@@ -115,7 +115,7 @@ function update(time) {
 update();
 ```
 
-See `./test/index.html` for a working example.
+See `./demo` for a more interesting working example.
 
 ## License
 &copy; 2021 P. Hughes. All rights reserved.

@@ -75,6 +75,7 @@
   ],
   "exclude": [
     "build",
+    "demo",
     "dist",
     "docs",
     "node_modules",

@@ -2,6 +2,7 @@
 
 dist/*            linguist-generated=true
 src/vendor/*      linguist-generated=true
+demo/*            linguist-documentation=true
 docs/*            linguist-documentation=true
 
 *.css             text
