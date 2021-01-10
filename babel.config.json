@@ -1,0 +1,18 @@
+{
+  "presets": [
+    ["@babel/preset-env", {
+      "targets": "Android >= 67, ChromeAndroid >= 87, FirefoxAndroid >= 68, Edge >= 79, Firefox >= 68, Chrome >= 67, Safari >= 14, Opera >= 54, iOS >= 14.3, Samsung >= 9.2, node >= 10.4.0, not Baidu > 0, not Blackberry > 0, not ie > 0, not ie_mob > 0, not OperaMobile > 0, not UCAndroid > 0, not kaios > 0, not QQAndroid > 0",
+      "bugfixes": true,
+      "shippedProposals": true,
+      "corejs": {
+        "version": 3,
+        "proposals": true
+      },
+      "useBuiltIns": "usage"
+    }],
+    "@babel/preset-typescript"
+  ],
+  "plugins": [
+    "@babel/plugin-proposal-class-properties"
+  ]
+}

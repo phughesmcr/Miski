@@ -1,0 +1,17 @@
+.vscode/
+docs/
+src/
+test/
+types/
+.browserlistrc
+.editorconfig
+.eslintignore
+.eslintrc.json
+.gitattributes
+.gitignore
+.mocharc.json
+babel.config.json
+jsconfig.json
+rollup.config.js
+tsconfig.json
+tsconfig.testing.json

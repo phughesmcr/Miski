@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "module": "esNext",
+    "target": "esNext",
+    "strict": true,
+    "baseUrl": "."
+  },
+  "exclude": [
+    "build",
+    "dist",
+    "docs",
+    "node_modules",
+    "test",
+    "types",
+    "rollup.config.js",
+  ]
+}

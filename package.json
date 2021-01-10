@@ -1,0 +1,80 @@
+{
+  "name": "miski",
+  "version": "0.1.0",
+  "description": "A simple ECS architecture in Typescript",
+  "main": "dist/cjs/index.min.js",
+  "module": "dist/esm/index.min.js",
+  "browser": "dist/iife/index.min.js",
+  "types": "dist/cjs/index.d.ts",
+  "type": "module",
+  "directories": {
+    "dist": "dist",
+    "doc": "docs",
+    "test": "test"
+  },
+  "devDependencies": {
+    "@babel/cli": "^7.12.10",
+    "@babel/core": "^7.12.10",
+    "@babel/plugin-proposal-class-properties": "^7.12.1",
+    "@babel/preset-env": "^7.12.11",
+    "@babel/preset-typescript": "^7.12.7",
+    "@rollup/plugin-babel": "^5.2.2",
+    "@rollup/plugin-commonjs": "^17.0.0",
+    "@rollup/plugin-node-resolve": "^11.0.1",
+    "@types/chai": "^4.2.14",
+    "@types/mocha": "^8.2.0",
+    "@types/node": "^14.14.14",
+    "@typescript-eslint/eslint-plugin": "^4.10.0",
+    "@typescript-eslint/parser": "^4.10.0",
+    "chai": "^4.2.0",
+    "eslint": "^7.16.0",
+    "esm": "^3.2.25",
+    "mocha": "^8.2.1",
+    "rimraf": "^3.0.2",
+    "rollup": "^2.35.1",
+    "rollup-plugin-dts": "^2.0.1",
+    "rollup-plugin-terser": "^7.0.2",
+    "rollup-plugin-typescript2": "^0.29.0",
+    "ts-mocha": "^8.0.0",
+    "ts-node": "^9.1.1",
+    "tslib": "^2.0.3",
+    "typedoc": "^0.19.2",
+    "typescript": "^4.1.3"
+  },
+  "scripts": {
+    "prebuild": "npm run clean:pre && npm run lint:fix",
+    "build": "npm run build:types && rollup -c rollup.config.js",
+    "postbuild": "npm run clean:post",
+    "build:docs": "typedoc --out docs",
+    "build:types": "tsc --emitDeclarationOnly --declaration --declarationDir types",
+    "clean": "npm run clean:pre && npm run clean:post && npm run clean:docs",
+    "clean:docs": "rimraf docs",
+    "clean:pre": "rimraf build && rimraf dist && rimraf types",
+    "clean:post": "rimraf types",
+    "lint": "eslint 'src/**/*.ts'",
+    "lint:fix": "eslint --fix 'src/**/*.ts'",
+    "test": "tsc -p tsconfig.json && ts-mocha -p tsconfig.testing.json -r ts-node/register -r esm 'test/**/*.ts'",
+    "check:types": "tsc --noEmit",
+    "check:es5": "npx es-check es5 ./dist/iife/*.js --verbose",
+    "check:es3": "npx es-check es3 ./dist/iife/*.js --verbose"
+  },
+  "repository": {
+    "type": "git",
+    "url": ""
+  },
+  "keywords": [],
+  "author": {
+    "name": "Peter Hughes",
+    "email": "peter@phugh.es",
+    "url": "https://www.phugh.es"
+  },
+  "license": "MIT",
+  "bugs": {
+    "url": ""
+  },
+  "homepage": "",
+  "dependencies": {
+    "core-js": "^3.8.1",
+    "decimal.js": "^10.2.1"
+  }
+}

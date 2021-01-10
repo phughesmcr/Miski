@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "commonjs",
+    "declaration": false,
+    "noImplicitAny": false,
+    "inlineSourceMap": true,
+  },
+  "include": [
+    "test/**/*.ts"
+  ]
+}
