@@ -60,9 +60,15 @@
   },
   "repository": {
     "type": "git",
-    "url": ""
+    "url": "https://github.com/phughesmcr/Miski"
   },
-  "keywords": [],
+  "keywords": [
+    "ecs",
+    "entity-component-system",
+    "entity",
+    "component",
+    "system"
+  ],
   "author": {
     "name": "Peter Hughes",
     "email": "peter@phugh.es",
@@ -70,9 +76,9 @@
   },
   "license": "MIT",
   "bugs": {
-    "url": ""
+    "url": "https://github.com/phughesmcr/Miski/issues"
   },
-  "homepage": "",
+  "homepage": "https://github.com/phughesmcr/Miski",
   "dependencies": {
     "core-js": "^3.8.1",
     "decimal.js": "^10.2.1"
