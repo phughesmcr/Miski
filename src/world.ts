@@ -24,6 +24,7 @@ interface World {
   createSystem(spec: SystemSpec): System,
   removeSystem(system: System): boolean,
   update(dt: number): void,
+  render(int: number): void,
 }
 
 export function createWorld(spec: WorldSpec): World {
@@ -209,7 +210,7 @@ export function createWorld(spec: WorldSpec): World {
   };
 
   /**
-   * Update all systems
+   * Call update on all systems
    * @param dt frame delta time
    */
   const update = function(dt: number): void {
@@ -222,6 +223,23 @@ export function createWorld(spec: WorldSpec): World {
       }
     });
   };
+
+  /**
+   * Call render on all systems
+   * @param int frame interpolation
+   */
+  const render = function(int: number): void {
+    systems.forEach((system) => {
+      if (system.enabled) {
+        const entities = archetypes.get(system.archetype);
+        if (entities && entities.length) {
+          system.render(int, entities);
+        }
+      }
+    });
+  };
+
+
 
   return Object.freeze(
     Object.assign(
@@ -236,6 +254,7 @@ export function createWorld(spec: WorldSpec): World {
         createSystem,
         removeSystem,
         update,
+        render,
       }
     )
   );

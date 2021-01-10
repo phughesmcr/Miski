@@ -9,7 +9,8 @@ export type SystemSpec = Omit<InternalSystemSpec, "id">;
 
 interface InternalSystemSpec {
   id: bigint,
-  system: (dt: number, entities: Entity[]) => void,
+  updateFn?: (dt: number, entities: Entity[]) => void,
+  renderFn?: (int: number, entities: Entity[]) => void,
   components: Component<unknown>[],
 }
 
@@ -20,10 +21,16 @@ export type System = Readonly<{
   enable(): void,
   disable(): void,
   update(dt: number, entities: Entity[]): void,
+  render(int: number, entities: Entity[]): void,
 }>;
 
 export function _createSystem(spec: InternalSystemSpec): System {
-  const { id, system, components } = spec;
+  const {
+    id,
+    components = [],
+    updateFn = ((dt, entities) => void 0),
+    renderFn = ((int, entities) => void 0),
+  } = spec;
 
   const { archetype } = { archetype: createMask(0n) };
   let { enabled } = { enabled: false };
@@ -53,7 +60,11 @@ export function _createSystem(spec: InternalSystemSpec): System {
   };
 
   const update = function(dt: number, entities: Entity[]): void {
-    system(dt, entities);
+    updateFn(dt, entities);
+  };
+
+  const render = function(int: number, entities: Entity[]): void {
+    renderFn(int, entities);
   };
 
   return Object.freeze(
@@ -63,6 +74,7 @@ export function _createSystem(spec: InternalSystemSpec): System {
         enable,
         disable,
         update,
+        render,
       }
     )
   );
