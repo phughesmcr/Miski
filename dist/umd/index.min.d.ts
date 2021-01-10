@@ -68,7 +68,8 @@ interface Component<T> {
 declare type SystemSpec = Omit<InternalSystemSpec, "id">;
 interface InternalSystemSpec {
     id: bigint;
-    system: (dt: number, entities: Entity[]) => void;
+    updateFn?: (dt: number, entities: Entity[]) => void;
+    renderFn?: (int: number, entities: Entity[]) => void;
     components: Component<unknown>[];
 }
 declare type System = Readonly<{
@@ -78,6 +79,7 @@ declare type System = Readonly<{
     enable(): void;
     disable(): void;
     update(dt: number, entities: Entity[]): void;
+    render(int: number, entities: Entity[]): void;
 }>;
 
 interface WorldSpec {
@@ -97,6 +99,7 @@ interface World {
     createSystem(spec: SystemSpec): System;
     removeSystem(system: System): boolean;
     update(dt: number): void;
+    render(int: number): void;
 }
 declare function createWorld(spec: WorldSpec): World;
 
