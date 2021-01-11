@@ -221,7 +221,13 @@ export function createWorld(spec: WorldSpec): World {
   const update = function(dt: number): void {
     systems.forEach((system) => {
       if (system.enabled) {
-        const entities = archetypes.get(system.archetype);
+        /** @todo make this more efficient */
+        const entities = Array.from(archetypes.entries()).reduce((arr, [archetype, ents]) => {
+          if ((archetype & system.archetype) !== 0n) {
+            arr.push(...ents);
+          }
+          return arr;
+        }, [] as Entity[]);
         if (entities && entities.length) {
           system.update(dt, entities);
         }
@@ -236,7 +242,13 @@ export function createWorld(spec: WorldSpec): World {
   const render = function(int: number): void {
     systems.forEach((system) => {
       if (system.enabled) {
-        const entities = archetypes.get(system.archetype);
+        /** @todo make this more efficient */
+        const entities = Array.from(archetypes.entries()).reduce((arr, [archetype, ents]) => {
+          if ((archetype & system.archetype) !== 0n) {
+            arr.push(...ents);
+          }
+          return arr;
+        }, [] as Entity[]);
         if (entities && entities.length) {
           system.render(int, entities);
         }
