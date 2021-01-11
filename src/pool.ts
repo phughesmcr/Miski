@@ -27,11 +27,7 @@ export function _createPool<T>(spec: PoolSpec<T>): Pool<T> {
   }
 
   const get = function(): T {
-    if (pool.length > 0) {
-      return pool.pop()!;
-    } else {
-      return create();
-    }
+    return pool.pop() ?? create();
   };
 
   const release = function(obj: T): void {
