@@ -21,7 +21,7 @@ interface World {
   removeComponent<T>(component: Component<T>): boolean,
   addComponentsToEntity(entity: Entity, ...components: Component<unknown>[]): Entity,
   removeComponentsFromEntity(entity: Entity, ...components: Component<unknown>[]): Entity,
-  createSystem(spec: SystemSpec): System,
+  createSystem(spec: SystemSpec, idx?: number): System,
   removeSystem(system: System): boolean,
   update(dt: number): void,
   render(int: number): void,
@@ -186,12 +186,17 @@ export function createWorld(spec: WorldSpec): World {
   /**
    * Create an new system
    * @param spec the system's specification object
+   * @param idx optional execution index (i.e. 0 gets called first);
    * @returns the created system
    */
-  const createSystem = function(spec: SystemSpec): System {
+  const createSystem = function(spec: SystemSpec, idx?: number): System {
     const id = ++systemCount;
     const system = _createSystem({...spec, id});
-    systems.push(system);
+    if (idx !== undefined) {
+      systems.splice(idx, 0, system);
+    } else {
+      systems.push(system);
+    }
     return system;
   };
 
