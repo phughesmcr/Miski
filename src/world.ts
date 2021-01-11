@@ -32,7 +32,7 @@ export function createWorld(spec: WorldSpec): World {
   const {
     initialPoolSize = 10,
     maxComponents = 1024n,
-  } = spec;
+  } = { ...spec };
 
   // constants
   const {

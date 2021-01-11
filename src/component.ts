@@ -31,7 +31,7 @@ export interface Component<T> {
  * @param spec the components specification object
  */
 export function _createComponent<T>(spec: InternalComponentSpec<T>): Component<T> {
-  const { id, name, properties } = spec;
+  const { id, name, properties } = { ...spec };
 
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
   const { entities } = { entities: new Set() as Set<Entity> };

@@ -17,7 +17,7 @@ export function _createPool<T>(spec: PoolSpec<T>): Pool<T> {
     initialSize = 2,
     create,
     destroy
-  } = spec;
+  } = { ...spec };
 
   const pool = [] as T[];
 

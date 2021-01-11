@@ -30,7 +30,7 @@ export function _createSystem(spec: InternalSystemSpec): System {
     components = [],
     updateFn = (() => void 0),
     renderFn = (() => void 0),
-  } = spec;
+  } = { ...spec };
 
   const { archetype } = { archetype: createMask(0n) };
   let { enabled } = { enabled: false };
