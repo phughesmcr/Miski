@@ -15,9 +15,13 @@
     }
     main {
       display: flex;
+      flex-direction: column;
       flex: 1;
       align-items: center;
       justify-content: center;
+    }
+    nav {
+      margin-top: 1em;
     }
     canvas {
       border: 4px solid #fff;
@@ -27,6 +31,18 @@
 <body>
   <main>
     <canvas width="800" height="600"></canvas>
+    <nav>
+      <button id="btn-enable-update">Enable update system</button>
+      <button id="btn-disable-update">Disable update system</button>
+    </nav>
+    <nav>
+      <button id="btn-enable-render">Enable render system</button>
+      <button id="btn-disable-render">Disable render system</button>
+    </nav>
+    <nav>
+      <button id="btn-add-box">Add box</button>
+      <button id="btn-remove-box">Remove box</button>
+    </nav>
   </main>
   <script type="module" src="demo.js"></script>
 </body>

@@ -6,10 +6,7 @@ const canvas = document.querySelector('canvas');
 const ctx = canvas.getContext('2d');
 
 // create our world - most functions take place through the world object
-const world = createWorld({
-  initialPoolSize: 10,
-  maxComponents: 1024,
-});
+const world = createWorld();
 
 // define some components - the properties given here are the default properties of the component
 const size = world.createComponent({
@@ -50,20 +47,27 @@ function rnd(min, max) { // min and max included
   return Math.floor(Math.random() * (max - min + 1) + min);
 }
 
+// entity container
+const ents = [];
+
+// box factory
+function createBox() {
+   // create entity
+   const entity = world.createEntity();
+   // add components
+   world.addComponentsToEntity(entity, size, colour, position, velocity);
+   // overwrite some of the default properties with entity specific properties
+   // N.B. you can access the individual properties of course (e.g. box.components.colour.r)
+   entity.components.colour = { r: rnd(0, 255), g: rnd(0, 255), b: rnd(0, 255) };
+   entity.components.position = { x: rnd(0, canvas.width - entity.components.size.width), y: rnd(0, canvas.height - entity.components.size.height) };
+   entity.components.velocity = { x: rnd(-100, 100), y: rnd(-100, 100) }
+   // store in array
+   ents.push(entity);
+}
+
 // create 1000 entities
-const entities = [];
 for (let i = 0; i < 1000; i++) {
-  // create entity
-  const entity = world.createEntity();
-  // add components
-  world.addComponentsToEntity(entity, size, colour, position, velocity);
-  // overwrite some of the default properties with entity specific properties
-  // N.B. you can access the individual properties of course (e.g. box.components.colour.r)
-  entity.components.colour = { r: rnd(0, 255), g: rnd(0, 255), b: rnd(0, 255) };
-  entity.components.position = { x: rnd(0, canvas.width - entity.components.size.width), y: rnd(0, canvas.height - entity.components.size.height) };
-  entity.components.velocity = { x: rnd(-100, 100), y: rnd(-100, 100) }
-  // store in array
-  entities.push(entity);
+  createBox();
 }
 
 // a simple function to draw the box to the canvas
@@ -108,7 +112,19 @@ function render(int, entities) {
 }
 
 // turn the draw function into a system
-const drawer = world.createSystem({
+const mover = world.createSystem({
+  // the components required in the function
+  components: [
+    position,
+    size,
+    velocity,
+  ],
+  // the function itself
+  updateFn: move,
+});
+
+// turn the render function into a system
+const renderer = world.createSystem({
   // the components required in the function
   components: [
     colour,
@@ -117,13 +133,11 @@ const drawer = world.createSystem({
     velocity,
   ],
   // the function itself
-  updateFn: move,
   renderFn: render,
 });
 
-// enable the system
-drawer.enable();
-
+// enable renderer
+renderer.enable();
 
 // FPS counter
 let f = 0
@@ -140,14 +154,12 @@ function updateFPS(time) {
 }
 
 // game loop
-let frameId = null;
 let last = null;
 let acc = 0;
-let tempo = 1/120;
+const tempo = 1/120;
 let dt = tempo;
-
 function onTick(time) {
-  frameId = requestAnimationFrame(onTick)
+  window.requestAnimationFrame(onTick)
   if (last !== null) {
     acc += (time - last) / 1000;
     while (acc > dt) {
@@ -159,5 +171,36 @@ function onTick(time) {
   updateFPS(time);
   world.render(acc / tempo);
 }
+window.requestAnimationFrame(onTick)
 
-frameId = requestAnimationFrame(onTick)
+// demo ui buttons
+
+// make update function disableable
+const btnEnableUpdate = document.getElementById('btn-enable-update');
+const btnDisableUpdate = document.getElementById('btn-disable-update');
+btnEnableUpdate.addEventListener('click', () => {
+  mover.enable()
+}, false);
+btnDisableUpdate.addEventListener('click', () => {
+  mover.disable()
+}, false);
+
+const btnEnableRender = document.getElementById('btn-enable-render');
+const btnDisableRender = document.getElementById('btn-disable-render');
+btnEnableRender.addEventListener('click', () => {
+  renderer.enable()
+}, false);
+btnDisableRender.addEventListener('click', () => {
+  renderer.disable()
+}, false);
+
+const btnAdd = document.getElementById('btn-add-box');
+const btnRemove = document.getElementById('btn-remove-box');
+btnAdd.addEventListener('click', () => {
+  createBox();
+}, false);
+btnRemove.addEventListener('click', () => {
+  if (ents.length) {
+    world.removeEntity(ents.pop());
+  }
+}, false);
