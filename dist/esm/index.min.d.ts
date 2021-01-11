@@ -30,12 +30,12 @@
 declare type Entity = Readonly<{
     /** The entity's archetype */
     archetype: bigint;
+    /** Array of components associated with the entity */
+    allComponents: Component<unknown>[];
     /** The entity's id */
     id: bigint;
     /** Check if a component is present in an entity */
     hasComponent(component: Component<unknown>): boolean;
-    /** @hidden */
-    _destroy(): Entity;
     /** @hidden */
     _setId(id: bigint): Entity;
     /** @hidden */
@@ -87,6 +87,7 @@ interface WorldSpec {
     maxComponents?: number | bigint;
 }
 interface World {
+    archetypes: [bigint, Entity[]][];
     components: Component<unknown>[];
     entities: Entity[];
     systems: System[];
@@ -96,7 +97,7 @@ interface World {
     removeComponent<T>(component: Component<T>): boolean;
     addComponentsToEntity(entity: Entity, ...components: Component<unknown>[]): Entity;
     removeComponentsFromEntity(entity: Entity, ...components: Component<unknown>[]): Entity;
-    createSystem(spec: SystemSpec): System;
+    createSystem(spec: SystemSpec, idx?: number): System;
     removeSystem(system: System): boolean;
     update(dt: number): void;
     render(int: number): void;
