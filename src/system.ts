@@ -28,8 +28,8 @@ export function _createSystem(spec: InternalSystemSpec): System {
   const {
     id,
     components = [],
-    updateFn = ((dt, entities) => void 0),
-    renderFn = ((int, entities) => void 0),
+    updateFn = (() => void 0),
+    renderFn = (() => void 0),
   } = spec;
 
   const { archetype } = { archetype: createMask(0n) };
