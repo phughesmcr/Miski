@@ -2,7 +2,7 @@
 "use strict";
 
 import { Component, ComponentSpec, _createComponent } from './component';
-import { Entity, _createEntity, _destroyEntity } from './entity';
+import { Entity, _createEntity } from './entity';
 import { _createPool } from './pool';
 import { System, SystemSpec, _createSystem } from './system';
 
@@ -12,6 +12,7 @@ interface WorldSpec {
 }
 
 interface World {
+  archetypes: [bigint, Entity[]][],
   components: Component<unknown>[],
   entities: Entity[],
   systems: System[],
@@ -76,20 +77,32 @@ export function createWorld(spec: WorldSpec): World {
   const removeEntityFromArchetypeArray = (entity: Entity) => {
     const archetype = archetypes.get(entity.archetype);
     const idx = archetype?.indexOf(entity);
-    if (idx && idx > -1) {
+    if (idx !== undefined && idx > -1) {
       archetype?.splice(idx, 1);
     }
   };
 
+  /** @private */
+  function _destroyEntity(entity: Entity): Entity {
+    entity._setId(-1n);
+    removeComponentsFromEntity(entity, ...entity.allComponents);
+    removeEntityFromArchetypeArray(entity);
+    return entity;
+  }
+
   const getters = {
+    get archetypes() {
+      return Array.from(archetypes.entries());
+    },
+
     /** @returns an array of components in the world */
     get components() {
-      return Array.from(Object.values(components)) as Component<unknown>[];
+      return Array.from(components.values());
     },
 
     /** @returns an array of entities in the world */
     get entities() {
-      return Array.from(Object.values(entities)) as Entity[];
+      return Array.from(entities.values());
     },
 
     /** @returns an array of systems in the world */
@@ -107,6 +120,7 @@ export function createWorld(spec: WorldSpec): World {
     const id = ++entityCount;
     entity._setId(id);
     entities.set(id, entity);
+    addEntityToArchetypeArray(entity);
     return entity;
   };
 
@@ -223,14 +237,12 @@ export function createWorld(spec: WorldSpec): World {
       if (system.enabled) {
         /** @todo make this more efficient */
         const entities = Array.from(archetypes.entries()).reduce((arr, [archetype, ents]) => {
-          if ((archetype & system.archetype) !== 0n) {
+          if ((system.archetype & archetype) === system.archetype) {
             arr.push(...ents);
           }
           return arr;
         }, [] as Entity[]);
-        if (entities && entities.length) {
-          system.update(dt, entities);
-        }
+        system.update(dt, entities);
       }
     });
   };
@@ -244,19 +256,15 @@ export function createWorld(spec: WorldSpec): World {
       if (system.enabled) {
         /** @todo make this more efficient */
         const entities = Array.from(archetypes.entries()).reduce((arr, [archetype, ents]) => {
-          if ((archetype & system.archetype) !== 0n) {
+          if ((system.archetype & archetype) === system.archetype) {
             arr.push(...ents);
           }
           return arr;
         }, [] as Entity[]);
-        if (entities && entities.length) {
-          system.render(int, entities);
-        }
+        system.render(int, entities);
       }
     });
   };
-
-
 
   return Object.freeze(
     Object.assign(

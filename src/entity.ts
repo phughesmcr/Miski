@@ -7,12 +7,12 @@ import { createMask } from './mask';
 export type Entity = Readonly<{
   /** The entity's archetype */
   archetype: bigint,
+  /** Array of components associated with the entity */
+  allComponents: Component<unknown>[],
   /** The entity's id */
   id: bigint,
   /** Check if a component is present in an entity */
   hasComponent(component: Component<unknown>): boolean,
-  /** @hidden */
-  _destroy(): Entity,
   /** @hidden */
   _setId(id: bigint): Entity,
   /** @hidden */
@@ -20,12 +20,6 @@ export type Entity = Readonly<{
   /** @hidden */
   _removeComponent(component: Component<unknown>): Entity,
 }>
-
-/** Reset an entity to a blank state */
-export function _destroyEntity(entity: Entity): Entity {
-  entity._destroy();
-  return entity;
-}
 
 /** Create an new entity */
 export function _createEntity(): Entity {
@@ -53,6 +47,12 @@ export function _createEntity(): Entity {
         }
       },
 
+      allComponents: {
+        get: function(): Component<unknown>[] {
+          return Array.from(componentObjects);
+        }
+      },
+
       /** @returns the entity's id */
       id: {
         get: function(): bigint {
@@ -61,12 +61,6 @@ export function _createEntity(): Entity {
       }
     }
   );
-
-  /** @hidden */
-  const _destroy = function(): void {
-    _id = 0n;
-    componentObjects.forEach((component) => _removeComponent(component));
-  };
 
   /** @hidden */
   const _setId = function(id: bigint): void {
@@ -104,7 +98,6 @@ export function _createEntity(): Entity {
     Object.assign(
       data,
       {
-        _destroy,
         _setId,
         _addComponent,
         _removeComponent,
