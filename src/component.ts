@@ -14,6 +14,7 @@ export type ComponentSpec<T = Record<string, unknown>> = Omit<InternalComponentS
 
 /** Internal component specification object */
 interface InternalComponentSpec<T = Record<string, unknown>> {
+  entityLimit?: number | bigint | null,
   id: bigint,
   name: string,
   properties: T,
@@ -23,9 +24,12 @@ export interface Component<T = Record<string, unknown>> {
   id: Readonly<bigint>,
   name: Readonly<string>,
   entities: Readonly<Entity[]>,
+  entityLimit: number | bigint | null | undefined,
   properties: T,
   /** Check if an entity is associated with this category */
   hasEntity(entity: Entity): boolean
+  /** Set the maximum entities component can attach to */
+  setEntityLimit(limit: number | bigint | null): void,
   /** @hidden */
   _addEntity(entity: Entity): void,
   /** @hidden */
@@ -38,6 +42,7 @@ export interface Component<T = Record<string, unknown>> {
  */
 export function _createComponent<T = Record<string, unknown>>(spec: InternalComponentSpec<T>): Component<T> {
   const { id, name, properties } = { ...spec };
+  let { entityLimit } = { ...spec };
 
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
   const { entities } = { entities: new Set() as Set<Entity> };
@@ -56,6 +61,11 @@ export function _createComponent<T = Record<string, unknown>>(spec: InternalComp
       return Array.from(entities);
     },
 
+    /** the maximum entities component can attach to */
+    get entityLimit(): number | bigint | null | undefined {
+      return entityLimit;
+    },
+
     /** @returns the default properties of this component */
     get properties(): T {
       return properties;
@@ -69,6 +79,9 @@ export function _createComponent<T = Record<string, unknown>>(spec: InternalComp
    * @returns this component
    */
   const _addEntity = function(entity: Entity): void {
+    if (entityLimit != null && entities.size >= entityLimit) {
+      throw new Error(`component "${name}" has reached its entity limit of ${entityLimit}.`);
+    }
     entities.add(entity);
   };
 
@@ -86,11 +99,16 @@ export function _createComponent<T = Record<string, unknown>>(spec: InternalComp
     return entities.has(entity);
   };
 
+  const setEntityLimit = function(limit?: number | bigint | null): void {
+    entityLimit = limit;
+  };
+
   return Object.freeze(
     Object.assign(
       getters,
       {
         hasEntity,
+        setEntityLimit,
         _addEntity,
         _removeEntity,
       }

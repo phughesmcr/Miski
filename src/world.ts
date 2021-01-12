@@ -183,8 +183,8 @@ export function createWorld(spec: WorldSpec): World {
   const addComponentsToEntity = function(entity: Entity, ...components: Component<unknown>[]): Entity {
     removeEntityFromArchetypeArray(entity);
     components.forEach((component) => {
-      entity._addComponent(component);
       component._addEntity(entity);
+      entity._addComponent(component);
     });
     addEntityToArchetypeArray(entity);
     return entity;
@@ -198,8 +198,8 @@ export function createWorld(spec: WorldSpec): World {
   const removeComponentsFromEntity = function(entity: Entity, ...components: Component<unknown>[]): Entity {
     removeEntityFromArchetypeArray(entity);
     components.forEach((component) => {
-      entity._removeComponent(component);
       component._removeEntity(entity);
+      entity._removeComponent(component);
     });
     addEntityToArchetypeArray(entity);
     return entity;
@@ -298,6 +298,7 @@ export function createWorld(spec: WorldSpec): World {
   // worldEntity setup - ensures archetype 1n is always just the worldEntity
   const worldComponent = createComponent<WorldComponent>({
     name: "world",
+    entityLimit: 1,
     properties: {
       world,
     },
