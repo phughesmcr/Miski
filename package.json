@@ -1,6 +1,6 @@
 {
   "name": "miski",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A simple ECS architecture in Typescript",
   "main": "dist/cjs/index.min.js",
   "module": "dist/esm/index.min.js",
@@ -81,6 +81,7 @@
   "homepage": "https://github.com/phughesmcr/Miski",
   "dependencies": {
     "core-js": "^3.8.1",
-    "decimal.js": "^10.2.1"
+    "decimal.js": "^10.2.1",
+    "miski": "^0.1.1"
   }
 }
