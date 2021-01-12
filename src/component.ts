@@ -4,16 +4,16 @@
 import { Entity } from './entity';
 
 /** Component specification object */
-export type ComponentSpec<T> = Omit<InternalComponentSpec<T>, "id">;
+export type ComponentSpec<T = Record<string, unknown>> = Omit<InternalComponentSpec<T>, "id">;
 
 /** Internal component specification object */
-interface InternalComponentSpec<T> {
+interface InternalComponentSpec<T = Record<string, unknown>> {
   id: bigint,
   name: string,
   properties: T,
 }
 
-export interface Component<T> {
+export interface Component<T = Record<string, unknown>> {
   id: Readonly<bigint>,
   name: Readonly<string>,
   entities: Readonly<Entity[]>,
@@ -30,7 +30,7 @@ export interface Component<T> {
  * Creates a new component object
  * @param spec the components specification object
  */
-export function _createComponent<T>(spec: InternalComponentSpec<T>): Component<T> {
+export function _createComponent<T = Record<string, unknown>>(spec: InternalComponentSpec<T>): Component<T> {
   const { id, name, properties } = { ...spec };
 
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
