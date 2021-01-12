@@ -2,6 +2,12 @@
 "use strict";
 
 import { Entity } from './entity';
+import { World } from './world';
+
+/** A property specifically for the worldEntity */
+export interface WorldComponent {
+  world: World,
+}
 
 /** Component specification object */
 export type ComponentSpec<T = Record<string, unknown>> = Omit<InternalComponentSpec<T>, "id">;
@@ -91,4 +97,3 @@ export function _createComponent<T = Record<string, unknown>>(spec: InternalComp
     )
   );
 }
-

@@ -1,7 +1,7 @@
 // Copyright (c) 2021 P. Hughes. All rights reserved. MIT license.
 "use strict";
 
-import { Component, ComponentSpec, _createComponent } from './component';
+import { Component, ComponentSpec, WorldComponent, _createComponent } from './component';
 import { Entity, _createEntity } from './entity';
 import { _createPool } from './pool';
 import { System, SystemSpec, _createSystem } from './system';
@@ -11,10 +11,11 @@ interface WorldSpec {
   maxComponents?: number | bigint;
 }
 
-interface World {
+export interface World {
   archetypes: [bigint, Entity[]][],
   components: Component<unknown>[],
   entities: Entity[],
+  entity: Entity,
   systems: System[],
   createEntity(): Entity,
   removeEntity(entity: Entity): boolean,
@@ -55,10 +56,12 @@ export function createWorld(spec: WorldSpec): World {
     componentCount,
     entityCount,
     systemCount,
+    worldEntity,
   } = {
     componentCount: 0n,
     entityCount: 0n,
     systemCount: 0n,
+    worldEntity: {} as Entity,
   };
 
   /** @private **/
@@ -105,6 +108,11 @@ export function createWorld(spec: WorldSpec): World {
       return Array.from(entities.values());
     },
 
+    /** @returns the world entity */
+    get entity() {
+      return worldEntity;
+    },
+
     /** @returns an array of systems in the world */
     get systems() {
       return Array.from(systems);
@@ -117,10 +125,10 @@ export function createWorld(spec: WorldSpec): World {
    */
   const createEntity = function(): Entity {
     const entity = entityPool.get();
-    const id = ++entityCount;
-    entity._setId(id);
-    entities.set(id, entity);
+    entity._setId(entityCount);
+    entities.set(entityCount, entity);
     addEntityToArchetypeArray(entity);
+    ++entityCount;
     return entity;
   };
 
@@ -147,9 +155,9 @@ export function createWorld(spec: WorldSpec): World {
     if (maxComponents && componentCount > maxComponents) {
       throw new Error('Maximum component count reached.');
     }
-    const id = ++componentCount;
-    const component = _createComponent({...spec, id});
+    const component = _createComponent({...spec, id: componentCount});
     components.set(component.name, component);
+    ++componentCount;
     return component;
   };
 
@@ -204,13 +212,13 @@ export function createWorld(spec: WorldSpec): World {
    * @returns the created system
    */
   const createSystem = function(spec: SystemSpec, idx?: number): System {
-    const id = ++systemCount;
-    const system = _createSystem({...spec, id});
+    const system = _createSystem({...spec, id: systemCount});
     if (idx !== undefined) {
       systems.splice(idx, 0, system);
     } else {
       systems.push(system);
     }
+    ++systemCount;
     return system;
   };
 
@@ -266,7 +274,10 @@ export function createWorld(spec: WorldSpec): World {
     });
   };
 
-  return Object.freeze(
+  // create worldEntity
+  worldEntity = createEntity();
+
+  const world: World = Object.freeze(
     Object.assign(
       getters,
       {
@@ -283,6 +294,17 @@ export function createWorld(spec: WorldSpec): World {
       }
     )
   );
+
+  // worldEntity setup - ensures archetype 1n is always just the worldEntity
+  const worldComponent = createComponent<WorldComponent>({
+    name: "world",
+    properties: {
+      world,
+    },
+  });
+  addComponentsToEntity(worldEntity, worldComponent);
+
+  return world;
 }
 
 
