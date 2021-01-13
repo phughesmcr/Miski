@@ -14,6 +14,7 @@ interface WorldSpec {
 export interface World {
   archetypes: [bigint, Entity[]][],
   components: Component<unknown>[],
+  component: Component<WorldComponent>,
   entities: Entity[],
   entity: Entity,
   systems: System[],
@@ -56,11 +57,13 @@ export function createWorld(spec: WorldSpec): World {
     componentCount,
     entityCount,
     systemCount,
+    worldComponent,
     worldEntity,
   } = {
     componentCount: 0n,
     entityCount: 0n,
     systemCount: 0n,
+    worldComponent: {} as Component<WorldComponent>,
     worldEntity: {} as Entity,
   };
 
@@ -102,6 +105,11 @@ export function createWorld(spec: WorldSpec): World {
     /** @returns an array of components in the world */
     get components() {
       return Array.from(components.values());
+    },
+
+    /** @returns the world component */
+    get component(): Component<WorldComponent> {
+      return worldComponent;
     },
 
     /** @returns an array of entities in the world */
@@ -297,7 +305,7 @@ export function createWorld(spec: WorldSpec): World {
   );
 
   // worldEntity setup - ensures archetype 1n is always just the worldEntity
-  const worldComponent = createComponent<WorldComponent>({
+  worldComponent = createComponent<WorldComponent>({
     name: "world",
     entityLimit: 1,
     properties: {
