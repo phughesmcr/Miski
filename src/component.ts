@@ -2,6 +2,7 @@
 "use strict";
 
 import { Entity } from './entity';
+import { deepAssign } from './utils';
 import { World } from './world';
 
 /** A property specifically for the worldEntity */
@@ -55,7 +56,12 @@ export interface Component<T = Record<string, unknown>> {
  * @param spec the components specification object
  */
 export function _createComponent<T = Record<string, unknown>>(spec: InternalComponentSpec<T>): Component<T> {
-  const { id, name, properties } = { ...spec };
+  const { id, name } = { ...spec };
+
+  // deep clone properties
+  const properties = deepAssign({}, spec.properties as Record<string, unknown>);
+
+  // configurables
   let {
     entityLimit = null,
     removable = true,
@@ -87,7 +93,7 @@ export function _createComponent<T = Record<string, unknown>>(spec: InternalComp
 
     /** @returns the default properties of this component */
     get properties(): T {
-      return properties;
+      return properties as T;
     },
 
     /** @returns can the component be removed from entities once attached? */
