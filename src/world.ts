@@ -12,7 +12,7 @@ interface WorldSpec {
 }
 
 export interface World {
-  archetypes: [bigint, Entity[]][],
+  archetypes: [bigint, Set<Entity>][],
   components: Component<unknown>[],
   component: Component<WorldComponent>,
   entities: Entity[],
@@ -45,7 +45,7 @@ export function createWorld(spec: WorldSpec): World {
     systems,
     entityPool,
   } = {
-    archetypes: new Map() as Map<bigint, Entity[]>,
+    archetypes: new Map() as Map<bigint, Set<Entity>>,
     components: new Map() as Map<string, Component<unknown>>,
     entities: new Map() as Map<bigint, Entity>,
     systems: [] as System[],
@@ -69,23 +69,15 @@ export function createWorld(spec: WorldSpec): World {
 
   /** @private **/
   const addEntityToArchetypeArray = (entity: Entity) => {
-    const archetype = archetypes.get(entity.archetype);
-    if (!archetype) {
-      archetypes.set(entity.archetype, [entity]);
-    } else {
-      if (!archetype.includes(entity)) {
-        archetype.push(entity);
-      }
+    if (archetypes.get(entity.archetype) === undefined) {
+      archetypes.set(entity.archetype, new Set());
     }
+    archetypes.get(entity.archetype)?.add(entity);
   };
 
   /** @private */
   const removeEntityFromArchetypeArray = (entity: Entity) => {
-    const archetype = archetypes.get(entity.archetype);
-    const idx = archetype?.indexOf(entity);
-    if (idx !== undefined && idx > -1) {
-      archetype?.splice(idx, 1);
-    }
+    archetypes.get(entity.archetype)?.delete(entity);
   };
 
   /** @private */
