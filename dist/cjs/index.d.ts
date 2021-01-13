@@ -1,7 +1,7 @@
 /*! *****************************************************************************
  *
  * miski
- * v0.1.0
+ * v0.1.2
  *
  * MIT License
  * 
@@ -44,42 +44,32 @@ declare type Entity = Readonly<{
     _removeComponent(component: Component<unknown>): Entity;
 }>;
 
-/** Component specification object */
-declare type ComponentSpec<T> = Omit<InternalComponentSpec<T>, "id">;
-/** Internal component specification object */
-interface InternalComponentSpec<T> {
-    id: bigint;
-    name: string;
-    properties: T;
-}
-interface Component<T> {
-    id: Readonly<bigint>;
-    name: Readonly<string>;
-    entities: Readonly<Entity[]>;
-    properties: T;
-    /** Check if an entity is associated with this category */
-    hasEntity(entity: Entity): boolean;
-    /** @hidden */
-    _addEntity(entity: Entity): void;
-    /** @hidden */
-    _removeEntity(entity: Entity): void;
-}
-
 declare type SystemSpec = Omit<InternalSystemSpec, "id">;
 interface InternalSystemSpec {
+    /** The system's required components */
+    components?: Component<unknown>[];
+    /** The system's id */
     id: bigint;
-    updateFn?: (dt: number, entities: Entity[]) => void;
+    /** The system's render function */
     renderFn?: (int: number, entities: Entity[]) => void;
-    components: Component<unknown>[];
+    /** The system's update function */
+    updateFn?: (dt: number, entities: Entity[]) => void;
 }
 declare type System = Readonly<{
+    /** The system's associated entity archetype */
     archetype: bigint;
+    /** Is the system enabled? */
     enabled: boolean;
+    /** The system's id */
     id: bigint;
-    enable(): void;
+    /** Disable the system */
     disable(): void;
-    update(dt: number, entities: Entity[]): void;
+    /** Enable the system */
+    enable(): void;
+    /** The system's render function */
     render(int: number, entities: Entity[]): void;
+    /** The system's update function */
+    update(dt: number, entities: Entity[]): void;
 }>;
 
 interface WorldSpec {
@@ -89,7 +79,9 @@ interface WorldSpec {
 interface World {
     archetypes: [bigint, Entity[]][];
     components: Component<unknown>[];
+    component: Component<WorldComponent>;
     entities: Entity[];
+    entity: Entity;
     systems: System[];
     createEntity(): Entity;
     removeEntity(entity: Entity): boolean;
@@ -104,4 +96,43 @@ interface World {
 }
 declare function createWorld(spec: WorldSpec): World;
 
-export { Component, ComponentSpec, Entity, System, SystemSpec, createWorld };
+/** A property specifically for the worldEntity */
+interface WorldComponent {
+    /** The associated world object */
+    world: World;
+}
+/** Component specification object */
+declare type ComponentSpec<T = Record<string, unknown>> = Omit<InternalComponentSpec<T>, "id">;
+/** Internal component specification object */
+interface InternalComponentSpec<T = Record<string, unknown>> {
+    /** The maximum entities component can attach to */
+    entityLimit?: number | bigint | null;
+    /** The component's id */
+    id: bigint;
+    /** The component's name */
+    name: string;
+    /** The component's property object */
+    properties: T;
+}
+interface Component<T = Record<string, unknown>> {
+    /** An array of entities associated with this component */
+    entities: Entity[];
+    /** The maximum entities component can attach to */
+    entityLimit: number | bigint | null | undefined;
+    /** The component's id */
+    id: Readonly<bigint>;
+    /** The component's name */
+    name: Readonly<string>;
+    /** The component's property object */
+    properties: T;
+    /** @hidden */
+    _addEntity(entity: Entity): void;
+    /** @hidden */
+    _removeEntity(entity: Entity): void;
+    /** Check if an entity is associated with this category */
+    hasEntity(entity: Entity): boolean;
+    /** Set the maximum entities component can attach to */
+    setEntityLimit(limit: number | bigint | null): void;
+}
+
+export { Component, ComponentSpec, Entity, System, SystemSpec, World, createWorld };
