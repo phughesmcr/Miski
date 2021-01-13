@@ -23,6 +23,9 @@ const colour = world.createComponent({
     r: 0,
     g: 0,
     b: 0,
+    get string() {
+      return "this is a colour string test";
+    },
   },
 });
 
@@ -80,13 +83,12 @@ function move(dt, entities) {
     // modify component properties
     entity.components.position.x += entity.components.velocity.x * dt;
     entity.components.position.y += entity.components.velocity.y * dt;
-    if (entity.components.position.x >= (canvas.width - entity.components.size.width) || entity.components.position.x <= entity.components.size.width) {
+    if (entity.components.position.x >= (canvas.width - entity.components.size.width) || entity.components.position.x <= 0) {
       entity.components.velocity.x = -(entity.components.velocity.x);
     }
-    if (entity.components.position.y >= (canvas.height - entity.components.size.height) || entity.components.position.y <= entity.components.size.height) {
+    if (entity.components.position.y >= (canvas.height - entity.components.size.height) || entity.components.position.y <= 0) {
       entity.components.velocity.y = -(entity.components.velocity.y);
     }
-
   });
 }
 
@@ -136,7 +138,8 @@ const renderer = world.createSystem({
   renderFn: render,
 });
 
-// enable renderer
+// enable systems
+mover.enable();
 renderer.enable();
 
 // FPS counter
@@ -156,12 +159,12 @@ function updateFPS(time) {
 // game loop
 let last = null;
 let acc = 0;
-const tempo = 1/120;
+const tempo = 1/60;
 let dt = tempo;
 function onTick(time) {
   window.requestAnimationFrame(onTick)
   if (last !== null) {
-    acc += (time - last) / 1000;
+    acc += (time - last) * 0.001;
     while (acc > dt) {
       world.update(dt);
       acc -= dt;
@@ -172,7 +175,6 @@ function onTick(time) {
   world.render(acc / tempo);
 }
 window.requestAnimationFrame(onTick)
-
 // demo ui buttons
 
 // make update function disableable
@@ -204,3 +206,5 @@ btnRemove.addEventListener('click', () => {
     world.removeEntity(ents.pop());
   }
 }, false);
+
+console.log(world);
