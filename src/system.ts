@@ -47,10 +47,10 @@ export function _createSystem(spec: InternalSystemSpec): System {
     renderFn = (() => void 0),
   } = { ...spec };
 
-  const { archetype } = { archetype: createMask(0n) };
+  const archetype = createMask(0n);
   components.forEach((component) => archetype.set(component.id));
 
-  let { enabled } = { enabled: false };
+  let enabled = false;
 
   const getters = {
     /** @returns the system's archetype */
@@ -63,7 +63,7 @@ export function _createSystem(spec: InternalSystemSpec): System {
       return enabled;
     },
 
-    /** @retuns the system's id */
+    /** @returns the system's id */
     get id(): bigint {
       return id;
     },

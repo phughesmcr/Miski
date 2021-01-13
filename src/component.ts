@@ -60,17 +60,15 @@ export interface Component<T = Record<string, unknown>> {
 export function _createComponent<T = Record<string, unknown>>(spec: InternalComponentSpec<T>): Component<T> {
   const { id, name } = { ...spec };
 
-  // deep clone properties
-  const properties = deepAssign({}, spec.properties as Record<string, unknown>);
-
   // configurables
-  let {
-    entityLimit = null,
-    removable = true,
-  } = { ...spec };
+  let entityLimit = spec.entityLimit ?? null;
+  let removable = (spec.entityLimit === undefined) ? true : false;
+
+  // deep clone properties
+  const properties = deepAssign({}, spec.properties) as T;
 
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
-  const { entities } = { entities: new Set() as Set<Entity> };
+  const entities = new Set() as Set<Entity>;
 
   const getters = {
     /** @returns the component's id */
@@ -95,7 +93,7 @@ export function _createComponent<T = Record<string, unknown>>(spec: InternalComp
 
     /** @returns the default properties of this component */
     get properties(): T {
-      return properties as T;
+      return properties;
     },
 
     /** @returns can the component be removed from entities once attached? */

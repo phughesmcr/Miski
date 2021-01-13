@@ -37,38 +37,8 @@ export function createWorld(spec: WorldSpec): World {
     maxComponents = 1024n,
   } = { ...spec };
 
-  // constants
-  const {
-    archetypes,
-    components,
-    entities,
-    systems,
-    entityPool,
-  } = {
-    archetypes: new Map() as Map<bigint, Set<Entity>>,
-    components: new Map() as Map<string, Component<unknown>>,
-    entities: new Map() as Map<bigint, Entity>,
-    systems: [] as System[],
-    entityPool: _createPool({create: _createEntity, destroy: _destroyEntity, initialSize: initialPoolSize}),
-  };
-
-  // variables
-  let {
-    componentCount,
-    entityCount,
-    systemCount,
-    worldComponent,
-    worldEntity,
-  } = {
-    componentCount: 0n,
-    entityCount: 0n,
-    systemCount: 0n,
-    worldComponent: {} as Component<WorldComponent>,
-    worldEntity: {} as Entity,
-  };
-
   /** @private **/
-  const addEntityToArchetypeArray = (entity: Entity) => {
+  const addEntityToArchetypeArray = function(entity: Entity) {
     if (archetypes.get(entity.archetype) === undefined) {
       archetypes.set(entity.archetype, new Set());
     }
@@ -76,17 +46,31 @@ export function createWorld(spec: WorldSpec): World {
   };
 
   /** @private */
-  const removeEntityFromArchetypeArray = (entity: Entity) => {
+  const removeEntityFromArchetypeArray = function(entity: Entity) {
     archetypes.get(entity.archetype)?.delete(entity);
   };
 
   /** @private */
-  function _destroyEntity(entity: Entity): Entity {
+  const _destroyEntity = function(entity: Entity): Entity {
     entity._setId(-1n);
     removeComponentsFromEntity(entity, ...entity.allComponents);
     removeEntityFromArchetypeArray(entity);
     return entity;
-  }
+  };
+
+  // constants
+  const archetypes = new Map() as Map<bigint, Set<Entity>>;
+  const components = new Map() as Map<string, Component<unknown>>;
+  const entities = new Map() as Map<bigint, Entity>;
+  const systems = [] as System[];
+  const entityPool = _createPool({create: _createEntity, destroy: _destroyEntity, initialSize: initialPoolSize});
+
+  // variables
+  let entityCount = 0n;
+  let componentCount = 0n;
+  let systemCount = 0n;
+  let worldComponent = {} as Component<WorldComponent>;
+  let worldEntity = {} as Entity;
 
   const getters = {
     /** @returns an array of archetypes and their entities */

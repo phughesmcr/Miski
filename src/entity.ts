@@ -23,18 +23,12 @@ export type Entity = Readonly<{
 
 /** Create an new entity */
 export function _createEntity(): Entity {
-  const {
-    archetype,
-    components,
-    componentObjects,
-  } = {
-    archetype: createMask(0n),
-    components: {} as Record<string, unknown>,
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
-    componentObjects: new Set() as Set<Component<unknown>>,
-  };
+  const archetype = createMask(0n);
+  const components = {} as Record<string, unknown>;
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
+  const componentObjects = new Set() as Set<Component<unknown>>;
 
-  let { _id } = { _id: 0n };
+  let _id = 0n;
 
   // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
   const data = Object.create(

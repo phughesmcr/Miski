@@ -2,10 +2,7 @@
 "use strict";
 
 /** @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/assign */
-export function deepAssign(
-    target: Record<string | number | symbol, unknown>,
-    ...sources: Record<string | number | symbol, unknown>[]
-  ): Record<string | number | symbol, unknown> {
+export function deepAssign<T>(target: T, ...sources: T[]): T {
     sources.forEach(source => {
       const descriptors = Object.keys(source).reduce((descriptors, key) => {
         const desc = Object.getOwnPropertyDescriptor(source, key);
