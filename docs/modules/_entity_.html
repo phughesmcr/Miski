@@ -80,7 +80,6 @@
 							<h3>Functions</h3>
 							<ul class="tsd-index-list">
 								<li class="tsd-kind-function tsd-parent-kind-module"><a href="_entity_.html#_createentity" class="tsd-kind-icon">_create<wbr>Entity</a></li>
-								<li class="tsd-kind-function tsd-parent-kind-module"><a href="_entity_.html#_destroyentity" class="tsd-kind-icon">_destroy<wbr>Entity</a></li>
 							</ul>
 						</section>
 					</div>
@@ -91,10 +90,10 @@
 				<section class="tsd-panel tsd-member tsd-kind-type-alias tsd-parent-kind-module">
 					<a name="entity" class="tsd-anchor"></a>
 					<h3>Entity</h3>
-					<div class="tsd-signature tsd-kind-icon">Entity<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">Readonly</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-symbol">{ </span>archetype<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">bigint</span><span class="tsd-signature-symbol">; </span>id<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">bigint</span><span class="tsd-signature-symbol">; </span>hasComponent<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">any</span><span class="tsd-signature-symbol"> }</span><span class="tsd-signature-symbol">&gt;</span></div>
+					<div class="tsd-signature tsd-kind-icon">Entity<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">Readonly</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-symbol">{ </span>allComponents<span class="tsd-signature-symbol">: </span><a href="../interfaces/_component_.component.html" class="tsd-signature-type">Component</a><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">unknown</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">[]</span><span class="tsd-signature-symbol">; </span>archetype<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">bigint</span><span class="tsd-signature-symbol">; </span>id<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">bigint</span><span class="tsd-signature-symbol">; </span>hasComponent<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">any</span><span class="tsd-signature-symbol"> }</span><span class="tsd-signature-symbol">&gt;</span></div>
 					<aside class="tsd-sources">
 						<ul>
-							<li>Defined in entity.ts:7</li>
+							<li>Defined in <a href="https://github.com/phughesmcr/Miski/blob/305fc86/src/entity.ts#L7">entity.ts:7</a></li>
 						</ul>
 					</aside>
 				</section>
@@ -111,7 +110,7 @@
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<ul>
-									<li>Defined in entity.ts:31</li>
+									<li>Defined in <a href="https://github.com/phughesmcr/Miski/blob/305fc86/src/entity.ts#L25">entity.ts:25</a></li>
 								</ul>
 							</aside>
 							<div class="tsd-comment tsd-typography">
@@ -119,34 +118,6 @@
 									<p>Create an new entity</p>
 								</div>
 							</div>
-							<h4 class="tsd-returns-title">Returns <a href="_entity_.html#entity" class="tsd-signature-type">Entity</a></h4>
-						</li>
-					</ul>
-				</section>
-				<section class="tsd-panel tsd-member tsd-kind-function tsd-parent-kind-module">
-					<a name="_destroyentity" class="tsd-anchor"></a>
-					<h3>_destroy<wbr>Entity</h3>
-					<ul class="tsd-signatures tsd-kind-function tsd-parent-kind-module">
-						<li class="tsd-signature tsd-kind-icon">_destroy<wbr>Entity<span class="tsd-signature-symbol">(</span>entity<span class="tsd-signature-symbol">: </span><a href="_entity_.html#entity" class="tsd-signature-type">Entity</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><a href="_entity_.html#entity" class="tsd-signature-type">Entity</a></li>
-					</ul>
-					<ul class="tsd-descriptions">
-						<li class="tsd-description">
-							<aside class="tsd-sources">
-								<ul>
-									<li>Defined in entity.ts:25</li>
-								</ul>
-							</aside>
-							<div class="tsd-comment tsd-typography">
-								<div class="lead">
-									<p>Reset an entity to a blank state</p>
-								</div>
-							</div>
-							<h4 class="tsd-parameters-title">Parameters</h4>
-							<ul class="tsd-parameters">
-								<li>
-									<h5>entity: <a href="_entity_.html#entity" class="tsd-signature-type">Entity</a></h5>
-								</li>
-							</ul>
 							<h4 class="tsd-returns-title">Returns <a href="_entity_.html#entity" class="tsd-signature-type">Entity</a></h4>
 						</li>
 					</ul>
@@ -178,6 +149,9 @@
 						<a href="_system_.html">&quot;system&quot;</a>
 					</li>
 					<li class=" tsd-kind-module">
+						<a href="_utils_.html">&quot;utils&quot;</a>
+					</li>
+					<li class=" tsd-kind-module">
 						<a href="_world_.html">&quot;world&quot;</a>
 					</li>
 				</ul>
@@ -189,9 +163,6 @@
 					</li>
 					<li class=" tsd-kind-function tsd-parent-kind-module">
 						<a href="_entity_.html#_createentity" class="tsd-kind-icon">_create<wbr>Entity</a>
-					</li>
-					<li class=" tsd-kind-function tsd-parent-kind-module">
-						<a href="_entity_.html#_destroyentity" class="tsd-kind-icon">_destroy<wbr>Entity</a>
 					</li>
 				</ul>
 			</nav>

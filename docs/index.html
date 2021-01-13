@@ -64,8 +64,8 @@
 	<div class="row">
 		<div class="col-8 col-content">
 			<div class="tsd-panel tsd-typography">
-				<a href="#miski-ecs" id="miski-ecs" style="color: inherit; text-decoration: none;">
-					<h1>Miski ECS</h1>
+				<a href="#ⓜ-miski-ecs" id="ⓜ-miski-ecs" style="color: inherit; text-decoration: none;">
+					<h1>Ⓜ Miski ECS</h1>
 				</a>
 				<p><em><strong>Miski</strong>: Quechuan adjective meaning &quot;sweet&quot;</em>.</p>
 				<p><em><strong>Miski ECS</strong>: A sweet ECS architecture written in Typescript.</em></p>
@@ -74,6 +74,7 @@
 					<h2>Install</h2>
 				</a>
 				<p><code>CJS</code>, <code>ESM</code>, <code>IIFE</code> and <code>UMD</code> builds are available in the <code>./dist</code> folder.</p>
+				<p>Miski requires <code>BigInt</code> support.</p>
 				<a href="#usage" id="usage" style="color: inherit; text-decoration: none;">
 					<h2>Usage</h2>
 				</a>
@@ -125,20 +126,32 @@ world.addComponentsToEntity(box, size, colour, position);
 box.components.colour = { <span class="hljs-attr">r</span>: <span class="hljs-number">150</span>, <span class="hljs-attr">g</span>: <span class="hljs-number">150</span>, <span class="hljs-attr">b</span>: <span class="hljs-number">150</span> };
 box.components.position = { <span class="hljs-attr">x</span>: <span class="hljs-number">100</span>, <span class="hljs-attr">y</span>: <span class="hljs-number">250</span> };
 
-<span class="hljs-comment">// a simple function to draw the box to the canvas</span>
-<span class="hljs-comment">// N.B. function you intend to use as systems must take the following:</span>
+<span class="hljs-comment">// world systems support two functions</span>
+<span class="hljs-comment">// 1) an update function - (updateFn) - to potentially be called multiple times per frame</span>
+<span class="hljs-comment">// 2) a render (or post-update) function - (renderFn) - to be called only once per frame</span>
+<span class="hljs-comment">// you must supply at least one of these functions per system, or both</span>
+
+<span class="hljs-comment">// a simple update function to move boxes around the canvas</span>
+<span class="hljs-comment">// N.B. update functions you intend to use as systems must take the following:</span>
 <span class="hljs-comment">//     dt: {number} frame delta time</span>
+<span class="hljs-comment">//     entities {Entity[]} an array of entities</span>
+<span class="hljs-function"><span class="hljs-keyword">function</span> <span class="hljs-title">moveBoxes</span>(<span class="hljs-params">dt, entites</span>) </span>{
+  entities.forEach(<span class="hljs-function">(<span class="hljs-params">entity</span>) =&gt;</span> {
+    <span class="hljs-comment">// modify component properties</span>
+    entity.components.position.x += (<span class="hljs-number">0.5</span> * dt),
+    entity.components.position.y -= (<span class="hljs-number">0.5</span> * dt),
+  }
+}
+
+<span class="hljs-comment">// a simple render (or post-update) function to draw the boxes to the canvas</span>
+<span class="hljs-comment">// N.B. function you intend to use as systems must take the following:</span>
+<span class="hljs-comment">//     int: {number} frame interpolation amount</span>
 <span class="hljs-comment">//     entities {Entity[]} an array of entities</span>
 <span class="hljs-function"><span class="hljs-keyword">function</span> <span class="hljs-title">draw</span>(<span class="hljs-params">dt, entities</span>) </span>{
   <span class="hljs-comment">// clear canvas every frame</span>
   ctx.clearRect(<span class="hljs-number">0</span>, <span class="hljs-number">0</span>, canvas.width, canvas.height);
+  <span class="hljs-comment">// draw each entity</span>
   entities.forEach(<span class="hljs-function">(<span class="hljs-params">entity</span>) =&gt;</span> {
-    <span class="hljs-comment">// modify component properties</span>
-    entity.components.colour.r += <span class="hljs-number">1</span>;
-    entity.components.colour.b -= <span class="hljs-number">1</span>;
-    entity.components.position.x += <span class="hljs-number">0.5</span>,
-    entity.components.position.y -= <span class="hljs-number">0.5</span>,
-    <span class="hljs-comment">// draw</span>
     ctx.fillStyle = <span class="hljs-string">`rgb(<span class="hljs-subst">${entity.components.colour.r}</span>, <span class="hljs-subst">${entity.components.colour.g}</span>, <span class="hljs-subst">${entity.components.colour.b}</span>)`</span>;
     ctx.fillRect(
       entity.components.position.x,
@@ -149,32 +162,55 @@ box.components.position = { <span class="hljs-attr">x</span>: <span class="hljs-
   });
 }
 
-<span class="hljs-comment">// turn the draw function into a system</span>
-<span class="hljs-keyword">const</span> drawer = world.createSystem({
+<span class="hljs-comment">// turn the mover function into a system</span>
+<span class="hljs-keyword">const</span> mover = world.createSystem({
   <span class="hljs-comment">// the components required in the function</span>
   <span class="hljs-attr">components</span>: [
-    size,
-    colour,
     position,
   ],
   <span class="hljs-comment">// the function itself</span>
-  <span class="hljs-attr">system</span>: draw,
+  <span class="hljs-attr">updateFn</span>: moveBoxes,
+  <span class="hljs-comment">// you could add a renderFn here too if you wanted to</span>
 });
 
-<span class="hljs-comment">// enable the system</span>
+<span class="hljs-comment">// turn the mover function into a system</span>
+<span class="hljs-keyword">const</span> drawer = world.createSystem({
+  <span class="hljs-comment">// the components required in the function</span>
+  <span class="hljs-attr">components</span>: [
+    colour,
+    position,
+    size,
+  ],
+  <span class="hljs-comment">// the function itself</span>
+  <span class="hljs-attr">rendereFn</span>: draw,
+  <span class="hljs-comment">// you could add an updateFn here too if you wanted to</span>
+});
+
+<span class="hljs-comment">// enable the systems</span>
+mover.enable();
 drawer.enable();
 
-<span class="hljs-comment">// simple game loop</span>
-<span class="hljs-keyword">let</span> lastTime = <span class="hljs-number">0</span>;
-<span class="hljs-function"><span class="hljs-keyword">function</span> <span class="hljs-title">update</span>(<span class="hljs-params">time</span>) </span>{
-  <span class="hljs-keyword">const</span> dt = time - lastTime;
-  <span class="hljs-comment">// call update to run systems every frame</span>
-  world.update(dt);
+<span class="hljs-comment">// game loop example</span>
+<span class="hljs-keyword">let</span> lastTime = <span class="hljs-literal">null</span>;
+<span class="hljs-keyword">let</span> accumulator = <span class="hljs-number">0</span>;
+<span class="hljs-keyword">const</span> tempo = <span class="hljs-number">1</span>/<span class="hljs-number">60</span>;
+<span class="hljs-keyword">let</span> dt = tempo;
+
+<span class="hljs-function"><span class="hljs-keyword">function</span> <span class="hljs-title">onTick</span>(<span class="hljs-params">time</span>) </span>{
+  <span class="hljs-built_in">window</span>.requestAnimationFrame(onTick)
+  <span class="hljs-keyword">if</span> (lastTime !== <span class="hljs-literal">null</span>) {
+    accumulator += (time - lastTime) / <span class="hljs-number">1000</span>;
+    <span class="hljs-keyword">while</span> (accumulator &gt; dt) {
+      world.update(dt); <span class="hljs-comment">// all updateFns called here</span>
+      accumulator -= dt;
+    }
+  }
   lastTime = time;
-  <span class="hljs-built_in">window</span>.requestAnimationFrame(update);
+  world.render(accumulator / tempo); <span class="hljs-comment">// all renderFns called here</span>
 }
-update();</code></pre>
-				<p>See <code>./test/index.html</code> for a working example.</p>
+
+<span class="hljs-built_in">window</span>.requestAnimationFrame(onTick)</code></pre>
+				<p>See <code>./demo</code> for a more interesting working example.</p>
 				<a href="#license" id="license" style="color: inherit; text-decoration: none;">
 					<h2>License</h2>
 				</a>
@@ -205,6 +241,9 @@ update();</code></pre>
 					</li>
 					<li class=" tsd-kind-module">
 						<a href="modules/_system_.html">&quot;system&quot;</a>
+					</li>
+					<li class=" tsd-kind-module">
+						<a href="modules/_utils_.html">&quot;utils&quot;</a>
 					</li>
 					<li class=" tsd-kind-module">
 						<a href="modules/_world_.html">&quot;world&quot;</a>
