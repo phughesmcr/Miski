@@ -1,7 +1,7 @@
 /*! *****************************************************************************
  *
  * miski
- * v0.1.2
+ * v0.1.3
  *
  * MIT License
  * 
@@ -77,7 +77,7 @@ interface WorldSpec {
     maxComponents?: number | bigint;
 }
 interface World {
-    archetypes: [bigint, Entity[]][];
+    archetypes: [bigint, Set<Entity>][];
     components: Component<unknown>[];
     component: Component<WorldComponent>;
     entities: Entity[];
@@ -113,18 +113,22 @@ interface InternalComponentSpec<T = Record<string, unknown>> {
     name: string;
     /** The component's property object */
     properties: T;
+    /** Is the component removable once attached? */
+    removable?: boolean;
 }
 interface Component<T = Record<string, unknown>> {
     /** An array of entities associated with this component */
     entities: Entity[];
     /** The maximum entities component can attach to */
-    entityLimit: number | bigint | null | undefined;
+    entityLimit: number | bigint | null;
     /** The component's id */
     id: Readonly<bigint>;
     /** The component's name */
     name: Readonly<string>;
     /** The component's property object */
     properties: T;
+    /** Is the component removable once attached? */
+    removable: boolean;
     /** @hidden */
     _addEntity(entity: Entity): void;
     /** @hidden */
@@ -133,6 +137,8 @@ interface Component<T = Record<string, unknown>> {
     hasEntity(entity: Entity): boolean;
     /** Set the maximum entities component can attach to */
     setEntityLimit(limit: number | bigint | null): void;
+    /** Set whether the component be removed from entities once attached */
+    setRemovable(isRemovable: boolean): void;
 }
 
 export { Component, ComponentSpec, Entity, System, SystemSpec, World, createWorld };
