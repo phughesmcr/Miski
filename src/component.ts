@@ -32,7 +32,7 @@ export interface Component<T = Record<string, unknown>> {
   /** An array of entities associated with this component */
   entities: Entity[],
   /** The maximum entities component can attach to */
-  entityLimit: number | bigint | null | undefined,
+  entityLimit: number | bigint | null,
   /** The component's id */
   id: Readonly<bigint>,
   /** The component's name */
@@ -49,6 +49,8 @@ export interface Component<T = Record<string, unknown>> {
   hasEntity(entity: Entity): boolean
   /** Set the maximum entities component can attach to */
   setEntityLimit(limit: number | bigint | null): void,
+  /** Set whether the component be removed from entities once attached */
+  setRemovable(isRemovable: boolean): void,
 }
 
 /**
@@ -87,7 +89,7 @@ export function _createComponent<T = Record<string, unknown>>(spec: InternalComp
     },
 
     /** @returns the maximum entities this component can attach to */
-    get entityLimit(): number | bigint | null | undefined {
+    get entityLimit(): number | bigint | null {
       return entityLimit;
     },
 
