@@ -312,6 +312,7 @@ export function createWorld(spec: WorldSpec): World {
   worldComponent = createComponent<WorldComponent>({
     name: "world",
     entityLimit: 1,
+    removable: false,
     properties: {
       world,
     },

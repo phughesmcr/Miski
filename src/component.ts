@@ -23,6 +23,8 @@ interface InternalComponentSpec<T = Record<string, unknown>> {
   name: string,
   /** The component's property object */
   properties: T,
+  /** Is the component removable once attached? */
+  removable?: boolean,
 }
 
 export interface Component<T = Record<string, unknown>> {
@@ -36,6 +38,8 @@ export interface Component<T = Record<string, unknown>> {
   name: Readonly<string>,
   /** The component's property object */
   properties: T,
+  /** Is the component removable once attached? */
+  removable: boolean,
   /** @hidden */
   _addEntity(entity: Entity): void,
   /** @hidden */
@@ -52,7 +56,10 @@ export interface Component<T = Record<string, unknown>> {
  */
 export function _createComponent<T = Record<string, unknown>>(spec: InternalComponentSpec<T>): Component<T> {
   const { id, name, properties } = { ...spec };
-  let { entityLimit } = { ...spec };
+  let {
+    entityLimit = null,
+    removable = true,
+  } = { ...spec };
 
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
   const { entities } = { entities: new Set() as Set<Entity> };
@@ -81,7 +88,12 @@ export function _createComponent<T = Record<string, unknown>>(spec: InternalComp
     /** @returns the default properties of this component */
     get properties(): T {
       return properties;
-    }
+    },
+
+    /** @returns can the component be removed from entities once attached? */
+    get removable(): boolean {
+      return removable;
+    },
   };
 
   /**
@@ -104,6 +116,9 @@ export function _createComponent<T = Record<string, unknown>>(spec: InternalComp
    * @returns this component
    */
   const _removeEntity = function(entity: Entity): void {
+    if (!removable) {
+      throw new Error(`component ${name} is not removable.`);
+    }
     entities.delete(entity);
   };
 
@@ -117,10 +132,18 @@ export function _createComponent<T = Record<string, unknown>>(spec: InternalComp
 
   /**
    * Set the maximum number of entities this component can be associated with at one time
-   * @param limit the limit or null/undefined to remove the limit
+   * @param limit the limit or null to remove the limit
    */
-  const setEntityLimit = function(limit?: number | bigint | null): void {
+  const setEntityLimit = function(limit: number | bigint | null): void {
     entityLimit = limit;
+  };
+
+  /**
+   * Set whether the component be removed from entities once attached
+   * @param isRemovable boolean - true = removable
+   */
+  const setRemovable = function(isRemovable: boolean): void {
+    removable = isRemovable;
   };
 
   return Object.freeze(
@@ -129,6 +152,7 @@ export function _createComponent<T = Record<string, unknown>>(spec: InternalComp
       {
         hasEntity,
         setEntityLimit,
+        setRemovable,
         _addEntity,
         _removeEntity,
       }
