@@ -47,6 +47,7 @@ export function _createEntity(): Entity {
         }
       },
 
+      /** @returns an array of this entity's components */
       allComponents: {
         get: function(): Component<unknown>[] {
           return Array.from(componentObjects);

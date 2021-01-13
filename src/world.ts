@@ -94,6 +94,7 @@ export function createWorld(spec: WorldSpec): World {
   }
 
   const getters = {
+    /** @returns an array of archetypes and their entities */
     get archetypes() {
       return Array.from(archetypes.entries());
     },

@@ -6,6 +6,7 @@ import { World } from './world';
 
 /** A property specifically for the worldEntity */
 export interface WorldComponent {
+  /** The associated world object */
   world: World,
 }
 
@@ -14,26 +15,35 @@ export type ComponentSpec<T = Record<string, unknown>> = Omit<InternalComponentS
 
 /** Internal component specification object */
 interface InternalComponentSpec<T = Record<string, unknown>> {
+  /** The maximum entities component can attach to */
   entityLimit?: number | bigint | null,
+  /** The component's id */
   id: bigint,
+  /** The component's name */
   name: string,
+  /** The component's property object */
   properties: T,
 }
 
 export interface Component<T = Record<string, unknown>> {
-  id: Readonly<bigint>,
-  name: Readonly<string>,
-  entities: Readonly<Entity[]>,
+  /** An array of entities associated with this component */
+  entities: Entity[],
+  /** The maximum entities component can attach to */
   entityLimit: number | bigint | null | undefined,
+  /** The component's id */
+  id: Readonly<bigint>,
+  /** The component's name */
+  name: Readonly<string>,
+  /** The component's property object */
   properties: T,
-  /** Check if an entity is associated with this category */
-  hasEntity(entity: Entity): boolean
-  /** Set the maximum entities component can attach to */
-  setEntityLimit(limit: number | bigint | null): void,
   /** @hidden */
   _addEntity(entity: Entity): void,
   /** @hidden */
   _removeEntity(entity: Entity): void,
+  /** Check if an entity is associated with this category */
+  hasEntity(entity: Entity): boolean
+  /** Set the maximum entities component can attach to */
+  setEntityLimit(limit: number | bigint | null): void,
 }
 
 /**
@@ -48,10 +58,12 @@ export function _createComponent<T = Record<string, unknown>>(spec: InternalComp
   const { entities } = { entities: new Set() as Set<Entity> };
 
   const getters = {
+    /** @returns the component's id */
     get id(): bigint {
       return id;
     },
 
+    /** @returns the component's name */
     get name(): string {
       return name;
     },
@@ -61,7 +73,7 @@ export function _createComponent<T = Record<string, unknown>>(spec: InternalComp
       return Array.from(entities);
     },
 
-    /** the maximum entities component can attach to */
+    /** @returns the maximum entities this component can attach to */
     get entityLimit(): number | bigint | null | undefined {
       return entityLimit;
     },
@@ -95,10 +107,18 @@ export function _createComponent<T = Record<string, unknown>>(spec: InternalComp
     entities.delete(entity);
   };
 
+  /**
+   * Check if an entity is associated with this component
+   * @param entity the entity to test for
+   */
   const hasEntity = function(entity: Entity): boolean {
     return entities.has(entity);
   };
 
+  /**
+   * Set the maximum number of entities this component can be associated with at one time
+   * @param limit the limit or null/undefined to remove the limit
+   */
   const setEntityLimit = function(limit?: number | bigint | null): void {
     entityLimit = limit;
   };
