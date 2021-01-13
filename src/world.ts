@@ -242,18 +242,24 @@ export function createWorld(spec: WorldSpec): World {
    * @param dt frame delta time
    */
   const update = function(dt: number): void {
-    systems.forEach((system) => {
-      if (system.enabled) {
-        /** @todo make this more efficient */
-        const entities = Array.from(archetypes.entries()).reduce((arr, [archetype, ents]) => {
-          if ((system.archetype & archetype) === system.archetype) {
-            arr.push(...ents);
-          }
-          return arr;
-        }, [] as Entity[]);
-        system.update(dt, entities);
+    // for loops might be out of fashion,
+    // but they're much faster than reduce
+    const acs = Array.from(archetypes.entries());
+    const aLen = acs.length - 1;
+    const sLen = systems.length - 1;
+    const entities = [] as Entity[];
+    for (let i = sLen; i >= 0; i--) {
+      const system = systems[i];
+      if (system.enabled === false) continue;
+      for (let j = aLen; j >= 0; j--) {
+        const [arch, ents] = acs[j];
+        if ((system.archetype & arch) === system.archetype) {
+          entities.push(...ents);
+        }
       }
-    });
+      system.update(dt, entities);
+      entities.length = 0;
+    }
   };
 
   /**
@@ -261,18 +267,24 @@ export function createWorld(spec: WorldSpec): World {
    * @param int frame interpolation
    */
   const render = function(int: number): void {
-    systems.forEach((system) => {
-      if (system.enabled) {
-        /** @todo make this more efficient */
-        const entities = Array.from(archetypes.entries()).reduce((arr, [archetype, ents]) => {
-          if ((system.archetype & archetype) === system.archetype) {
-            arr.push(...ents);
-          }
-          return arr;
-        }, [] as Entity[]);
-        system.render(int, entities);
+    // for loops might be out of fashion,
+    // but they're much faster than reduce
+    const acs = Array.from(archetypes.entries());
+    const aLen = acs.length - 1;
+    const sLen = systems.length - 1;
+    const entities = [] as Entity[];
+    for (let i = sLen; i >= 0; i--) {
+      const system = systems[i];
+      if (system.enabled === false) continue;
+      for (let j = aLen; j >= 0; j--) {
+        const [arch, ents] = acs[j];
+        if ((system.archetype & arch) === system.archetype) {
+          entities.push(...ents);
+        }
       }
-    });
+      system.render(int, entities);
+      entities.length = 0;
+    }
   };
 
   // create worldEntity
