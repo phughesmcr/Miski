@@ -179,7 +179,7 @@ export function createWorld(spec: WorldSpec): World {
   const removeComponent = function<T>(component: Component<T>): boolean {
     const b = components.delete(component.name);
     if (b) {
-      component.entities.forEach((entity) => entity._removeComponent(component));
+      component.entities.forEach((entity) => removeComponentsFromEntity(entity, component));
     }
     return b;
   };
