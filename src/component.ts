@@ -58,14 +58,14 @@ export interface Component<T = Record<string, unknown>> {
  * @param spec the components specification object
  */
 export function _createComponent<T = Record<string, unknown>>(spec: InternalComponentSpec<T>): Component<T> {
-  const { id, name } = { ...spec };
+  const { id, name, properties } = { ...spec };
 
   // configurables
   let entityLimit = spec.entityLimit ?? null;
   let removable = (spec.entityLimit === undefined) ? true : false;
 
   // deep clone properties
-  const properties = deepAssign({}, spec.properties) as T;
+  deepAssign(properties, spec.properties);
 
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
   const entities = new Set() as Set<Entity>;
