@@ -1,6 +1,21 @@
 // Copyright (c) 2021 P. Hughes. All rights reserved. MIT license.
 "use strict";
 
+export type DisallowedKeys =
+    "constructor" |
+    "hasOwnProperty" |
+    "isPrototypeOf" |
+    "propertyIsEnumerable" |
+    "prototype" |
+    "toLocaleString" |
+    "toString" |
+    "valueOf" |
+    "__defineGetter__" |
+    "__defineSetter__" |
+    "__lookupGetter__" |
+    "__lookupGetter__" |
+    "__proto__";
+
 /** @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/assign */
 export function deepAssign<T>(target: T, ...sources: T[]): T {
     sources.forEach(source => {
