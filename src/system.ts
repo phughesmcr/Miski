@@ -12,6 +12,8 @@ interface InternalSystemSpec {
   components?: Component<unknown>[],
   /** The system's id */
   id: bigint,
+  /** A name / label for the system */
+  name: string,
   /** The system's render function */
   renderFn?: (int: number, entities: Entity[]) => void,
   /** The system's update function */
@@ -25,6 +27,8 @@ export type System = Readonly<{
   enabled: boolean,
   /** The system's id */
   id: bigint,
+  /** The name / label of the system */
+  name: string,
   /** Disable the system */
   disable(): void,
   /** Enable the system */
@@ -41,8 +45,9 @@ export type System = Readonly<{
  */
 export function _createSystem(spec: InternalSystemSpec): System {
   const {
-    id,
     components = [],
+    id,
+    name,
     updateFn = (() => void 0),
     renderFn = (() => void 0),
   } = { ...spec };
@@ -66,6 +71,11 @@ export function _createSystem(spec: InternalSystemSpec): System {
     /** @returns the system's id */
     get id(): bigint {
       return id;
+    },
+
+    /** @returns the system's name */
+    get name(): string {
+      return name;
     },
   };
 
