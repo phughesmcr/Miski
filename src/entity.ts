@@ -3,6 +3,7 @@
 
 import { Component } from './component';
 import { createMask } from './mask';
+import { World } from './world';
 
 export type Entity = Readonly<{
   /** The entity's archetype */
@@ -11,10 +12,14 @@ export type Entity = Readonly<{
   allComponents: Component<unknown>[],
   /** The entity's id */
   id: bigint,
+  /** The entity's world */
+  world: World | null,
   /** Check if a component is present in an entity */
   hasComponent(component: Component<unknown>): boolean,
   /** @hidden */
   _setId(id: bigint): Entity,
+  /** @hidden */
+  _setWorld(world: World | null): void,
   /** @hidden */
   _addComponent(component: Component<unknown>): Entity,
   /** @hidden */
@@ -29,6 +34,7 @@ export function _createEntity(): Entity {
   const componentObjects = new Set() as Set<Component<unknown>>;
 
   let _id = 0n;
+  let _world: World | null = null;
 
   // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
   const data = Object.create(
@@ -53,6 +59,12 @@ export function _createEntity(): Entity {
         get: function(): bigint {
           return _id;
         }
+      },
+
+      world: {
+        get: function(): World | null | undefined {
+          return _world;
+        },
       }
     }
   );
@@ -60,6 +72,11 @@ export function _createEntity(): Entity {
   /** @hidden */
   const _setId = function(id: bigint): void {
     _id = id;
+  };
+
+  /** @hidden */
+  const _setWorld = function(world: World | null) {
+    _world = world;
   };
 
   /** @hidden */
@@ -94,6 +111,7 @@ export function _createEntity(): Entity {
       data,
       {
         _setId,
+        _setWorld,
         _addComponent,
         _removeComponent,
         hasComponent,

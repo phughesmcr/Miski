@@ -3,7 +3,7 @@
 
 import { Component, ComponentSpec, WorldComponent, _createComponent } from './component';
 import { Entity, _createEntity } from './entity';
-import { _createPool } from './pool';
+import { Pool, _createPool } from './pool';
 import { System, SystemSpec, _createSystem } from './system';
 
 interface WorldSpec {
@@ -20,12 +20,16 @@ export interface World {
   systems: System[],
   createEntity(): Entity,
   removeEntity(entity: Entity): boolean,
+  getEntityById(id: bigint): Entity | undefined,
   createComponent<T>(spec: ComponentSpec<T>): Component<T>,
   removeComponent<T>(component: Component<T>): boolean,
+  getComponentByName(name: string): Component<unknown> | undefined,
   addComponentsToEntity(entity: Entity, ...components: Component<unknown>[]): Entity,
   removeComponentsFromEntity(entity: Entity, ...components: Component<unknown>[]): Entity,
   createSystem(spec: SystemSpec, idx?: number): System,
   removeSystem(system: System): boolean,
+  moveSystem(system: System | string, idx: number): System,
+  getSystemByName(name: string): System | undefined,
   update(dt: number): void,
   render(int: number): void,
 }
@@ -36,6 +40,11 @@ export function createWorld(spec: WorldSpec): World {
     initialPoolSize = 10,
     maxComponents = 1024n,
   } = { ...spec };
+
+  /** @private */
+  const isComponentRegistered = function<T>(component: Component<T>): boolean {
+    return components.get(component.name) === component;
+  };
 
   /** @private **/
   const addEntityToArchetypeArray = function(entity: Entity) {
@@ -51,7 +60,7 @@ export function createWorld(spec: WorldSpec): World {
   };
 
   /** @private */
-  const _destroyEntity = function(entity: Entity): Entity {
+  const destroyEntity = function(entity: Entity): Entity {
     entity._setId(-1n);
     removeComponentsFromEntity(entity, ...entity.allComponents);
     removeEntityFromArchetypeArray(entity);
@@ -63,7 +72,11 @@ export function createWorld(spec: WorldSpec): World {
   const components = new Map() as Map<string, Component<unknown>>;
   const entities = new Map() as Map<bigint, Entity>;
   const systems = [] as System[];
-  const entityPool = _createPool({create: _createEntity, destroy: _destroyEntity, initialSize: initialPoolSize});
+  const entityPool: Pool<Entity> = _createPool({
+    create: _createEntity,
+    destroy: destroyEntity,
+    initialSize: initialPoolSize,
+  });
 
   // variables
   let entityCount = 0n;
@@ -105,30 +118,26 @@ export function createWorld(spec: WorldSpec): World {
   };
 
   /**
-   * Create a new entity
-   * @returns a new entity
-   */
-  const createEntity = function(): Entity {
-    const entity = entityPool.get();
-    entity._setId(entityCount);
-    entities.set(entityCount, entity);
-    addEntityToArchetypeArray(entity);
-    ++entityCount;
-    return entity;
-  };
-
-  /**
    * Remove an entity from the world
    * and disassociate it from any components in the world
    * @param entity the entity to remove
    * @returns true if removed, false if entity not found
    */
   const removeEntity = function(entity: Entity): boolean {
+    if (!entity) return false;
     const b = entities.delete(entity.id);
-    if (b) {
+    if (b === true) {
       entityPool.release(entity);
     }
     return b;
+  };
+
+  /**
+   * Find an entity in the world by its id
+   * @param id the entity id to search for.
+   */
+  const getEntityById = function(id: bigint): Entity | undefined {
+    return entities.get(id);
   };
 
   /**
@@ -137,9 +146,13 @@ export function createWorld(spec: WorldSpec): World {
    * @returns the created component
    */
   const createComponent = function<T>(spec: ComponentSpec<T>): Component<T> {
-    if (maxComponents && componentCount > maxComponents) {
+    if (maxComponents !== undefined && componentCount > maxComponents) {
       throw new Error('Maximum component count reached.');
     }
+    if (components.has(spec.name)) {
+      throw new Error(`component "${spec.name}" already exists.`);
+    }
+    /** @todo validate input */
     const component = _createComponent({...spec, id: componentCount});
     components.set(component.name, component);
     ++componentCount;
@@ -153,11 +166,20 @@ export function createWorld(spec: WorldSpec): World {
    * @returns true if removed, false if component not found
    */
   const removeComponent = function<T>(component: Component<T>): boolean {
+    if (!component?.name) return false;
     const b = components.delete(component.name);
-    if (b) {
+    if (b === true) {
       component.entities.forEach((entity) => removeComponentsFromEntity(entity, component));
     }
     return b;
+  };
+
+  /**
+   * Find a component in the world by its name
+   * @param name the case-sensitive component name to search for.
+   */
+  const getComponentByName = function(name: string): Component<unknown> | undefined {
+    return components.get(name);
   };
 
   /**
@@ -166,10 +188,22 @@ export function createWorld(spec: WorldSpec): World {
    * @param components one or more component objects
    */
   const addComponentsToEntity = function(entity: Entity, ...components: Component<unknown>[]): Entity {
+    if (!entity) {
+      throw new Error('no entity provided.');
+    }
+    if (!components?.length) {
+      return entity;
+    }
     removeEntityFromArchetypeArray(entity);
     components.forEach((component) => {
-      component._addEntity(entity);
-      entity._addComponent(component);
+      if (isComponentRegistered(component) === false) {
+        /** @todo add function to avoid this error */
+        throw new Error(`component ${component.name} is not registered in this world.`);
+      }
+      if (component.hasEntity(entity) == false) {
+        component._addEntity(entity);
+        entity._addComponent(component);
+      }
     });
     addEntityToArchetypeArray(entity);
     return entity;
@@ -181,10 +215,21 @@ export function createWorld(spec: WorldSpec): World {
    * @param components one or more component objects
    */
   const removeComponentsFromEntity = function(entity: Entity, ...components: Component<unknown>[]): Entity {
+    if (!entity) {
+      throw new Error('no entity provided.');
+    }
+    if (!components?.length) {
+      return entity;
+    }
     removeEntityFromArchetypeArray(entity);
     components.forEach((component) => {
-      component._removeEntity(entity);
-      entity._removeComponent(component);
+      if (isComponentRegistered(component) === false) {
+        throw new Error(`component ${component.name} is not registered in this world.`);
+      }
+      if (component.hasEntity(entity) == true) {
+        component._removeEntity(entity);
+        entity._removeComponent(component);
+      }
     });
     addEntityToArchetypeArray(entity);
     return entity;
@@ -197,14 +242,19 @@ export function createWorld(spec: WorldSpec): World {
    * @returns the created system
    */
   const createSystem = function(spec: SystemSpec, idx?: number): System {
-    const system = _createSystem({...spec, id: systemCount});
-    if (idx !== undefined) {
-      systems.splice(idx, 0, system);
+    const tmp = getSystemByName(spec.name);
+    if (!tmp) {
+      const system = _createSystem({...spec, id: systemCount});
+      if (idx !== undefined) {
+        systems.splice(idx, 0, system);
+      } else {
+        systems.push(system);
+      }
+      ++systemCount;
+      return system;
     } else {
-      systems.push(system);
+      throw new Error(`system "${spec.name}" already exists.`);
     }
-    ++systemCount;
-    return system;
   };
 
   /**
@@ -213,12 +263,41 @@ export function createWorld(spec: WorldSpec): World {
    * @returns true if remove, false if system not found
    */
   const removeSystem = function(system: System): boolean {
+    if (!system?.name) return false;
     const idx = systems.indexOf(system);
     if (idx > -1) {
       systems.splice(idx, 1);
       return true;
     }
     return false;
+  };
+
+  /**
+   * Move a system in the execution order
+   * @param system the system to move
+   * @param idx the execution array index to move the system to
+   */
+  const moveSystem = function(system: System, idx: number): System {
+    if (!system?.id) {
+      throw new Error('no system provided.');
+    }
+    if (idx === undefined || typeof idx !== 'number') {
+      throw new Error('no new index provided.');
+    }
+    const removed = removeSystem(system);
+    if (removed === true) {
+      systems.splice(idx, 0, system);
+    }
+    return system;
+  };
+
+  /**
+   * Find a system in the world by its name
+   * @param name the case-sensitive system name to search for.
+   */
+  const getSystemByName = function(name: string): System | undefined {
+    if (!name) return undefined;
+    return systems.find((system) => system.name === name);
   };
 
   /**
@@ -271,26 +350,41 @@ export function createWorld(spec: WorldSpec): World {
     }
   };
 
-  // create worldEntity
-  worldEntity = createEntity();
-
-  const world: World = Object.freeze(
-    Object.assign(
-      getters,
-      {
-        createEntity,
-        removeEntity,
-        createComponent,
-        removeComponent,
-        addComponentsToEntity,
-        removeComponentsFromEntity,
-        createSystem,
-        removeSystem,
-        update,
-        render,
-      }
-    )
+  const world: World = Object.assign(
+    getters,
+    {
+      /**
+       * Create a new entity
+       * @returns a new entity
+       */
+      createEntity: function(): Entity {
+        const entity = entityPool.get();
+        entity._setId(entityCount);
+        entity._setWorld(world);
+        entities.set(entityCount, entity);
+        addEntityToArchetypeArray(entity);
+        ++entityCount;
+        return entity;
+      },
+      removeEntity,
+      getEntityById,
+      createComponent,
+      removeComponent,
+      getComponentByName,
+      addComponentsToEntity,
+      removeComponentsFromEntity,
+      createSystem,
+      removeSystem,
+      moveSystem,
+      getSystemByName,
+      update,
+      render,
+    }
   );
+
+
+  // create worldEntity
+  worldEntity = world.createEntity();
 
   // worldEntity setup - ensures archetype 1n is always just the worldEntity
   worldComponent = createComponent<WorldComponent>({
@@ -303,7 +397,7 @@ export function createWorld(spec: WorldSpec): World {
   });
   addComponentsToEntity(worldEntity, worldComponent);
 
-  return world;
+  return Object.freeze(world);
 }
 
 

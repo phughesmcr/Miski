@@ -16,6 +16,8 @@ export type DisallowedKeys =
     "__lookupGetter__" |
     "__proto__";
 
+export type RestrictedObject<T> = Pick<T, Exclude<keyof T, DisallowedKeys>>;
+
 /** @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/assign */
 export function deepAssign<T>(target: T, ...sources: T[]): T {
     sources.forEach(source => {
