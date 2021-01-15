@@ -3,7 +3,7 @@
 import { createWorld } from "../dist/esm/index.min.js";
 
 const canvas = document.querySelector('canvas');
-const ctx = canvas.getContext('2d');
+const ctx = canvas.getContext('2d', {alpha: false, desynchronized: false});
 
 // create our world - most functions take place through the world object
 const world = createWorld();
@@ -165,9 +165,15 @@ function onTick(time) {
   window.requestAnimationFrame(onTick)
   if (last !== null) {
     acc += (time - last) * 0.001;
+    let updateCount = 0;
     while (acc > dt) {
+      if (updateCount >= 240) {
+        acc = 1;
+        break;
+      }
       world.update(dt);
       acc -= dt;
+      updateCount++;
     }
   }
   last = time;
@@ -187,22 +193,15 @@ btnDisableUpdate.addEventListener('click', () => {
   mover.disable()
 }, false);
 
-const btnEnableRender = document.getElementById('btn-enable-render');
-const btnDisableRender = document.getElementById('btn-disable-render');
-btnEnableRender.addEventListener('click', () => {
-  renderer.enable()
-}, false);
-btnDisableRender.addEventListener('click', () => {
-  renderer.disable()
-}, false);
-
 const btnAdd = document.getElementById('btn-add-box');
 const btnRemove = document.getElementById('btn-remove-box');
 btnAdd.addEventListener('click', () => {
-  createBox();
+  for (let i = 0; i < 100; i++) {
+    createBox();
+  }
 }, false);
 btnRemove.addEventListener('click', () => {
-  if (ents.length) {
+  for (let i = 0; i < 100; i++) {
     world.removeEntity(ents.pop());
   }
 }, false);

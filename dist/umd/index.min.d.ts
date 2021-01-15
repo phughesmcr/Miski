@@ -1,7 +1,7 @@
 /*! *****************************************************************************
  *
  * miski
- * v0.1.3
+ * v0.1.4
  *
  * MIT License
  * 
@@ -27,29 +27,14 @@
  * 
 ***************************************************************************** */
 
-declare type Entity = Readonly<{
-    /** The entity's archetype */
-    archetype: bigint;
-    /** Array of components associated with the entity */
-    allComponents: Component<unknown>[];
-    /** The entity's id */
-    id: bigint;
-    /** Check if a component is present in an entity */
-    hasComponent(component: Component<unknown>): boolean;
-    /** @hidden */
-    _setId(id: bigint): Entity;
-    /** @hidden */
-    _addComponent(component: Component<unknown>): Entity;
-    /** @hidden */
-    _removeComponent(component: Component<unknown>): Entity;
-}>;
-
 declare type SystemSpec = Omit<InternalSystemSpec, "id">;
 interface InternalSystemSpec {
     /** The system's required components */
     components?: Component<unknown>[];
     /** The system's id */
     id: bigint;
+    /** A name / label for the system */
+    name: string;
     /** The system's render function */
     renderFn?: (int: number, entities: Entity[]) => void;
     /** The system's update function */
@@ -62,6 +47,8 @@ declare type System = Readonly<{
     enabled: boolean;
     /** The system's id */
     id: bigint;
+    /** The name / label of the system */
+    name: string;
     /** Disable the system */
     disable(): void;
     /** Enable the system */
@@ -85,16 +72,41 @@ interface World {
     systems: System[];
     createEntity(): Entity;
     removeEntity(entity: Entity): boolean;
+    getEntityById(id: bigint): Entity | undefined;
     createComponent<T>(spec: ComponentSpec<T>): Component<T>;
     removeComponent<T>(component: Component<T>): boolean;
+    getComponentByName(name: string): Component<unknown> | undefined;
     addComponentsToEntity(entity: Entity, ...components: Component<unknown>[]): Entity;
     removeComponentsFromEntity(entity: Entity, ...components: Component<unknown>[]): Entity;
     createSystem(spec: SystemSpec, idx?: number): System;
     removeSystem(system: System): boolean;
+    moveSystem(system: System | string, idx: number): System;
+    getSystemByName(name: string): System | undefined;
     update(dt: number): void;
     render(int: number): void;
 }
 declare function createWorld(spec: WorldSpec): World;
+
+declare type Entity = Readonly<{
+    /** The entity's archetype */
+    archetype: bigint;
+    /** Array of components associated with the entity */
+    allComponents: Component<unknown>[];
+    /** The entity's id */
+    id: bigint;
+    /** The entity's world */
+    world: World | null;
+    /** Check if a component is present in an entity */
+    hasComponent(component: Component<unknown>): boolean;
+    /** @hidden */
+    _setId(id: bigint): Entity;
+    /** @hidden */
+    _setWorld(world: World | null): void;
+    /** @hidden */
+    _addComponent(component: Component<unknown>): Entity;
+    /** @hidden */
+    _removeComponent(component: Component<unknown>): Entity;
+}>;
 
 /** A property specifically for the worldEntity */
 interface WorldComponent {
