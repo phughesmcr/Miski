@@ -177,21 +177,6 @@ export function createWorld(spec: WorldSpec): World {
   };
 
   /**
-   * Remove a component from the world
-   * and disassociate it from any entities
-   * @param component the component to remove
-   * @returns true if removed, false if component not found
-   */
-  const removeComponent = function<T>(component: Component<T>): boolean {
-    if (!component?.name) return false;
-    const b = components.delete(component.name);
-    if (b === true) {
-      component.entities.forEach((entity) => removeComponentsFromEntity(entity, component));
-    }
-    return b;
-  };
-
-  /**
    * Find a component in the world by its name
    * @param name the case-sensitive component name to search for.
    */
@@ -200,11 +185,34 @@ export function createWorld(spec: WorldSpec): World {
   };
 
   /**
+   * Remove a component from the world
+   * and disassociate it from any entities
+   * @param component the component to remove
+   * @returns true if removed, false if component not found
+   */
+  const removeComponent = function<T>(component: Component<T> | string): boolean {
+    if (!component) return false;
+    if (typeof component === 'string') {
+      const tmp = getComponentByName(component);
+      if (tmp) {
+        component = tmp as Component<T>;
+      } else {
+        throw new Error(`component "${component}" not found.`);
+      }
+    }
+    const b = components.delete(component.name);
+    if (b === true) {
+      component.entities.forEach((entity) => removeComponentsFromEntity(entity, component as Component<T>));
+    }
+    return b;
+  };
+
+  /**
    * Associate components with an entity
    * @param entity the entity to add components to
-   * @param components one or more component objects
+   * @param components one or more component objects or names
    */
-  const addComponentsToEntity = function(entity: Entity, ...components: Component<unknown>[]): Entity {
+  const addComponentsToEntity = function(entity: Entity, ...components: (Component<unknown> | string)[]): Entity {
     if (!entity) {
       throw new Error('no entity provided.');
     }
@@ -213,6 +221,14 @@ export function createWorld(spec: WorldSpec): World {
     }
     removeEntityFromArchetypeArray(entity);
     components.forEach((component) => {
+      if (typeof component === 'string') {
+        const tmp = getComponentByName(component);
+        if (tmp) {
+          component = tmp;
+        } else {
+          throw new Error(`component "${component}" not found.`);
+        }
+      }
       if (isComponentRegistered(component) === false) {
         /** @todo add function to avoid this error */
         throw new Error(`component ${component.name} is not registered in this world.`);
@@ -229,9 +245,9 @@ export function createWorld(spec: WorldSpec): World {
   /**
    * Disassociate components from an entity
    * @param entity the entity to remove components from
-   * @param components one or more component objects
+   * @param components one or more component objects or names
    */
-  const removeComponentsFromEntity = function(entity: Entity, ...components: Component<unknown>[]): Entity {
+  const removeComponentsFromEntity = function(entity: Entity, ...components: (Component<unknown> | string)[]): Entity {
     if (!entity) {
       throw new Error('no entity provided.');
     }
@@ -240,6 +256,14 @@ export function createWorld(spec: WorldSpec): World {
     }
     removeEntityFromArchetypeArray(entity);
     components.forEach((component) => {
+      if (typeof component === 'string') {
+        const tmp = getComponentByName(component);
+        if (tmp) {
+          component = tmp;
+        } else {
+          throw new Error(`component "${component}" not found.`);
+        }
+      }
       if (isComponentRegistered(component) === false) {
         throw new Error(`component ${component.name} is not registered in this world.`);
       }
@@ -259,9 +283,21 @@ export function createWorld(spec: WorldSpec): World {
    * @returns the created system
    */
   const createSystem = function(spec: SystemSpec, idx?: number): System {
-    const tmp = getSystemByName(spec.name);
-    if (!tmp) {
-      const system = _createSystem({...spec, id: systemCount});
+    if (!getSystemByName(spec.name)) {
+      const components = spec.components?.reduce((arr, curr) => {
+        if (typeof curr === 'string') {
+          const tmp = getComponentByName(curr);
+          if (tmp) {
+            arr.push(tmp);
+          } else {
+            throw new Error(`component "${curr}" not found`);
+          }
+        } else {
+          arr.push(curr);
+        }
+        return arr;
+      }, [] as Component<unknown>[]);
+      const system = _createSystem({...spec, components: components, id: systemCount});
       if (idx !== undefined) {
         systems.splice(idx, 0, system);
       } else {

@@ -9,7 +9,7 @@ export type SystemSpec = Omit<InternalSystemSpec, "id">;
 
 interface InternalSystemSpec {
   /** The system's required components */
-  components?: Component<unknown>[],
+  components?: (Component<unknown> | string)[],
   /** The system's id */
   id: bigint,
   /** A name / label for the system */
