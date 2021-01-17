@@ -1,6 +1,9 @@
 // Copyright (c) 2021 P. Hughes. All rights reserved. MIT license.
 "use strict";
 
+import { Component } from './component';
+import { createMask } from './mask';
+
 export type DisallowedKeys =
     "constructor" |
     "hasOwnProperty" |
@@ -38,4 +41,10 @@ export function deepAssign<T>(target: T, ...sources: T[]): T {
       Object.defineProperties(target, descriptors);
     });
     return target;
+}
+
+export function componentsToArchetype(...components: Component<unknown>[]): bigint {
+  const archetype = createMask(0n);
+  components.forEach((component) => archetype.set(component.id));
+  return archetype.value;
 }

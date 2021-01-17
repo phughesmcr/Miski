@@ -5,6 +5,7 @@ import { Component, ComponentSpec, WorldComponent, _createComponent } from './co
 import { Entity, _createEntity } from './entity';
 import { Pool, _createPool } from './pool';
 import { System, SystemSpec, _createSystem } from './system';
+import { componentsToArchetype } from './utils';
 
 interface WorldSpec {
   initialPoolSize?: number | bigint;
@@ -21,6 +22,7 @@ export interface World {
   createEntity(): Entity,
   removeEntity(entity: Entity): boolean,
   getEntityById(id: bigint): Entity | undefined,
+  getEntitiesByComponents(...components: Component<unknown>[]): Entity[],
   createComponent<T>(spec: ComponentSpec<T>): Component<T>,
   removeComponent<T>(component: Component<T>): boolean,
   getComponentByName(name: string): Component<unknown> | undefined,
@@ -131,6 +133,20 @@ export function createWorld(spec: WorldSpec): World {
       entityPool.release(entity);
     }
     return b;
+  };
+
+  /**
+   * Get entities that have a given set of components
+   * @param components components to test for
+   */
+  const getEntitiesByComponents = function(...components: Component<unknown>[]): Entity[] {
+    const archetype = componentsToArchetype(...components);
+    return Array.from(archetypes.entries()).reduce((arr, [arch, ents]) => {
+      if ((archetype & arch) === archetype) {
+        arr.push(...ents);
+      }
+      return arr;
+    }, [] as Entity[]);
   };
 
   /**
@@ -391,6 +407,7 @@ export function createWorld(spec: WorldSpec): World {
       },
       removeEntity,
       getEntityById,
+      getEntitiesByComponents,
       createComponent,
       removeComponent,
       getComponentByName,
