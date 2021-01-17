@@ -5,11 +5,15 @@ import { Component } from './component';
 import { Entity } from './entity';
 import { createMask } from './mask';
 
-export type SystemSpec = Omit<InternalSystemSpec, "id">;
+export type SystemSpec = Omit<InternalSystemSpec, "id" | "components"> & externalSystemSpec;
+
+interface externalSystemSpec {
+  components?: (Component<unknown> | string)[],
+}
 
 interface InternalSystemSpec {
   /** The system's required components */
-  components?: (Component<unknown> | string)[],
+  components?: Component<unknown>[],
   /** The system's id */
   id: bigint,
   /** A name / label for the system */
