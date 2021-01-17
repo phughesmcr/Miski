@@ -128,6 +128,9 @@ export function createWorld(spec: WorldSpec): World {
    */
   const removeEntity = function(entity: Entity): boolean {
     if (!entity) return false;
+    if (entity === world.entity) {
+      throw new Error('removing world.entity is not allowed.');
+    }
     const b = entities.delete(entity.id);
     if (b === true) {
       entityPool.release(entity);
@@ -199,6 +202,9 @@ export function createWorld(spec: WorldSpec): World {
       } else {
         throw new Error(`component "${component}" not found.`);
       }
+    }
+    if (component.name === 'world') {
+      throw new Error('removing world.component is not allowed.');
     }
     const b = components.delete(component.name);
     if (b === true) {
