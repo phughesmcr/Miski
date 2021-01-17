@@ -12,12 +12,23 @@ Miski is currently in alpha. Expect breaking changes every version until beta.
 
 Miski requires `BigInt` support.
 
+### npm
+```bash
+npm install --production miski
+```
+
+```javascript
+import { createWorld } from "miski";
+// OR
+const misky = require("miski");
+```
+
 ## Usage
 
 A simple box on a 2d canvas example:
 
 ```javascript
-import { createWorld } from "../dist/esm/index.min.js";
+import { createWorld } from 'miski';
 const canvas = document.querySelector('canvas');
 const ctx = canvas.getContext('2d');
 
