@@ -14,9 +14,11 @@ interface InternalSystemSpec {
   id: bigint,
   /** A name / label for the system */
   name: string,
-  /** The system's render function */
+  /** The system's pre-update function. Runs once per frame before the update loop */
+  preUpdateFn: (entities: Entity[]) => void,
+  /** The system's render function. Runs once per frame after the update loop */
   renderFn?: (int: number, entities: Entity[]) => void,
-  /** The system's update function */
+  /** The system's update function. Runs 0...n times per frame */
   updateFn?: (dt: number, entities: Entity[]) => void,
 }
 
@@ -33,6 +35,8 @@ export type System = Readonly<{
   disable(): void,
   /** Enable the system */
   enable(): void,
+  /** The system's pre-update function */
+  preUpdate(entities: Entity[]): void,
   /** The system's render function */
   render(int: number, entities: Entity[]): void,
   /** The system's update function */
@@ -48,6 +52,7 @@ export function _createSystem(spec: InternalSystemSpec): System {
     components = [],
     id,
     name,
+    preUpdateFn = (() => void 0),
     updateFn = (() => void 0),
     renderFn = (() => void 0),
   } = { ...spec };
@@ -89,6 +94,10 @@ export function _createSystem(spec: InternalSystemSpec): System {
     enabled = false;
   };
 
+  const preUpdate = function(entities: Entity[]): void {
+    preUpdateFn(entities);
+  };
+
   /** Call the system's update function */
   const update = function(dt: number, entities: Entity[]): void {
     updateFn(dt, entities);
@@ -107,6 +116,7 @@ export function _createSystem(spec: InternalSystemSpec): System {
         disable,
         update,
         render,
+        preUpdate,
       }
     )
   );

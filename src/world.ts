@@ -30,6 +30,7 @@ export interface World {
   removeSystem(system: System): boolean,
   moveSystem(system: System | string, idx: number): System,
   getSystemByName(name: string): System | undefined,
+  preUpdate(): void,
   update(dt: number): void,
   render(int: number): void,
 }
@@ -300,8 +301,30 @@ export function createWorld(spec: WorldSpec): World {
     return systems.find((system) => system.name === name);
   };
 
+  /** Call preUpdateFn on all systems */
+  const preUpdate = function(): void {
+    // for loops might be out of fashion,
+    // but they're much faster than reduce
+    const acs = Array.from(archetypes.entries());
+    const aLen = acs.length - 1;
+    const sLen = systems.length - 1;
+    const entities = [] as Entity[];
+    for (let i = sLen; i >= 0; i--) {
+      const system = systems[i];
+      if (system.enabled === false) continue;
+      for (let j = aLen; j >= 0; j--) {
+        const [arch, ents] = acs[j];
+        if ((system.archetype & arch) === system.archetype) {
+          entities.push(...ents);
+        }
+      }
+      system.preUpdate(entities);
+      entities.length = 0;
+    }
+  };
+
   /**
-   * Call update on all systems
+   * Call updateFn on all systems
    * @param dt frame delta time
    */
   const update = function(dt: number): void {
@@ -326,7 +349,7 @@ export function createWorld(spec: WorldSpec): World {
   };
 
   /**
-   * Call render on all systems
+   * Call renderFn on all systems
    * @param int frame interpolation
    */
   const render = function(int: number): void {
@@ -377,11 +400,11 @@ export function createWorld(spec: WorldSpec): World {
       removeSystem,
       moveSystem,
       getSystemByName,
+      preUpdate,
       update,
       render,
     }
   );
-
 
   // create worldEntity
   worldEntity = world.createEntity();
