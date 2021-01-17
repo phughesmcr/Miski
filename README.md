@@ -152,6 +152,9 @@ window.requestAnimationFrame(onTick)
 
 See `./demo` for a more interesting working example.
 
+## Acknowledgements
+Miski is inspired by [ape-ecs](https://github.com/fritzy/ape-ecs), [ECSY](https://github.com/ecsyjs/ecsy), [Geotic](https://github.com/ddmills/geotic), [HECS](https://github.com/gohyperr/hecs), and [classless.md](https://gist.github.com/mpj/17d8d73275bca303e8d2)
+
 ## License
 &copy; 2021 P. Hughes. All rights reserved.
 
