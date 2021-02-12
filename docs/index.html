@@ -7,6 +7,7 @@
 	<meta name="description" content="Documentation for miski">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<link rel="stylesheet" href="assets/css/main.css">
+	<script async src="assets/js/search.js" id="search-script"></script>
 </head>
 <body>
 <header>
@@ -40,8 +41,6 @@
 							<label class="tsd-widget" for="tsd-filter-inherited">Inherited</label>
 							<input type="checkbox" id="tsd-filter-externals" checked />
 							<label class="tsd-widget" for="tsd-filter-externals">Externals</label>
-							<input type="checkbox" id="tsd-filter-only-exported" />
-							<label class="tsd-widget" for="tsd-filter-only-exported">Only exported</label>
 						</div>
 					</div>
 					<a href="#" class="tsd-widget menu no-caption" data-toggle="menu">Menu</a>
@@ -51,11 +50,6 @@
 	</div>
 	<div class="tsd-page-title">
 		<div class="container">
-			<ul class="tsd-breadcrumb">
-				<li>
-					<a href="globals.html">Globals</a>
-				</li>
-			</ul>
 			<h1>miski</h1>
 		</div>
 	</div>
@@ -75,142 +69,156 @@
 				</a>
 				<p><code>CJS</code>, <code>ESM</code>, <code>IIFE</code> and <code>UMD</code> builds are available in the <code>./dist</code> folder.</p>
 				<p>Miski requires <code>BigInt</code> support.</p>
+				<a href="#npm" id="npm" style="color: inherit; text-decoration: none;">
+					<h3>npm</h3>
+				</a>
+				<pre><code class="language-bash"><span style="color: #000000">npm install --production miski</span>
+</code></pre>
+				<pre><code class="language-javascript"><span style="color: #AF00DB">import</span><span style="color: #000000"> { </span><span style="color: #001080">createWorld</span><span style="color: #000000"> } </span><span style="color: #AF00DB">from</span><span style="color: #000000"> </span><span style="color: #A31515">&quot;miski&quot;</span><span style="color: #000000">;</span>
+<span style="color: #008000">// OR</span>
+<span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">misky</span><span style="color: #000000"> = </span><span style="color: #795E26">require</span><span style="color: #000000">(</span><span style="color: #A31515">&quot;miski&quot;</span><span style="color: #000000">);</span>
+</code></pre>
 				<a href="#usage" id="usage" style="color: inherit; text-decoration: none;">
 					<h2>Usage</h2>
 				</a>
 				<p>A simple box on a 2d canvas example:</p>
-				<pre><code class="language-javascript"><span class="hljs-keyword">import</span> { createWorld } <span class="hljs-keyword">from</span> <span class="hljs-string">&quot;../dist/esm/index.min.js&quot;</span>;
-<span class="hljs-keyword">const</span> canvas = <span class="hljs-built_in">document</span>.querySelector(<span class="hljs-string">&#x27;canvas&#x27;</span>);
-<span class="hljs-keyword">const</span> ctx = canvas.getContext(<span class="hljs-string">&#x27;2d&#x27;</span>);
+				<pre><code class="language-javascript"><span style="color: #AF00DB">import</span><span style="color: #000000"> { </span><span style="color: #001080">createWorld</span><span style="color: #000000"> } </span><span style="color: #AF00DB">from</span><span style="color: #000000"> </span><span style="color: #A31515">&#039;miski&#039;</span><span style="color: #000000">;</span>
+<span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">canvas</span><span style="color: #000000"> = </span><span style="color: #001080">document</span><span style="color: #000000">.</span><span style="color: #795E26">querySelector</span><span style="color: #000000">(</span><span style="color: #A31515">&#039;canvas&#039;</span><span style="color: #000000">);</span>
+<span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">ctx</span><span style="color: #000000"> = </span><span style="color: #001080">canvas</span><span style="color: #000000">.</span><span style="color: #795E26">getContext</span><span style="color: #000000">(</span><span style="color: #A31515">&#039;2d&#039;</span><span style="color: #000000">);</span>
 
-<span class="hljs-comment">// create our world - most functions take place through the world object</span>
-<span class="hljs-keyword">const</span> world = createWorld({
-  <span class="hljs-attr">initialPoolSize</span>: <span class="hljs-number">10</span>,
-  <span class="hljs-attr">maxComponents</span>: <span class="hljs-number">1024</span>,
-});
+<span style="color: #008000">// create our world - most functions take place through the world object</span>
+<span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">world</span><span style="color: #000000"> = </span><span style="color: #795E26">createWorld</span><span style="color: #000000">({</span>
+<span style="color: #000000">  </span><span style="color: #001080">initialPoolSize:</span><span style="color: #000000"> </span><span style="color: #098658">10</span><span style="color: #000000">,</span>
+<span style="color: #000000">  </span><span style="color: #001080">maxComponents:</span><span style="color: #000000"> </span><span style="color: #098658">1024</span><span style="color: #000000">,</span>
+<span style="color: #000000">});</span>
 
-<span class="hljs-comment">// define some components - the properties given here are the default properties of the component</span>
-<span class="hljs-keyword">const</span> size = world.createComponent({
-  <span class="hljs-attr">name</span>: <span class="hljs-string">&quot;size&quot;</span>,
-  <span class="hljs-attr">properties</span>: {
-    <span class="hljs-attr">height</span>: <span class="hljs-number">100</span>,
-    <span class="hljs-attr">width</span>: <span class="hljs-number">100</span>,
-  },
-});
+<span style="color: #008000">// define some components - the properties given here are the default properties of the component</span>
+<span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">size</span><span style="color: #000000"> = </span><span style="color: #001080">world</span><span style="color: #000000">.</span><span style="color: #795E26">createComponent</span><span style="color: #000000">({</span>
+<span style="color: #000000">  </span><span style="color: #001080">name:</span><span style="color: #000000"> </span><span style="color: #A31515">&quot;size&quot;</span><span style="color: #000000">,</span>
+<span style="color: #000000">  </span><span style="color: #001080">properties:</span><span style="color: #000000"> {</span>
+<span style="color: #000000">    </span><span style="color: #001080">height:</span><span style="color: #000000"> </span><span style="color: #098658">100</span><span style="color: #000000">,</span>
+<span style="color: #000000">    </span><span style="color: #001080">width:</span><span style="color: #000000"> </span><span style="color: #098658">100</span><span style="color: #000000">,</span>
+<span style="color: #000000">  },</span>
+<span style="color: #000000">});</span>
 
-<span class="hljs-keyword">const</span> colour = world.createComponent({
-  <span class="hljs-attr">name</span>: <span class="hljs-string">&quot;colour&quot;</span>,
-  <span class="hljs-attr">properties</span>: {
-    <span class="hljs-attr">r</span>: <span class="hljs-number">0</span>,
-    <span class="hljs-attr">g</span>: <span class="hljs-number">0</span>,
-    <span class="hljs-attr">b</span>: <span class="hljs-number">0</span>,
-  },
-});
+<span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">colour</span><span style="color: #000000"> = </span><span style="color: #001080">world</span><span style="color: #000000">.</span><span style="color: #795E26">createComponent</span><span style="color: #000000">({</span>
+<span style="color: #000000">  </span><span style="color: #001080">name:</span><span style="color: #000000"> </span><span style="color: #A31515">&quot;colour&quot;</span><span style="color: #000000">,</span>
+<span style="color: #000000">  </span><span style="color: #001080">properties:</span><span style="color: #000000"> {</span>
+<span style="color: #000000">    </span><span style="color: #001080">r:</span><span style="color: #000000"> </span><span style="color: #098658">0</span><span style="color: #000000">,</span>
+<span style="color: #000000">    </span><span style="color: #001080">g:</span><span style="color: #000000"> </span><span style="color: #098658">0</span><span style="color: #000000">,</span>
+<span style="color: #000000">    </span><span style="color: #001080">b:</span><span style="color: #000000"> </span><span style="color: #098658">0</span><span style="color: #000000">,</span>
+<span style="color: #000000">  },</span>
+<span style="color: #000000">});</span>
 
-<span class="hljs-keyword">const</span> position = world.createComponent({
-  <span class="hljs-attr">name</span>: <span class="hljs-string">&quot;position&quot;</span>,
-  <span class="hljs-attr">properties</span>: {
-    <span class="hljs-attr">x</span>: <span class="hljs-number">0</span>,
-    <span class="hljs-attr">y</span>: <span class="hljs-number">0</span>,
-  },
-});
+<span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">position</span><span style="color: #000000"> = </span><span style="color: #001080">world</span><span style="color: #000000">.</span><span style="color: #795E26">createComponent</span><span style="color: #000000">({</span>
+<span style="color: #000000">  </span><span style="color: #001080">name:</span><span style="color: #000000"> </span><span style="color: #A31515">&quot;position&quot;</span><span style="color: #000000">,</span>
+<span style="color: #000000">  </span><span style="color: #001080">properties:</span><span style="color: #000000"> {</span>
+<span style="color: #000000">    </span><span style="color: #001080">x:</span><span style="color: #000000"> </span><span style="color: #098658">0</span><span style="color: #000000">,</span>
+<span style="color: #000000">    </span><span style="color: #001080">y:</span><span style="color: #000000"> </span><span style="color: #098658">0</span><span style="color: #000000">,</span>
+<span style="color: #000000">  },</span>
+<span style="color: #000000">});</span>
 
-<span class="hljs-comment">// create our box entity - createEntity takes no arguments</span>
-<span class="hljs-keyword">const</span> box = world.createEntity();
+<span style="color: #008000">// create our box entity - createEntity takes no arguments</span>
+<span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">box</span><span style="color: #000000"> = </span><span style="color: #001080">world</span><span style="color: #000000">.</span><span style="color: #795E26">createEntity</span><span style="color: #000000">();</span>
 
-<span class="hljs-comment">// add the components to the entity</span>
-world.addComponentsToEntity(box, size, colour, position);
+<span style="color: #008000">// add the components to the entity</span>
+<span style="color: #001080">world</span><span style="color: #000000">.</span><span style="color: #795E26">addComponentsToEntity</span><span style="color: #000000">(</span><span style="color: #001080">box</span><span style="color: #000000">, </span><span style="color: #001080">size</span><span style="color: #000000">, </span><span style="color: #001080">colour</span><span style="color: #000000">, </span><span style="color: #001080">position</span><span style="color: #000000">);</span>
 
-<span class="hljs-comment">// overwrite some of the default properties with entity specific properties</span>
-<span class="hljs-comment">// N.B. you can access the individual properties of course (e.g. box.components.colour.r)</span>
-box.components.colour = { <span class="hljs-attr">r</span>: <span class="hljs-number">150</span>, <span class="hljs-attr">g</span>: <span class="hljs-number">150</span>, <span class="hljs-attr">b</span>: <span class="hljs-number">150</span> };
-box.components.position = { <span class="hljs-attr">x</span>: <span class="hljs-number">100</span>, <span class="hljs-attr">y</span>: <span class="hljs-number">250</span> };
+<span style="color: #008000">// overwrite some of the default properties with entity specific properties</span>
+<span style="color: #008000">// N.B. you can access the individual properties of course (e.g. box.components.colour.r)</span>
+<span style="color: #001080">box</span><span style="color: #000000">.</span><span style="color: #001080">components</span><span style="color: #000000">.</span><span style="color: #001080">colour</span><span style="color: #000000"> = { </span><span style="color: #001080">r:</span><span style="color: #000000"> </span><span style="color: #098658">150</span><span style="color: #000000">, </span><span style="color: #001080">g:</span><span style="color: #000000"> </span><span style="color: #098658">150</span><span style="color: #000000">, </span><span style="color: #001080">b:</span><span style="color: #000000"> </span><span style="color: #098658">150</span><span style="color: #000000"> };</span>
+<span style="color: #001080">box</span><span style="color: #000000">.</span><span style="color: #001080">components</span><span style="color: #000000">.</span><span style="color: #001080">position</span><span style="color: #000000"> = { </span><span style="color: #001080">x:</span><span style="color: #000000"> </span><span style="color: #098658">100</span><span style="color: #000000">, </span><span style="color: #001080">y:</span><span style="color: #000000"> </span><span style="color: #098658">250</span><span style="color: #000000"> };</span>
 
-<span class="hljs-comment">// world systems support two functions</span>
-<span class="hljs-comment">// 1) an update function - (updateFn) - to potentially be called multiple times per frame</span>
-<span class="hljs-comment">// 2) a render (or post-update) function - (renderFn) - to be called only once per frame</span>
-<span class="hljs-comment">// you must supply at least one of these functions per system, or both</span>
+<span style="color: #008000">// world systems support two functions</span>
+<span style="color: #008000">// 1) an update function - (updateFn) - to potentially be called multiple times per frame</span>
+<span style="color: #008000">// 2) a render (or post-update) function - (renderFn) - to be called only once per frame</span>
+<span style="color: #008000">// you must supply at least one of these functions per system, or both</span>
 
-<span class="hljs-comment">// a simple update function to move boxes around the canvas</span>
-<span class="hljs-comment">// N.B. update functions you intend to use as systems must take the following:</span>
-<span class="hljs-comment">//     dt: {number} frame delta time</span>
-<span class="hljs-comment">//     entities {Entity[]} an array of entities</span>
-<span class="hljs-function"><span class="hljs-keyword">function</span> <span class="hljs-title">moveBoxes</span>(<span class="hljs-params">dt, entites</span>) </span>{
-  entities.forEach(<span class="hljs-function">(<span class="hljs-params">entity</span>) =&gt;</span> {
-    <span class="hljs-comment">// modify component properties</span>
-    entity.components.position.x += (<span class="hljs-number">0.5</span> * dt),
-    entity.components.position.y -= (<span class="hljs-number">0.5</span> * dt),
-  }
-}
+<span style="color: #008000">// a simple update function to move boxes around the canvas</span>
+<span style="color: #008000">// N.B. update functions you intend to use as systems must take the following:</span>
+<span style="color: #008000">//     dt: {number} frame delta time</span>
+<span style="color: #008000">//     entities {Entity[]} an array of entities</span>
+<span style="color: #0000FF">function</span><span style="color: #000000"> </span><span style="color: #795E26">moveBoxes</span><span style="color: #000000">(</span><span style="color: #001080">dt</span><span style="color: #000000">, </span><span style="color: #001080">entites</span><span style="color: #000000">) {</span>
+<span style="color: #000000">  </span><span style="color: #001080">entities</span><span style="color: #000000">.</span><span style="color: #795E26">forEach</span><span style="color: #000000">((</span><span style="color: #001080">entity</span><span style="color: #000000">) </span><span style="color: #0000FF">=&gt;</span><span style="color: #000000"> {</span>
+<span style="color: #000000">    </span><span style="color: #008000">// modify component properties</span>
+<span style="color: #000000">    </span><span style="color: #001080">entity</span><span style="color: #000000">.</span><span style="color: #001080">components</span><span style="color: #000000">.</span><span style="color: #001080">position</span><span style="color: #000000">.</span><span style="color: #001080">x</span><span style="color: #000000"> += (</span><span style="color: #098658">0.5</span><span style="color: #000000"> * </span><span style="color: #001080">dt</span><span style="color: #000000">),</span>
+<span style="color: #000000">    </span><span style="color: #001080">entity</span><span style="color: #000000">.</span><span style="color: #001080">components</span><span style="color: #000000">.</span><span style="color: #001080">position</span><span style="color: #000000">.</span><span style="color: #001080">y</span><span style="color: #000000"> -= (</span><span style="color: #098658">0.5</span><span style="color: #000000"> * </span><span style="color: #001080">dt</span><span style="color: #000000">),</span>
+<span style="color: #000000">  }</span>
+<span style="color: #000000">}</span>
 
-<span class="hljs-comment">// a simple render (or post-update) function to draw the boxes to the canvas</span>
-<span class="hljs-comment">// N.B. function you intend to use as systems must take the following:</span>
-<span class="hljs-comment">//     int: {number} frame interpolation amount</span>
-<span class="hljs-comment">//     entities {Entity[]} an array of entities</span>
-<span class="hljs-function"><span class="hljs-keyword">function</span> <span class="hljs-title">draw</span>(<span class="hljs-params">dt, entities</span>) </span>{
-  <span class="hljs-comment">// clear canvas every frame</span>
-  ctx.clearRect(<span class="hljs-number">0</span>, <span class="hljs-number">0</span>, canvas.width, canvas.height);
-  <span class="hljs-comment">// draw each entity</span>
-  entities.forEach(<span class="hljs-function">(<span class="hljs-params">entity</span>) =&gt;</span> {
-    ctx.fillStyle = <span class="hljs-string">`rgb(<span class="hljs-subst">${entity.components.colour.r}</span>, <span class="hljs-subst">${entity.components.colour.g}</span>, <span class="hljs-subst">${entity.components.colour.b}</span>)`</span>;
-    ctx.fillRect(
-      entity.components.position.x,
-      entity.components.position.y,
-      entity.components.size.width,
-      entity.components.size.height,
-    );
-  });
-}
+<span style="color: #008000">// a simple render (or post-update) function to draw the boxes to the canvas</span>
+<span style="color: #008000">// N.B. function you intend to use as systems must take the following:</span>
+<span style="color: #008000">//     int: {number} frame interpolation amount</span>
+<span style="color: #008000">//     entities {Entity[]} an array of entities</span>
+<span style="color: #0000FF">function</span><span style="color: #000000"> </span><span style="color: #795E26">draw</span><span style="color: #000000">(</span><span style="color: #001080">dt</span><span style="color: #000000">, </span><span style="color: #001080">entities</span><span style="color: #000000">) {</span>
+<span style="color: #000000">  </span><span style="color: #008000">// clear canvas every frame</span>
+<span style="color: #000000">  </span><span style="color: #001080">ctx</span><span style="color: #000000">.</span><span style="color: #795E26">clearRect</span><span style="color: #000000">(</span><span style="color: #098658">0</span><span style="color: #000000">, </span><span style="color: #098658">0</span><span style="color: #000000">, </span><span style="color: #001080">canvas</span><span style="color: #000000">.</span><span style="color: #001080">width</span><span style="color: #000000">, </span><span style="color: #001080">canvas</span><span style="color: #000000">.</span><span style="color: #001080">height</span><span style="color: #000000">);</span>
+<span style="color: #000000">  </span><span style="color: #008000">// draw each entity</span>
+<span style="color: #000000">  </span><span style="color: #001080">entities</span><span style="color: #000000">.</span><span style="color: #795E26">forEach</span><span style="color: #000000">((</span><span style="color: #001080">entity</span><span style="color: #000000">) </span><span style="color: #0000FF">=&gt;</span><span style="color: #000000"> {</span>
+<span style="color: #000000">    </span><span style="color: #001080">ctx</span><span style="color: #000000">.</span><span style="color: #001080">fillStyle</span><span style="color: #000000"> = </span><span style="color: #A31515">`rgb(</span><span style="color: #0000FF">${</span><span style="color: #001080">entity</span><span style="color: #000000FF">.</span><span style="color: #001080">components</span><span style="color: #000000FF">.</span><span style="color: #001080">colour</span><span style="color: #000000FF">.</span><span style="color: #001080">r</span><span style="color: #0000FF">}</span><span style="color: #A31515">, </span><span style="color: #0000FF">${</span><span style="color: #001080">entity</span><span style="color: #000000FF">.</span><span style="color: #001080">components</span><span style="color: #000000FF">.</span><span style="color: #001080">colour</span><span style="color: #000000FF">.</span><span style="color: #001080">g</span><span style="color: #0000FF">}</span><span style="color: #A31515">, </span><span style="color: #0000FF">${</span><span style="color: #001080">entity</span><span style="color: #000000FF">.</span><span style="color: #001080">components</span><span style="color: #000000FF">.</span><span style="color: #001080">colour</span><span style="color: #000000FF">.</span><span style="color: #001080">b</span><span style="color: #0000FF">}</span><span style="color: #A31515">)`</span><span style="color: #000000">;</span>
+<span style="color: #000000">    </span><span style="color: #001080">ctx</span><span style="color: #000000">.</span><span style="color: #795E26">fillRect</span><span style="color: #000000">(</span>
+<span style="color: #000000">      </span><span style="color: #001080">entity</span><span style="color: #000000">.</span><span style="color: #001080">components</span><span style="color: #000000">.</span><span style="color: #001080">position</span><span style="color: #000000">.</span><span style="color: #001080">x</span><span style="color: #000000">,</span>
+<span style="color: #000000">      </span><span style="color: #001080">entity</span><span style="color: #000000">.</span><span style="color: #001080">components</span><span style="color: #000000">.</span><span style="color: #001080">position</span><span style="color: #000000">.</span><span style="color: #001080">y</span><span style="color: #000000">,</span>
+<span style="color: #000000">      </span><span style="color: #001080">entity</span><span style="color: #000000">.</span><span style="color: #001080">components</span><span style="color: #000000">.</span><span style="color: #001080">size</span><span style="color: #000000">.</span><span style="color: #001080">width</span><span style="color: #000000">,</span>
+<span style="color: #000000">      </span><span style="color: #001080">entity</span><span style="color: #000000">.</span><span style="color: #001080">components</span><span style="color: #000000">.</span><span style="color: #001080">size</span><span style="color: #000000">.</span><span style="color: #001080">height</span><span style="color: #000000">,</span>
+<span style="color: #000000">    );</span>
+<span style="color: #000000">  });</span>
+<span style="color: #000000">}</span>
 
-<span class="hljs-comment">// turn the mover function into a system</span>
-<span class="hljs-keyword">const</span> mover = world.createSystem({
-  <span class="hljs-comment">// the components required in the function</span>
-  <span class="hljs-attr">components</span>: [
-    position,
-  ],
-  <span class="hljs-comment">// the function itself</span>
-  <span class="hljs-attr">updateFn</span>: moveBoxes,
-  <span class="hljs-comment">// you could add a renderFn here too if you wanted to</span>
-});
+<span style="color: #008000">// turn the mover function into a system</span>
+<span style="color: #001080">const</span><span style="color: #000000"> </span><span style="color: #001080">mover</span><span style="color: #000000"> = </span><span style="color: #001080">world</span><span style="color: #000000">.</span><span style="color: #795E26">createSystem</span><span style="color: #000000">({</span>
+<span style="color: #000000">  </span><span style="color: #008000">// the components required in the function</span>
+<span style="color: #000000">  </span><span style="color: #001080">components:</span><span style="color: #000000"> [</span>
+<span style="color: #000000">    </span><span style="color: #001080">position</span><span style="color: #000000">,</span>
+<span style="color: #000000">  ],</span>
+<span style="color: #000000">  </span><span style="color: #008000">// the function itself</span>
+<span style="color: #000000">  </span><span style="color: #001080">updateFn:</span><span style="color: #000000"> </span><span style="color: #001080">moveBoxes</span><span style="color: #000000">,</span>
+<span style="color: #000000">  </span><span style="color: #008000">// you could add a renderFn here too if you wanted to</span>
+<span style="color: #000000">});</span>
 
-<span class="hljs-comment">// turn the mover function into a system</span>
-<span class="hljs-keyword">const</span> drawer = world.createSystem({
-  <span class="hljs-comment">// the components required in the function</span>
-  <span class="hljs-attr">components</span>: [
-    colour,
-    position,
-    size,
-  ],
-  <span class="hljs-comment">// the function itself</span>
-  <span class="hljs-attr">rendereFn</span>: draw,
-  <span class="hljs-comment">// you could add an updateFn here too if you wanted to</span>
-});
+<span style="color: #008000">// turn the mover function into a system</span>
+<span style="color: #001080">const</span><span style="color: #000000"> </span><span style="color: #001080">drawer</span><span style="color: #000000"> = </span><span style="color: #001080">world</span><span style="color: #000000">.</span><span style="color: #795E26">createSystem</span><span style="color: #000000">({</span>
+<span style="color: #000000">  </span><span style="color: #008000">// the components required in the function</span>
+<span style="color: #000000">  </span><span style="color: #001080">components:</span><span style="color: #000000"> [</span>
+<span style="color: #000000">    </span><span style="color: #001080">colour</span><span style="color: #000000">,</span>
+<span style="color: #000000">    </span><span style="color: #001080">position</span><span style="color: #000000">,</span>
+<span style="color: #000000">    </span><span style="color: #001080">size</span><span style="color: #000000">,</span>
+<span style="color: #000000">  ],</span>
+<span style="color: #000000">  </span><span style="color: #008000">// the function itself</span>
+<span style="color: #000000">  </span><span style="color: #001080">rendereFn:</span><span style="color: #000000"> </span><span style="color: #001080">draw</span><span style="color: #000000">,</span>
+<span style="color: #000000">  </span><span style="color: #008000">// you could add an updateFn here too if you wanted to</span>
+<span style="color: #000000">});</span>
 
-<span class="hljs-comment">// enable the systems</span>
-mover.enable();
-drawer.enable();
+<span style="color: #008000">// enable the systems</span>
+<span style="color: #001080">mover</span><span style="color: #000000">.</span><span style="color: #795E26">enable</span><span style="color: #000000">();</span>
+<span style="color: #001080">drawer</span><span style="color: #000000">.</span><span style="color: #795E26">enable</span><span style="color: #000000">();</span>
 
-<span class="hljs-comment">// game loop example</span>
-<span class="hljs-keyword">let</span> lastTime = <span class="hljs-literal">null</span>;
-<span class="hljs-keyword">let</span> accumulator = <span class="hljs-number">0</span>;
-<span class="hljs-keyword">const</span> tempo = <span class="hljs-number">1</span>/<span class="hljs-number">60</span>;
-<span class="hljs-keyword">let</span> dt = tempo;
+<span style="color: #008000">// game loop example</span>
+<span style="color: #001080">let</span><span style="color: #000000"> </span><span style="color: #001080">lastTime</span><span style="color: #000000"> = </span><span style="color: #0000FF">null</span><span style="color: #000000">;</span>
+<span style="color: #001080">let</span><span style="color: #000000"> </span><span style="color: #001080">accumulator</span><span style="color: #000000"> = </span><span style="color: #098658">0</span><span style="color: #000000">;</span>
+<span style="color: #001080">const</span><span style="color: #000000"> </span><span style="color: #001080">tempo</span><span style="color: #000000"> = </span><span style="color: #098658">1</span><span style="color: #000000">/</span><span style="color: #098658">60</span><span style="color: #000000">;</span>
+<span style="color: #001080">let</span><span style="color: #000000"> </span><span style="color: #001080">dt</span><span style="color: #000000"> = </span><span style="color: #001080">tempo</span><span style="color: #000000">;</span>
 
-<span class="hljs-function"><span class="hljs-keyword">function</span> <span class="hljs-title">onTick</span>(<span class="hljs-params">time</span>) </span>{
-  <span class="hljs-built_in">window</span>.requestAnimationFrame(onTick)
-  <span class="hljs-keyword">if</span> (lastTime !== <span class="hljs-literal">null</span>) {
-    accumulator += (time - lastTime) / <span class="hljs-number">1000</span>;
-    <span class="hljs-keyword">while</span> (accumulator &gt; dt) {
-      world.update(dt); <span class="hljs-comment">// all updateFns called here</span>
-      accumulator -= dt;
-    }
-  }
-  lastTime = time;
-  world.render(accumulator / tempo); <span class="hljs-comment">// all renderFns called here</span>
-}
+<span style="color: #0000FF">function</span><span style="color: #000000"> </span><span style="color: #795E26">onTick</span><span style="color: #000000">(</span><span style="color: #001080">time</span><span style="color: #000000">) {</span>
+<span style="color: #000000">  </span><span style="color: #001080">window</span><span style="color: #000000">.</span><span style="color: #795E26">requestAnimationFrame</span><span style="color: #000000">(</span><span style="color: #001080">onTick</span><span style="color: #000000">)</span>
+<span style="color: #000000">  </span><span style="color: #AF00DB">if</span><span style="color: #000000"> (</span><span style="color: #001080">lastTime</span><span style="color: #000000"> !== </span><span style="color: #0000FF">null</span><span style="color: #000000">) {</span>
+<span style="color: #000000">    </span><span style="color: #001080">accumulator</span><span style="color: #000000"> += (</span><span style="color: #001080">time</span><span style="color: #000000"> - </span><span style="color: #001080">lastTime</span><span style="color: #000000">) / </span><span style="color: #098658">1000</span><span style="color: #000000">;</span>
+<span style="color: #000000">    </span><span style="color: #AF00DB">while</span><span style="color: #000000"> (</span><span style="color: #001080">accumulator</span><span style="color: #000000"> &gt; </span><span style="color: #001080">dt</span><span style="color: #000000">) {</span>
+<span style="color: #000000">      </span><span style="color: #001080">world</span><span style="color: #000000">.</span><span style="color: #795E26">update</span><span style="color: #000000">(</span><span style="color: #001080">dt</span><span style="color: #000000">); </span><span style="color: #008000">// all updateFns called here</span>
+<span style="color: #000000">      </span><span style="color: #001080">accumulator</span><span style="color: #000000"> -= </span><span style="color: #001080">dt</span><span style="color: #000000">;</span>
+<span style="color: #000000">    }</span>
+<span style="color: #000000">  }</span>
+<span style="color: #000000">  </span><span style="color: #001080">lastTime</span><span style="color: #000000"> = </span><span style="color: #001080">time</span><span style="color: #000000">;</span>
+<span style="color: #000000">  </span><span style="color: #001080">world</span><span style="color: #000000">.</span><span style="color: #795E26">render</span><span style="color: #000000">(</span><span style="color: #001080">accumulator</span><span style="color: #000000"> / </span><span style="color: #001080">tempo</span><span style="color: #000000">); </span><span style="color: #008000">// all renderFns called here</span>
+<span style="color: #000000">}</span>
 
-<span class="hljs-built_in">window</span>.requestAnimationFrame(onTick)</code></pre>
+<span style="color: #001080">window</span><span style="color: #000000">.</span><span style="color: #795E26">requestAnimationFrame</span><span style="color: #000000">(</span><span style="color: #001080">onTick</span><span style="color: #000000">)</span>
+</code></pre>
 				<p>See <code>./demo</code> for a more interesting working example.</p>
+				<a href="#acknowledgements" id="acknowledgements" style="color: inherit; text-decoration: none;">
+					<h2>Acknowledgements</h2>
+				</a>
+				<p>Miski is inspired by <a href="https://github.com/fritzy/ape-ecs">ape-ecs</a>, <a href="https://github.com/NateTheGreatt/bitECS">bitECS</a>, <a href="https://github.com/ecsyjs/ecsy">ECSY</a>, <a href="https://github.com/ddmills/geotic">Geotic</a>, <a href="https://github.com/gohyperr/hecs">HECS</a>, and <a href="https://gist.github.com/mpj/17d8d73275bca303e8d2">classless.md</a></p>
 				<a href="#license" id="license" style="color: inherit; text-decoration: none;">
 					<h2>License</h2>
 				</a>
@@ -221,37 +229,28 @@ drawer.enable();
 		<div class="col-4 col-menu menu-sticky-wrap menu-highlight">
 			<nav class="tsd-navigation primary">
 				<ul>
-					<li class="globals  ">
-						<a href="globals.html"><em>Globals</em></a>
-					</li>
-					<li class=" tsd-kind-module">
-						<a href="modules/_component_.html">&quot;component&quot;</a>
-					</li>
-					<li class=" tsd-kind-module">
-						<a href="modules/_entity_.html">&quot;entity&quot;</a>
-					</li>
-					<li class=" tsd-kind-module">
-						<a href="modules/_index_.html">&quot;index&quot;</a>
-					</li>
-					<li class=" tsd-kind-module">
-						<a href="modules/_mask_.html">&quot;mask&quot;</a>
-					</li>
-					<li class=" tsd-kind-module">
-						<a href="modules/_pool_.html">&quot;pool&quot;</a>
-					</li>
-					<li class=" tsd-kind-module">
-						<a href="modules/_system_.html">&quot;system&quot;</a>
-					</li>
-					<li class=" tsd-kind-module">
-						<a href="modules/_utils_.html">&quot;utils&quot;</a>
-					</li>
-					<li class=" tsd-kind-module">
-						<a href="modules/_world_.html">&quot;world&quot;</a>
+					<li class=" ">
+						<a href="modules.html">Exports</a>
 					</li>
 				</ul>
 			</nav>
 			<nav class="tsd-navigation secondary menu-sticky">
 				<ul class="before-current">
+					<li class=" tsd-kind-type-alias tsd-has-type-parameter">
+						<a href="modules.html#component" class="tsd-kind-icon">Component</a>
+					</li>
+					<li class=" tsd-kind-type-alias">
+						<a href="modules.html#entity" class="tsd-kind-icon">Entity</a>
+					</li>
+					<li class=" tsd-kind-type-alias">
+						<a href="modules.html#system" class="tsd-kind-icon">System</a>
+					</li>
+					<li class=" tsd-kind-type-alias">
+						<a href="modules.html#world" class="tsd-kind-icon">World</a>
+					</li>
+					<li class=" tsd-kind-function">
+						<a href="modules.html#createworld" class="tsd-kind-icon">create<wbr>World</a>
+					</li>
 				</ul>
 			</nav>
 		</div>
@@ -261,16 +260,6 @@ drawer.enable();
 	<div class="container">
 		<h2>Legend</h2>
 		<div class="tsd-legend-group">
-			<ul class="tsd-legend">
-				<li class="tsd-kind-function"><span class="tsd-kind-icon">Function</span></li>
-				<li class="tsd-kind-function tsd-has-type-parameter"><span class="tsd-kind-icon">Function with type parameter</span></li>
-				<li class="tsd-kind-type-alias"><span class="tsd-kind-icon">Type alias</span></li>
-				<li class="tsd-kind-type-alias tsd-has-type-parameter"><span class="tsd-kind-icon">Type alias with type parameter</span></li>
-			</ul>
-			<ul class="tsd-legend">
-				<li class="tsd-kind-interface"><span class="tsd-kind-icon">Interface</span></li>
-				<li class="tsd-kind-interface tsd-has-type-parameter"><span class="tsd-kind-icon">Interface with type parameter</span></li>
-			</ul>
 		</div>
 	</div>
 </footer>

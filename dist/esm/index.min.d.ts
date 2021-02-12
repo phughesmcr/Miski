@@ -27,130 +27,85 @@
  * 
 ***************************************************************************** */
 
-declare type SystemSpec = Omit<InternalSystemSpec, "id">;
-interface InternalSystemSpec {
-    /** The system's required components */
-    components?: Component<unknown>[];
-    /** The system's id */
-    id: bigint;
-    /** A name / label for the system */
+interface ComponentSpec<T> {
+    entityLimit?: number | null;
     name: string;
-    /** The system's render function */
-    renderFn?: (int: number, entities: Entity[]) => void;
-    /** The system's update function */
-    updateFn?: (dt: number, entities: Entity[]) => void;
-}
-declare type System = Readonly<{
-    /** The system's associated entity archetype */
-    archetype: bigint;
-    /** Is the system enabled? */
-    enabled: boolean;
-    /** The system's id */
-    id: bigint;
-    /** The name / label of the system */
-    name: string;
-    /** Disable the system */
-    disable(): void;
-    /** Enable the system */
-    enable(): void;
-    /** The system's render function */
-    render(int: number, entities: Entity[]): void;
-    /** The system's update function */
-    update(dt: number, entities: Entity[]): void;
-}>;
-
-interface WorldSpec {
-    initialPoolSize?: number | bigint;
-    maxComponents?: number | bigint;
-}
-interface World {
-    archetypes: [bigint, Set<Entity>][];
-    components: Component<unknown>[];
-    component: Component<WorldComponent>;
-    entities: Entity[];
-    entity: Entity;
-    systems: System[];
-    createEntity(): Entity;
-    removeEntity(entity: Entity): boolean;
-    getEntityById(id: bigint): Entity | undefined;
-    createComponent<T>(spec: ComponentSpec<T>): Component<T>;
-    removeComponent<T>(component: Component<T>): boolean;
-    getComponentByName(name: string): Component<unknown> | undefined;
-    addComponentsToEntity(entity: Entity, ...components: Component<unknown>[]): Entity;
-    removeComponentsFromEntity(entity: Entity, ...components: Component<unknown>[]): Entity;
-    createSystem(spec: SystemSpec, idx?: number): System;
-    removeSystem(system: System): boolean;
-    moveSystem(system: System | string, idx: number): System;
-    getSystemByName(name: string): System | undefined;
-    update(dt: number): void;
-    render(int: number): void;
-}
-declare function createWorld(spec: WorldSpec): World;
-
-declare type Entity = Readonly<{
-    /** The entity's archetype */
-    archetype: bigint;
-    /** Array of components associated with the entity */
-    allComponents: Component<unknown>[];
-    /** The entity's id */
-    id: bigint;
-    /** The entity's world */
-    world: World | null;
-    /** Check if a component is present in an entity */
-    hasComponent(component: Component<unknown>): boolean;
-    /** @hidden */
-    _setId(id: bigint): Entity;
-    /** @hidden */
-    _setWorld(world: World | null): void;
-    /** @hidden */
-    _addComponent(component: Component<unknown>): Entity;
-    /** @hidden */
-    _removeComponent(component: Component<unknown>): Entity;
-}>;
-
-/** A property specifically for the worldEntity */
-interface WorldComponent {
-    /** The associated world object */
-    world: World;
-}
-/** Component specification object */
-declare type ComponentSpec<T = Record<string, unknown>> = Omit<InternalComponentSpec<T>, "id">;
-/** Internal component specification object */
-interface InternalComponentSpec<T = Record<string, unknown>> {
-    /** The maximum entities component can attach to */
-    entityLimit?: number | bigint | null;
-    /** The component's id */
-    id: bigint;
-    /** The component's name */
-    name: string;
-    /** The component's property object */
     properties: T;
-    /** Is the component removable once attached? */
     removable?: boolean;
 }
-interface Component<T = Record<string, unknown>> {
-    /** An array of entities associated with this component */
-    entities: Entity[];
-    /** The maximum entities component can attach to */
-    entityLimit: number | bigint | null;
-    /** The component's id */
-    id: Readonly<bigint>;
-    /** The component's name */
-    name: Readonly<string>;
-    /** The component's property object */
+declare type Component<T> = Readonly<{
+    entityLimit: number | null;
+    id: number;
+    name: string;
     properties: T;
-    /** Is the component removable once attached? */
     removable: boolean;
-    /** @hidden */
-    _addEntity(entity: Entity): void;
-    /** @hidden */
-    _removeEntity(entity: Entity): void;
-    /** Check if an entity is associated with this category */
-    hasEntity(entity: Entity): boolean;
-    /** Set the maximum entities component can attach to */
-    setEntityLimit(limit: number | bigint | null): void;
-    /** Set whether the component be removed from entities once attached */
-    setRemovable(isRemovable: boolean): void;
+}>;
+
+declare type Entity = Readonly<{
+    _: Record<string, unknown>;
+    addComponent: <T>(component: Component<T>) => boolean;
+    getArchetype: () => bigint;
+    hasComponent: <T>(component: Component<T>) => boolean;
+    id: string;
+    isAwake: () => boolean;
+    next: (next?: Entity | null) => Entity | null;
+    purge: () => void;
+    removeComponent: <T>(component: Component<T>) => boolean;
+    sleep: () => void;
+    wake: () => void;
+}>;
+
+declare type System = Readonly<{
+    archetype: bigint;
+    enabled: boolean;
+    exclusive: boolean;
+    name: string;
+    enable: () => void;
+    disable: () => void;
+    preUpdate: (entities: Entity[], system: System) => void;
+    update: (dt: number, entities: Entity[], system: System) => void;
+    postUpdate: (int: number, entities: Entity[], system: System) => void;
+}>;
+interface SystemSpec {
+    components: Component<unknown>[];
+    exclusive?: boolean;
+    name: string;
+    update?: (dt: number, entities: Entity[], system: System) => void;
+    postUpdate?: (int: number, entity: Entity[], system: System) => void;
+    preUpdate?: (entities: Entity[], system: System) => void;
 }
 
-export { Component, ComponentSpec, Entity, System, SystemSpec, World, createWorld };
+interface WorldSpec {
+    initialPoolSize?: number;
+    maxComponents?: number;
+    maxEntities?: number;
+}
+declare type World = Readonly<{
+    entity: Entity;
+    createEntity: () => Entity;
+    destroyEntity: (entity: Entity) => boolean;
+    addComponentsToEntity: (entity: Entity, ...components: Component<unknown>[]) => Entity;
+    removeComponentsFromEntity: (entity: Entity, ...components: Component<unknown>[]) => Entity;
+    getEntities: () => Entity[];
+    getComponents: () => Component<unknown>[];
+    getSystems: () => System[];
+    getComponentById: (id: number) => Component<unknown> | undefined;
+    getComponentByName: (name: string) => Component<unknown> | undefined;
+    getEntitiesByComponents: (...components: Component<unknown>[]) => Entity[];
+    getEntityById: (id: string) => Entity | undefined;
+    getSystemByIndex: (index: number) => System | undefined;
+    getSystemByName: (name: string) => System | undefined;
+    isComponentRegistered: <T>(component: Component<T>) => boolean;
+    isSystemRegistered: (system: System) => boolean;
+    moveSystem: (system: System, idx: number) => boolean;
+    registerComponent: <T>(spec: ComponentSpec<T>) => Component<T>;
+    registerSystem: (spec: SystemSpec) => System;
+    unregisterComponent: <T>(component: Component<T>) => ComponentSpec<T>;
+    unregisterSystem: (system: System) => void;
+    preUpdate: () => void;
+    update: (dt: number) => void;
+    postUpdate: (int: number) => void;
+}>;
+declare function createWorld(spec: WorldSpec): World;
+
+export { Component, Entity, System, World, createWorld };
