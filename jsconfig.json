@@ -6,6 +6,8 @@
     "baseUrl": "."
   },
   "exclude": [
+    ".github",
+    ".vscode",
     "build",
     "demo",
     "dist",

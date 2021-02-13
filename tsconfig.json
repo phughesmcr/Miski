@@ -74,6 +74,8 @@
     "./src/**/*.tsx"
   ],
   "exclude": [
+    ".github",
+    ".vscode",
     "build",
     "demo",
     "dist",

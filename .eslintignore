@@ -1,3 +1,5 @@
+.github/
+.vscode/
 build/
 demo/
 dist/
