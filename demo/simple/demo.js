@@ -2,7 +2,8 @@
 "use strict";
 
 // import the createWorld function from Miski
-import { createWorld } from "../../dist/esm/index.min.js";
+// import { createWorld } from "../../dist/esm/index.min.js";
+import { createWorld } from "https://gitcdn.link/repo/phughesmcr/Miski/master/dist/esm/index.min.js";
 
 // cache main canvas
 const canvas = document.querySelector('canvas');
