@@ -12,6 +12,12 @@
     "doc": "docs",
     "test": "test"
   },
+  "exports": {
+    "require": "./dist/umd/index.min.js",
+    "import": "./dist/esm/index.min.js",
+    "node": "./dist/cjs/index.min.js",
+    "browser": "./dist/iife/index.min.js",
+  },
   "devDependencies": {
     "@babel/cli": "^7.12.16",
     "@babel/core": "^7.12.16",
