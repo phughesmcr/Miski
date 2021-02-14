@@ -1,7 +1,7 @@
 // Copyright (c) 2021 P. Hughes. All rights reserved. MIT license.
 "use strict";
 
-import { Component } from './component/component';
+import { Component } from '../component/component';
 import { createMask } from './mask';
 
 export type DisallowedKeys =
@@ -17,7 +17,6 @@ export type DisallowedKeys =
     "__defineSetter__" |
     "__lookupGetter__" |
     "__lookupGetter__" |
-    "piss" |
     "__proto__";
 
 // eslint-disable-next-line max-len
