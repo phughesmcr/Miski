@@ -1,7 +1,7 @@
 /*! *****************************************************************************
  *
  * miski
- * v0.2.0
+ * v0.2.1
  *
  * MIT License
  * 
@@ -51,28 +51,28 @@ declare type Entity = Readonly<{
     next: (next?: Entity | null) => Entity | null;
     purge: () => void;
     removeComponent: <T>(component: Component<T>) => boolean;
-    sleep: () => void;
-    wake: () => void;
+    sleep: () => boolean;
+    wake: () => boolean;
 }>;
 
 declare type System = Readonly<{
     archetype: bigint;
+    disable: () => boolean;
+    enable: () => boolean;
     enabled: boolean;
     exclusive: boolean;
     name: string;
-    enable: () => void;
-    disable: () => void;
+    postUpdate: (int: number, entities: Entity[], system: System) => void;
     preUpdate: (entities: Entity[], system: System) => void;
     update: (dt: number, entities: Entity[], system: System) => void;
-    postUpdate: (int: number, entities: Entity[], system: System) => void;
 }>;
 interface SystemSpec {
     components: Component<unknown>[];
     exclusive?: boolean;
     name: string;
-    update?: (dt: number, entities: Entity[], system: System) => void;
     postUpdate?: (int: number, entity: Entity[], system: System) => void;
     preUpdate?: (entities: Entity[], system: System) => void;
+    update?: (dt: number, entities: Entity[], system: System) => void;
 }
 
 interface WorldSpec {
@@ -81,30 +81,30 @@ interface WorldSpec {
     maxEntities?: number;
 }
 declare type World = Readonly<{
-    entity: Entity;
+    addComponentsToEntity: (entity: Entity, ...components: Component<unknown>[]) => Entity;
     createEntity: () => Entity;
     destroyEntity: (entity: Entity) => boolean;
-    addComponentsToEntity: (entity: Entity, ...components: Component<unknown>[]) => Entity;
-    removeComponentsFromEntity: (entity: Entity, ...components: Component<unknown>[]) => Entity;
-    getEntities: () => Entity[];
-    getComponents: () => Component<unknown>[];
-    getSystems: () => System[];
+    entity: Entity;
     getComponentById: (id: number) => Component<unknown> | undefined;
     getComponentByName: (name: string) => Component<unknown> | undefined;
+    getComponents: () => Component<unknown>[];
+    getEntities: () => Entity[];
     getEntitiesByComponents: (...components: Component<unknown>[]) => Entity[];
     getEntityById: (id: string) => Entity | undefined;
     getSystemByIndex: (index: number) => System | undefined;
     getSystemByName: (name: string) => System | undefined;
+    getSystems: () => System[];
     isComponentRegistered: <T>(component: Component<T>) => boolean;
     isSystemRegistered: (system: System) => boolean;
     moveSystem: (system: System, idx: number) => boolean;
+    postUpdate: (int: number) => void;
+    preUpdate: () => void;
     registerComponent: <T>(spec: ComponentSpec<T>) => Component<T>;
     registerSystem: (spec: SystemSpec) => System;
+    removeComponentsFromEntity: (entity: Entity, ...components: Component<unknown>[]) => Entity;
     unregisterComponent: <T>(component: Component<T>) => ComponentSpec<T>;
     unregisterSystem: (system: System) => void;
-    preUpdate: () => void;
     update: (dt: number) => void;
-    postUpdate: (int: number) => void;
 }>;
 declare function createWorld(spec: WorldSpec): World;
 
