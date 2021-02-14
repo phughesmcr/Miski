@@ -16,7 +16,8 @@ export interface EntityManager {
   getEntityById: (id: string) => Entity | undefined;
   getEntities: () => Entity[];
   getEntitiesByComponents: (...components: Component<unknown>[]) => Entity[];
-  getEntitiesByMask: (mask: bigint, exact?: boolean) => Entity[];
+  getEntitiesFromMasks: (masks: bigint[]) => Entity[];
+  getEntitiesByMask: (mask: bigint, exact?: boolean) => [bigint[], Entity[]];
   rebuildArchetypes: () => void;
   updateArchetype: (entity: Entity, previous?: bigint) => Entity;
   areArchetypesDirty: () => boolean;
@@ -61,14 +62,25 @@ export function createEntityManager(spec: EntityManagerSpec): EntityManager {
 
   const getEntitiesByComponents = (...components: Component<unknown>[]): Entity[] => {
     const mask = componentsToArchetype(...components);
-    return getEntitiesByMask(mask);
+    return getEntitiesByMask(mask)[1];
   };
 
-  const getEntitiesByMask = (mask: bigint, exact = false): Entity[] => {
+  const getEntitiesFromMasks = (masks: bigint[]): Entity[] => {
+    const entities = masks.reduce((arr, mask) => {
+      const e = _archetypes.get(mask) ?? [];
+      arr.push(...e);
+      return arr;
+    }, [] as Entity[]);
+    return [...entities];
+  };
+
+  const getEntitiesByMask = (mask: bigint, exact = false): [bigint[], Entity[]] => {
     if (exact) {
-      return Array.from(_archetypes.get(mask) ?? []);
+      const entities = _archetypes.get(mask) ?? [];
+      return [[mask], [...entities]];
     } else {
       const _entities: Set<Entity> = new Set();
+      const _masks: Set<bigint> = new Set();
       if (_dirty === true) {
         _archetypes.forEach((entities, archetype) => {
           if ((archetype & mask) === mask) {
@@ -82,7 +94,7 @@ export function createEntityManager(spec: EntityManagerSpec): EntityManager {
           }
         });
       }
-      return [..._entities];
+      return [[..._masks], [..._entities]];
     }
   };
 
@@ -119,6 +131,7 @@ export function createEntityManager(spec: EntityManagerSpec): EntityManager {
     getEntityById,
     getEntities,
     getEntitiesByComponents,
+    getEntitiesFromMasks,
     getEntitiesByMask,
     rebuildArchetypes,
     updateArchetype,

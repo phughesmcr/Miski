@@ -58,6 +58,7 @@ export function createWorld(spec: WorldSpec): World {
     getEntityById,
     getEntities,
     getEntitiesByMask,
+    getEntitiesFromMasks,
     getEntitiesByComponents,
     rebuildArchetypes,
     updateArchetype,
@@ -102,7 +103,7 @@ export function createWorld(spec: WorldSpec): World {
     removable: false,
   });
 
-  const _systemEntities: Record<string, Entity[]> = {};
+  const _systemMasks: Record<string, bigint[]> = {};
 
   // Public methods
   const addComponentsToEntity = (entity: Entity, ...components: (Component<unknown> | string)[]): Entity => {
@@ -171,11 +172,11 @@ export function createWorld(spec: WorldSpec): World {
       const system = systems[i];
       if (system.enabled === false) continue;
       if (areArchetypesDirty() === true) {
-        const entities = getEntitiesByMask(system.archetype, system.exclusive);
-        _systemEntities[system.name] = entities;
+        const [masks, entities] = getEntitiesByMask(system.archetype, system.exclusive);
+        _systemMasks[system.name] = masks;
         system.preUpdate(entities, system);
       } else {
-        system.preUpdate(_systemEntities[system.name], system);
+        system.preUpdate(getEntitiesFromMasks(_systemMasks[system.name]), system);
       }
      }
      cleanedArchetypes();
@@ -191,11 +192,11 @@ export function createWorld(spec: WorldSpec): World {
       const system = systems[i];
       if (system.enabled === false) continue;
       if (areArchetypesDirty() === true) {
-        const entities = getEntitiesByMask(system.archetype, system.exclusive);
-        _systemEntities[system.name] = entities;
+        const [masks, entities] = getEntitiesByMask(system.archetype, system.exclusive);
+        _systemMasks[system.name] = masks;
         system.update(dt, entities, system);
       } else {
-        system.update(dt, _systemEntities[system.name], system);
+        system.update(dt, getEntitiesFromMasks(_systemMasks[system.name]), system);
       }
     }
     cleanedArchetypes();
@@ -211,11 +212,11 @@ export function createWorld(spec: WorldSpec): World {
       const system = systems[i];
       if (system.enabled === false) continue;
       if (areArchetypesDirty() === true) {
-        const entities = getEntitiesByMask(system.archetype, system.exclusive);
-        _systemEntities[system.name] = entities;
+        const [masks, entities] = getEntitiesByMask(system.archetype, system.exclusive);
+        _systemMasks[system.name] = masks;
         system.postUpdate(int, entities, system);
       } else {
-        system.postUpdate(int, _systemEntities[system.name], system);
+        system.postUpdate(int, getEntitiesFromMasks(_systemMasks[system.name]), system);
       }
     }
     cleanedArchetypes();
@@ -223,7 +224,6 @@ export function createWorld(spec: WorldSpec): World {
 
   // finalizations
   addComponentsToEntity(worldEntity, worldComponent);
-  rebuildArchetypes();
 
   return Object.freeze({
     entity: worldEntity,
