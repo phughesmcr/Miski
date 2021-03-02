@@ -1,8 +1,8 @@
 "use strict";
 
 import { Component } from '../component/component';
-import { createMask } from '../mask';
-import { clearObject, deepAssign } from '../utils';
+import { createMask } from '../utils/mask';
+import { clearObject, deepAssign } from '../utils/utils';
 
 export type Entity = Readonly<{
   _: Record<string, unknown>;
@@ -14,19 +14,30 @@ export type Entity = Readonly<{
   next: (next?: Entity | null) => Entity | null;
   purge: () => void;
   removeComponent: <T>(component: Component<T>) => boolean;
-  sleep: () => void;
-  wake: () => void;
+  sleep: () => boolean;
+  wake: () => boolean;
 }>
 
+/** Creates an entity */
 export function createEntity(): Entity {
+  /** The entity's archetype mask */
   const _archetype = createMask();
-  const _id = Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 9);
+
+  /** A unique id for the entity */
+  const _id = `${Date.now().toString(36)}_${Math.random().toString(36).substr(2, 9)}`;
+
+  /** Container for the entity's component properties */
   const _properties = {} as Record<string, unknown>;
 
+  /** The entity's status */
   let _awake = true;
+
+  /** The next entity in the entity pool */
   let _next: Entity | null = null;
 
+  /** The entity object */
   const entity = Object.create({}, {
+    // shorthand accessor for the entity's component properties
     _: {
       value: _properties,
       enumerable: true,

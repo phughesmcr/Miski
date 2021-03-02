@@ -15,30 +15,30 @@ export interface WorldSpec {
 }
 
 export type World = Readonly<{
-  entity: Entity;
+  addComponentsToEntity: (entity: Entity, ...components: Component<unknown>[]) => Entity;
   createEntity: () => Entity;
   destroyEntity: (entity: Entity) => boolean;
-  addComponentsToEntity: (entity: Entity, ...components: Component<unknown>[]) => Entity;
-  removeComponentsFromEntity: (entity: Entity, ...components: Component<unknown>[]) => Entity;
-  getEntities: () => Entity[];
-  getComponents: () => Component<unknown>[];
-  getSystems: () => System[];
+  entity: Entity;
   getComponentById: (id: number) => Component<unknown> | undefined;
   getComponentByName: (name: string) => Component<unknown> | undefined;
+  getComponents: () => Component<unknown>[];
+  getEntities: () => Entity[];
   getEntitiesByComponents: (...components: Component<unknown>[]) => Entity[];
   getEntityById: (id: string) => Entity | undefined;
   getSystemByIndex: (index: number) => System | undefined;
   getSystemByName: (name: string) => System | undefined;
+  getSystems: () => System[];
   isComponentRegistered: <T>(component: Component<T>) => boolean;
   isSystemRegistered: (system: System) => boolean;
   moveSystem: (system: System, idx: number) => boolean;
+  postUpdate: (int: number) => void;
+  preUpdate: () => void;
   registerComponent: <T>(spec: ComponentSpec<T>) => Component<T>;
   registerSystem: (spec: SystemSpec) => System;
+  removeComponentsFromEntity: (entity: Entity, ...components: Component<unknown>[]) => Entity;
   unregisterComponent: <T>(component: Component<T>) => ComponentSpec<T>;
   unregisterSystem: (system: System) => void;
-  preUpdate: () => void;
   update: (dt: number) => void;
-  postUpdate: (int: number) => void;
 }>
 
 export function createWorld(spec: WorldSpec): World {
@@ -53,17 +53,17 @@ export function createWorld(spec: WorldSpec): World {
 
   // Entity
   const {
-    createEntity,
-    destroyEntity,
-    getEntityById,
-    getEntities,
-    getEntitiesByMask,
-    getEntitiesFromMasks,
-    getEntitiesByComponents,
-    rebuildArchetypes,
-    updateArchetype,
     areArchetypesDirty,
     cleanedArchetypes,
+    createEntity,
+    destroyEntity,
+    getEntities,
+    getEntitiesByComponents,
+    getEntitiesByMask,
+    getEntitiesFromMasks,
+    getEntityById,
+    rebuildArchetypes,
+    updateArchetype,
   } = createEntityManager({
     initialPoolSize,
     maxEntities,
@@ -71,25 +71,25 @@ export function createWorld(spec: WorldSpec): World {
 
   // Component
   const {
+    getComponentById,
+    getComponentByName,
+    getComponents,
+    isComponentRegistered,
     registerComponent,
     unregisterComponent,
-    isComponentRegistered,
-    getComponentByName,
-    getComponentById,
-    getComponents,
   } = createComponentManager({
     maxComponents,
   });
 
   // System
   const {
+    getSystemByIndex,
+    getSystemByName,
+    getSystems,
+    isSystemRegistered,
+    moveSystem,
     registerSystem,
     unregisterSystem,
-    getSystemByName,
-    getSystemByIndex,
-    getSystems,
-    moveSystem,
-    isSystemRegistered,
   } = createSystemManager();
 
   // world.entity Initialization
@@ -163,7 +163,7 @@ export function createWorld(spec: WorldSpec): World {
   };
 
   const preUpdate = (): void => {
-    if (_isFirstRun) {
+    if (_isFirstRun === true) {
       rebuildArchetypes();
       _isFirstRun = false;
     }
@@ -171,19 +171,21 @@ export function createWorld(spec: WorldSpec): World {
     for (let i = 0; i < systems.length; i++) {
       const system = systems[i];
       if (system.enabled === false) continue;
-      if (areArchetypesDirty() === true) {
+      if (areArchetypesDirty() === true || !(system.name in _systemMasks)) {
         const [masks, entities] = getEntitiesByMask(system.archetype, system.exclusive);
         _systemMasks[system.name] = masks;
         system.preUpdate(entities, system);
+        cleanedArchetypes();
       } else {
-        system.preUpdate(getEntitiesFromMasks(_systemMasks[system.name]), system);
+        const masks = _systemMasks[system.name];
+        const entities = getEntitiesFromMasks(masks);
+        system.preUpdate(entities, system);
       }
      }
-     cleanedArchetypes();
   };
 
   const update = (dt: number): void => {
-    if (_isFirstRun) {
+    if (_isFirstRun === true) {
       rebuildArchetypes();
       _isFirstRun = false;
     }
@@ -191,19 +193,21 @@ export function createWorld(spec: WorldSpec): World {
     for (let i = 0; i < systems.length; i++) {
       const system = systems[i];
       if (system.enabled === false) continue;
-      if (areArchetypesDirty() === true) {
+      if (areArchetypesDirty() === true || !(system.name in _systemMasks)) {
         const [masks, entities] = getEntitiesByMask(system.archetype, system.exclusive);
         _systemMasks[system.name] = masks;
         system.update(dt, entities, system);
+        cleanedArchetypes();
       } else {
-        system.update(dt, getEntitiesFromMasks(_systemMasks[system.name]), system);
+        const masks = _systemMasks[system.name];
+        const entities = getEntitiesFromMasks(masks);
+        system.update(dt, entities, system);
       }
     }
-    cleanedArchetypes();
   };
 
   const postUpdate = (int: number): void => {
-    if (_isFirstRun) {
+    if (_isFirstRun === true) {
       rebuildArchetypes();
       _isFirstRun = false;
     }
@@ -211,45 +215,47 @@ export function createWorld(spec: WorldSpec): World {
     for (let i = 0; i < systems.length; i++) {
       const system = systems[i];
       if (system.enabled === false) continue;
-      if (areArchetypesDirty() === true) {
+      if (areArchetypesDirty() === true || !(system.name in _systemMasks)) {
         const [masks, entities] = getEntitiesByMask(system.archetype, system.exclusive);
         _systemMasks[system.name] = masks;
         system.postUpdate(int, entities, system);
+        cleanedArchetypes();
       } else {
-        system.postUpdate(int, getEntitiesFromMasks(_systemMasks[system.name]), system);
+        const masks = _systemMasks[system.name];
+        const entities = getEntitiesFromMasks(masks);
+        system.postUpdate(int, entities, system);
       }
     }
-    cleanedArchetypes();
   };
 
   // finalizations
   addComponentsToEntity(worldEntity, worldComponent);
 
   return Object.freeze({
-    entity: worldEntity,
-    getComponents,
-    getEntities,
-    getSystems,
+    addComponentsToEntity,
     createEntity,
     destroyEntity,
-    addComponentsToEntity,
-    removeComponentsFromEntity,
+    entity: worldEntity,
     getComponentById,
     getComponentByName,
+    getComponents,
+    getEntities,
     getEntitiesByComponents,
-    getEntityById,
     getEntitiesByMask,
+    getEntityById,
     getSystemByIndex,
     getSystemByName,
+    getSystems,
     isComponentRegistered,
     isSystemRegistered,
     moveSystem,
+    postUpdate,
+    preUpdate,
     registerComponent,
     registerSystem,
+    removeComponentsFromEntity,
     unregisterComponent,
     unregisterSystem,
-    preUpdate,
     update,
-    postUpdate,
   });
 }

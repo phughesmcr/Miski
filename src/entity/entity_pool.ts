@@ -1,7 +1,7 @@
 // Copyright (c) 2021 P. Hughes. All rights reserved. MIT license.
 "use strict";
 
-import { Entity, createEntity } from './entity';
+import { createEntity, Entity } from './entity';
 
 export interface EntityPoolSpec {
   initialPoolSize: number;
@@ -14,14 +14,19 @@ export interface EntityPool {
   release: (entity: Entity) => void;
 }
 
+/** Creates an entity object pool */
 export function createPool(spec: EntityPoolSpec): EntityPool {
   const { initialPoolSize, maxEntities } = { ...spec };
 
+  /** The pool itself */
   const _pool: Entity[] = [];
+
+  /** The first available entity */
   let _firstAvailable: Entity | null;
 
+  /** Creates a new entity object  */
   const _create = (n = 1): void => {
-    for (let i = n; i >= 0; i--) {
+    for (let i = 0; i < n; i++) {
       if (_pool.length >= maxEntities) {
         throw new Error('The entity pool is full.');
       }
@@ -32,12 +37,14 @@ export function createPool(spec: EntityPoolSpec): EntityPool {
     }
   };
 
+  /** Empty the pool */
   const flush = (): void => {
     _pool.length = 0;
     _firstAvailable = null;
     _create(initialPoolSize);
   };
 
+  /** Get an entity from the pool */
   const get = (): Entity | null => {
     if (!_firstAvailable) _create(initialPoolSize * 0.25);
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
@@ -46,12 +53,14 @@ export function createPool(spec: EntityPoolSpec): EntityPool {
     return entity;
   };
 
+  /** Release an entity back into the pool */
   const release = (entity: Entity): void => {
     entity.purge();
     entity.next(_firstAvailable);
     _firstAvailable = entity;
   };
 
+  // flush the pool before returning
   flush();
 
   return Object.freeze({

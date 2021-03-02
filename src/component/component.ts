@@ -1,7 +1,7 @@
 // Copyright (c) 2021 P. Hughes. All rights reserved. MIT license.
 "use strict";
 
-import { deepAssign } from "../utils";
+import { deepAssign } from "../utils/utils";
 
 export type InternalComponentSpec<T> = ComponentSpec<T> & { id: number };
 
@@ -20,6 +20,10 @@ export type Component<T> = Readonly<{
   removable: boolean,
 }>
 
+/**
+ * Creates a new component
+ * @param spec the component specification object
+ */
 export function createComponent<T>(spec: InternalComponentSpec<T>): Component<T> {
   const {
     entityLimit = null,
@@ -39,7 +43,7 @@ export function createComponent<T>(spec: InternalComponentSpec<T>): Component<T>
   Object.seal(properties);
 
   return Object.freeze(
-    Object.create(null, {
+    Object.create({}, {
       entityLimit: {
         value: entityLimit,
         enumerable: true,

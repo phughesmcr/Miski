@@ -1,9 +1,9 @@
 "use strict";
 
 import { Component } from '../component/component';
-import { componentsToArchetype } from '../utils';
+import { componentsToArchetype } from '../utils/utils';
 import { Entity } from './entity';
-import { EntityPool, createPool } from "./entity_pool";
+import { createPool, EntityPool } from "./entity_pool";
 
 export interface EntityManagerSpec {
   initialPoolSize: number;
@@ -11,28 +11,35 @@ export interface EntityManagerSpec {
 }
 
 export interface EntityManager {
-  createEntity: () => Entity;
-  destroyEntity: (entity: Entity) => boolean;
-  getEntityById: (id: string) => Entity | undefined;
-  getEntities: () => Entity[];
-  getEntitiesByComponents: (...components: Component<unknown>[]) => Entity[];
-  getEntitiesFromMasks: (masks: bigint[]) => Entity[];
-  getEntitiesByMask: (mask: bigint, exact?: boolean) => [bigint[], Entity[]];
-  rebuildArchetypes: () => void;
-  updateArchetype: (entity: Entity, previous?: bigint) => Entity;
   areArchetypesDirty: () => boolean;
   cleanedArchetypes: () => boolean;
+  createEntity: () => Entity;
+  destroyEntity: (entity: Entity) => boolean;
+  getEntities: () => Entity[];
+  getEntitiesByComponents: (...components: Component<unknown>[]) => Entity[];
+  getEntitiesByMask: (mask: bigint, exact?: boolean) => [bigint[], Entity[]];
+  getEntitiesFromMasks: (masks: bigint[]) => Entity[];
+  getEntityById: (id: string) => Entity | undefined;
+  rebuildArchetypes: () => void;
+  updateArchetype: (entity: Entity, previous?: bigint) => Entity;
 }
 
 export function createEntityManager(spec: EntityManagerSpec): EntityManager {
   const { initialPoolSize, maxEntities } = { ...spec };
+
+  /** The entity object pool */
   const _pool: EntityPool = createPool({initialPoolSize, maxEntities});
+
+  /** The entity registry indexed by entity id */
   const _registry: Record<string, Entity> = {};
 
-  // archetypes
+  /**  */
   const _archetypes: Map<bigint, Set<Entity>> = new Map() as Map<bigint, Set<Entity>>;
+
+  /**  */
   let _dirty = true;
 
+  /** */
   const createEntity = (): Entity => {
     const entity = _pool.get();
     if (!entity) throw new Error('no entities left!');
@@ -41,6 +48,10 @@ export function createEntityManager(spec: EntityManagerSpec): EntityManager {
     return entity;
   };
 
+  /**
+   *
+   * @param entity
+   */
   const destroyEntity = (entity: Entity): boolean => {
     const success = (entity.id in _registry);
     if (success === true) {
@@ -56,24 +67,41 @@ export function createEntityManager(spec: EntityManagerSpec): EntityManager {
     return success;
   };
 
+  /**
+   *
+   * @param id
+   */
   const getEntityById = (id: string): Entity | undefined => _registry[id];
 
+  /** */
   const getEntities = (): Entity[] => Object.values(_registry);
 
+  /**
+   *
+   * @param components
+   */
   const getEntitiesByComponents = (...components: Component<unknown>[]): Entity[] => {
     const mask = componentsToArchetype(...components);
     return getEntitiesByMask(mask)[1];
   };
 
+  /**
+   *
+   * @param masks
+   */
   const getEntitiesFromMasks = (masks: bigint[]): Entity[] => {
-    const entities = masks.reduce((arr, mask) => {
+    return masks.reduce((arr, mask) => {
       const e = _archetypes.get(mask) ?? [];
       arr.push(...e);
       return arr;
     }, [] as Entity[]);
-    return [...entities];
   };
 
+  /**
+   *
+   * @param mask
+   * @param exact
+   */
   const getEntitiesByMask = (mask: bigint, exact = false): [bigint[], Entity[]] => {
     if (exact) {
       const entities = _archetypes.get(mask) ?? [];
@@ -81,23 +109,23 @@ export function createEntityManager(spec: EntityManagerSpec): EntityManager {
     } else {
       const _entities: Set<Entity> = new Set();
       const _masks: Set<bigint> = new Set();
-      if (_dirty === true) {
+      // if (_dirty === true) {
         _archetypes.forEach((entities, archetype) => {
           if ((archetype & mask) === mask) {
             entities.forEach((entity) => _entities.add(entity));
+            _masks.add(mask);
           }
         });
-      } else {
-        _archetypes.forEach((entities, archetype) => {
-          if ((archetype & mask) === mask) {
-            entities.forEach((entity) => _entities.add(entity));
-          }
-        });
-      }
+      // }
       return [[..._masks], [..._entities]];
     }
   };
 
+  /**
+   *
+   * @param entity
+   * @param previous
+   */
   const updateArchetype = (entity: Entity, previous?: bigint): Entity => {
     if (previous != undefined) {
       _archetypes.get(previous)?.delete(entity);
@@ -112,6 +140,7 @@ export function createEntityManager(spec: EntityManagerSpec): EntityManager {
     return entity;
   };
 
+  /**  */
   const rebuildArchetypes = (): void => {
     _archetypes.clear();
     const entities = getEntities();
@@ -121,21 +150,23 @@ export function createEntityManager(spec: EntityManagerSpec): EntityManager {
     _dirty = false;
   };
 
+  /** */
   const areArchetypesDirty = (): boolean => _dirty;
 
+  /** */
   const cleanedArchetypes = (): boolean => _dirty = false;
 
   return Object.freeze({
-    createEntity,
-    destroyEntity,
-    getEntityById,
-    getEntities,
-    getEntitiesByComponents,
-    getEntitiesFromMasks,
-    getEntitiesByMask,
-    rebuildArchetypes,
-    updateArchetype,
     areArchetypesDirty,
     cleanedArchetypes,
+    createEntity,
+    destroyEntity,
+    getEntities,
+    getEntitiesByComponents,
+    getEntitiesByMask,
+    getEntitiesFromMasks,
+    getEntityById,
+    rebuildArchetypes,
+    updateArchetype,
   });
 }
