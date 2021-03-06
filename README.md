@@ -20,7 +20,7 @@ npm install --production miski
 ```javascript
 import { createWorld } from "miski";
 // OR
-const misky = require("miski");
+const miski = require("miski");
 ```
 
 ## Usage
@@ -34,12 +34,13 @@ const ctx = canvas.getContext('2d');
 
 // create our world - most functions take place through the world object
 const world = createWorld({
-  initialPoolSize: 10,
+  initialPoolSize: 64,
   maxComponents: 1024,
+  maxEntities: 1000000;
 });
 
 // define some components - the properties given here are the default properties of the component
-const size = world.createComponent({
+const size = world.registerComponent({
   name: "size",
   properties: {
     height: 100,
@@ -47,16 +48,16 @@ const size = world.createComponent({
   },
 });
 
-const colour = world.createComponent({
+const colour = world.registerComponent({
   name: "colour",
   properties: {
-    r: 0,
+    r: 255,
     g: 0,
     b: 0,
   },
 });
 
-const position = world.createComponent({
+const position = world.registerComponent({
   name: "position",
   properties: {
     x: 0,
@@ -71,34 +72,41 @@ const box = world.createEntity();
 world.addComponentsToEntity(box, size, colour, position);
 
 // overwrite some of the default properties with entity specific properties
-// N.B. you can access the individual properties of course (e.g. box.components.colour.r)
-box.components.colour = { r: 150, g: 150, b: 150 };
-box.components.position = { x: 100, y: 250 };
+// access components through the "_" shorthand property
+// N.B. you can access the individual properties of course (e.g. box._.colour.r)
+box._.colour = { r: 150, g: 150, b: 150 };
+box._.position = { x: 100, y: 250 };
 
-// world systems support two functions
-// 1) an update function - (updateFn) - to potentially be called multiple times per frame
-// 2) a render (or post-update) function - (renderFn) - to be called only once per frame
-// you must supply at least one of these functions per system, or both
+// world systems support three functions
+// 1) a pre-update function - ("preUpdate") - run once at the start of each frame
+// 2) an update function - ("update") - to potentially be called multiple times per frame
+// 3) a post-update function - ("postUpdate) - run once at the end of each frame
 
 // a simple update function to move boxes around the canvas
 // N.B. update functions you intend to use as systems must take the following:
-//     dt: {number} frame delta time
+//     dt {number} frame delta time
 //     entities {Entity[]} an array of entities
-function moveBoxes(dt, entites) {
+//     system {System} the system calling this function
+function moveBoxes(dt, entities, system) {
+  // its generally a good idea to bail early if no entities are affected
+  if (!entities.length) return;
   entities.forEach((entity) => {
     // modify component properties
     entity.components.position.x += (0.5 * dt),
     entity.components.position.y -= (0.5 * dt),
-  }
+  });
 }
 
-// a simple render (or post-update) function to draw the boxes to the canvas
-// N.B. function you intend to use as systems must take the following:
-//     int: {number} frame interpolation amount
+// a simple render function to draw the boxes to the canvas
+// N.B. function you intend to use as a post-update function must take the following:
+//     int {number} frame interpolation amount
 //     entities {Entity[]} an array of entities
-function draw(dt, entities) {
+//     system {System} the system calling this function
+function draw(int, entities) {
   // clear canvas every frame
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+  // its generally a good idea to bail early if no entities are affected
+  if (!entities.length) return;
   // draw each entity
   entities.forEach((entity) => {
     ctx.fillStyle = `rgb(${entity.components.colour.r}, ${entity.components.colour.g}, ${entity.components.colour.b})`;
@@ -114,12 +122,9 @@ function draw(dt, entities) {
 // turn the mover function into a system
 const mover = world.createSystem({
   // the components required in the function
-  components: [
-    position,
-  ],
+  components: [ position ],
   // the function itself
-  updateFn: moveBoxes,
-  // you could add a renderFn here too if you wanted to
+  update: moveBoxes,
 });
 
 // turn the mover function into a system
@@ -131,8 +136,7 @@ const drawer = world.createSystem({
     size,
   ],
   // the function itself
-  rendereFn: draw,
-  // you could add an updateFn here too if you wanted to
+  postUpdate: draw,
 });
 
 // enable the systems
@@ -147,15 +151,16 @@ let dt = tempo;
 
 function onTick(time) {
   window.requestAnimationFrame(onTick)
+  world.preUpdate();
   if (lastTime !== null) {
     accumulator += (time - lastTime) / 1000;
     while (accumulator > dt) {
-      world.update(dt); // all updateFns called here
+      world.update(dt);
       accumulator -= dt;
     }
   }
   lastTime = time;
-  world.render(accumulator / tempo); // all renderFns called here
+  world.postUpdate(accumulator / tempo);
 }
 
 window.requestAnimationFrame(onTick)
