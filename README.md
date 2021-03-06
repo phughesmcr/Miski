@@ -10,7 +10,7 @@ Miski is currently in alpha. Expect breaking changes every version until beta.
 
 `CJS`, `ESM`, `IIFE` and `UMD` builds are available in the `./dist` folder.
 
-Miski requires `BigInt` support.
+**Miski requires `BigInt` support.**
 
 ### npm
 ```bash
@@ -167,6 +167,19 @@ window.requestAnimationFrame(onTick)
 ```
 
 See `./demo` for a more interesting working example.
+
+## To-Do Before 1.0.0 release
+### General
+1. Finalise API
+2. Write comprehensive tests
+3. Write consistent code documentation throughout
+4. Write argument validation for functions requiring user input
+5. Ensure high-quality Typescript definitions throughout
+### Components
+1. Add schemas and schema validation for component properties
+2. Ensure Typescript definitions work consistently - current use of "unknown" causing issues for users
+### Archetypes
+1. Performance improvements - Ensure getting entities by archetype / components is performant
 
 ## Acknowledgements
 Miski is inspired by [ape-ecs](https://github.com/fritzy/ape-ecs), [bitECS](https://github.com/NateTheGreatt/bitECS), [ECSY](https://github.com/ecsyjs/ecsy), [Geotic](https://github.com/ddmills/geotic), [HECS](https://github.com/gohyperr/hecs), and [classless.md](https://gist.github.com/mpj/17d8d73275bca303e8d2)
