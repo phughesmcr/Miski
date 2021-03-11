@@ -6,11 +6,24 @@
 
 Miski is currently in alpha. Expect breaking changes every version until beta.
 
+## Contents
+  * [Requirements](#requirements)
+  * [Install](#install)
+    + [Browser etc.](#browser-etc)
+    + [npm](#npm)
+  * [Example](#example)
+    + [Demos and Benchmarks](#demos-and-benchmarks)
+  * [To-Do](#to-do-before-100-release)
+  * [Acknowledgements](#acknowledgements)
+  * [License](#license)
+
+## Requirements
+Miski requires `BigInt` support.
+
 ## Install
 
+### Browser etc.
 `CJS`, `ESM`, `IIFE` and `UMD` builds are available in the `./dist` folder.
-
-**Miski requires `BigInt` support.**
 
 ### npm
 ```bash
@@ -23,8 +36,7 @@ import { createWorld } from "miski";
 const miski = require("miski");
 ```
 
-## Usage
-
+## Example
 A simple box on a 2d canvas example:
 
 ```javascript
@@ -166,18 +178,23 @@ function onTick(time) {
 window.requestAnimationFrame(onTick)
 ```
 
-See `./demo` for a more interesting working example.
+### Demos and Benchmarks
+See `./demo` for a more interesting working examples, and `./demo/benchamark` for benchmarks.
+
 
 ## To-Do Before 1.0.0 release
 ### General
+0. Write up some core principles, project goals and style guide
 1. Finalise API
 2. Write comprehensive tests
 3. Write consistent code documentation throughout
 4. Write argument validation for functions requiring user input
 5. Ensure high-quality Typescript definitions throughout
+6. Allow for deferred removal of entities, components and systems
 ### Components
 1. Add schemas and schema validation for component properties
 2. Ensure Typescript definitions work consistently - current use of "unknown" causing issues for users
+3. Explore the implications of direct component access (i.e. entity.component instead of current entity._.component)
 ### Archetypes
 1. Performance improvements - Ensure getting entities by archetype / components is performant
 
