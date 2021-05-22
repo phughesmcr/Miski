@@ -17,6 +17,7 @@
       padding: 0;
     }
     body {
+      position: relative;
       display: flex;
       background-color: black;
       overflow: hidden;
@@ -34,9 +35,38 @@
       image-rendering: optimize-contrast;
       -ms-interpolation-mode: nearest-neighbor;
     }
+    .top, .btm {
+      position: absolute;
+      width: fit-content;
+      height: fit-content;
+      background-color: rgba(0, 255, 255, 0.2);
+      padding: 5px;
+      border-radius: 4px;
+      left: 0;
+    }
+    .btm {
+      bottom: 0;
+    }
+    .btm p, .top p {
+      color: #fff;
+      font-family: sans-serif;
+      word-wrap: unset;
+    }
+    .btm p a {
+      color: #000;
+    }
+    .top {
+      top: 0;
+    }
   </style>
 </head>
 <body>
+  <div class="top">
+    <p><span id="fps">29</span> FPS</p>
+  </div>
   <canvas width="1280" height="720" tabindex="-1"></canvas>
+  <div class="btm">
+    <p>Based on the <a href="https://ecsy.io/" target="_blank" rel="noopener noreferrer">ECSY 2d canvas demo</a></p>
+  </div>
 </body>
 </html>
