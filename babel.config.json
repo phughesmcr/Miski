@@ -5,14 +5,18 @@
       "bugfixes": true,
       "shippedProposals": true,
       "corejs": {
-        "version": 3,
+        "version": "3.12",
         "proposals": true
       },
-      "useBuiltIns": "usage"
+      "useBuiltIns": "usage",
+      "modules": false
     }],
     "@babel/preset-typescript"
   ],
   "plugins": [
-    "@babel/plugin-proposal-class-properties"
+    "@babel/plugin-proposal-class-properties",
+    "@babel/plugin-proposal-private-property-in-object",
+    "@babel/proposal-object-rest-spread",
+    "@babel/plugin-syntax-bigint"
   ]
 }
