@@ -1,219 +1,236 @@
-// Miski - Flocking Boids Example!
+// based on ECSY's canvas demo - https://github.com/ecsyjs/ecsy/blob/dev/site/examples/canvas/
 "use strict";
 
-// import the createWorld function from Miski
-// import { createWorld } from "../../dist/esm/index.min.js";
-import { createWorld } from "https://gitcdn.link/repo/phughesmcr/Miski/master/dist/esm/index.min.js";
+import { createWorld } from "../../dist/esm/index.min.js";
+import { fillCircle, drawLine, intersection, random } from "./utils.js";
 
-// cache main canvas
-const canvas = document.querySelector('canvas');
-const ctx = canvas.getContext('2d', {alpha: false, desynchronized: false});
-ctx.imageSmoothingEnabled = false;
+const WIDTH = 1920;
+const HEIGHT = 1080;
 
-// create buffer canvas
-const bufferCnv = document.createElement('canvas');
-bufferCnv.width = canvas.width;
-bufferCnv.height = canvas.height;
-const bufferCtx = bufferCnv.getContext('2d', {alpha: false, desynchronized: true});
-bufferCtx.imageSmoothingEnabled = false;
-
-// ui elements
-const sFps = document.getElementById('sFps');
-
-// create our world - most functions take place through the world object
 const world = createWorld();
-
-// expose world on window
 window.world = world;
 
-// create some singleton categories that are going to reside on the world.entity singleton entity
-// the properties given when registering a component become its default properties
-const cCanvas = world.registerComponent({
-  name: "canvas",
-  properties: {
-    ctx: ctx,
-    get canvas() {
-      return this.ctx.canvas;
-    }
-  },
-  entityLimit: 1,
-  removable: false,
-});
-
-const cBuffer = world.registerComponent({
-  name: "buffer",
-  properties: {
-    ctx: bufferCtx,
-  },
-  entityLimit: 1,
-  removable: false,
-});
-
-// add the components to the world entity
-world.addComponentsToEntity(world.entity, cCanvas, cBuffer);
-
-// modify the components' properties through the ._. pathway
-world.entity._.canvas.ctx = ctx;
-world.entity._.buffer.ctx = bufferCtx;
-
-// define some reusable components for our boids
-const cSize = world.registerComponent({
-  name: "size",
-  properties: {
-    height: 10,
-    width: 10,
-  },
-});
-
-const cColour = world.registerComponent({
-  name: "colour",
-  properties: {
-    r: 255,
-    g: 255,
-    b: 255,
-  },
-});
+// COMPONENTS
 
 const cPosition = world.registerComponent({
-  name: "position",
-  properties: {
+  name: "Position",
+  defaults: {
     x: 0,
     y: 0,
   },
 });
 
 const cVelocity = world.registerComponent({
-  name: "velocity",
-  properties: {
+  name: "Velocity",
+  defaults: {
     x: 0,
     y: 0,
   },
 });
 
 const cAcceleration = world.registerComponent({
-  name: "acceleration",
-  properties: {
+  name: "Acceleration",
+  defaults: {
     x: 0,
     y: 0,
   },
 });
 
-const cAlignment = world.registerComponent({
-  name: "alignment",
-  properties: {
-
-  }
+const cCircle = world.registerComponent({
+  name: "Circle",
+  defaults: {
+    radius: 10,
+  },
 });
 
-// random utility functions
-function rnd(min, max) { // min and max included
-  return Math.floor(Math.random() * (max - min + 1) + min);
-}
-function clamp(n, min, max) {
-  if (n < min) n = min;
-  if (n > max) n = max;
-  return n;
-}
-
-// entity container
-const boids = [];
-window.boids = boids;
-// boid factory
-function createBoid() {
-  // create entity
-  const boid = world.createEntity();
-  // add components
-  world.addComponentsToEntity(boid, cSize, cColour, cPosition, cVelocity, cAcceleration);
-  // overwrite some of the default properties with entity specific properties
-  // N.B. you can access the individual properties too of course (e.g. boid._.colour.r)
-  boid._.colour = { r: rnd(0, 255), g: rnd(0, 255), b: rnd(0, 255) };
-  boid._.size = { width: 20, height: 20 };
-  boid._.position = {x: rnd(0, canvas.width - boid._.size.width), y: rnd(0, canvas.height - boid._.size.height)};
-  boid._.velocity = {x: rnd(-100, 100), y: rnd(-100, 100)};
-  boid._.acceleration = {x: rnd(-1, 1), y: rnd(-1, 1)};
-  return boid;
-}
-
-// create 1000 boxes
-for (let i = 0; i < 1000; i++) {
- const boid = createBoid();
- boids.push(boid);
-}
-
-// create a system to handle the boids
-const boidSystem = world.registerSystem({
-  name: "boids",
-  components: [
-    cSize,
-    cColour,
-    cPosition,
-    cVelocity,
-    cAcceleration,
-  ],
-  // align function needs to gfo in preupdate
-  update: function(dt, entities, system) {
-    if (!entities.length) return;
-    const len = entities.length - 1;
-    for (let i = len; i >= 0; i--) {
-      const entity = entities[i];
-      const cnv = world.entity._.canvas.ctx.canvas;
-      if (entity._.position.x >= (cnv.width - entity._.size.width) || (entity._.position.x <= 0)) {
-        entity._.velocity.x = -entity._.velocity.x;
-      }
-      if (entity._.position.y >= (cnv.height - entity._.size.height) || (entity._.position.y <= 0)) {
-        entity._.velocity.y = -entity._.velocity.y;
-      }
-      entity._.position.x += entity._.velocity.x * dt;
-      entity._.position.y += entity._.velocity.y * dt;
-      entity._.velocity.x += entity._.acceleration.x * dt;
-      entity._.velocity.y += entity._.acceleration.y * dt;
-    };
+const cIntersecting = world.registerComponent({
+  name: "Intersecting",
+  defaults: {
+    points: [],
   },
-  postUpdate: function(int, entities, system) {
-    if (!entities.length) return;
-    const worldCtx = world.entity._.buffer.ctx;
-    // clear canvas every frame
-    worldCtx.fillStyle = '#000'
-    worldCtx.fillRect(0, 0, worldCtx.canvas.width, worldCtx.canvas.height);
-    // process each entity
-    const len = entities.length - 1;
-    for (let i = len; i >= 0; i--) {
-      const entity = entities[i];
-      // draw
-      const c = entity._.colour;
-      worldCtx.fillStyle = `rgb(${c.r}, ${c.g}, ${c.b})`;
-      worldCtx.fillRect(
-        entity._.position.x,
-        entity._.position.y,
-        entity._.size.width,
-        entity._.size.height,
+});
+
+const cCanvasContext = world.registerComponent({
+  name: "Canvas",
+  defaults: {
+    ctx: undefined,
+    width: 1920,
+    height: 1080,
+  },
+});
+
+const cBufferContext = world.registerComponent({
+  name: "Buffer",
+  defaults: {
+    ctx: undefined,
+    width: WIDTH,
+    height: HEIGHT,
+  },
+});
+
+const cDemoSettings = world.registerComponent({
+  name: "Demo",
+  defaults: {
+    speedMultiplier: 1,
+  },
+});
+
+// CANVAS SETUP
+
+// global entity (i.e. singleton) - available in all systems
+world.global.addComponent(cCanvasContext);
+world.global.addComponent(cBufferContext);
+world.global.addComponent(cDemoSettings);
+world.global.enable();
+
+// canvas
+const cnv = document.getElementsByTagName('canvas')[0];
+cnv.width = window.innerWidth;
+cnv.height = window.innerHeight;
+
+const globalCanvas = world.global.Canvas;
+globalCanvas.ctx = cnv.getContext('2d', {alpha: false});
+globalCanvas.width = cnv.width;
+globalCanvas.height = cnv.height;
+globalCanvas.ctx.imageSmoothingEnabled = globalCanvas.ctx.mozImageSmoothingEnabled = globalCanvas.ctx.webkitImageSmoothingEnabled = true;
+globalCanvas.ctx.imageSmoothingQuality = "high";
+globalCanvas.ctx.fillStyle = "black";
+
+// buffer
+const bufferCanvas = document.createElement('canvas');
+bufferCanvas.width = WIDTH;
+bufferCanvas.height = HEIGHT;
+
+const globalBuffer = world.global.Buffer;
+globalBuffer.ctx = bufferCanvas.getContext('2d', {alpha: false, desynchronized: true});
+globalBuffer.width = bufferCanvas.width;
+globalBuffer.height = bufferCanvas.height;
+
+// QUERIES
+
+const qMovement = world.registerQuery({ all: [cAcceleration, cCircle, cPosition, cVelocity] });
+const qCircle = world.registerQuery({ all: [cCircle, cPosition, cIntersecting]});
+
+// SYSTEMS - registration order matters! (can be changed later with world.moveSystem())
+
+const sMovement = world.registerSystem({
+  name: "Movement",
+  query: qMovement,
+  update: (entities, global, dt) => {
+    const canvas = global.Canvas;
+    const multiplier = global.Demo.speedMultiplier;
+    entities.forEach((entity) => {
+      const position = entity.Position;
+      const acceleration = entity.Acceleration;
+      const velocity = entity.Velocity;
+      position.x += velocity.x * acceleration.x * dt * multiplier ;
+      position.y += velocity.y * acceleration.y * dt * multiplier ;
+      if (acceleration.x > 1) acceleration.x -= dt * multiplier;
+      if (acceleration.y > 1) acceleration.y -= dt * multiplier;
+      if (acceleration.x < 1) acceleration.x = 1;
+      if (acceleration.y < 1) acceleration.y = 1;
+
+      const radius = entity.Circle.radius;
+      if ((position.y + radius) < 0) position.y = canvas.height + radius;
+      if ((position.y - radius) > canvas.height) position.y = -radius;
+      if ((position.x - radius) > canvas.width) position.x = 0;
+      if ((position.x + radius) < 0) position.x = canvas.width;
+    });
+  },
+});
+sMovement.enable();
+
+const sCircle = world.registerSystem({
+  name: "Circle",
+  query: qCircle,
+  pre: (entities, global) => {
+    entities.forEach((entity, idx, arr) => {
+      entity.Intersecting.points.length = 0;
+    });
+  },
+  update: (entities, global, _dt) => {
+    entities.forEach((entity, idx, arr) => {
+      // entity.Intersecting.points.length = 0;
+      for (let j = idx + 1; j < entities.length; j++) {
+        const entityB = entities[j];
+        const intersect = intersection(entity, entityB);
+        if (intersect !== false) {
+          entity.Intersecting.points.push(intersect);
+        }
+      }
+    });
+  },
+  post: (entities, global, _int) => {
+    const canvas = global.Buffer;
+    canvas.ctx.fillStyle = "black";
+    canvas.ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    entities.forEach((entity) => {
+      const position = entity.Position;
+      canvas.ctx.beginPath();
+      canvas.ctx.arc(
+        position.x,
+        position.y,
+        entity.Circle.radius,
+        0,
+        2 * Math.PI,
+        false
       );
-    }
-    // draw fps counter
-    sFps.textContent = f.toFixed(3);
+      canvas.ctx.lineWidth = 1;
+      canvas.ctx.strokeStyle = "#fff";
+      canvas.ctx.stroke();
+
+      let intersect = entity.Intersecting;
+      canvas.ctx.strokeStyle = "#ff9";
+      canvas.ctx.lineWidth = 2;
+      canvas.ctx.fillStyle = "#fff";
+      for (let j = 0; j < intersect.points.length; j++) {
+        const points = intersect.points[j];
+        fillCircle(canvas.ctx, points[0], points[1], 3);
+        fillCircle(canvas.ctx, points[2], points[3], 3);
+        drawLine(canvas.ctx, points[0], points[1], points[2], points[3]);
+      }
+    });
   },
 });
-boidSystem.enable();
+sCircle.enable();
 
-const renderer = world.registerSystem({
-  name: "renderer",
-  components: [
-    cCanvas,
-    cBuffer,
-  ],
-  postUpdate: function(int, entities, system) {
-    const len = entities.length - 1;
-    for (let i = len; i >= 0; i--) {
-      const entity = entities[i];
-      const cnv = entity._.canvas.ctx;
-      const buf = entity._.buffer.ctx;
-      cnv.clearRect(0, 0, cnv.canvas.width, cnv.canvas.height);
-      cnv.drawImage(buf.canvas, 0, 0);
-      buf.clearRect(0, 0, buf.canvas.width, buf.canvas.height);
-    }
-  }
+const sRender = world.registerSystem({
+  name: "Renderer",
+  post: (_entities, global, _int) => {
+    const buffer = global.Buffer;
+    const canvas = global.Canvas;
+    const ctx = canvas.ctx;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(buffer.ctx.canvas, 0, 0, canvas.width, canvas.height);
+  },
 });
-renderer.enable();
+sRender.enable();
+
+// SETUP
+
+for (let i = 0; i < 30; i++) {
+  const entity = world.createEntity();
+  entity.addComponent(cCircle, {radius: random(20, 100)});
+  entity.addComponent(cIntersecting);
+  entity.addComponent(cAcceleration);
+  entity.addComponent(cPosition, {
+    x: random(0, bufferCanvas.width),
+    y: random(0, bufferCanvas.height),
+  });
+  entity.addComponent(cVelocity, {
+    x: random(-20, 20),
+    y: random(-20, 20),
+  });
+  entity.enable();
+}
+
+function resize() {
+  globalCanvas.width = cnv.width = window.innerWidth;
+  globalCanvas.height = cnv.height = window.innerHeight;
+}
+window.addEventListener('resize', resize, {passive: true});
+resize();
 
 // FPS counter
 let f = 0
@@ -227,43 +244,13 @@ function updateFPS(time) {
   f =  0.9 * ld * 1000 / (time - lu) + 0.1 * f;
   lu = time;
   ld = 0;
+  console.log(f.toFixed(3));
 }
 
 // game loop
-let last = null;
-let acc = 0;
-const tempo = 1/60;
-let dt = tempo;
-
 function onTick(time) {
-  window.requestAnimationFrame(onTick)
-  if (last !== null) {
-    acc += (time - last) * 0.001;
-    let updateCount = 0;
-    world.preUpdate();
-    while (acc > dt) {
-      if (updateCount >= 240) {
-        acc = 1;
-        break;
-      }
-      world.update(dt);
-      acc -= dt;
-      updateCount++;
-    }
-  }
-  last = time;
+  window.requestAnimationFrame(onTick);
+  world.step(time);
   updateFPS(time);
-  world.postUpdate(acc / tempo);
 }
-window.requestAnimationFrame(onTick);
-
-document.getElementById('sEntLen').textContent = world.getEntities().length;
-document.getElementById('sCompLen').textContent = world.getComponents().length;
-document.getElementById('sSysLen').textContent = world.getSystems().length;
-
-function onResize(e) {
-  document.getElementById('sCnvW').textContent = canvas.clientWidth;
-  document.getElementById('sCnvH').textContent = canvas.clientHeight;
-}
-window.addEventListener('resize', onResize, {passive: true});
-onResize();
+onTick(0);

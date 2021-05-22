@@ -1,111 +1,163 @@
-/*! *****************************************************************************
- *
- * miski
- * v0.2.2
- *
- * MIT License
- * 
- * Copyright (C) 2021 Peter Hughes<https://www.phugh.es>, all rights reserved.
- * 
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- * 
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- * 
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- * 
-***************************************************************************** */
-
-interface ComponentSpec<T> {
-    entityLimit?: number | null;
-    name: string;
-    properties: T;
-    removable?: boolean;
+declare class Archetype {
+    private _registry;
+    readonly id: bigint;
+    constructor(id: bigint, initialEntities?: Entity[]);
+    get entities(): Entity[];
+    addEntity(entity: Entity): void;
+    isEmpty(): boolean;
+    removeEntity(entity: Entity): void;
 }
-declare type Component<T> = Readonly<{
-    entityLimit: number | null;
-    id: number;
-    name: string;
-    properties: T;
-    removable: boolean;
-}>;
 
-declare type Entity = Readonly<{
-    _: Record<string, unknown>;
-    addComponent: <T>(component: Component<T>) => boolean;
-    getArchetype: () => bigint;
-    hasComponent: <T>(component: Component<T>) => boolean;
-    id: string;
-    isAwake: () => boolean;
-    next: (next?: Entity | null) => Entity | null;
-    purge: () => void;
-    removeComponent: <T>(component: Component<T>) => boolean;
-    sleep: () => boolean;
-    wake: () => boolean;
-}>;
+interface QuerySpec {
+    all?: Component<unknown>[];
+    any?: Component<unknown>[];
+    none?: Component<unknown>[];
+}
+declare class Query {
+    private _all;
+    private _any;
+    private _none;
+    private _mskAll;
+    private _mskAny;
+    private _mskNone;
+    private _cache;
+    private _registry;
+    private _world;
+    constructor(world: World, spec: QuerySpec);
+    get entities(): Entity[];
+    get size(): number;
+    hasEntity(entity: Entity): boolean;
+    matches(archetype: bigint): boolean;
+    update(): void;
+}
 
-declare type System = Readonly<{
-    archetype: bigint;
-    disable: () => boolean;
-    enable: () => boolean;
-    enabled: boolean;
-    exclusive: boolean;
-    name: string;
-    postUpdate: (int: number, entities: Entity[], system: System) => void;
-    preUpdate: (entities: Entity[], system: System) => void;
-    update: (dt: number, entities: Entity[], system: System) => void;
-}>;
+interface Toggleable {
+    readonly enabled: boolean;
+    disable: () => void;
+    enable: () => void;
+}
+
 interface SystemSpec {
-    components: Component<unknown>[];
-    exclusive?: boolean;
+    query?: Query | null;
     name: string;
-    postUpdate?: (int: number, entity: Entity[], system: System) => void;
-    preUpdate?: (entities: Entity[], system: System) => void;
-    update?: (dt: number, entities: Entity[], system: System) => void;
+    pre?: (entities: Entity[], global: Entity) => void;
+    post?: (entities: Entity[], global: Entity, int?: number) => void;
+    update?: (entities: Entity[], global: Entity, dt?: number) => void;
+}
+declare class System implements Toggleable {
+    private _enabled;
+    private _world;
+    readonly name: string;
+    readonly query: Query | null;
+    readonly pre: (entities: Entity[], global: Entity) => void;
+    readonly post: (entities: Entity[], global: Entity, int?: number) => void;
+    readonly update: (entities: Entity[], global: Entity, dt?: number) => void;
+    constructor(world: World, spec: SystemSpec);
+    get enabled(): boolean;
+    get entities(): Entity[];
+    disable(): void;
+    enable(): void;
 }
 
 interface WorldSpec {
-    initialPoolSize?: number;
+    entityPoolGrowthFactor?: number;
+    initialEntityPoolSize?: number;
     maxComponents?: number;
     maxEntities?: number;
+    maxUpdates?: number;
+    tempo?: number;
 }
-declare type World = Readonly<{
-    addComponentsToEntity: (entity: Entity, ...components: Component<unknown>[]) => Entity;
-    createEntity: () => Entity;
-    destroyEntity: (entity: Entity) => boolean;
-    entity: Entity;
-    getComponentById: (id: number) => Component<unknown> | undefined;
+interface World {
+    FORBIDDEN_NAMES: Readonly<string[]>;
+    global: Entity;
+    getArchetype: (id: bigint) => Archetype | undefined;
+    getArchetypes: () => Archetype[];
+    getEntitiesByComponents: (...components: Component<unknown>[]) => Entity[];
+    isArchetypeRegistered: (archetype: Archetype) => boolean;
+    updateArchetype: (entity: Entity, prev?: bigint) => World;
+    getComponentById: (id: bigint) => Component<unknown> | undefined;
     getComponentByName: (name: string) => Component<unknown> | undefined;
     getComponents: () => Component<unknown>[];
-    getEntities: () => Entity[];
-    getEntitiesByComponents: (...components: Component<unknown>[]) => Entity[];
-    getEntityById: (id: string) => Entity | undefined;
-    getSystemByIndex: (index: number) => System | undefined;
-    getSystemByName: (name: string) => System | undefined;
-    getSystems: () => System[];
     isComponentRegistered: <T>(component: Component<T>) => boolean;
-    isSystemRegistered: (system: System) => boolean;
-    moveSystem: (system: System, idx: number) => boolean;
-    postUpdate: (int: number) => void;
-    preUpdate: () => void;
     registerComponent: <T>(spec: ComponentSpec<T>) => Component<T>;
+    unregisterComponent: <T>(component: Component<T>) => World;
+    createEntity: () => Entity;
+    destroyEntity: (entity: Entity) => boolean;
+    getEntities: () => Entity[];
+    getEntityById: (id: string) => Entity | undefined;
+    isEntityRegistered: (entity: Entity) => boolean;
+    isQueryRegistered: (query: Query) => boolean;
+    registerQuery: (spec: QuerySpec) => Query;
+    unregisterQuery: (query: Query) => World;
+    updateQueries: () => World;
+    pre: () => World;
+    post: (int: number) => World;
+    step: (time: number) => World;
+    update: (dt: number) => World;
+    getSystems: () => System[];
+    getPostSystems: () => System[];
+    getPreSystems: () => System[];
+    getUpdateSystems: () => System[];
+    getSystemByIdx: (idx: number) => System | undefined;
+    getSystemByName: (name: string) => System | undefined;
+    isSystemRegistered: (system: System) => boolean;
+    moveSystem: (system: System, idx: number) => number;
     registerSystem: (spec: SystemSpec) => System;
-    removeComponentsFromEntity: (entity: Entity, ...components: Component<unknown>[]) => Entity;
-    unregisterComponent: <T>(component: Component<T>) => ComponentSpec<T>;
-    unregisterSystem: (system: System) => void;
-    update: (dt: number) => void;
-}>;
-declare function createWorld(spec: WorldSpec): World;
+    unregisterSystem: (system: System) => World;
+}
+/**
+ * Creates a new World object
+ * @param spec the world's specification object
+ * @param spec.entityPoolGrowthFactor amount to grow the entity pool by once the
+ * initial entities have been used. Defaults to 0.25.
+ * @param spec.initialEntityPoolSize the number of entities to pre-allocate. Defaults to 128.
+ * @param spec.maxComponents the maximum number of components to allow. Defaults to 256.
+ * @param spec.maxEntities the maximum number of entities to allow. Defaults to Number.POSITIVE_INFINITY.
+ * @param spec.maxUpdates the maximum number of updates to allow before panicking. Defaults to 240.
+ * @param spec.tempo the desired update rate. Defaults to 1/60 (i.e. 60fps, or 0.016).
+ * @returns a new World object
+ */
+declare function createWorld(spec?: WorldSpec): World;
 
-export { Component, Entity, System, World, createWorld };
+interface Poolable<T> {
+    next: T | null;
+}
+
+interface Entity {
+    [property: string]: unknown;
+}
+declare class Entity implements Toggleable, Poolable<Entity> {
+    private _archetype;
+    private _enabled;
+    private _next;
+    private _properties;
+    private _world;
+    readonly id: string;
+    constructor(world: World);
+    get archetype(): bigint;
+    get enabled(): boolean;
+    get next(): Entity | null;
+    set next(next: Entity | null);
+    addComponent<T>(component: Component<T>, properties?: T): boolean;
+    clear(): void;
+    disable(): void;
+    enable(): void;
+    hasComponent<T>(component: Component<T> | string): boolean;
+    removeComponent<T>(component: Component<T>): boolean;
+}
+
+interface ComponentSpec<T> {
+    name: string;
+    defaults: T;
+}
+declare class Component<T> {
+    private _world;
+    readonly defaults: Readonly<T>;
+    readonly id: bigint;
+    readonly name: string;
+    constructor(world: World, id: bigint, spec: ComponentSpec<T>);
+    get entities(): Entity[];
+    get isRegistered(): boolean;
+}
+
+export { Component, ComponentSpec, Entity, Poolable, Query, QuerySpec, System, SystemSpec, Toggleable, World, WorldSpec, createWorld };
