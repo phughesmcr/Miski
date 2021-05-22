@@ -236,6 +236,7 @@ resize();
 let f = 0
 let ld = 0;
 let lu = Number.NEGATIVE_INFINITY;
+const sFPS = document.getElementById('fps');
 function updateFPS(time) {
   if (time <= lu + 1000) {
     ld += 1;
@@ -244,7 +245,7 @@ function updateFPS(time) {
   f =  0.9 * ld * 1000 / (time - lu) + 0.1 * f;
   lu = time;
   ld = 0;
-  console.log(f.toFixed(3));
+  sFPS.textContent = Math.round(f + 0.6);
 }
 
 // game loop
