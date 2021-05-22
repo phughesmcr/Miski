@@ -1,74 +1,67 @@
 // Copyright (c) 2021 P. Hughes. All rights reserved. MIT license.
 "use strict";
 
-import { Component } from '../component/component';
 import { Entity } from '../entity/entity';
-import { createMask } from '../utils/mask';
+import { Query } from '../query/query';
+import { Toggleable } from '../utils';
+import { World } from '../world';
 
-export type System = Readonly<{
-  archetype: bigint;
-  disable: () => boolean;
-  enable: () => boolean;
-  enabled: boolean;
-  exclusive: boolean;
-  name: string;
-  postUpdate: (int: number, entities: Entity[], system: System) => void;
-  preUpdate: (entities: Entity[], system: System) => void;
-  update: (dt: number, entities: Entity[], system: System) => void;
-}>
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function noopPre(_entities: Entity[], _global: Entity): void { return; }
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function noopPost(_entities: Entity[], _global: Entity, _int?: number): void { return; }
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function noopUpdate(_entities: Entity[], _global: Entity, _dt?: number): void { return; }
 
 export interface SystemSpec {
-  components: Component<unknown>[];
-  exclusive?: boolean;
+  query?: Query | null;
   name: string;
-  postUpdate?: (int: number, entity: Entity[], system: System) => void;
-  preUpdate?: (entities: Entity[], system: System) => void;
-  update?: (dt: number, entities: Entity[], system: System) => void;
+  pre?: (entities: Entity[], global: Entity) => void;
+  post?: (entities: Entity[], global: Entity, int?: number) => void;
+  update?: (entities: Entity[], global: Entity, dt?: number) => void;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-empty-function
-const _noop = function() {};
+export class System implements Toggleable {
+  private _enabled: boolean;
+  private _world: World;
+  readonly name: string;
+  readonly query: Query | null;
+  readonly pre: (entities: Entity[], global: Entity) => void;
+  readonly post: (entities: Entity[], global: Entity, int?: number) => void;
+  readonly update: (entities: Entity[], global: Entity, dt?: number) => void;
 
-/**
- * Creates a new system
- * @param spec the system specification object
- */
-export function createSystem(spec: SystemSpec): System {
-  const {
-    components,
-    exclusive = false,
-    name,
-    postUpdate = _noop,
-    preUpdate = _noop,
-    update = _noop,
-  } = { ...spec };
+  constructor(world: World, spec: SystemSpec) {
+    const {
+      name,
+      query = null,
+      pre = noopPre,
+      post = noopPost,
+      update = noopUpdate,
+    } = spec;
 
-  // construct system archetype
-  const _archetype = components.reduce((archetype, component) => {
-    archetype.on(component.id);
-    return archetype;
-  }, createMask()).value();
+    this.name = name;
+    this.query = query;
+    this.pre = pre;
+    this.post = post;
+    this.update = update;
 
-  // system status
-  let _enabled = false;
+    this._enabled = false;
+    this._world = world;
+  }
 
-  /** Enable the system */
-  const enable = (): boolean => _enabled = true;
+  get enabled(): boolean {
+    return this._enabled;
+  }
 
-  /** Disable the system */
-  const disable = (): boolean => _enabled = false;
+  get entities(): Entity[] {
+    return (this.query === null) ? this._world.getEntities() : this.query.entities;
+  }
 
-  return Object.freeze({
-    get enabled(): boolean {
-      return _enabled;
-    },
-    archetype: _archetype,
-    disable,
-    enable,
-    exclusive,
-    name,
-    postUpdate,
-    preUpdate,
-    update,
-  });
+  disable(): void {
+    this._enabled = false;
+  }
+
+  enable(): void {
+    this._enabled = true;
+  }
 }

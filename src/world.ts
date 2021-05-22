@@ -1,261 +1,110 @@
 // Copyright (c) 2021 P. Hughes. All rights reserved. MIT license.
 "use strict";
 
+import { createArchetypeManager } from './archetype/archetype-manager';
+import { createComponentManager } from "./component/component-manager";
+import { createEntityManager } from './entity/entity-manager';
+import { createQueryManager } from './query/query-manager';
+import { createStepManager } from './step/step-manager';
+import { createSystemManager } from './system/system-manager';
+
+import { Archetype } from './archetype/archetype';
 import { Component, ComponentSpec } from './component/component';
-import { createComponentManager } from './component/component_manager';
 import { Entity } from './entity/entity';
-import { createEntityManager } from './entity/entity_manager';
+import { Query, QuerySpec } from './query/query';
 import { System, SystemSpec } from './system/system';
-import { createSystemManager } from './system/system_manager';
+import { FORBIDDEN_NAMES } from './utils';
 
 export interface WorldSpec {
-  initialPoolSize?: number;
+  entityPoolGrowthFactor?: number;
+  initialEntityPoolSize?: number;
   maxComponents?: number;
   maxEntities?: number;
+  maxUpdates?: number;
+  tempo?: number;
 }
 
-export type World = Readonly<{
-  addComponentsToEntity: (entity: Entity, ...components: Component<unknown>[]) => Entity;
-  createEntity: () => Entity;
-  destroyEntity: (entity: Entity) => boolean;
-  entity: Entity;
-  getComponentById: (id: number) => Component<unknown> | undefined;
+export interface World {
+  FORBIDDEN_NAMES: Readonly<string[]>,
+  global: Entity;
+  // archetype manager
+  getArchetype: (id: bigint) => Archetype | undefined;
+  getArchetypes: () => Archetype[];
+  getEntitiesByComponents: (...components: Component<unknown>[]) => Entity[];
+  isArchetypeRegistered: (archetype: Archetype) => boolean;
+  updateArchetype: (entity: Entity, prev?: bigint) => World;
+  // component manager
+  getComponentById: (id: bigint) => Component<unknown> | undefined;
   getComponentByName: (name: string) => Component<unknown> | undefined;
   getComponents: () => Component<unknown>[];
-  getEntities: () => Entity[];
-  getEntitiesByComponents: (...components: Component<unknown>[]) => Entity[];
-  getEntityById: (id: string) => Entity | undefined;
-  getSystemByIndex: (index: number) => System | undefined;
-  getSystemByName: (name: string) => System | undefined;
-  getSystems: () => System[];
   isComponentRegistered: <T>(component: Component<T>) => boolean;
-  isSystemRegistered: (system: System) => boolean;
-  moveSystem: (system: System, idx: number) => boolean;
-  postUpdate: (int: number) => void;
-  preUpdate: () => void;
   registerComponent: <T>(spec: ComponentSpec<T>) => Component<T>;
+  unregisterComponent: <T>(component: Component<T>) => World;
+  // entity manager
+  createEntity: () => Entity;
+  destroyEntity: (entity: Entity) => boolean;
+  getEntities: () => Entity[];
+  getEntityById: (id: string) => Entity | undefined;
+  isEntityRegistered: (entity: Entity) => boolean;
+  // query manager
+  isQueryRegistered: (query: Query) => boolean;
+  registerQuery: (spec: QuerySpec) => Query;
+  unregisterQuery: (query: Query) => World;
+  updateQueries: () => World;
+  // step manager
+  pre: () => World;
+  post: (int: number) => World;
+  step: (time: number) => World;
+  update: (dt: number) => World;
+  // system manager
+  getSystems: () => System[];
+  getPostSystems: () => System[];
+  getPreSystems: () => System[];
+  getUpdateSystems: () => System[];
+  getSystemByIdx: (idx: number) => System | undefined;
+  getSystemByName: (name: string) => System | undefined;
+  isSystemRegistered: (system: System) => boolean;
+  moveSystem: (system: System, idx: number) => number;
   registerSystem: (spec: SystemSpec) => System;
-  removeComponentsFromEntity: (entity: Entity, ...components: Component<unknown>[]) => Entity;
-  unregisterComponent: <T>(component: Component<T>) => ComponentSpec<T>;
-  unregisterSystem: (system: System) => void;
-  update: (dt: number) => void;
-}>
+  unregisterSystem: (system: System) => World;
+}
 
-export function createWorld(spec: WorldSpec): World {
-  // Spec
+/**
+ * Creates a new World object
+ * @param spec the world's specification object
+ * @param spec.entityPoolGrowthFactor amount to grow the entity pool by once the
+ * initial entities have been used. Defaults to 0.25.
+ * @param spec.initialEntityPoolSize the number of entities to pre-allocate. Defaults to 128.
+ * @param spec.maxComponents the maximum number of components to allow. Defaults to 256.
+ * @param spec.maxEntities the maximum number of entities to allow. Defaults to Number.POSITIVE_INFINITY.
+ * @param spec.maxUpdates the maximum number of updates to allow before panicking. Defaults to 240.
+ * @param spec.tempo the desired update rate. Defaults to 1/60 (i.e. 60fps, or 0.016).
+ * @returns a new World object
+ */
+export function createWorld(spec: WorldSpec = {}): World {
   const {
-    initialPoolSize = 64,
-    maxComponents = 1024,
-    maxEntities = 100000,
-  } = { ...spec };
+    entityPoolGrowthFactor = 0.25,
+    initialEntityPoolSize = 128,
+    maxComponents = 256,
+    maxEntities = Number.POSITIVE_INFINITY,
+    maxUpdates = 240,
+    tempo = 1 / 60,
+  } = spec;
 
-  let _isFirstRun = false;
+  const world = Object.create(null) as World;
 
-  // Entity
-  const {
-    areArchetypesDirty,
-    cleanedArchetypes,
-    createEntity,
-    destroyEntity,
-    getEntities,
-    getEntitiesByComponents,
-    getEntitiesByMask,
-    getEntitiesFromMasks,
-    getEntityById,
-    rebuildArchetypes,
-    updateArchetype,
-  } = createEntityManager({
-    initialPoolSize,
-    maxEntities,
-  });
+  Object.assign(
+    world,
+    createArchetypeManager(world, {}),
+    createComponentManager(world, {maxComponents}),
+    createEntityManager(world, {entityPoolGrowthFactor, initialEntityPoolSize, maxEntities}),
+    createQueryManager(world, {}),
+    createStepManager(world, {maxUpdates, tempo}),
+    createSystemManager(world, {}),
+  );
 
-  // Component
-  const {
-    getComponentById,
-    getComponentByName,
-    getComponents,
-    isComponentRegistered,
-    registerComponent,
-    unregisterComponent,
-  } = createComponentManager({
-    maxComponents,
-  });
+  world.global = world.createEntity();
+  world.FORBIDDEN_NAMES = [...FORBIDDEN_NAMES];
 
-  // System
-  const {
-    getSystemByIndex,
-    getSystemByName,
-    getSystems,
-    isSystemRegistered,
-    moveSystem,
-    registerSystem,
-    unregisterSystem,
-  } = createSystemManager();
-
-  // world.entity Initialization
-  const worldEntity = createEntity();
-  const worldComponent = registerComponent<{ isWorld: boolean }>({
-    name: "world",
-    properties: {
-      isWorld: true,
-    },
-    entityLimit: 1,
-    removable: false,
-  });
-
-  const _systemMasks: Record<string, bigint[]> = {};
-
-  // Public methods
-  const addComponentsToEntity = (entity: Entity, ...components: (Component<unknown> | string)[]): Entity => {
-    if (!entity) {
-      throw new Error('no entity provided.');
-    }
-    if (!components?.length) {
-      throw new Error('no components provided.');
-    }
-    const len = components.length;
-    let i: number;
-    for (i = 0; i < len; i++) {
-      let component: Component<unknown> | undefined;
-      if (typeof components[i] === 'string') {
-        component = getComponentByName(components[i] as string);
-      } else {
-        component = components[i] as Component<unknown>;
-      }
-      if (!component) {
-        throw new Error(`component ${components[i] as string} is not registered!.`);
-      }
-      if (!entity.hasComponent(component)) {
-        const previousArchetype = entity.getArchetype();
-        entity.addComponent(component);
-        updateArchetype(entity, previousArchetype);
-      }
-    }
-    return entity;
-  };
-
-  const removeComponentsFromEntity = (entity: Entity, ...components: (Component<unknown> | string)[]): Entity => {
-    if (!entity) {
-      throw new Error('no entity provided.');
-    }
-    if (!components?.length) {
-      throw new Error('no components provided.');
-    }
-    const len = components.length;
-    let i: number;
-    for (i = 0; i < len; i++) {
-      let component: Component<unknown> | undefined;
-      if (typeof components[i] === 'string') {
-        component = getComponentByName(components[i] as string);
-      } else {
-        component = components[i] as Component<unknown>;
-      }
-      if (!component) {
-        throw new Error(`component ${components[i] as string}  is not registered.`);
-      }
-      if (entity.hasComponent(component)) {
-        const previousArchetype = entity.getArchetype();
-        entity.removeComponent(component);
-        updateArchetype(entity, previousArchetype);
-      }
-    }
-    return entity;
-  };
-
-  const preUpdate = (): void => {
-    if (_isFirstRun === true) {
-      rebuildArchetypes();
-      _isFirstRun = false;
-    }
-    const systems = getSystems();
-    for (let i = 0; i < systems.length; i++) {
-      const system = systems[i];
-      if (system.enabled === false) continue;
-      if (areArchetypesDirty() === true || !(system.name in _systemMasks)) {
-        const [masks, entities] = getEntitiesByMask(system.archetype, system.exclusive);
-        _systemMasks[system.name] = masks;
-        system.preUpdate(entities, system);
-        cleanedArchetypes();
-      } else {
-        const masks = _systemMasks[system.name];
-        const entities = getEntitiesFromMasks(masks);
-        system.preUpdate(entities, system);
-      }
-     }
-  };
-
-  const update = (dt: number): void => {
-    if (_isFirstRun === true) {
-      rebuildArchetypes();
-      _isFirstRun = false;
-    }
-    const systems = getSystems();
-    for (let i = 0; i < systems.length; i++) {
-      const system = systems[i];
-      if (system.enabled === false) continue;
-      if (areArchetypesDirty() === true || !(system.name in _systemMasks)) {
-        const [masks, entities] = getEntitiesByMask(system.archetype, system.exclusive);
-        _systemMasks[system.name] = masks;
-        system.update(dt, entities, system);
-        cleanedArchetypes();
-      } else {
-        const masks = _systemMasks[system.name];
-        const entities = getEntitiesFromMasks(masks);
-        system.update(dt, entities, system);
-      }
-    }
-  };
-
-  const postUpdate = (int: number): void => {
-    if (_isFirstRun === true) {
-      rebuildArchetypes();
-      _isFirstRun = false;
-    }
-    const systems = getSystems();
-    for (let i = 0; i < systems.length; i++) {
-      const system = systems[i];
-      if (system.enabled === false) continue;
-      if (areArchetypesDirty() === true || !(system.name in _systemMasks)) {
-        const [masks, entities] = getEntitiesByMask(system.archetype, system.exclusive);
-        _systemMasks[system.name] = masks;
-        system.postUpdate(int, entities, system);
-        cleanedArchetypes();
-      } else {
-        const masks = _systemMasks[system.name];
-        const entities = getEntitiesFromMasks(masks);
-        system.postUpdate(int, entities, system);
-      }
-    }
-  };
-
-  // finalizations
-  addComponentsToEntity(worldEntity, worldComponent);
-
-  return Object.freeze({
-    addComponentsToEntity,
-    createEntity,
-    destroyEntity,
-    entity: worldEntity,
-    getComponentById,
-    getComponentByName,
-    getComponents,
-    getEntities,
-    getEntitiesByComponents,
-    getEntitiesByMask,
-    getEntityById,
-    getSystemByIndex,
-    getSystemByName,
-    getSystems,
-    isComponentRegistered,
-    isSystemRegistered,
-    moveSystem,
-    postUpdate,
-    preUpdate,
-    registerComponent,
-    registerSystem,
-    removeComponentsFromEntity,
-    unregisterComponent,
-    unregisterSystem,
-    update,
-  });
+  return world;
 }

@@ -1,109 +1,140 @@
+// Copyright (c) 2021 P. Hughes. All rights reserved. MIT license.
 "use strict";
 
 import { Component } from '../component/component';
-import { createMask } from '../utils/mask';
-import { clearObject, deepAssign } from '../utils/utils';
+import { Mask } from '../mask/mask';
+import { Poolable } from '../pool/pool';
+import { deepAssignObjects, Toggleable } from '../utils';
+import { World } from '../world';
 
-export type Entity = Readonly<{
-  _: Record<string, unknown>;
-  addComponent: <T>(component: Component<T>) => boolean;
-  getArchetype: () => bigint;
-  hasComponent: <T>(component: Component<T>) => boolean;
-  id: string;
-  isAwake: () => boolean;
-  next: (next?: Entity | null) => Entity | null;
-  purge: () => void;
-  removeComponent: <T>(component: Component<T>) => boolean;
-  sleep: () => boolean;
-  wake: () => boolean;
-}>
+export interface Entity {
+  [property: string]: unknown;
+}
 
-/** Creates an entity */
-export function createEntity(): Entity {
-  /** The entity's archetype mask */
-  const _archetype = createMask();
+export class Entity implements Toggleable, Poolable<Entity> {
+  private _archetype: Mask;
+  private _enabled: boolean;
+  private _next: Entity | null;
+  private _properties: Map<Component<unknown>, Record<string, unknown>>;
+  private _world: World;
+  readonly id: string;
 
-  /** A unique id for the entity */
-  const _id = `${Date.now().toString(36)}_${Math.random().toString(36).substr(2, 9)}`;
+  constructor(world: World) {
+    this.id = `${Date.now().toString(36)}_${Math.random().toString(36).substr(2, 9)}`;
+    this._archetype = new Mask();
+    this._enabled = false;
+    this._next = null;
+    this._properties = new Map();
+    this._world = world;
+  }
 
-  /** Container for the entity's component properties */
-  const _properties = {} as Record<string, unknown>;
+  get archetype(): bigint {
+    return this._archetype.value;
+  }
 
-  /** The entity's status */
-  let _awake = true;
+  get enabled(): boolean {
+    return this._enabled;
+  }
 
-  /** The next entity in the entity pool */
-  let _next: Entity | null = null;
+  get next(): Entity | null {
+    return this._next;
+  }
 
-  /** The entity object */
-  const entity = Object.create({}, {
-    // shorthand accessor for the entity's component properties
-    _: {
-      value: _properties,
-      enumerable: true,
-    },
-    addComponent: {
-      value: <T>(component: Component<T>): boolean => {
-        /** @todo validation */
-        if (component.name in _properties) {
-          console.warn(`Entity "${_id}" already has component "${component.name}".`);
-          return false;
-        }
-        try {
-          _properties[component.name] = deepAssign({}, component.properties);
-          _archetype.on(component.id);
-        } catch (err) {
-          console.warn(`Error adding component "${component.name}" to entity "${_id}".`, err);
-          return false;
-        }
-        return true;
-      },
-    },
-    getArchetype: {
-      value: (): bigint => _archetype.value(),
-    },
-    hasComponent: {
-      value: <T>(component: Component<T> | string): boolean => {
-        return ((typeof component === "string") ? component in _properties : component.name in _properties) ?? false;
-      },
-    },
-    isAwake: {
-      value: (): boolean => _awake,
-    },
-    id: {
-      value: _id,
-      enumerable: true,
-    },
-    next: {
-      value: (next?: Entity | null): Entity | null => {
-        if (next !== undefined) {
-          _next = next;
-        }
-        return _next;
+  set next(next: Entity | null) {
+    this._next = next;
+  }
+
+  addComponent<T>(component: Component<T>, properties?: T): boolean {
+    if (typeof component === 'string') {
+      const tmp = this._world.getComponentByName(component);
+      if (tmp) {
+        component = tmp as Component<T>;
+      } else {
+        throw new Error(`Component "${component as string}" not found!`);
       }
-    },
-    purge: {
-      value: (): void => {
-        clearObject(_properties);
-        _archetype.clear();
-      },
-    },
-    removeComponent: {
-      value: <T>(component: Component<T>): boolean => {
-        /** @todo validation */
-        if (!(component.name in _properties)) return false;
-        delete _properties[component.name];
-        _archetype.off(component.id);
-        return true;
-      },
-    },
-    sleep: {
-      value: (): boolean => _awake = false,
-    },
-    wake: {
-      value: (): boolean => _awake = true,
-    },
-  }) as Entity;
+    }
 
-  return Object.freeze(entity);
+    if (component instanceof Component) {
+      if (this._properties.has(component)) {
+        throw new Error(`Entity already has component "${component.name}".`);
+      }
+      // eslint-disable-next-line max-len
+      this._properties.set(component, deepAssignObjects({}, component.defaults as Record<string, unknown>, properties??{}));
+      Object.defineProperty(this, component.name, {
+        get: () => {
+          return this._properties.get(component);
+        },
+        set: (val: T) => {
+          const _c = this._properties.get(component);
+          if (Object.isFrozen(_c)) {
+            throw new Error(`Properties in component "${component.name}" cannot be modified.`);
+          } else if (_c) {
+            // Prevent accidental adding of new keys
+            Object.entries(val).forEach(([key, prop]) => {
+              if (key in _c) {
+                _c[key] = prop;
+              } else {
+                throw new Error(`Property "${key}" does not exist in component "${component.name}".`);
+              }
+            });
+          } else {
+            throw new Error(`Component "${component.name}" does not exist in entity.`);
+          }
+        },
+        enumerable: true,
+        configurable: true,
+      });
+      const prev = this._archetype.value;
+      this._archetype.on(component.id);
+      this._world.updateArchetype(this, prev);
+      return true;
+    } else {
+      throw new SyntaxError('Invalid or unregistered component.');
+    }
+  }
+
+  clear(): void {
+    Object.keys(this._properties).forEach((key) => delete this[key]);
+    this._properties.clear();
+    const prev = this._archetype.value;
+    this._archetype.clear();
+    this._world.updateArchetype(this, prev);
+  }
+
+  disable(): void {
+    this._enabled = false;
+  }
+
+  enable(): void {
+    this._enabled = true;
+  }
+
+  hasComponent<T>(component: Component<T> | string): boolean {
+    const name = (typeof component === "string") ? component : component.name;
+    return Boolean(Reflect.has(this._properties, name));
+  }
+
+  removeComponent<T>(component: Component<T>): boolean {
+    if (typeof component === 'string') {
+      const tmp = this._world.getComponentByName(component);
+      if (tmp) {
+        component = tmp as Component<T>;
+      } else {
+        throw new Error(`Component "${component as string}" not found!`);
+      }
+    }
+    if (!(this._properties.has(component))) {
+      throw new Error(`Entity ${this.id} has no component "${component.name}".`);
+    }
+    this._properties.delete(component);
+    try {
+      delete this[component.name];
+    } catch (err) {
+      console.warn(`Could not remove property ${component.name} from entity.`);
+    }
+    const prev = this._archetype.value;
+    this._archetype.off(component.id);
+    this._world.updateArchetype(this, prev);
+    return true;
+  }
 }

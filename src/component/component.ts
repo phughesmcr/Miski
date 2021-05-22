@@ -1,69 +1,41 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 // Copyright (c) 2021 P. Hughes. All rights reserved. MIT license.
 "use strict";
 
-import { deepAssign } from "../utils/utils";
-
-export type InternalComponentSpec<T> = ComponentSpec<T> & { id: number };
+import { Entity } from '../entity/entity';
+import { deepAssignObjects } from '../utils';
+import { World } from '../world';
 
 export interface ComponentSpec<T> {
-  entityLimit?: number | null;
   name: string;
-  properties: T;
-  removable?: boolean,
+  defaults: T;
 }
 
-export type Component<T> = Readonly<{
-  entityLimit: number | null;
-  id: number,
-  name: string;
-  properties: T;
-  removable: boolean,
-}>
+export class Component<T> {
+  private _world: World;
+  readonly defaults: Readonly<T>;
+  readonly id: bigint;
+  readonly name: string;
 
-/**
- * Creates a new component
- * @param spec the component specification object
- */
-export function createComponent<T>(spec: InternalComponentSpec<T>): Component<T> {
-  const {
-    entityLimit = null,
-    id,
-    name,
-    properties,
-    removable = true,
-  } = { ...spec };
+  constructor(world: World, id: bigint, spec: ComponentSpec<T>) {
+    const { name } = spec;
 
-  // check all required data is present
-  if (!name || !properties || typeof properties !== 'object' || id == null) {
-    throw new Error('malformed component.');
+    this.id = id;
+    this.name = name;
+    this._world = world;
+
+    this.defaults = deepAssignObjects({}, spec.defaults as Record<string, unknown>) as T;
+    Object.keys(this.defaults).forEach((key) => {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+      Object.defineProperty(this, key, Object.getOwnPropertyDescriptor(this.defaults, key)!);
+    });
   }
 
-  // clone and seal properties object
-  deepAssign(properties, spec.properties);
-  Object.seal(properties);
+  get entities(): Entity[] {
+    return this._world.getEntitiesByComponents(this);
+  }
 
-  return Object.freeze(
-    Object.create({}, {
-      entityLimit: {
-        value: entityLimit,
-        enumerable: true,
-      },
-      id: {
-        value: id,
-        enumerable: true,
-      },
-      name: {
-        value: name,
-        enumerable: true,
-      },
-      properties: {
-        value: properties,
-        enumerable: true,
-      },
-      removable: {
-        value: removable,
-        enumerable: true,
-      }
-    })
-  ) as Component<T>;
+  get isRegistered(): boolean {
+    return this._world.isComponentRegistered(this);
+  }
 }
