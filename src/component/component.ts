@@ -31,11 +31,11 @@ export class Component<T> {
     });
   }
 
-  get entities(): Entity[] {
+  getEntities(): Entity[] {
     return this._world.getEntitiesByComponents(this);
   }
 
-  get isRegistered(): boolean {
+  isRegistered(): boolean {
     return this._world.isComponentRegistered(this);
   }
 }

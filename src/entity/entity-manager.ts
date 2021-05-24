@@ -47,7 +47,7 @@ function createDestroyEntity(pool: Pool<Entity>, registry: Map<string, Entity>, 
       throw new Error('Destroying the global entity is forbidden.');
     }
     if (registry.has(entity.id)) {
-      world.getArchetype(entity.archetype)?.removeEntity(entity);
+      world.getArchetype(entity.getArchetype())?.removeEntity(entity);
       registry.delete(entity.id);
       pool.release(entity);
       return true;

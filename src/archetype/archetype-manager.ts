@@ -49,7 +49,7 @@ function createGetEntitiesByComponents(registry: Map<bigint, Archetype>) {
     components.forEach((component) => {
       registry.forEach((archetype, id) => {
         if (bitIntersection(component.id, id) > 0) {
-          archetype.entities.forEach((entity) => entities.add(entity));
+          archetype.getEntities().forEach((entity) => entities.add(entity));
         }
       });
     });
@@ -74,7 +74,7 @@ function createUpdateArchetype(registry: Map<bigint, Archetype>, world: World) {
         }
       }
     }
-    const current = entity.archetype;
+    const current = entity.getArchetype();
     if (registry.has(current)) {
       registry.get(current)?.addEntity(entity);
     } else {

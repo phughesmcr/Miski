@@ -78,7 +78,7 @@ export class System implements Toggleable {
   }
 
   get entities(): Entity[] {
-    return (this.query === null) ? this._world.getEntities() : this.query.entities;
+    return (this.query === null) ? this._world.getEntities() : this.query.getEntities();
   }
 
   disable(): void {

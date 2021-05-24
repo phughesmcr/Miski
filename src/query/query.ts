@@ -56,12 +56,13 @@ export class Query {
     }, new Mask()) ?? new Mask();
   }
 
-  get entities(): Entity[] {
-    return [...this._registry];
-  }
 
   get size(): number {
     return this._registry.size;
+  }
+
+  getEntities(): Entity[] {
+    return [...this._registry];
   }
 
   hasEntity(entity: Entity): boolean {
@@ -79,7 +80,7 @@ export class Query {
     this._registry.clear();
     this._world.getArchetypes().forEach((archetype: Archetype) => {
       if (this.matches(archetype.id)) {
-        archetype.entities.forEach((entity) => this._registry.add(entity));
+        archetype.getEntities().forEach((entity) => this._registry.add(entity));
       }
     });
   }

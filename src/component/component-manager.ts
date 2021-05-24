@@ -99,7 +99,7 @@ function createUnregisterComponent(registry: Map<string, Component<unknown>>, av
       throw new Error(`Component "${component.name}" is not registered.`);
     }
     // remove component from entities
-    component.entities.forEach((entity) => entity.removeComponent(component));
+    component.getEntities().forEach((entity) => entity.removeComponent(component));
     // remove component from registry and recycle id
     registry.delete(component.name);
     availableIds.unshift(component.id);

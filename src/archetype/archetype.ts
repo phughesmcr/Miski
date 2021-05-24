@@ -12,12 +12,12 @@ export class Archetype {
     this._registry = new Set(initialEntities);
   }
 
-  get entities(): Entity[] {
-    return [...this._registry];
-  }
-
   addEntity(entity: Entity): void {
     this._registry.add(entity);
+  }
+
+  getEntities(): Entity[] {
+    return [...this._registry];
   }
 
   isEmpty(): boolean {

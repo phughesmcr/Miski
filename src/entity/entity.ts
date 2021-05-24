@@ -28,9 +28,6 @@ export class Entity implements Toggleable, Poolable<Entity> {
     this._world = world;
   }
 
-  get archetype(): bigint {
-    return this._archetype.value;
-  }
 
   get enabled(): boolean {
     return this._enabled;
@@ -107,6 +104,10 @@ export class Entity implements Toggleable, Poolable<Entity> {
 
   enable(): void {
     this._enabled = true;
+  }
+
+  getArchetype(): bigint {
+    return this._archetype.value;
   }
 
   hasComponent<T>(component: Component<T> | string): boolean {
