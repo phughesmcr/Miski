@@ -1,6 +1,8 @@
+/* eslint-disable max-len */
 // Copyright (c) 2021 P. Hughes. All rights reserved. MIT license.
 "use strict";
 
+/** An array of strings that cannot be used for component or system names */
 export const FORBIDDEN_NAMES = Object.freeze([
   // component properties
   "_world",
@@ -23,16 +25,19 @@ export const FORBIDDEN_NAMES = Object.freeze([
   "__proto__",
 ]);
 
+/** Adds a toggleable 'enabled' property */
 export interface Toggleable {
   readonly enabled: boolean;
   disable: () => void;
   enable: () => void;
 }
 
+/** Returns the intersection between two bits */
 export function bitIntersection(a: bigint, b: bigint): bigint {
   return a & b;
 }
 
+/** Clamps a value between two extremes */
 export function clamp(n: number, min?: number, max?: number): number {
   if (min != undefined && n < min) return min;
   if (max != undefined && n > max) return max;
@@ -44,16 +49,18 @@ export function validName(str: string): boolean {
   return /^(?![0-9])[a-zA-Z0-9$_]+$/.test(str) && !(FORBIDDEN_NAMES.includes(str));
 }
 
+/** Determine if a given item is an object and not an array */
 export function isObject(item: unknown): boolean {
   return Boolean(item && typeof item === 'object' && !Array.isArray(item));
 }
 
+/** Delete all the properties from an object */
 export function clearObject(obj: Record<string, unknown>): Record<string, unknown> {
   Object.keys(obj).forEach((key) => delete obj[key]);
   return obj;
 }
 
-// eslint-disable-next-line max-len
+/** Recursively copy the properties of source objects to a target object */
 export function deepAssignObjects(target: Record<string, unknown>, ...sources: Record<string, unknown>[]): Record<string, unknown> {
   if (!sources || !sources.length) return target;
 
@@ -79,7 +86,6 @@ export function deepAssignObjects(target: Record<string, unknown>, ...sources: R
       if (descriptor !== undefined && descriptor.enumerable) {
         descriptors[symbol as unknown as string] = {...descriptor};
         if (isObject(descriptor.value)) {
-          // eslint-disable-next-line max-len
           deepAssignObjects(descriptor.value as Record<string, unknown>, source[symbol as unknown as string] as Record<string, unknown>);
         } else if (Array.isArray(descriptor.value)) {
           descriptor.value = [...source[symbol as unknown as string] as Array<unknown>];

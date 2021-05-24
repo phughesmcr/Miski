@@ -10,15 +10,42 @@ export interface SystemManagerSpec {
 }
 
 export interface SystemManager {
+  /** @returns an array of all systems in the world */
   getSystems: () => System[];
+  /** @returns an array of all enabled systems which have a custom post-update function */
   getPostSystems: () => System[];
+  /** @returns an array of all enabled systems which have a custom pre-update function */
   getPreSystems: () => System[];
+  /** @returns an array of all enabled systems which have a custom update function */
   getUpdateSystems: () => System[];
+  /**
+   * @returns a system by its execution index
+   * @param idx the system's index in the execution order array
+   */
   getSystemByIdx: (idx: number) => System | undefined;
+  /** @returns a system by its name */
   getSystemByName: (name: string) => System | undefined;
+  /** @returns true if a system is registered in this world */
   isSystemRegistered: (system: System) => boolean;
+  /**
+   * Change a system's execution order.
+   * (N.B., if the given idx is greater than the current number of systems
+   * the system will be moved to the last position)
+   * @param system the system to move
+   * @param idx the execution position.
+   * @returns the systems new execution position
+   */
   moveSystem: (system: System, idx: number) => number;
+  /**
+   * Creates and registers a new system
+   * @param spec the system specification
+   * @returns the new system
+   */
   registerSystem: (spec: SystemSpec) => System;
+  /**
+   * Unregisters a given system
+   * @returns the world
+   */
   unregisterSystem: (system: System) => World;
 }
 

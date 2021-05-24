@@ -9,10 +9,23 @@ export interface QueryManagerSpec {
 }
 
 export interface QueryManager {
+  /** @returns true if the given query is registered in this world */
   isQueryRegistered: (query: Query) => boolean;
+  /**
+   * Creates and registers a new query
+   * @returns the new query
+   */
   registerQuery: (spec: QuerySpec) => Query;
+  /**
+   * Force queries to refresh their archetype cache.
+   * You probably don't need to use this as this is called automatically once per step().
+   */
+  refreshQueries: () => World;
+  /**
+   * Unregisters a given query
+   * @returns the world
+   */
   unregisterQuery: (query: Query) => World;
-  updateQueries: () => World;
 }
 
 function createIsQueryRegistered(registry: Set<Query>) {
@@ -29,16 +42,16 @@ function createRegisterQuery(registry: Set<Query>, world: World) {
   };
 }
 
-function createUnregisterQuery(registry: Set<Query>, world: World) {
-  return function unregisterQuery(query: Query): World {
-    registry.delete(query);
+function createRefreshQueries(registry: Set<Query>, world: World) {
+  return function refreshQueries(): World {
+    registry.forEach((query) => query.update());
     return world;
   };
 }
 
-function createUpdateQueries(registry: Set<Query>, world: World) {
-  return function updateQueries(): World {
-    registry.forEach((query) => query.update());
+function createUnregisterQuery(registry: Set<Query>, world: World) {
+  return function unregisterQuery(query: Query): World {
+    registry.delete(query);
     return world;
   };
 }
@@ -49,7 +62,7 @@ export function createQueryManager(world: World, _spec: QueryManagerSpec): Query
   return {
     isQueryRegistered: createIsQueryRegistered(registry),
     registerQuery: createRegisterQuery(registry, world),
+    refreshQueries: createRefreshQueries(registry, world),
     unregisterQuery: createUnregisterQuery(registry, world),
-    updateQueries: createUpdateQueries(registry, world),
   };
 }

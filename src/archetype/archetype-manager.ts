@@ -12,10 +12,22 @@ export interface ArchetypeManagerSpec {
 }
 
 export interface ArchetypeManager {
+  /**
+   * Find an archetype by its id
+   * @param id the archetype's bigint id
+   */
   getArchetype: (id: bigint) => Archetype | undefined;
+  /** @returns an array of all the archetypes in the world */
   getArchetypes: () => Archetype[];
+  /** Find entities by components */
   getEntitiesByComponents: (...components: Component<unknown>[]) => Entity[];
+  /** @returns true if the archetype is registered in this world */
   isArchetypeRegistered: (archetype: Archetype) => boolean;
+  /**
+   * Update the archetype of an entity.
+   * You probably don't want to use this manually as the
+   * archetype system handles this automatically.
+   */
   updateArchetype: (entity: Entity, prev?: bigint) => World;
 }
 

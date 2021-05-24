@@ -11,11 +11,30 @@ export interface ComponentManagerSpec {
 }
 
 export interface ComponentManager {
+  /**
+   * Find a component by its id
+   * @param id the components bigint id
+   */
   getComponentById: (id: bigint) => Component<unknown> | undefined;
+  /**
+   * Find a component by its name
+   * @param name the component's name string
+   */
   getComponentByName: (name: string) => Component<unknown> | undefined;
+  /** @returns an array of all components in the world */
   getComponents: () => Component<unknown>[];
+  /** @returns true if the component is registered in this world */
   isComponentRegistered: <T>(component: Component<T>) => boolean;
+  /**
+   * Creates and registers a new component
+   * @param spec the component specification
+   * @returns the new component
+   */
   registerComponent: <T>(spec: ComponentSpec<T>) => Component<T>;
+  /**
+   * Unregisters a given component
+   * @returns the world
+   */
   unregisterComponent: <T>(component: Component<T>) => World;
 }
 

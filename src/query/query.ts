@@ -10,8 +10,11 @@ import { bitIntersection } from '../utils';
 import { World } from '../world';
 
 export interface QuerySpec {
+  /** Gather entities as long as they have all these components */
   all?: Component<unknown>[],
+  /** Gather entities as long as they have one of more of these components */
   any?: Component<unknown>[],
+  /** Gather entities as long as they don't have these components */
   none?: Component<unknown>[],
 }
 

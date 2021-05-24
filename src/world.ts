@@ -1,18 +1,17 @@
 // Copyright (c) 2021 P. Hughes. All rights reserved. MIT license.
 "use strict";
 
+import { Archetype } from './archetype/archetype';
 import { createArchetypeManager } from './archetype/archetype-manager';
+import { Component, ComponentSpec } from './component/component';
 import { createComponentManager } from "./component/component-manager";
+import { Entity } from './entity/entity';
 import { createEntityManager } from './entity/entity-manager';
+import { Query, QuerySpec } from './query/query';
 import { createQueryManager } from './query/query-manager';
 import { createStepManager } from './step/step-manager';
-import { createSystemManager } from './system/system-manager';
-
-import { Archetype } from './archetype/archetype';
-import { Component, ComponentSpec } from './component/component';
-import { Entity } from './entity/entity';
-import { Query, QuerySpec } from './query/query';
 import { System, SystemSpec } from './system/system';
+import { createSystemManager } from './system/system-manager';
 import { FORBIDDEN_NAMES } from './utils';
 
 export interface WorldSpec {
@@ -49,8 +48,8 @@ export interface World {
   // query manager
   isQueryRegistered: (query: Query) => boolean;
   registerQuery: (spec: QuerySpec) => Query;
+  refreshQueries: () => World;
   unregisterQuery: (query: Query) => World;
-  updateQueries: () => World;
   // step manager
   pre: () => World;
   post: (int: number) => World;
@@ -73,7 +72,9 @@ export interface World {
  * Creates a new World object
  * @param spec the world's specification object
  * @param spec.entityPoolGrowthFactor amount to grow the entity pool by once the
- * initial entities have been used. Defaults to 0.25.
+ *  initial entities have been used. Defaults to 0.25
+ *  (i.e. once the pool grows beyond the initialEntityPoolSize, it will grow by
+ *   initialEntityPoolSize * 0.25).
  * @param spec.initialEntityPoolSize the number of entities to pre-allocate. Defaults to 128.
  * @param spec.maxComponents the maximum number of components to allow. Defaults to 256.
  * @param spec.maxEntities the maximum number of entities to allow. Defaults to Number.POSITIVE_INFINITY.

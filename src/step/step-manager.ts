@@ -9,21 +9,28 @@ export interface StepManagerSpec {
 }
 
 export interface StepManager {
-  /** Pre-update function */
+  /**
+   * Perform the world's pre-update step
+   * @returns the world
+   */
   pre: () => World;
   /**
-   * Post-update function
-   * @param int
+   * Perform the world's post-update step
+   * @param int the step's interpolation alpha
+   * @returns the world
    */
   post: (int: number) => World;
   /**
    * Perform one complete step.
    * i.e. Pre > Update > Post
+   * @param time the current time (e.g., from requestAnimationFrame)
+   * @returns the world
    */
   step: (time: number) => World;
   /**
-   * Update function
-   * @param dt delta-time
+   * Perform the world's post-update step
+   * @param dt the step's delta time
+   * @returns the world
    */
   update: (dt: number) => World;
 }
@@ -38,7 +45,7 @@ function createPre(world: World) {
 function createPost(world: World) {
   return function post(int = 0): World {
     world.getPostSystems().forEach((system) => system.post(system.entities, world.global, int));
-    world.updateQueries();
+    world.refreshQueries();
     return world;
   };
 }

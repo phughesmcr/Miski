@@ -11,10 +11,21 @@ export interface EntityManagerSpec {
 }
 
 export interface EntityManager {
+  /** @returns a new entity */
   createEntity: () => Entity;
+  /**
+   * Destroys an entity and returns it to the object pool
+   * @returns true if the entity was successfully destroyed.
+   */
   destroyEntity: (entity: Entity) => boolean;
+  /** @returns an array of all entities in the world */
   getEntities: () => Entity[];
+  /**
+   * Find an entity by its id
+   * @param id the entity's id string
+   */
   getEntityById: (id: string) => Entity | undefined;
+  /** @returns true if the entity is registered in this world */
   isEntityRegistered: (entity: Entity) => boolean;
 }
 
@@ -32,6 +43,9 @@ function createCreateEntity(pool: Pool<Entity>, registry: Map<string, Entity>, w
 
 function createDestroyEntity(pool: Pool<Entity>, registry: Map<string, Entity>, world: World) {
   return function destroyEntity(entity: Entity): boolean {
+    if (entity === world.global) {
+      throw new Error('Destroying the global entity is forbidden.');
+    }
     if (registry.has(entity.id)) {
       world.getArchetype(entity.archetype)?.removeEntity(entity);
       registry.delete(entity.id);

@@ -14,10 +14,34 @@ export function noopPost(_entities: Entity[], _global: Entity, _int?: number): v
 export function noopUpdate(_entities: Entity[], _global: Entity, _dt?: number): void { return; }
 
 export interface SystemSpec {
+  /**
+   * The associated query to gather entities for this system. @see world.registerQuery()
+   * null queries will gather all entities in the world.
+   */
   query?: Query | null;
+  /** The name of the system. Must be a valid property name. */
   name: string;
+  /**
+   * The system's pre-update function.
+   * This runs once per step before the update function.
+   * @param entities an array of entities associated with the system's query
+   * @param global the world's global entity
+   */
   pre?: (entities: Entity[], global: Entity) => void;
+  /**
+   * The system's post-update function.
+   * This runs once per step after the update function.
+   * @param entities an array of entities associated with the system's query
+   * @param global the world's global entity
+   * @param int the step's interpolation alpha
+   */
   post?: (entities: Entity[], global: Entity, int?: number) => void;
+  /**
+   * The system's update function.
+   * @param entities an array of entities associated with the system's query
+   * @param global the world's global entity
+   * @param dt the step's delta time
+   */
   update?: (entities: Entity[], global: Entity, dt?: number) => void;
 }
 
