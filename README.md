@@ -12,7 +12,10 @@ Miski is currently in alpha. Expect breaking changes every version until beta.
     + [Browser etc.](#browser-etc)
     + [npm](#npm)
   * [Example](#example)
-    + [Demos and Benchmarks](#demos-and-benchmarks)
+  * [Demos](#demos)
+  * [Benchmarks](#benchmarks)
+  * [Goals](#goals)
+  * [Not Goals](#not-goals)
   * [To-Do](#to-do-before-100-release)
   * [Acknowledgements](#acknowledgements)
   * [License](#license)
@@ -29,6 +32,8 @@ Miski requires `BigInt` support.
 ```bash
 npm install --production miski
 ```
+
+## Example
 
 ```javascript
 import { createWorld } from "../../dist/esm/index.min.js";
@@ -166,11 +171,11 @@ function onTick(time) {
 onTick(0);
 ```
 
-### Demos
+## Demos
 See `./demo` for more interesting working examples.
 
-### Benchmarks
-Coming soon™
+## Benchmarks
+See [ddmills/js-ecs-benchmarks](https://github.com/ddmills/js-ecs-benchmarks).
 
 ## Goals
 * To provide a stable, readable ECS architecture using ES2020+ features
