@@ -1,7 +1,7 @@
 // based on ECSY's canvas demo - https://github.com/ecsyjs/ecsy/blob/dev/site/examples/canvas/
 "use strict";
 
-import { createWorld } from "../../dist/esm/index.min.js";
+import { createWorld } from "./miski.min.js";
 import { fillCircle, drawLine, intersection, random } from "./utils.js";
 
 const WIDTH = 1920;
