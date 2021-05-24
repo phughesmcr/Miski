@@ -31,30 +31,28 @@ npm install --production miski
 ```
 
 ```javascript
-import { createWorld } from "miski";
-// OR
-const miski = require("miski");
-```
-
-## Example
-A simple box on a 2d canvas example:
-
-```javascript
-import { createWorld } from 'miski';
+import { createWorld } from "../../dist/esm/index.min.js";
 const canvas = document.querySelector('canvas');
 const ctx = canvas.getContext('2d');
 
 // create our world - most functions take place through the world object
 const world = createWorld({
-  initialPoolSize: 64,
-  maxComponents: 1024,
-  maxEntities: 1000000;
+  entityPoolGrowthFactor: 0.25,
+  initialEntityPoolSize: 128,
+  maxComponents: 256,
+  maxEntities: Number.POSITIVE_INFINITY,
+  maxUpdates: 240,
+  tempo: 1 / 60,
 });
 
-// define some components - the properties given here are the default properties of the component
+// useful for debugging
+window.world = world;
+
+// define some components
 const size = world.registerComponent({
+  // component name can be any valid object property name
   name: "size",
-  properties: {
+  defaults: {
     height: 100,
     width: 100,
   },
@@ -62,7 +60,7 @@ const size = world.registerComponent({
 
 const colour = world.registerComponent({
   name: "colour",
-  properties: {
+  defaults: {
     r: 255,
     g: 0,
     b: 0,
@@ -71,7 +69,7 @@ const colour = world.registerComponent({
 
 const position = world.registerComponent({
   name: "position",
-  properties: {
+  defaults: {
     x: 0,
     y: 0,
   },
@@ -79,81 +77,81 @@ const position = world.registerComponent({
 
 // create our box entity - createEntity takes no arguments
 const box = world.createEntity();
+box.enable();
 
 // add the components to the entity
-world.addComponentsToEntity(box, size, colour, position);
+box.addComponent(colour);
+box.addComponent(position);
+box.addComponent(size);
 
 // overwrite some of the default properties with entity specific properties
-// access components through the "_" shorthand property
-// N.B. you can access the individual properties of course (e.g. box._.colour.r)
-box._.colour = { r: 150, g: 150, b: 150 };
-box._.position = { x: 100, y: 250 };
+box.colour = { r: 10, g: 255, b: 111 }; // rewriting the whole object is possible
+box.position.x = 100;                    // but this way is preferred
+box.position.y = 250;
 
 // world systems support three functions
-// 1) a pre-update function - ("preUpdate") - run once at the start of each frame
-// 2) an update function - ("update") - to potentially be called multiple times per frame
-// 3) a post-update function - ("postUpdate) - run once at the end of each frame
+// 1) a pre-update function   - ("pre")     - run once at the start of each frame
+// 2) an update function      - ("update")  - to potentially be called multiple times per frame
+// 3) a post-update function  - ("post")    - run once at the end of each frame
 
 // a simple update function to move boxes around the canvas
 // N.B. update functions you intend to use as systems must take the following:
-//     dt {number} frame delta time
 //     entities {Entity[]} an array of entities
-//     system {System} the system calling this function
-function moveBoxes(dt, entities, system) {
+//     global {Entity} the world.global entity
+//     dt {number} frame delta time
+function moveBoxes(entities, global, dt) {
   // its generally a good idea to bail early if no entities are affected
   if (!entities.length) return;
   entities.forEach((entity) => {
     // modify component properties
-    entity.components.position.x += (0.5 * dt),
-    entity.components.position.y -= (0.5 * dt),
+    entity.position.x += (10 * dt);
+    entity.position.y -= (10 * dt);
   });
 }
 
 // a simple render function to draw the boxes to the canvas
 // N.B. function you intend to use as a post-update function must take the following:
-//     int {number} frame interpolation amount
 //     entities {Entity[]} an array of entities
-//     system {System} the system calling this function
-function draw(int, entities) {
+//     global {Entity} the world.global entity
+//     int {number} frame interpolation amount
+function draw(entities, global, int) {
   // clear canvas every frame
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  // its generally a good idea to bail early if no entities are affected
-  if (!entities.length) return;
   // draw each entity
   entities.forEach((entity) => {
-    ctx.fillStyle = `rgb(${entity.components.colour.r}, ${entity.components.colour.g}, ${entity.components.colour.b})`;
-    ctx.fillRect(
-      entity.components.position.x,
-      entity.components.position.y,
-      entity.components.size.width,
-      entity.components.size.height,
-    );
+    if (entity.enabled === true) {
+      ctx.fillStyle = `rgb(${entity.colour.r}, ${entity.colour.g}, ${entity.colour.b})`;
+      ctx.fillRect(
+        entity.position.x,
+        entity.position.y,
+        entity.size.width,
+        entity.size.height,
+      );
+    }
   });
 }
 
-// turn the mover function into a system
-const mover = world.createSystem({
-  // the components required in the function
-  components: [ position ],
-  // the function itself
-  update: moveBoxes,
-});
-
-// turn the mover function into a system
-const drawer = world.createSystem({
-  // the components required in the function
-  components: [
+// Use queries to gather entities for use in systems:
+const qBox = world.registerQuery({
+  all: [
     colour,
     position,
-    size,
+    size
   ],
-  // the function itself
-  postUpdate: draw,
+  // also takes 'any' and 'none' arrays like Geotic
 });
 
-// enable the systems
+// turn the mover function into a system
+const mover = world.registerSystem({
+  // system name can be any valid object property name
+  name: "mover",
+  query: qBox,
+  update: moveBoxes,
+  post: draw,
+});
+
+// enable the system
 mover.enable();
-drawer.enable();
 
 // game loop example
 let lastTime = null;
@@ -162,41 +160,44 @@ const tempo = 1/60;
 let dt = tempo;
 
 function onTick(time) {
-  window.requestAnimationFrame(onTick)
-  world.preUpdate();
-  if (lastTime !== null) {
-    accumulator += (time - lastTime) / 1000;
-    while (accumulator > dt) {
-      world.update(dt);
-      accumulator -= dt;
-    }
-  }
-  lastTime = time;
-  world.postUpdate(accumulator / tempo);
+  world.step(time);
+  window.requestAnimationFrame(onTick);
 }
-
-window.requestAnimationFrame(onTick)
+onTick(0);
 ```
 
-### Demos and Benchmarks
-See `./demo` for a more interesting working examples, and `./demo/benchamark` for benchmarks.
+### Demos
+See `./demo` for more interesting working examples.
+
+### Benchmarks
+Coming soon™
+
+## Goals
+* To provide a stable, readable ECS architecture using ES2020+ features
+* To provide a high level of customisability
+
+## Not Goals
+* To be the fastest / smallest ECS on the web
+* To conform a particular style of coding - function over form
+* To support the majority of web users / web environments
+* To provide polyfils / workarounds etc. for ES2020+ features / older browser support
 
 
 ## To-Do Before 1.0.0 release
 ### General
-0. Write up some core principles, project goals and style guide
-1. Finalise API
+0. Decide between object / integer based entities
+1. Finalise core API
 2. Write comprehensive tests
 3. Write consistent code documentation throughout
-4. Write argument validation for functions requiring user input
+4. Write argument validation for all functions requiring user input
 5. Ensure high-quality Typescript definitions throughout
-6. Allow for deferred removal of entities, components and systems
-### Components
+### Features
 1. Add schemas and schema validation for component properties
-2. Ensure Typescript definitions work consistently - current use of "unknown" causing issues for users
-3. Explore the implications of direct component access (i.e. entity.component instead of current entity._.component)
-### Archetypes
-1. Performance improvements - Ensure getting entities by archetype / components is performant
+2. Ensure Typescript definitions work consistently
+3. Allow for deferred removal of entities, components and systems
+4. Allow for "changed" and "not" in queries
+5. Add a plugin support system
+
 
 ## Acknowledgements
 Miski is inspired by [ape-ecs](https://github.com/fritzy/ape-ecs), [bitECS](https://github.com/NateTheGreatt/bitECS), [ECSY](https://github.com/ecsyjs/ecsy), [Geotic](https://github.com/ddmills/geotic), [HECS](https://github.com/gohyperr/hecs), and [classless.md](https://gist.github.com/mpj/17d8d73275bca303e8d2)
