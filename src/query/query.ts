@@ -34,28 +34,16 @@ export class Query {
     this._registry = new Set();
     this._world = world;
 
-    this._all = new Set();
-    this._any = new Set();
-    this._none = new Set();
+    this._all = new Set(spec.all);
+    this._any = new Set(spec.any);
+    this._none = new Set(spec.none);
 
-    // create masks
-    this._mskAll = spec.all?.reduce((mask, component) => {
-      this._all.add(component);
-      mask.on(component.id);
-      return mask;
-    }, new Mask()) ?? new Mask();
-    this._mskAny = spec.any?.reduce((mask, component) => {
-      this._any.add(component);
-      mask.on(component.id);
-      return mask;
-    }, new Mask()) ?? new Mask();
-    this._mskNone = spec.none?.reduce((mask, component) => {
-      this._none.add(component);
-      mask.on(component.id);
-      return mask;
-    }, new Mask()) ?? new Mask();
+    this._mskAll = new Mask();
+    this._mskAny = new Mask();
+    this._mskNone = new Mask();
+
+    this._refresh();
   }
-
 
   get size(): number {
     return this._registry.size;
@@ -76,7 +64,29 @@ export class Query {
     return _any && _all && _none;
   }
 
+  private _refresh(): void {
+    this._all.forEach((component) => {
+      this._mskAll.on(component.id);
+      if (component.isRegistered() === false) {
+        console.warn(`Query has unregistered component ("${component.id}") in _all.`, this);
+      }
+    });
+    this._any.forEach((component) => {
+      this._mskAny.on(component.id);
+      if (component.isRegistered() === true) {
+        console.warn(`Query has unregistered component ("${component.id}") in _any.`, this);
+      }
+    });
+    this._none.forEach((component) => {
+      this._mskNone.on(component.id);
+      if (component.isRegistered() === true) {
+        console.warn(`Query has unregistered component ("${component.id}") in _none.`, this);
+      }
+    });
+  }
+
   update(): void {
+    this._refresh();
     this._registry.clear();
     this._world.getArchetypes().forEach((archetype: Archetype) => {
       if (this.matches(archetype.id)) {
