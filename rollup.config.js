@@ -79,7 +79,6 @@ export default [
       exports: 'named',
       file: pkg.module,
       format: "es",
-      name: pkgName,
       sourcemap: true,
       globals,
     },
@@ -184,6 +183,7 @@ export default [
       file: "./dist/umd/index.min.js",
       format: 'umd',
       name: pkgName,
+      noConflict: true,
       sourcemap: true,
       globals,
     }]
