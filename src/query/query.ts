@@ -27,12 +27,10 @@ export class Query {
   private _mskAny: Mask;
   private _mskNone: Mask;
 
-  private _cache: WeakSet<Archetype>;
   private _registry: Set<Entity>;
   private _world: World;
 
   constructor(world: World, spec: QuerySpec) {
-    this._cache = new WeakSet();
     this._registry = new Set();
     this._world = world;
 
@@ -80,9 +78,8 @@ export class Query {
   update(): void {
     this._registry.clear();
     this._world.getArchetypes().forEach((archetype: Archetype) => {
-      if (this._cache.has(archetype) || this.matches(archetype.id)) {
+      if (this.matches(archetype.id)) {
         archetype.entities.forEach((entity) => this._registry.add(entity));
-        this._cache.add(archetype);
       }
     });
   }
