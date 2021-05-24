@@ -51,26 +51,27 @@ function createPost(world: World) {
 }
 
 function createStep(maxUpdates: number, tempo: number, world: World) {
-  let last: number | null = null;
   let acc = 0;
+  let lastTime: DOMHighResTimeStamp | number | null = null;
+  let lastUpdate = 0;
   const dt = tempo;
 
-  return function step(time = 0): World {
-    if (last !== null) {
-      acc += (time - last) * 0.001;
-      let updatesLast = 0;
+  return function step(time: DOMHighResTimeStamp | number = 0): World {
+    if (lastTime !== null) {
+      acc += (time - lastTime) * 0.001;
+      lastUpdate = 0;
       world.pre();
       while (acc > dt) {
-        if (updatesLast >= maxUpdates) {
+        if (lastUpdate >= maxUpdates) {
           acc = 1;
           break;
         }
         world.update(dt);
         acc -= dt;
-        updatesLast++;
+        lastUpdate++;
       }
     }
-    last = time;
+    lastTime = time;
     world.post(acc / tempo);
     return world;
   };
