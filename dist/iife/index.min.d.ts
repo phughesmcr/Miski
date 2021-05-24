@@ -2,15 +2,18 @@ declare class Archetype {
     private _registry;
     readonly id: bigint;
     constructor(id: bigint, initialEntities?: Entity[]);
-    get entities(): Entity[];
     addEntity(entity: Entity): void;
+    getEntities(): Entity[];
     isEmpty(): boolean;
     removeEntity(entity: Entity): void;
 }
 
 interface QuerySpec {
+    /** Gather entities as long as they have all these components */
     all?: Component<unknown>[];
+    /** Gather entities as long as they have one of more of these components */
     any?: Component<unknown>[];
+    /** Gather entities as long as they don't have these components */
     none?: Component<unknown>[];
 }
 declare class Query {
@@ -20,17 +23,18 @@ declare class Query {
     private _mskAll;
     private _mskAny;
     private _mskNone;
-    private _cache;
     private _registry;
     private _world;
     constructor(world: World, spec: QuerySpec);
-    get entities(): Entity[];
     get size(): number;
+    getEntities(): Entity[];
     hasEntity(entity: Entity): boolean;
     matches(archetype: bigint): boolean;
+    private _refresh;
     update(): void;
 }
 
+/** Adds a toggleable 'enabled' property */
 interface Toggleable {
     readonly enabled: boolean;
     disable: () => void;
@@ -38,10 +42,34 @@ interface Toggleable {
 }
 
 interface SystemSpec {
+    /**
+     * The associated query to gather entities for this system. @see world.registerQuery()
+     * null queries will gather all entities in the world.
+     */
     query?: Query | null;
+    /** The name of the system. Must be a valid property name. */
     name: string;
+    /**
+     * The system's pre-update function.
+     * This runs once per step before the update function.
+     * @param entities an array of entities associated with the system's query
+     * @param global the world's global entity
+     */
     pre?: (entities: Entity[], global: Entity) => void;
+    /**
+     * The system's post-update function.
+     * This runs once per step after the update function.
+     * @param entities an array of entities associated with the system's query
+     * @param global the world's global entity
+     * @param int the step's interpolation alpha
+     */
     post?: (entities: Entity[], global: Entity, int?: number) => void;
+    /**
+     * The system's update function.
+     * @param entities an array of entities associated with the system's query
+     * @param global the world's global entity
+     * @param dt the step's delta time
+     */
     update?: (entities: Entity[], global: Entity, dt?: number) => void;
 }
 declare class System implements Toggleable {
@@ -88,8 +116,8 @@ interface World {
     isEntityRegistered: (entity: Entity) => boolean;
     isQueryRegistered: (query: Query) => boolean;
     registerQuery: (spec: QuerySpec) => Query;
+    refreshQueries: () => World;
     unregisterQuery: (query: Query) => World;
-    updateQueries: () => World;
     pre: () => World;
     post: (int: number) => World;
     step: (time: number) => World;
@@ -109,7 +137,9 @@ interface World {
  * Creates a new World object
  * @param spec the world's specification object
  * @param spec.entityPoolGrowthFactor amount to grow the entity pool by once the
- * initial entities have been used. Defaults to 0.25.
+ *  initial entities have been used. Defaults to 0.25
+ *  (i.e. once the pool grows beyond the initialEntityPoolSize, it will grow by
+ *   initialEntityPoolSize * 0.25).
  * @param spec.initialEntityPoolSize the number of entities to pre-allocate. Defaults to 128.
  * @param spec.maxComponents the maximum number of components to allow. Defaults to 256.
  * @param spec.maxEntities the maximum number of entities to allow. Defaults to Number.POSITIVE_INFINITY.
@@ -134,7 +164,6 @@ declare class Entity implements Toggleable, Poolable<Entity> {
     private _world;
     readonly id: string;
     constructor(world: World);
-    get archetype(): bigint;
     get enabled(): boolean;
     get next(): Entity | null;
     set next(next: Entity | null);
@@ -142,6 +171,7 @@ declare class Entity implements Toggleable, Poolable<Entity> {
     clear(): void;
     disable(): void;
     enable(): void;
+    getArchetype(): bigint;
     hasComponent<T>(component: Component<T> | string): boolean;
     removeComponent<T>(component: Component<T>): boolean;
 }
@@ -156,8 +186,8 @@ declare class Component<T> {
     readonly id: bigint;
     readonly name: string;
     constructor(world: World, id: bigint, spec: ComponentSpec<T>);
-    get entities(): Entity[];
-    get isRegistered(): boolean;
+    getEntities(): Entity[];
+    isRegistered(): boolean;
 }
 
 export { Component, ComponentSpec, Entity, Poolable, Query, QuerySpec, System, SystemSpec, Toggleable, World, WorldSpec, createWorld };

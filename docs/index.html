@@ -98,29 +98,28 @@
 				</a>
 				<pre><code class="language-bash"><span style="color: #000000">npm install --production miski</span>
 </code></pre>
-				<pre><code class="language-javascript"><span style="color: #AF00DB">import</span><span style="color: #000000"> { </span><span style="color: #001080">createWorld</span><span style="color: #000000"> } </span><span style="color: #AF00DB">from</span><span style="color: #000000"> </span><span style="color: #A31515">&quot;miski&quot;</span><span style="color: #000000">;</span>
-<span style="color: #008000">// OR</span>
-<span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">miski</span><span style="color: #000000"> = </span><span style="color: #795E26">require</span><span style="color: #000000">(</span><span style="color: #A31515">&quot;miski&quot;</span><span style="color: #000000">);</span>
-</code></pre>
-				<a href="#example" id="example" style="color: inherit; text-decoration: none;">
-					<h2>Example</h2>
-				</a>
-				<p>A simple box on a 2d canvas example:</p>
-				<pre><code class="language-javascript"><span style="color: #AF00DB">import</span><span style="color: #000000"> { </span><span style="color: #001080">createWorld</span><span style="color: #000000"> } </span><span style="color: #AF00DB">from</span><span style="color: #000000"> </span><span style="color: #A31515">&#039;miski&#039;</span><span style="color: #000000">;</span>
+				<pre><code class="language-javascript"><span style="color: #AF00DB">import</span><span style="color: #000000"> { </span><span style="color: #001080">createWorld</span><span style="color: #000000"> } </span><span style="color: #AF00DB">from</span><span style="color: #000000"> </span><span style="color: #A31515">&quot;../../dist/esm/index.min.js&quot;</span><span style="color: #000000">;</span>
 <span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">canvas</span><span style="color: #000000"> = </span><span style="color: #001080">document</span><span style="color: #000000">.</span><span style="color: #795E26">querySelector</span><span style="color: #000000">(</span><span style="color: #A31515">&#039;canvas&#039;</span><span style="color: #000000">);</span>
 <span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">ctx</span><span style="color: #000000"> = </span><span style="color: #001080">canvas</span><span style="color: #000000">.</span><span style="color: #795E26">getContext</span><span style="color: #000000">(</span><span style="color: #A31515">&#039;2d&#039;</span><span style="color: #000000">);</span>
 
 <span style="color: #008000">// create our world - most functions take place through the world object</span>
 <span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">world</span><span style="color: #000000"> = </span><span style="color: #795E26">createWorld</span><span style="color: #000000">({</span>
-<span style="color: #000000">  </span><span style="color: #001080">initialPoolSize:</span><span style="color: #000000"> </span><span style="color: #098658">64</span><span style="color: #000000">,</span>
-<span style="color: #000000">  </span><span style="color: #001080">maxComponents:</span><span style="color: #000000"> </span><span style="color: #098658">1024</span><span style="color: #000000">,</span>
-<span style="color: #000000">  </span><span style="color: #001080">maxEntities:</span><span style="color: #000000"> </span><span style="color: #098658">1000000</span><span style="color: #000000">;</span>
+<span style="color: #000000">  </span><span style="color: #001080">entityPoolGrowthFactor:</span><span style="color: #000000"> </span><span style="color: #098658">0.25</span><span style="color: #000000">,</span>
+<span style="color: #000000">  </span><span style="color: #001080">initialEntityPoolSize:</span><span style="color: #000000"> </span><span style="color: #098658">128</span><span style="color: #000000">,</span>
+<span style="color: #000000">  </span><span style="color: #001080">maxComponents:</span><span style="color: #000000"> </span><span style="color: #098658">256</span><span style="color: #000000">,</span>
+<span style="color: #000000">  </span><span style="color: #001080">maxEntities:</span><span style="color: #000000"> </span><span style="color: #267F99">Number</span><span style="color: #000000">.POSITIVE_INFINITY,</span>
+<span style="color: #000000">  </span><span style="color: #001080">maxUpdates:</span><span style="color: #000000"> </span><span style="color: #098658">240</span><span style="color: #000000">,</span>
+<span style="color: #000000">  </span><span style="color: #001080">tempo:</span><span style="color: #000000"> </span><span style="color: #098658">1</span><span style="color: #000000"> / </span><span style="color: #098658">60</span><span style="color: #000000">,</span>
 <span style="color: #000000">});</span>
 
-<span style="color: #008000">// define some components - the properties given here are the default properties of the component</span>
+<span style="color: #008000">// useful for debugging</span>
+<span style="color: #001080">window</span><span style="color: #000000">.</span><span style="color: #001080">world</span><span style="color: #000000"> = </span><span style="color: #001080">world</span><span style="color: #000000">;</span>
+
+<span style="color: #008000">// define some components</span>
 <span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">size</span><span style="color: #000000"> = </span><span style="color: #001080">world</span><span style="color: #000000">.</span><span style="color: #795E26">registerComponent</span><span style="color: #000000">({</span>
+<span style="color: #000000">  </span><span style="color: #008000">// component name can be any valid object property name</span>
 <span style="color: #000000">  </span><span style="color: #001080">name:</span><span style="color: #000000"> </span><span style="color: #A31515">&quot;size&quot;</span><span style="color: #000000">,</span>
-<span style="color: #000000">  </span><span style="color: #001080">properties:</span><span style="color: #000000"> {</span>
+<span style="color: #000000">  </span><span style="color: #001080">defaults:</span><span style="color: #000000"> {</span>
 <span style="color: #000000">    </span><span style="color: #001080">height:</span><span style="color: #000000"> </span><span style="color: #098658">100</span><span style="color: #000000">,</span>
 <span style="color: #000000">    </span><span style="color: #001080">width:</span><span style="color: #000000"> </span><span style="color: #098658">100</span><span style="color: #000000">,</span>
 <span style="color: #000000">  },</span>
@@ -128,7 +127,7 @@
 
 <span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">colour</span><span style="color: #000000"> = </span><span style="color: #001080">world</span><span style="color: #000000">.</span><span style="color: #795E26">registerComponent</span><span style="color: #000000">({</span>
 <span style="color: #000000">  </span><span style="color: #001080">name:</span><span style="color: #000000"> </span><span style="color: #A31515">&quot;colour&quot;</span><span style="color: #000000">,</span>
-<span style="color: #000000">  </span><span style="color: #001080">properties:</span><span style="color: #000000"> {</span>
+<span style="color: #000000">  </span><span style="color: #001080">defaults:</span><span style="color: #000000"> {</span>
 <span style="color: #000000">    </span><span style="color: #001080">r:</span><span style="color: #000000"> </span><span style="color: #098658">255</span><span style="color: #000000">,</span>
 <span style="color: #000000">    </span><span style="color: #001080">g:</span><span style="color: #000000"> </span><span style="color: #098658">0</span><span style="color: #000000">,</span>
 <span style="color: #000000">    </span><span style="color: #001080">b:</span><span style="color: #000000"> </span><span style="color: #098658">0</span><span style="color: #000000">,</span>
@@ -137,7 +136,7 @@
 
 <span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">position</span><span style="color: #000000"> = </span><span style="color: #001080">world</span><span style="color: #000000">.</span><span style="color: #795E26">registerComponent</span><span style="color: #000000">({</span>
 <span style="color: #000000">  </span><span style="color: #001080">name:</span><span style="color: #000000"> </span><span style="color: #A31515">&quot;position&quot;</span><span style="color: #000000">,</span>
-<span style="color: #000000">  </span><span style="color: #001080">properties:</span><span style="color: #000000"> {</span>
+<span style="color: #000000">  </span><span style="color: #001080">defaults:</span><span style="color: #000000"> {</span>
 <span style="color: #000000">    </span><span style="color: #001080">x:</span><span style="color: #000000"> </span><span style="color: #098658">0</span><span style="color: #000000">,</span>
 <span style="color: #000000">    </span><span style="color: #001080">y:</span><span style="color: #000000"> </span><span style="color: #098658">0</span><span style="color: #000000">,</span>
 <span style="color: #000000">  },</span>
@@ -145,81 +144,81 @@
 
 <span style="color: #008000">// create our box entity - createEntity takes no arguments</span>
 <span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">box</span><span style="color: #000000"> = </span><span style="color: #001080">world</span><span style="color: #000000">.</span><span style="color: #795E26">createEntity</span><span style="color: #000000">();</span>
+<span style="color: #001080">box</span><span style="color: #000000">.</span><span style="color: #795E26">enable</span><span style="color: #000000">();</span>
 
 <span style="color: #008000">// add the components to the entity</span>
-<span style="color: #001080">world</span><span style="color: #000000">.</span><span style="color: #795E26">addComponentsToEntity</span><span style="color: #000000">(</span><span style="color: #001080">box</span><span style="color: #000000">, </span><span style="color: #001080">size</span><span style="color: #000000">, </span><span style="color: #001080">colour</span><span style="color: #000000">, </span><span style="color: #001080">position</span><span style="color: #000000">);</span>
+<span style="color: #001080">box</span><span style="color: #000000">.</span><span style="color: #795E26">addComponent</span><span style="color: #000000">(</span><span style="color: #001080">colour</span><span style="color: #000000">);</span>
+<span style="color: #001080">box</span><span style="color: #000000">.</span><span style="color: #795E26">addComponent</span><span style="color: #000000">(</span><span style="color: #001080">position</span><span style="color: #000000">);</span>
+<span style="color: #001080">box</span><span style="color: #000000">.</span><span style="color: #795E26">addComponent</span><span style="color: #000000">(</span><span style="color: #001080">size</span><span style="color: #000000">);</span>
 
 <span style="color: #008000">// overwrite some of the default properties with entity specific properties</span>
-<span style="color: #008000">// access components through the &quot;_&quot; shorthand property</span>
-<span style="color: #008000">// N.B. you can access the individual properties of course (e.g. box._.colour.r)</span>
-<span style="color: #001080">box</span><span style="color: #000000">.</span><span style="color: #001080">_</span><span style="color: #000000">.</span><span style="color: #001080">colour</span><span style="color: #000000"> = { </span><span style="color: #001080">r:</span><span style="color: #000000"> </span><span style="color: #098658">150</span><span style="color: #000000">, </span><span style="color: #001080">g:</span><span style="color: #000000"> </span><span style="color: #098658">150</span><span style="color: #000000">, </span><span style="color: #001080">b:</span><span style="color: #000000"> </span><span style="color: #098658">150</span><span style="color: #000000"> };</span>
-<span style="color: #001080">box</span><span style="color: #000000">.</span><span style="color: #001080">_</span><span style="color: #000000">.</span><span style="color: #001080">position</span><span style="color: #000000"> = { </span><span style="color: #001080">x:</span><span style="color: #000000"> </span><span style="color: #098658">100</span><span style="color: #000000">, </span><span style="color: #001080">y:</span><span style="color: #000000"> </span><span style="color: #098658">250</span><span style="color: #000000"> };</span>
+<span style="color: #001080">box</span><span style="color: #000000">.</span><span style="color: #001080">colour</span><span style="color: #000000"> = { </span><span style="color: #001080">r:</span><span style="color: #000000"> </span><span style="color: #098658">10</span><span style="color: #000000">, </span><span style="color: #001080">g:</span><span style="color: #000000"> </span><span style="color: #098658">255</span><span style="color: #000000">, </span><span style="color: #001080">b:</span><span style="color: #000000"> </span><span style="color: #098658">111</span><span style="color: #000000"> }; </span><span style="color: #008000">// rewriting the whole object is possible</span>
+<span style="color: #001080">box</span><span style="color: #000000">.</span><span style="color: #001080">position</span><span style="color: #000000">.</span><span style="color: #001080">x</span><span style="color: #000000"> = </span><span style="color: #098658">100</span><span style="color: #000000">;                    </span><span style="color: #008000">// but this way is preferred</span>
+<span style="color: #001080">box</span><span style="color: #000000">.</span><span style="color: #001080">position</span><span style="color: #000000">.</span><span style="color: #001080">y</span><span style="color: #000000"> = </span><span style="color: #098658">250</span><span style="color: #000000">;</span>
 
 <span style="color: #008000">// world systems support three functions</span>
-<span style="color: #008000">// 1) a pre-update function - (&quot;preUpdate&quot;) - run once at the start of each frame</span>
-<span style="color: #008000">// 2) an update function - (&quot;update&quot;) - to potentially be called multiple times per frame</span>
-<span style="color: #008000">// 3) a post-update function - (&quot;postUpdate) - run once at the end of each frame</span>
+<span style="color: #008000">// 1) a pre-update function   - (&quot;pre&quot;)     - run once at the start of each frame</span>
+<span style="color: #008000">// 2) an update function      - (&quot;update&quot;)  - to potentially be called multiple times per frame</span>
+<span style="color: #008000">// 3) a post-update function  - (&quot;post&quot;)    - run once at the end of each frame</span>
 
 <span style="color: #008000">// a simple update function to move boxes around the canvas</span>
 <span style="color: #008000">// N.B. update functions you intend to use as systems must take the following:</span>
-<span style="color: #008000">//     dt {number} frame delta time</span>
 <span style="color: #008000">//     entities {Entity[]} an array of entities</span>
-<span style="color: #008000">//     system {System} the system calling this function</span>
-<span style="color: #0000FF">function</span><span style="color: #000000"> </span><span style="color: #795E26">moveBoxes</span><span style="color: #000000">(</span><span style="color: #001080">dt</span><span style="color: #000000">, </span><span style="color: #001080">entities</span><span style="color: #000000">, </span><span style="color: #001080">system</span><span style="color: #000000">) {</span>
+<span style="color: #008000">//     global {Entity} the world.global entity</span>
+<span style="color: #008000">//     dt {number} frame delta time</span>
+<span style="color: #0000FF">function</span><span style="color: #000000"> </span><span style="color: #795E26">moveBoxes</span><span style="color: #000000">(</span><span style="color: #001080">entities</span><span style="color: #000000">, </span><span style="color: #001080">global</span><span style="color: #000000">, </span><span style="color: #001080">dt</span><span style="color: #000000">) {</span>
 <span style="color: #000000">  </span><span style="color: #008000">// its generally a good idea to bail early if no entities are affected</span>
 <span style="color: #000000">  </span><span style="color: #AF00DB">if</span><span style="color: #000000"> (!</span><span style="color: #001080">entities</span><span style="color: #000000">.</span><span style="color: #001080">length</span><span style="color: #000000">) </span><span style="color: #AF00DB">return</span><span style="color: #000000">;</span>
 <span style="color: #000000">  </span><span style="color: #001080">entities</span><span style="color: #000000">.</span><span style="color: #795E26">forEach</span><span style="color: #000000">((</span><span style="color: #001080">entity</span><span style="color: #000000">) </span><span style="color: #0000FF">=&gt;</span><span style="color: #000000"> {</span>
 <span style="color: #000000">    </span><span style="color: #008000">// modify component properties</span>
-<span style="color: #000000">    </span><span style="color: #001080">entity</span><span style="color: #000000">.</span><span style="color: #001080">components</span><span style="color: #000000">.</span><span style="color: #001080">position</span><span style="color: #000000">.</span><span style="color: #001080">x</span><span style="color: #000000"> += (</span><span style="color: #098658">0.5</span><span style="color: #000000"> * </span><span style="color: #001080">dt</span><span style="color: #000000">),</span>
-<span style="color: #000000">    </span><span style="color: #001080">entity</span><span style="color: #000000">.</span><span style="color: #001080">components</span><span style="color: #000000">.</span><span style="color: #001080">position</span><span style="color: #000000">.</span><span style="color: #001080">y</span><span style="color: #000000"> -= (</span><span style="color: #098658">0.5</span><span style="color: #000000"> * </span><span style="color: #001080">dt</span><span style="color: #000000">),</span>
+<span style="color: #000000">    </span><span style="color: #001080">entity</span><span style="color: #000000">.</span><span style="color: #001080">position</span><span style="color: #000000">.</span><span style="color: #001080">x</span><span style="color: #000000"> += (</span><span style="color: #098658">10</span><span style="color: #000000"> * </span><span style="color: #001080">dt</span><span style="color: #000000">);</span>
+<span style="color: #000000">    </span><span style="color: #001080">entity</span><span style="color: #000000">.</span><span style="color: #001080">position</span><span style="color: #000000">.</span><span style="color: #001080">y</span><span style="color: #000000"> -= (</span><span style="color: #098658">10</span><span style="color: #000000"> * </span><span style="color: #001080">dt</span><span style="color: #000000">);</span>
 <span style="color: #000000">  });</span>
 <span style="color: #000000">}</span>
 
 <span style="color: #008000">// a simple render function to draw the boxes to the canvas</span>
 <span style="color: #008000">// N.B. function you intend to use as a post-update function must take the following:</span>
-<span style="color: #008000">//     int {number} frame interpolation amount</span>
 <span style="color: #008000">//     entities {Entity[]} an array of entities</span>
-<span style="color: #008000">//     system {System} the system calling this function</span>
-<span style="color: #0000FF">function</span><span style="color: #000000"> </span><span style="color: #795E26">draw</span><span style="color: #000000">(</span><span style="color: #001080">int</span><span style="color: #000000">, </span><span style="color: #001080">entities</span><span style="color: #000000">) {</span>
+<span style="color: #008000">//     global {Entity} the world.global entity</span>
+<span style="color: #008000">//     int {number} frame interpolation amount</span>
+<span style="color: #0000FF">function</span><span style="color: #000000"> </span><span style="color: #795E26">draw</span><span style="color: #000000">(</span><span style="color: #001080">entities</span><span style="color: #000000">, </span><span style="color: #001080">global</span><span style="color: #000000">, </span><span style="color: #001080">int</span><span style="color: #000000">) {</span>
 <span style="color: #000000">  </span><span style="color: #008000">// clear canvas every frame</span>
 <span style="color: #000000">  </span><span style="color: #001080">ctx</span><span style="color: #000000">.</span><span style="color: #795E26">clearRect</span><span style="color: #000000">(</span><span style="color: #098658">0</span><span style="color: #000000">, </span><span style="color: #098658">0</span><span style="color: #000000">, </span><span style="color: #001080">canvas</span><span style="color: #000000">.</span><span style="color: #001080">width</span><span style="color: #000000">, </span><span style="color: #001080">canvas</span><span style="color: #000000">.</span><span style="color: #001080">height</span><span style="color: #000000">);</span>
-<span style="color: #000000">  </span><span style="color: #008000">// its generally a good idea to bail early if no entities are affected</span>
-<span style="color: #000000">  </span><span style="color: #AF00DB">if</span><span style="color: #000000"> (!</span><span style="color: #001080">entities</span><span style="color: #000000">.</span><span style="color: #001080">length</span><span style="color: #000000">) </span><span style="color: #AF00DB">return</span><span style="color: #000000">;</span>
 <span style="color: #000000">  </span><span style="color: #008000">// draw each entity</span>
 <span style="color: #000000">  </span><span style="color: #001080">entities</span><span style="color: #000000">.</span><span style="color: #795E26">forEach</span><span style="color: #000000">((</span><span style="color: #001080">entity</span><span style="color: #000000">) </span><span style="color: #0000FF">=&gt;</span><span style="color: #000000"> {</span>
-<span style="color: #000000">    </span><span style="color: #001080">ctx</span><span style="color: #000000">.</span><span style="color: #001080">fillStyle</span><span style="color: #000000"> = </span><span style="color: #A31515">`rgb(</span><span style="color: #0000FF">${</span><span style="color: #001080">entity</span><span style="color: #000000FF">.</span><span style="color: #001080">components</span><span style="color: #000000FF">.</span><span style="color: #001080">colour</span><span style="color: #000000FF">.</span><span style="color: #001080">r</span><span style="color: #0000FF">}</span><span style="color: #A31515">, </span><span style="color: #0000FF">${</span><span style="color: #001080">entity</span><span style="color: #000000FF">.</span><span style="color: #001080">components</span><span style="color: #000000FF">.</span><span style="color: #001080">colour</span><span style="color: #000000FF">.</span><span style="color: #001080">g</span><span style="color: #0000FF">}</span><span style="color: #A31515">, </span><span style="color: #0000FF">${</span><span style="color: #001080">entity</span><span style="color: #000000FF">.</span><span style="color: #001080">components</span><span style="color: #000000FF">.</span><span style="color: #001080">colour</span><span style="color: #000000FF">.</span><span style="color: #001080">b</span><span style="color: #0000FF">}</span><span style="color: #A31515">)`</span><span style="color: #000000">;</span>
-<span style="color: #000000">    </span><span style="color: #001080">ctx</span><span style="color: #000000">.</span><span style="color: #795E26">fillRect</span><span style="color: #000000">(</span>
-<span style="color: #000000">      </span><span style="color: #001080">entity</span><span style="color: #000000">.</span><span style="color: #001080">components</span><span style="color: #000000">.</span><span style="color: #001080">position</span><span style="color: #000000">.</span><span style="color: #001080">x</span><span style="color: #000000">,</span>
-<span style="color: #000000">      </span><span style="color: #001080">entity</span><span style="color: #000000">.</span><span style="color: #001080">components</span><span style="color: #000000">.</span><span style="color: #001080">position</span><span style="color: #000000">.</span><span style="color: #001080">y</span><span style="color: #000000">,</span>
-<span style="color: #000000">      </span><span style="color: #001080">entity</span><span style="color: #000000">.</span><span style="color: #001080">components</span><span style="color: #000000">.</span><span style="color: #001080">size</span><span style="color: #000000">.</span><span style="color: #001080">width</span><span style="color: #000000">,</span>
-<span style="color: #000000">      </span><span style="color: #001080">entity</span><span style="color: #000000">.</span><span style="color: #001080">components</span><span style="color: #000000">.</span><span style="color: #001080">size</span><span style="color: #000000">.</span><span style="color: #001080">height</span><span style="color: #000000">,</span>
-<span style="color: #000000">    );</span>
+<span style="color: #000000">    </span><span style="color: #AF00DB">if</span><span style="color: #000000"> (</span><span style="color: #001080">entity</span><span style="color: #000000">.</span><span style="color: #001080">enabled</span><span style="color: #000000"> === </span><span style="color: #0000FF">true</span><span style="color: #000000">) {</span>
+<span style="color: #000000">      </span><span style="color: #001080">ctx</span><span style="color: #000000">.</span><span style="color: #001080">fillStyle</span><span style="color: #000000"> = </span><span style="color: #A31515">`rgb(</span><span style="color: #0000FF">${</span><span style="color: #001080">entity</span><span style="color: #000000FF">.</span><span style="color: #001080">colour</span><span style="color: #000000FF">.</span><span style="color: #001080">r</span><span style="color: #0000FF">}</span><span style="color: #A31515">, </span><span style="color: #0000FF">${</span><span style="color: #001080">entity</span><span style="color: #000000FF">.</span><span style="color: #001080">colour</span><span style="color: #000000FF">.</span><span style="color: #001080">g</span><span style="color: #0000FF">}</span><span style="color: #A31515">, </span><span style="color: #0000FF">${</span><span style="color: #001080">entity</span><span style="color: #000000FF">.</span><span style="color: #001080">colour</span><span style="color: #000000FF">.</span><span style="color: #001080">b</span><span style="color: #0000FF">}</span><span style="color: #A31515">)`</span><span style="color: #000000">;</span>
+<span style="color: #000000">      </span><span style="color: #001080">ctx</span><span style="color: #000000">.</span><span style="color: #795E26">fillRect</span><span style="color: #000000">(</span>
+<span style="color: #000000">        </span><span style="color: #001080">entity</span><span style="color: #000000">.</span><span style="color: #001080">position</span><span style="color: #000000">.</span><span style="color: #001080">x</span><span style="color: #000000">,</span>
+<span style="color: #000000">        </span><span style="color: #001080">entity</span><span style="color: #000000">.</span><span style="color: #001080">position</span><span style="color: #000000">.</span><span style="color: #001080">y</span><span style="color: #000000">,</span>
+<span style="color: #000000">        </span><span style="color: #001080">entity</span><span style="color: #000000">.</span><span style="color: #001080">size</span><span style="color: #000000">.</span><span style="color: #001080">width</span><span style="color: #000000">,</span>
+<span style="color: #000000">        </span><span style="color: #001080">entity</span><span style="color: #000000">.</span><span style="color: #001080">size</span><span style="color: #000000">.</span><span style="color: #001080">height</span><span style="color: #000000">,</span>
+<span style="color: #000000">      );</span>
+<span style="color: #000000">    }</span>
 <span style="color: #000000">  });</span>
 <span style="color: #000000">}</span>
 
-<span style="color: #008000">// turn the mover function into a system</span>
-<span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">mover</span><span style="color: #000000"> = </span><span style="color: #001080">world</span><span style="color: #000000">.</span><span style="color: #795E26">createSystem</span><span style="color: #000000">({</span>
-<span style="color: #000000">  </span><span style="color: #008000">// the components required in the function</span>
-<span style="color: #000000">  </span><span style="color: #001080">components:</span><span style="color: #000000"> [ </span><span style="color: #001080">position</span><span style="color: #000000"> ],</span>
-<span style="color: #000000">  </span><span style="color: #008000">// the function itself</span>
-<span style="color: #000000">  </span><span style="color: #001080">update:</span><span style="color: #000000"> </span><span style="color: #001080">moveBoxes</span><span style="color: #000000">,</span>
-<span style="color: #000000">});</span>
-
-<span style="color: #008000">// turn the mover function into a system</span>
-<span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">drawer</span><span style="color: #000000"> = </span><span style="color: #001080">world</span><span style="color: #000000">.</span><span style="color: #795E26">createSystem</span><span style="color: #000000">({</span>
-<span style="color: #000000">  </span><span style="color: #008000">// the components required in the function</span>
-<span style="color: #000000">  </span><span style="color: #001080">components:</span><span style="color: #000000"> [</span>
+<span style="color: #008000">// Use queries to gather entities for use in systems:</span>
+<span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">qBox</span><span style="color: #000000"> = </span><span style="color: #001080">world</span><span style="color: #000000">.</span><span style="color: #795E26">registerQuery</span><span style="color: #000000">({</span>
+<span style="color: #000000">  </span><span style="color: #001080">all:</span><span style="color: #000000"> [</span>
 <span style="color: #000000">    </span><span style="color: #001080">colour</span><span style="color: #000000">,</span>
 <span style="color: #000000">    </span><span style="color: #001080">position</span><span style="color: #000000">,</span>
-<span style="color: #000000">    </span><span style="color: #001080">size</span><span style="color: #000000">,</span>
+<span style="color: #000000">    </span><span style="color: #001080">size</span>
 <span style="color: #000000">  ],</span>
-<span style="color: #000000">  </span><span style="color: #008000">// the function itself</span>
-<span style="color: #000000">  </span><span style="color: #001080">postUpdate:</span><span style="color: #000000"> </span><span style="color: #001080">draw</span><span style="color: #000000">,</span>
+<span style="color: #000000">  </span><span style="color: #008000">// also takes &#039;any&#039; and &#039;none&#039; arrays like Geotic</span>
 <span style="color: #000000">});</span>
 
-<span style="color: #008000">// enable the systems</span>
+<span style="color: #008000">// turn the mover function into a system</span>
+<span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">mover</span><span style="color: #000000"> = </span><span style="color: #001080">world</span><span style="color: #000000">.</span><span style="color: #795E26">registerSystem</span><span style="color: #000000">({</span>
+<span style="color: #000000">  </span><span style="color: #008000">// system name can be any valid object property name</span>
+<span style="color: #000000">  </span><span style="color: #001080">name:</span><span style="color: #000000"> </span><span style="color: #A31515">&quot;mover&quot;</span><span style="color: #000000">,</span>
+<span style="color: #000000">  </span><span style="color: #001080">query:</span><span style="color: #000000"> </span><span style="color: #001080">qBox</span><span style="color: #000000">,</span>
+<span style="color: #000000">  </span><span style="color: #001080">update:</span><span style="color: #000000"> </span><span style="color: #001080">moveBoxes</span><span style="color: #000000">,</span>
+<span style="color: #000000">  </span><span style="color: #001080">post:</span><span style="color: #000000"> </span><span style="color: #001080">draw</span><span style="color: #000000">,</span>
+<span style="color: #000000">});</span>
+
+<span style="color: #008000">// enable the system</span>
 <span style="color: #001080">mover</span><span style="color: #000000">.</span><span style="color: #795E26">enable</span><span style="color: #000000">();</span>
-<span style="color: #001080">drawer</span><span style="color: #000000">.</span><span style="color: #795E26">enable</span><span style="color: #000000">();</span>
 
 <span style="color: #008000">// game loop example</span>
 <span style="color: #0000FF">let</span><span style="color: #000000"> </span><span style="color: #001080">lastTime</span><span style="color: #000000"> = </span><span style="color: #0000FF">null</span><span style="color: #000000">;</span>
@@ -228,25 +227,35 @@
 <span style="color: #0000FF">let</span><span style="color: #000000"> </span><span style="color: #001080">dt</span><span style="color: #000000"> = </span><span style="color: #001080">tempo</span><span style="color: #000000">;</span>
 
 <span style="color: #0000FF">function</span><span style="color: #000000"> </span><span style="color: #795E26">onTick</span><span style="color: #000000">(</span><span style="color: #001080">time</span><span style="color: #000000">) {</span>
-<span style="color: #000000">  </span><span style="color: #001080">window</span><span style="color: #000000">.</span><span style="color: #795E26">requestAnimationFrame</span><span style="color: #000000">(</span><span style="color: #001080">onTick</span><span style="color: #000000">)</span>
-<span style="color: #000000">  </span><span style="color: #001080">world</span><span style="color: #000000">.</span><span style="color: #795E26">preUpdate</span><span style="color: #000000">();</span>
-<span style="color: #000000">  </span><span style="color: #AF00DB">if</span><span style="color: #000000"> (</span><span style="color: #001080">lastTime</span><span style="color: #000000"> !== </span><span style="color: #0000FF">null</span><span style="color: #000000">) {</span>
-<span style="color: #000000">    </span><span style="color: #001080">accumulator</span><span style="color: #000000"> += (</span><span style="color: #001080">time</span><span style="color: #000000"> - </span><span style="color: #001080">lastTime</span><span style="color: #000000">) / </span><span style="color: #098658">1000</span><span style="color: #000000">;</span>
-<span style="color: #000000">    </span><span style="color: #AF00DB">while</span><span style="color: #000000"> (</span><span style="color: #001080">accumulator</span><span style="color: #000000"> &gt; </span><span style="color: #001080">dt</span><span style="color: #000000">) {</span>
-<span style="color: #000000">      </span><span style="color: #001080">world</span><span style="color: #000000">.</span><span style="color: #795E26">update</span><span style="color: #000000">(</span><span style="color: #001080">dt</span><span style="color: #000000">);</span>
-<span style="color: #000000">      </span><span style="color: #001080">accumulator</span><span style="color: #000000"> -= </span><span style="color: #001080">dt</span><span style="color: #000000">;</span>
-<span style="color: #000000">    }</span>
-<span style="color: #000000">  }</span>
-<span style="color: #000000">  </span><span style="color: #001080">lastTime</span><span style="color: #000000"> = </span><span style="color: #001080">time</span><span style="color: #000000">;</span>
-<span style="color: #000000">  </span><span style="color: #001080">world</span><span style="color: #000000">.</span><span style="color: #795E26">postUpdate</span><span style="color: #000000">(</span><span style="color: #001080">accumulator</span><span style="color: #000000"> / </span><span style="color: #001080">tempo</span><span style="color: #000000">);</span>
+<span style="color: #000000">  </span><span style="color: #001080">world</span><span style="color: #000000">.</span><span style="color: #795E26">step</span><span style="color: #000000">(</span><span style="color: #001080">time</span><span style="color: #000000">);</span>
+<span style="color: #000000">  </span><span style="color: #001080">window</span><span style="color: #000000">.</span><span style="color: #795E26">requestAnimationFrame</span><span style="color: #000000">(</span><span style="color: #001080">onTick</span><span style="color: #000000">);</span>
 <span style="color: #000000">}</span>
-
-<span style="color: #001080">window</span><span style="color: #000000">.</span><span style="color: #795E26">requestAnimationFrame</span><span style="color: #000000">(</span><span style="color: #001080">onTick</span><span style="color: #000000">)</span>
+<span style="color: #795E26">onTick</span><span style="color: #000000">(</span><span style="color: #098658">0</span><span style="color: #000000">);</span>
 </code></pre>
-				<a href="#demos-and-benchmarks" id="demos-and-benchmarks" style="color: inherit; text-decoration: none;">
-					<h3>Demos and Benchmarks</h3>
+				<a href="#demos" id="demos" style="color: inherit; text-decoration: none;">
+					<h3>Demos</h3>
 				</a>
-				<p>See <code>./demo</code> for a more interesting working examples, and <code>./demo/benchamark</code> for benchmarks.</p>
+				<p>See <code>./demo</code> for more interesting working examples.</p>
+				<a href="#benchmarks" id="benchmarks" style="color: inherit; text-decoration: none;">
+					<h3>Benchmarks</h3>
+				</a>
+				<p>Coming soon™</p>
+				<a href="#goals" id="goals" style="color: inherit; text-decoration: none;">
+					<h2>Goals</h2>
+				</a>
+				<ul>
+					<li>To provide a stable, readable ECS architecture using ES2020+ features</li>
+					<li>To provide a high level of customisability</li>
+				</ul>
+				<a href="#not-goals" id="not-goals" style="color: inherit; text-decoration: none;">
+					<h2>Not Goals</h2>
+				</a>
+				<ul>
+					<li>To be the fastest / smallest ECS on the web</li>
+					<li>To conform a particular style of coding - function over form</li>
+					<li>To support the majority of web users / web environments</li>
+					<li>To provide polyfills / workarounds etc. for ES2020+ features / older browser support</li>
+				</ul>
 				<a href="#to-do-before-100-release" id="to-do-before-100-release" style="color: inherit; text-decoration: none;">
 					<h2>To-Do Before 1.0.0 release</h2>
 				</a>
@@ -254,25 +263,21 @@
 					<h3>General</h3>
 				</a>
 				<ol start="0">
-					<li>Write up some core principles, project goals and style guide</li>
-					<li>Finalise API</li>
+					<li>Decide between object / integer based entities</li>
+					<li>Finalise core API</li>
 					<li>Write comprehensive tests</li>
 					<li>Write consistent code documentation throughout</li>
-					<li>Write argument validation for functions requiring user input</li>
-					<li>Ensure high-quality Typescript definitions throughout</li>
-					<li>Allow for deferred removal of entities, components and systems
-						<a href="#components" id="components" style="color: inherit; text-decoration: none;">
-							<h3>Components</h3>
+					<li>Write argument validation for all functions requiring user input</li>
+					<li>Ensure high-quality Typescript definitions throughout
+						<a href="#features" id="features" style="color: inherit; text-decoration: none;">
+							<h3>Features</h3>
 						</a>
 					</li>
 					<li>Add schemas and schema validation for component properties</li>
-					<li>Ensure Typescript definitions work consistently - current use of &quot;unknown&quot; causing issues for users</li>
-					<li>Explore the implications of direct component access (i.e. entity.component instead of current entity._.component)
-						<a href="#archetypes" id="archetypes" style="color: inherit; text-decoration: none;">
-							<h3>Archetypes</h3>
-						</a>
-					</li>
-					<li>Performance improvements - Ensure getting entities by archetype / components is performant</li>
+					<li>Ensure Typescript definitions work consistently</li>
+					<li>Allow for deferred removal of entities, components and systems</li>
+					<li>Allow for &quot;changed&quot; and &quot;not&quot; in queries</li>
+					<li>Add a plugin support system</li>
 				</ol>
 				<a href="#acknowledgements" id="acknowledgements" style="color: inherit; text-decoration: none;">
 					<h2>Acknowledgements</h2>
@@ -347,10 +352,11 @@
 				<li class="tsd-kind-accessor tsd-parent-kind-class"><span class="tsd-kind-icon">Accessor</span></li>
 			</ul>
 			<ul class="tsd-legend">
-				<li class="tsd-kind-property tsd-parent-kind-interface"><span class="tsd-kind-icon">Property</span></li>
+				<li class="tsd-kind-property tsd-parent-kind-class tsd-is-private"><span class="tsd-kind-icon">Private property</span></li>
+				<li class="tsd-kind-method tsd-parent-kind-class tsd-is-private"><span class="tsd-kind-icon">Private method</span></li>
 			</ul>
 			<ul class="tsd-legend">
-				<li class="tsd-kind-property tsd-parent-kind-class tsd-is-private"><span class="tsd-kind-icon">Private property</span></li>
+				<li class="tsd-kind-property tsd-parent-kind-interface"><span class="tsd-kind-icon">Property</span></li>
 			</ul>
 		</div>
 	</div>

@@ -180,7 +180,7 @@ Coming soon™
 * To be the fastest / smallest ECS on the web
 * To conform a particular style of coding - function over form
 * To support the majority of web users / web environments
-* To provide polyfils / workarounds etc. for ES2020+ features / older browser support
+* To provide polyfills / workarounds etc. for ES2020+ features / older browser support
 
 
 ## To-Do Before 1.0.0 release

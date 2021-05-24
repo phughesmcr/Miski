@@ -98,9 +98,14 @@
 					<div class="tsd-signature tsd-kind-icon">name<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div>
 					<aside class="tsd-sources">
 						<ul>
-							<li>Defined in <a href="https://github.com/phughesmcr/Miski/blob/fe858fb/src/system/system.ts#L18">system/system.ts:18</a></li>
+							<li>Defined in <a href="https://github.com/phughesmcr/Miski/blob/16d40b7/src/system/system.ts#L23">system/system.ts:23</a></li>
 						</ul>
 					</aside>
+					<div class="tsd-comment tsd-typography">
+						<div class="lead">
+							<p>The name of the system. Must be a valid property name.</p>
+						</div>
+					</div>
 				</section>
 				<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-interface">
 					<a name="post" class="tsd-anchor"></a>
@@ -108,9 +113,26 @@
 					<div class="tsd-signature tsd-kind-icon">post<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">(</span>entities<span class="tsd-signature-symbol">: </span><a href="../classes/entity.html" class="tsd-signature-type" data-tsd-kind="Class">Entity</a><span class="tsd-signature-symbol">[]</span>, global<span class="tsd-signature-symbol">: </span><a href="../classes/entity.html" class="tsd-signature-type" data-tsd-kind="Class">Entity</a>, int<span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol"> =&gt; </span><span class="tsd-signature-type">void</span></div>
 					<aside class="tsd-sources">
 						<ul>
-							<li>Defined in <a href="https://github.com/phughesmcr/Miski/blob/fe858fb/src/system/system.ts#L20">system/system.ts:20</a></li>
+							<li>Defined in <a href="https://github.com/phughesmcr/Miski/blob/16d40b7/src/system/system.ts#L38">system/system.ts:38</a></li>
 						</ul>
 					</aside>
+					<div class="tsd-comment tsd-typography">
+						<div class="lead">
+							<p>The system&#39;s post-update function.
+							This runs once per step after the update function.</p>
+						</div>
+						<dl class="tsd-comment-tags">
+							<dt>param</dt>
+							<dd><p>an array of entities associated with the system&#39;s query</p>
+							</dd>
+							<dt>param</dt>
+							<dd><p>the world&#39;s global entity</p>
+							</dd>
+							<dt>param</dt>
+							<dd><p>the step&#39;s interpolation alpha</p>
+							</dd>
+						</dl>
+					</div>
 					<div class="tsd-type-declaration">
 						<h4>Type declaration</h4>
 						<ul class="tsd-parameters">
@@ -145,9 +167,23 @@
 					<div class="tsd-signature tsd-kind-icon">pre<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">(</span>entities<span class="tsd-signature-symbol">: </span><a href="../classes/entity.html" class="tsd-signature-type" data-tsd-kind="Class">Entity</a><span class="tsd-signature-symbol">[]</span>, global<span class="tsd-signature-symbol">: </span><a href="../classes/entity.html" class="tsd-signature-type" data-tsd-kind="Class">Entity</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol"> =&gt; </span><span class="tsd-signature-type">void</span></div>
 					<aside class="tsd-sources">
 						<ul>
-							<li>Defined in <a href="https://github.com/phughesmcr/Miski/blob/fe858fb/src/system/system.ts#L19">system/system.ts:19</a></li>
+							<li>Defined in <a href="https://github.com/phughesmcr/Miski/blob/16d40b7/src/system/system.ts#L30">system/system.ts:30</a></li>
 						</ul>
 					</aside>
+					<div class="tsd-comment tsd-typography">
+						<div class="lead">
+							<p>The system&#39;s pre-update function.
+							This runs once per step before the update function.</p>
+						</div>
+						<dl class="tsd-comment-tags">
+							<dt>param</dt>
+							<dd><p>an array of entities associated with the system&#39;s query</p>
+							</dd>
+							<dt>param</dt>
+							<dd><p>the world&#39;s global entity</p>
+							</dd>
+						</dl>
+					</div>
 					<div class="tsd-type-declaration">
 						<h4>Type declaration</h4>
 						<ul class="tsd-parameters">
@@ -179,9 +215,15 @@
 					<div class="tsd-signature tsd-kind-icon">query<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">null</span><span class="tsd-signature-symbol"> | </span><a href="../classes/query.html" class="tsd-signature-type" data-tsd-kind="Class">Query</a></div>
 					<aside class="tsd-sources">
 						<ul>
-							<li>Defined in <a href="https://github.com/phughesmcr/Miski/blob/fe858fb/src/system/system.ts#L17">system/system.ts:17</a></li>
+							<li>Defined in <a href="https://github.com/phughesmcr/Miski/blob/16d40b7/src/system/system.ts#L21">system/system.ts:21</a></li>
 						</ul>
 					</aside>
+					<div class="tsd-comment tsd-typography">
+						<div class="lead">
+							<p>The associated query to gather entities for this system. @see world.registerQuery()
+							null queries will gather all entities in the world.</p>
+						</div>
+					</div>
 				</section>
 				<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-interface">
 					<a name="update" class="tsd-anchor"></a>
@@ -189,9 +231,25 @@
 					<div class="tsd-signature tsd-kind-icon">update<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">(</span>entities<span class="tsd-signature-symbol">: </span><a href="../classes/entity.html" class="tsd-signature-type" data-tsd-kind="Class">Entity</a><span class="tsd-signature-symbol">[]</span>, global<span class="tsd-signature-symbol">: </span><a href="../classes/entity.html" class="tsd-signature-type" data-tsd-kind="Class">Entity</a>, dt<span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol"> =&gt; </span><span class="tsd-signature-type">void</span></div>
 					<aside class="tsd-sources">
 						<ul>
-							<li>Defined in <a href="https://github.com/phughesmcr/Miski/blob/fe858fb/src/system/system.ts#L21">system/system.ts:21</a></li>
+							<li>Defined in <a href="https://github.com/phughesmcr/Miski/blob/16d40b7/src/system/system.ts#L45">system/system.ts:45</a></li>
 						</ul>
 					</aside>
+					<div class="tsd-comment tsd-typography">
+						<div class="lead">
+							<p>The system&#39;s update function.</p>
+						</div>
+						<dl class="tsd-comment-tags">
+							<dt>param</dt>
+							<dd><p>an array of entities associated with the system&#39;s query</p>
+							</dd>
+							<dt>param</dt>
+							<dd><p>the world&#39;s global entity</p>
+							</dd>
+							<dt>param</dt>
+							<dd><p>the step&#39;s delta time</p>
+							</dd>
+						</dl>
+					</div>
 					<div class="tsd-type-declaration">
 						<h4>Type declaration</h4>
 						<ul class="tsd-parameters">
@@ -305,10 +363,11 @@
 				<li class="tsd-kind-accessor tsd-parent-kind-class"><span class="tsd-kind-icon">Accessor</span></li>
 			</ul>
 			<ul class="tsd-legend">
-				<li class="tsd-kind-property tsd-parent-kind-interface"><span class="tsd-kind-icon">Property</span></li>
+				<li class="tsd-kind-property tsd-parent-kind-class tsd-is-private"><span class="tsd-kind-icon">Private property</span></li>
+				<li class="tsd-kind-method tsd-parent-kind-class tsd-is-private"><span class="tsd-kind-icon">Private method</span></li>
 			</ul>
 			<ul class="tsd-legend">
-				<li class="tsd-kind-property tsd-parent-kind-class tsd-is-private"><span class="tsd-kind-icon">Private property</span></li>
+				<li class="tsd-kind-property tsd-parent-kind-interface"><span class="tsd-kind-icon">Property</span></li>
 			</ul>
 		</div>
 	</div>

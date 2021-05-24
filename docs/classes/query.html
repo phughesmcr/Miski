@@ -88,7 +88,6 @@
 							<ul class="tsd-index-list">
 								<li class="tsd-kind-property tsd-parent-kind-class tsd-is-private"><a href="query.html#_all" class="tsd-kind-icon">_all</a></li>
 								<li class="tsd-kind-property tsd-parent-kind-class tsd-is-private"><a href="query.html#_any" class="tsd-kind-icon">_any</a></li>
-								<li class="tsd-kind-property tsd-parent-kind-class tsd-is-private"><a href="query.html#_cache" class="tsd-kind-icon">_cache</a></li>
 								<li class="tsd-kind-property tsd-parent-kind-class tsd-is-private"><a href="query.html#_mskall" class="tsd-kind-icon">_msk<wbr>All</a></li>
 								<li class="tsd-kind-property tsd-parent-kind-class tsd-is-private"><a href="query.html#_mskany" class="tsd-kind-icon">_msk<wbr>Any</a></li>
 								<li class="tsd-kind-property tsd-parent-kind-class tsd-is-private"><a href="query.html#_msknone" class="tsd-kind-icon">_msk<wbr>None</a></li>
@@ -100,13 +99,14 @@
 						<section class="tsd-index-section ">
 							<h3>Accessors</h3>
 							<ul class="tsd-index-list">
-								<li class="tsd-kind-get-signature tsd-parent-kind-class"><a href="query.html#entities" class="tsd-kind-icon">entities</a></li>
 								<li class="tsd-kind-get-signature tsd-parent-kind-class"><a href="query.html#size" class="tsd-kind-icon">size</a></li>
 							</ul>
 						</section>
 						<section class="tsd-index-section ">
 							<h3>Methods</h3>
 							<ul class="tsd-index-list">
+								<li class="tsd-kind-method tsd-parent-kind-class tsd-is-private"><a href="query.html#_refresh" class="tsd-kind-icon">_refresh</a></li>
+								<li class="tsd-kind-method tsd-parent-kind-class"><a href="query.html#getentities" class="tsd-kind-icon">get<wbr>Entities</a></li>
 								<li class="tsd-kind-method tsd-parent-kind-class"><a href="query.html#hasentity" class="tsd-kind-icon">has<wbr>Entity</a></li>
 								<li class="tsd-kind-method tsd-parent-kind-class"><a href="query.html#matches" class="tsd-kind-icon">matches</a></li>
 								<li class="tsd-kind-method tsd-parent-kind-class"><a href="query.html#update" class="tsd-kind-icon">update</a></li>
@@ -127,7 +127,7 @@
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<ul>
-									<li>Defined in <a href="https://github.com/phughesmcr/Miski/blob/fe858fb/src/query/query.ts#L29">query/query.ts:29</a></li>
+									<li>Defined in <a href="https://github.com/phughesmcr/Miski/blob/16d40b7/src/query/query.ts#L31">query/query.ts:31</a></li>
 								</ul>
 							</aside>
 							<h4 class="tsd-parameters-title">Parameters</h4>
@@ -152,7 +152,7 @@
 					<div class="tsd-signature tsd-kind-icon">_all<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">Set</span><span class="tsd-signature-symbol">&lt;</span><a href="component.html" class="tsd-signature-type" data-tsd-kind="Class">Component</a><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">unknown</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">&gt;</span></div>
 					<aside class="tsd-sources">
 						<ul>
-							<li>Defined in <a href="https://github.com/phughesmcr/Miski/blob/fe858fb/src/query/query.ts#L19">query/query.ts:19</a></li>
+							<li>Defined in <a href="https://github.com/phughesmcr/Miski/blob/16d40b7/src/query/query.ts#L22">query/query.ts:22</a></li>
 						</ul>
 					</aside>
 				</section>
@@ -162,17 +162,7 @@
 					<div class="tsd-signature tsd-kind-icon">_any<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">Set</span><span class="tsd-signature-symbol">&lt;</span><a href="component.html" class="tsd-signature-type" data-tsd-kind="Class">Component</a><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">unknown</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">&gt;</span></div>
 					<aside class="tsd-sources">
 						<ul>
-							<li>Defined in <a href="https://github.com/phughesmcr/Miski/blob/fe858fb/src/query/query.ts#L20">query/query.ts:20</a></li>
-						</ul>
-					</aside>
-				</section>
-				<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-class tsd-is-private">
-					<a name="_cache" class="tsd-anchor"></a>
-					<h3><span class="tsd-flag ts-flagPrivate">Private</span> _cache</h3>
-					<div class="tsd-signature tsd-kind-icon">_cache<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">WeakSet</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">Archetype</span><span class="tsd-signature-symbol">&gt;</span></div>
-					<aside class="tsd-sources">
-						<ul>
-							<li>Defined in <a href="https://github.com/phughesmcr/Miski/blob/fe858fb/src/query/query.ts#L27">query/query.ts:27</a></li>
+							<li>Defined in <a href="https://github.com/phughesmcr/Miski/blob/16d40b7/src/query/query.ts#L23">query/query.ts:23</a></li>
 						</ul>
 					</aside>
 				</section>
@@ -182,7 +172,7 @@
 					<div class="tsd-signature tsd-kind-icon">_msk<wbr>All<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">Mask</span></div>
 					<aside class="tsd-sources">
 						<ul>
-							<li>Defined in <a href="https://github.com/phughesmcr/Miski/blob/fe858fb/src/query/query.ts#L23">query/query.ts:23</a></li>
+							<li>Defined in <a href="https://github.com/phughesmcr/Miski/blob/16d40b7/src/query/query.ts#L26">query/query.ts:26</a></li>
 						</ul>
 					</aside>
 				</section>
@@ -192,7 +182,7 @@
 					<div class="tsd-signature tsd-kind-icon">_msk<wbr>Any<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">Mask</span></div>
 					<aside class="tsd-sources">
 						<ul>
-							<li>Defined in <a href="https://github.com/phughesmcr/Miski/blob/fe858fb/src/query/query.ts#L24">query/query.ts:24</a></li>
+							<li>Defined in <a href="https://github.com/phughesmcr/Miski/blob/16d40b7/src/query/query.ts#L27">query/query.ts:27</a></li>
 						</ul>
 					</aside>
 				</section>
@@ -202,7 +192,7 @@
 					<div class="tsd-signature tsd-kind-icon">_msk<wbr>None<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">Mask</span></div>
 					<aside class="tsd-sources">
 						<ul>
-							<li>Defined in <a href="https://github.com/phughesmcr/Miski/blob/fe858fb/src/query/query.ts#L25">query/query.ts:25</a></li>
+							<li>Defined in <a href="https://github.com/phughesmcr/Miski/blob/16d40b7/src/query/query.ts#L28">query/query.ts:28</a></li>
 						</ul>
 					</aside>
 				</section>
@@ -212,7 +202,7 @@
 					<div class="tsd-signature tsd-kind-icon">_none<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">Set</span><span class="tsd-signature-symbol">&lt;</span><a href="component.html" class="tsd-signature-type" data-tsd-kind="Class">Component</a><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">unknown</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">&gt;</span></div>
 					<aside class="tsd-sources">
 						<ul>
-							<li>Defined in <a href="https://github.com/phughesmcr/Miski/blob/fe858fb/src/query/query.ts#L21">query/query.ts:21</a></li>
+							<li>Defined in <a href="https://github.com/phughesmcr/Miski/blob/16d40b7/src/query/query.ts#L24">query/query.ts:24</a></li>
 						</ul>
 					</aside>
 				</section>
@@ -222,7 +212,7 @@
 					<div class="tsd-signature tsd-kind-icon">_registry<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">Set</span><span class="tsd-signature-symbol">&lt;</span><a href="entity.html" class="tsd-signature-type" data-tsd-kind="Class">Entity</a><span class="tsd-signature-symbol">&gt;</span></div>
 					<aside class="tsd-sources">
 						<ul>
-							<li>Defined in <a href="https://github.com/phughesmcr/Miski/blob/fe858fb/src/query/query.ts#L28">query/query.ts:28</a></li>
+							<li>Defined in <a href="https://github.com/phughesmcr/Miski/blob/16d40b7/src/query/query.ts#L30">query/query.ts:30</a></li>
 						</ul>
 					</aside>
 				</section>
@@ -232,30 +222,13 @@
 					<div class="tsd-signature tsd-kind-icon">_world<span class="tsd-signature-symbol">:</span> <a href="../interfaces/world.html" class="tsd-signature-type" data-tsd-kind="Interface">World</a></div>
 					<aside class="tsd-sources">
 						<ul>
-							<li>Defined in <a href="https://github.com/phughesmcr/Miski/blob/fe858fb/src/query/query.ts#L29">query/query.ts:29</a></li>
+							<li>Defined in <a href="https://github.com/phughesmcr/Miski/blob/16d40b7/src/query/query.ts#L31">query/query.ts:31</a></li>
 						</ul>
 					</aside>
 				</section>
 			</section>
 			<section class="tsd-panel-group tsd-member-group ">
 				<h2>Accessors</h2>
-				<section class="tsd-panel tsd-member tsd-kind-get-signature tsd-parent-kind-class">
-					<a name="entities" class="tsd-anchor"></a>
-					<h3>entities</h3>
-					<ul class="tsd-signatures tsd-kind-get-signature tsd-parent-kind-class">
-						<li class="tsd-signature tsd-kind-icon"><span class="tsd-signature-symbol">get</span> entities<span class="tsd-signature-symbol">(</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><a href="entity.html" class="tsd-signature-type" data-tsd-kind="Class">Entity</a><span class="tsd-signature-symbol">[]</span></li>
-					</ul>
-					<ul class="tsd-descriptions">
-						<li class="tsd-description">
-							<aside class="tsd-sources">
-								<ul>
-									<li>Defined in <a href="https://github.com/phughesmcr/Miski/blob/fe858fb/src/query/query.ts#L58">query/query.ts:58</a></li>
-								</ul>
-							</aside>
-							<h4 class="tsd-returns-title">Returns <a href="entity.html" class="tsd-signature-type" data-tsd-kind="Class">Entity</a><span class="tsd-signature-symbol">[]</span></h4>
-						</li>
-					</ul>
-				</section>
 				<section class="tsd-panel tsd-member tsd-kind-get-signature tsd-parent-kind-class">
 					<a name="size" class="tsd-anchor"></a>
 					<h3>size</h3>
@@ -266,7 +239,7 @@
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<ul>
-									<li>Defined in <a href="https://github.com/phughesmcr/Miski/blob/fe858fb/src/query/query.ts#L62">query/query.ts:62</a></li>
+									<li>Defined in <a href="https://github.com/phughesmcr/Miski/blob/16d40b7/src/query/query.ts#L48">query/query.ts:48</a></li>
 								</ul>
 							</aside>
 							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">number</span></h4>
@@ -276,6 +249,40 @@
 			</section>
 			<section class="tsd-panel-group tsd-member-group ">
 				<h2>Methods</h2>
+				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-class tsd-is-private">
+					<a name="_refresh" class="tsd-anchor"></a>
+					<h3><span class="tsd-flag ts-flagPrivate">Private</span> _refresh</h3>
+					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-class tsd-is-private">
+						<li class="tsd-signature tsd-kind-icon">_refresh<span class="tsd-signature-symbol">(</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">void</span></li>
+					</ul>
+					<ul class="tsd-descriptions">
+						<li class="tsd-description">
+							<aside class="tsd-sources">
+								<ul>
+									<li>Defined in <a href="https://github.com/phughesmcr/Miski/blob/16d40b7/src/query/query.ts#L67">query/query.ts:67</a></li>
+								</ul>
+							</aside>
+							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">void</span></h4>
+						</li>
+					</ul>
+				</section>
+				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-class">
+					<a name="getentities" class="tsd-anchor"></a>
+					<h3>get<wbr>Entities</h3>
+					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-class">
+						<li class="tsd-signature tsd-kind-icon">get<wbr>Entities<span class="tsd-signature-symbol">(</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><a href="entity.html" class="tsd-signature-type" data-tsd-kind="Class">Entity</a><span class="tsd-signature-symbol">[]</span></li>
+					</ul>
+					<ul class="tsd-descriptions">
+						<li class="tsd-description">
+							<aside class="tsd-sources">
+								<ul>
+									<li>Defined in <a href="https://github.com/phughesmcr/Miski/blob/16d40b7/src/query/query.ts#L52">query/query.ts:52</a></li>
+								</ul>
+							</aside>
+							<h4 class="tsd-returns-title">Returns <a href="entity.html" class="tsd-signature-type" data-tsd-kind="Class">Entity</a><span class="tsd-signature-symbol">[]</span></h4>
+						</li>
+					</ul>
+				</section>
 				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-class">
 					<a name="hasentity" class="tsd-anchor"></a>
 					<h3>has<wbr>Entity</h3>
@@ -286,7 +293,7 @@
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<ul>
-									<li>Defined in <a href="https://github.com/phughesmcr/Miski/blob/fe858fb/src/query/query.ts#L66">query/query.ts:66</a></li>
+									<li>Defined in <a href="https://github.com/phughesmcr/Miski/blob/16d40b7/src/query/query.ts#L56">query/query.ts:56</a></li>
 								</ul>
 							</aside>
 							<h4 class="tsd-parameters-title">Parameters</h4>
@@ -309,7 +316,7 @@
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<ul>
-									<li>Defined in <a href="https://github.com/phughesmcr/Miski/blob/fe858fb/src/query/query.ts#L70">query/query.ts:70</a></li>
+									<li>Defined in <a href="https://github.com/phughesmcr/Miski/blob/16d40b7/src/query/query.ts#L60">query/query.ts:60</a></li>
 								</ul>
 							</aside>
 							<h4 class="tsd-parameters-title">Parameters</h4>
@@ -332,7 +339,7 @@
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<ul>
-									<li>Defined in <a href="https://github.com/phughesmcr/Miski/blob/fe858fb/src/query/query.ts#L77">query/query.ts:77</a></li>
+									<li>Defined in <a href="https://github.com/phughesmcr/Miski/blob/16d40b7/src/query/query.ts#L88">query/query.ts:88</a></li>
 								</ul>
 							</aside>
 							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">void</span></h4>
@@ -372,9 +379,6 @@
 								<a href="query.html#_any" class="tsd-kind-icon">_any</a>
 							</li>
 							<li class=" tsd-kind-property tsd-parent-kind-class tsd-is-private">
-								<a href="query.html#_cache" class="tsd-kind-icon">_cache</a>
-							</li>
-							<li class=" tsd-kind-property tsd-parent-kind-class tsd-is-private">
 								<a href="query.html#_mskall" class="tsd-kind-icon">_msk<wbr>All</a>
 							</li>
 							<li class=" tsd-kind-property tsd-parent-kind-class tsd-is-private">
@@ -393,10 +397,13 @@
 								<a href="query.html#_world" class="tsd-kind-icon">_world</a>
 							</li>
 							<li class=" tsd-kind-get-signature tsd-parent-kind-class">
-								<a href="query.html#entities" class="tsd-kind-icon">entities</a>
-							</li>
-							<li class=" tsd-kind-get-signature tsd-parent-kind-class">
 								<a href="query.html#size" class="tsd-kind-icon">size</a>
+							</li>
+							<li class=" tsd-kind-method tsd-parent-kind-class tsd-is-private">
+								<a href="query.html#_refresh" class="tsd-kind-icon">_refresh</a>
+							</li>
+							<li class=" tsd-kind-method tsd-parent-kind-class">
+								<a href="query.html#getentities" class="tsd-kind-icon">get<wbr>Entities</a>
 							</li>
 							<li class=" tsd-kind-method tsd-parent-kind-class">
 								<a href="query.html#hasentity" class="tsd-kind-icon">has<wbr>Entity</a>
@@ -454,10 +461,11 @@
 				<li class="tsd-kind-accessor tsd-parent-kind-class"><span class="tsd-kind-icon">Accessor</span></li>
 			</ul>
 			<ul class="tsd-legend">
-				<li class="tsd-kind-property tsd-parent-kind-interface"><span class="tsd-kind-icon">Property</span></li>
+				<li class="tsd-kind-property tsd-parent-kind-class tsd-is-private"><span class="tsd-kind-icon">Private property</span></li>
+				<li class="tsd-kind-method tsd-parent-kind-class tsd-is-private"><span class="tsd-kind-icon">Private method</span></li>
 			</ul>
 			<ul class="tsd-legend">
-				<li class="tsd-kind-property tsd-parent-kind-class tsd-is-private"><span class="tsd-kind-icon">Private property</span></li>
+				<li class="tsd-kind-property tsd-parent-kind-interface"><span class="tsd-kind-icon">Property</span></li>
 			</ul>
 		</div>
 	</div>
