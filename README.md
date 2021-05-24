@@ -175,7 +175,61 @@ onTick(0);
 See `./demo` for more interesting working examples.
 
 ## Benchmarks
-See [ddmills/js-ecs-benchmarks](https://github.com/ddmills/js-ecs-benchmarks).
+[ddmills/js-ecs-benchmarks](https://github.com/ddmills/js-ecs-benchmarks) results for 0.3.0:
+
+```
+Suite Add/Remove (5000 iterations)
+  - fastecs         12ms     60089ms    15000 updates       0.0% fastest
+  - bitecs          32ms    161606ms  25010000 updates     168.9% slower
+  - perform-ecs     55ms    276041ms  25010000 updates     359.4% slower
+  - uecs            60ms    301533ms  25010000 updates     401.8% slower
+  - geotic (v4)     81ms    405695ms  25010000 updates     575.2% slower
+  - yagl-ecs       105ms    525279ms  25010000 updates     774.2% slower
+  - tiny-ecs       150ms    750824ms  25010000 updates    1149.5% slower
+  - nano-ecs       223ms   1114682ms  25010000 updates    1755.1% slower
+  - miski          379ms   1894463ms                 ?    3052.8% slower
+  - ape-ecs        552ms   2762271ms  25010000 updates    4497.0% slower
+  - geotic (v3)   2635ms  13177163ms  25010000 updates   21829.4% slower
+
+Suite Additions (100000 iterations)
+  - bitecs           0ms     21040ms       0.0% fastest
+  - yagl-ecs         1ms     65114ms     209.5% slower
+  - tiny-ecs         1ms    141095ms     570.6% slower
+  - uecs             2ms    159334ms     657.3% slower
+  - nano-ecs         2ms    197827ms     840.2% slower
+  - geotic (v4)      3ms    301895ms    1334.8% slower
+  - fastecs          3ms    305888ms    1353.8% slower
+  - perform-ecs      3ms    322302ms    1431.8% slower
+  - ape-ecs          8ms    826375ms    3827.6% slower
+  - miski           11ms   1123688ms    5240.6% slower
+  - geotic (v3)     13ms   1337423ms    6256.5% slower
+
+Suite Destroy (100000 iterations)
+  - bitecs           2ms    168018ms       0.0% fastest
+  - uecs             2ms    216921ms      29.1% slower
+  - tiny-ecs         2ms    221882ms      32.1% slower
+  - nano-ecs         3ms    308669ms      83.7% slower
+  - perform-ecs      3ms    328951ms      95.8% slower
+  - geotic (v4)      5ms    471950ms     180.9% slower
+  - fastecs          7ms    707468ms     321.1% slower
+  - ape-ecs          8ms    752111ms     347.6% slower
+  - miski            9ms    923467ms     449.6% slower
+  - geotic (v3)     15ms   1457818ms     767.7% slower
+  - yagl-ecs        25ms   2520367ms    1400.1% slower
+
+Suite Velocity (2000 iterations)
+  - bitecs          11ms     22492ms 2001000 updates       0.0% fastest
+  - uecs            13ms     25924ms 2001000 updates      15.3% slower
+  - perform-ecs     13ms     25981ms 2001000 updates      15.5% slower
+  - fastecs         14ms     28492ms 2001000 updates      26.7% slower
+  - yagl-ecs        16ms     32555ms 2001000 updates      44.7% slower
+  - geotic (v4)     17ms     33086ms 2001000 updates      47.1% slower
+  - tiny-ecs        18ms     36833ms 2001000 updates      63.8% slower
+  - nano-ecs        26ms     51134ms 2001000 updates     127.3% slower
+  - miski           67ms    134208ms               ?     496.7% slower
+  - ape-ecs        118ms    235000ms 2001000 updates     944.8% slower
+  - geotic (v3)    516ms   1032155ms 2001000 updates    4489.0% slower
+```
 
 ## Goals
 * To provide a stable, readable ECS architecture using ES2020+ features
