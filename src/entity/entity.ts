@@ -41,7 +41,7 @@ export class Entity implements Toggleable, Poolable<Entity> {
     this._next = next;
   }
 
-  addComponent<T>(component: Component<T>, properties?: T): boolean {
+  addComponent<T>(component: Component<T>, properties?: T): this {
     if (typeof component === 'string') {
       const tmp = this._world.getComponentByName(component);
       if (tmp) {
@@ -84,26 +84,29 @@ export class Entity implements Toggleable, Poolable<Entity> {
       const prev = this._archetype.value;
       this._archetype.on(component.id);
       this._world.updateArchetype(this, prev);
-      return true;
+      return this;
     } else {
       throw new SyntaxError('Invalid or unregistered component.');
     }
   }
 
-  clear(): void {
+  clear(): this {
     Object.keys(this._properties).forEach((key) => delete this[key]);
     this._properties.clear();
     const prev = this._archetype.value;
     this._archetype.clear();
     this._world.updateArchetype(this, prev);
+    return this;
   }
 
-  disable(): void {
+  disable(): this {
     this._enabled = false;
+    return this;
   }
 
-  enable(): void {
+  enable(): this {
     this._enabled = true;
+    return this;
   }
 
   getArchetype(): bigint {
@@ -115,7 +118,7 @@ export class Entity implements Toggleable, Poolable<Entity> {
     return Boolean(Reflect.has(this._properties, name));
   }
 
-  removeComponent<T>(component: Component<T>): boolean {
+  removeComponent<T>(component: Component<T>): this {
     if (typeof component === 'string') {
       const tmp = this._world.getComponentByName(component);
       if (tmp) {
@@ -136,6 +139,6 @@ export class Entity implements Toggleable, Poolable<Entity> {
     const prev = this._archetype.value;
     this._archetype.off(component.id);
     this._world.updateArchetype(this, prev);
-    return true;
+    return this;
   }
 }
