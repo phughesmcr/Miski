@@ -32,11 +32,6 @@ export interface Toggleable {
   enable: () => void;
 }
 
-/** Returns the intersection between two bits */
-export function bitIntersection(a: bigint, b: bigint): bigint {
-  return a & b;
-}
-
 /** Clamps a value between two extremes */
 export function clamp(n: number, min?: number, max?: number): number {
   if (min != undefined && n < min) return min;

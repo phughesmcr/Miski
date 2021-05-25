@@ -3,7 +3,6 @@
 
 import { Component } from '../component/component';
 import { Entity } from '../entity/entity';
-import { bitIntersection } from '../utils';
 import { World } from '../world';
 
 type ArchetypeRegistry = Map<bigint, Set<Entity>>;
@@ -77,7 +76,7 @@ function createGetEntitiesByComponents(registry: ArchetypeRegistry) {
     const entities: Set<Entity> = new Set();
     components.forEach((component) => {
       registry.forEach((archetype, id) => {
-        if (bitIntersection(component.id, id) > 0) {
+        if ((component.id & id) > 0) {
           archetype.forEach((entity) => entities.add(entity));
         }
       });
