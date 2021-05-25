@@ -10,29 +10,11 @@ export interface StepManagerSpec {
 
 export interface StepManager {
   /**
-   * Perform the world's pre-update step
-   * @returns the world
-   */
-  pre: () => World;
-  /**
-   * Perform the world's post-update step
-   * @param int the step's interpolation alpha
-   * @returns the world
-   */
-  post: (int: number) => World;
-  /**
    * Perform one complete step.
    * i.e. Pre > Update > Post
-   * @param time the current time (e.g., from requestAnimationFrame)
-   * @returns the world
+   * @param time the current DOMHighResTimeStamp (e.g., from requestAnimationFrame)
    */
-  step: (time: number) => World;
-  /**
-   * Perform the world's post-update step
-   * @param dt the step's delta time
-   * @returns the world
-   */
-  update: (dt: number) => World;
+  step: (time: number) => void;
 }
 
 function createPre(world: World) {
@@ -56,24 +38,27 @@ function createStep(maxUpdates: number, tempo: number, world: World) {
   let lastUpdate = 0;
   const dt = tempo;
 
-  return function step(time: DOMHighResTimeStamp | number = 0): World {
+  const pre = createPre(world);
+  const post = createPost(world);
+  const update = createUpdate(world);
+
+  return function step(time: DOMHighResTimeStamp | number = 0): void {
     if (lastTime !== null) {
       acc += (time - lastTime) * 0.001;
       lastUpdate = 0;
-      world.pre();
+      pre();
       while (acc > dt) {
         if (lastUpdate >= maxUpdates) {
           acc = 1;
           break;
         }
-        world.update(dt);
+        update(dt);
         acc -= dt;
         lastUpdate++;
       }
     }
     lastTime = time;
-    world.post(acc / tempo);
-    return world;
+    post(acc / tempo);
   };
 }
 
@@ -88,9 +73,6 @@ export function createStepManager(world: World, spec: StepManagerSpec): StepMana
   const { maxUpdates, tempo } = spec;
 
   return {
-    post: createPost(world),
-    pre: createPre(world),
     step: createStep(maxUpdates, tempo, world),
-    update: createUpdate(world),
   };
 }

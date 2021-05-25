@@ -52,10 +52,7 @@ export interface World {
   refreshQueries: () => World;
   unregisterQuery: (query: Query) => World;
   // step manager
-  pre: () => World;
-  post: (int: number) => World;
   step: (time: number) => World;
-  update: (dt: number) => World;
   // system manager
   getSystems: () => System[];
   getPostSystems: () => System[];
