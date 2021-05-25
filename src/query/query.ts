@@ -4,7 +4,6 @@
 
 import { Component } from '../component/component';
 import { Entity } from '../entity/entity';
-import { Mask } from '../mask/mask';
 import { World } from '../world';
 
 export interface QuerySpec {
@@ -16,11 +15,11 @@ export interface QuerySpec {
   none?: Component<unknown>[],
 }
 
-function maskFromComponents(components: Component<unknown>[]): Mask {
-  return components.reduce((mask, current) => {
-    mask.on(current.id);
+function maskFromComponents(components: Component<unknown>[]): bigint {
+  return components.reduce((mask, component) => {
+    mask |= (1n << component.id);
     return mask;
-  }, new Mask()) ?? new Mask();
+  }, 0n);
 }
 
 export class Query {
@@ -37,9 +36,9 @@ export class Query {
       none = [],
     } = spec;
 
-    this._mskAll = maskFromComponents(all).value;
-    this._mskAny = maskFromComponents(any).value;
-    this._mskNone = maskFromComponents(none).value;
+    this._mskAll = maskFromComponents(all);
+    this._mskAny = maskFromComponents(any);
+    this._mskNone = maskFromComponents(none);
 
     this._registry = new Set();
     this._world = world;

@@ -2,7 +2,6 @@
 "use strict";
 
 import { Component } from '../component/component';
-import { Mask } from '../mask/mask';
 import { Poolable } from '../pool/pool';
 import { deepAssignObjects, Toggleable } from '../utils';
 import { World } from '../world';
@@ -12,7 +11,7 @@ export interface Entity {
 }
 
 export class Entity implements Toggleable, Poolable<Entity> {
-  private _archetype: Mask;
+  private _archetype: bigint;
   private _enabled: boolean;
   private _next: Entity | null;
   private _properties: Map<Component<unknown>, Record<string, unknown>>;
@@ -21,7 +20,7 @@ export class Entity implements Toggleable, Poolable<Entity> {
 
   constructor(world: World) {
     this.id = `${Date.now().toString(36)}_${Math.random().toString(36).substr(2, 9)}`;
-    this._archetype = new Mask();
+    this._archetype = 0n;
     this._enabled = false;
     this._next = null;
     this._properties = new Map();
@@ -81,8 +80,8 @@ export class Entity implements Toggleable, Poolable<Entity> {
         enumerable: true,
         configurable: true,
       });
-      const prev = this._archetype.value;
-      this._archetype.on(component.id);
+      const prev = this._archetype;
+      this._archetype |= (1n << component.id);
       this._world.updateArchetype(this, prev);
       return this;
     } else {
@@ -91,8 +90,8 @@ export class Entity implements Toggleable, Poolable<Entity> {
   }
 
   clear(): this {
-    const prev = this._archetype.value;
-    this._archetype.clear();
+    const prev = this._archetype;
+    this._archetype = 0n;
     this._world.updateArchetype(this, prev);
     Object.keys(this._properties).forEach((key) => delete this[key]);
     this._properties.clear();
@@ -110,7 +109,7 @@ export class Entity implements Toggleable, Poolable<Entity> {
   }
 
   getArchetype(): bigint {
-    return this._archetype.value;
+    return this._archetype;
   }
 
   hasComponent<T>(component: Component<T> | string): boolean {
@@ -136,8 +135,8 @@ export class Entity implements Toggleable, Poolable<Entity> {
     } catch (err) {
       console.warn(`Could not remove property ${component.name} from entity.`);
     }
-    const prev = this._archetype.value;
-    this._archetype.off(component.id);
+    const prev = this._archetype;
+    this._archetype &= ~(1n << component.id);
     this._world.updateArchetype(this, prev);
     return this;
   }
