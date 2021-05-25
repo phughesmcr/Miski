@@ -5,7 +5,6 @@
 import { Component } from '../component/component';
 import { Entity } from '../entity/entity';
 import { Mask } from '../mask/mask';
-import { bitIntersection } from '../utils';
 import { World } from '../world';
 
 export interface QuerySpec {
@@ -17,31 +16,33 @@ export interface QuerySpec {
   none?: Component<unknown>[],
 }
 
+function maskFromComponents(components: Component<unknown>[]): Mask {
+  return components.reduce((mask, current) => {
+    mask.on(current.id);
+    return mask;
+  }, new Mask()) ?? new Mask();
+}
+
 export class Query {
-  private _all: Set<Component<unknown>>;
-  private _any: Set<Component<unknown>>;
-  private _none: Set<Component<unknown>>;
-
-  private _mskAll: Mask;
-  private _mskAny: Mask;
-  private _mskNone: Mask;
-
+  private _mskAll: bigint;
+  private _mskAny: bigint;
+  private _mskNone: bigint;
   private _registry: Set<Entity>;
   private _world: World;
 
   constructor(world: World, spec: QuerySpec) {
+    const {
+      all = [],
+      any = [],
+      none = [],
+    } = spec;
+
+    this._mskAll = maskFromComponents(all).value;
+    this._mskAny = maskFromComponents(any).value;
+    this._mskNone = maskFromComponents(none).value;
+
     this._registry = new Set();
     this._world = world;
-
-    this._all = new Set(spec.all);
-    this._any = new Set(spec.any);
-    this._none = new Set(spec.none);
-
-    this._mskAll = new Mask();
-    this._mskAny = new Mask();
-    this._mskNone = new Mask();
-
-    this._refresh();
   }
 
   get size(): number {
@@ -57,31 +58,10 @@ export class Query {
   }
 
   matches(archetype: bigint): boolean {
-    const _any = this._mskAny.value === 0n || bitIntersection(archetype, this._mskAny.value) > 0;
-    const _all = bitIntersection(archetype, this._mskAll.value) === this._mskAll.value;
-    const _none = bitIntersection(archetype, this._mskNone.value) === 0n;
+    const _any = this._mskAny === 0n || (archetype & this._mskAny) > 0;
+    const _all = (archetype & this._mskAll) === this._mskAll;
+    const _none = (archetype & this._mskNone) === 0n;
     return _any && _all && _none;
-  }
-
-  private _refresh(): void {
-    this._all.forEach((component) => {
-      this._mskAll.on(component.id);
-      if (component.isRegistered() === false) {
-        console.warn(`Query has unregistered component ("${component.id}") in _all.`, this);
-      }
-    });
-    this._any.forEach((component) => {
-      this._mskAny.on(component.id);
-      if (component.isRegistered() === true) {
-        console.warn(`Query has unregistered component ("${component.id}") in _any.`, this);
-      }
-    });
-    this._none.forEach((component) => {
-      this._mskNone.on(component.id);
-      if (component.isRegistered() === true) {
-        console.warn(`Query has unregistered component ("${component.id}") in _none.`, this);
-      }
-    });
   }
 
   update(): void {
