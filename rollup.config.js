@@ -73,7 +73,7 @@ export default [
       }),
     ],
 
-    output: {
+    output: [{
       banner: bannerText,
       esModule: true,
       exports: 'named',
@@ -82,6 +82,15 @@ export default [
       sourcemap: true,
       globals,
     },
+    {
+      banner: bannerText,
+      esModule: true,
+      exports: 'named',
+      file: './demo/miski.min.js',
+      format: "es",
+      sourcemap: true,
+      globals,
+    }],
   },
 
   // CJS
@@ -176,7 +185,7 @@ export default [
       }),
     ],
 
-    output: [{
+    output: {
       banner: bannerText,
       esModule: false,
       exports: 'named',
@@ -186,7 +195,7 @@ export default [
       noConflict: true,
       sourcemap: true,
       globals,
-    }]
+    }
   },
 
   // BROWSER IIFE
@@ -230,7 +239,7 @@ export default [
       }),
     ],
 
-    output: [{
+    output: {
       banner: bannerText,
       esModule: false,
       exports: 'named',
@@ -239,7 +248,7 @@ export default [
       name: pkgName,
       sourcemap: true,
       globals,
-    }],
+    },
   },
 
   // TYPESCRIPT DECLARATIONS
