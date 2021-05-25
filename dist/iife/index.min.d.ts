@@ -1,13 +1,3 @@
-declare class Archetype {
-    private _registry;
-    readonly id: bigint;
-    constructor(id: bigint, initialEntities?: Entity[]);
-    addEntity(entity: Entity): void;
-    getEntities(): Entity[];
-    isEmpty(): boolean;
-    removeEntity(entity: Entity): void;
-}
-
 interface QuerySpec {
     /** Gather entities as long as they have all these components */
     all?: Component<unknown>[];
@@ -17,9 +7,6 @@ interface QuerySpec {
     none?: Component<unknown>[];
 }
 declare class Query {
-    private _all;
-    private _any;
-    private _none;
     private _mskAll;
     private _mskAny;
     private _mskNone;
@@ -30,7 +17,6 @@ declare class Query {
     getEntities(): Entity[];
     hasEntity(entity: Entity): boolean;
     matches(archetype: bigint): boolean;
-    private _refresh;
     update(): void;
 }
 
@@ -98,10 +84,12 @@ interface WorldSpec {
 interface World {
     FORBIDDEN_NAMES: Readonly<string[]>;
     global: Entity;
-    getArchetype: (id: bigint) => Archetype | undefined;
-    getArchetypes: () => Archetype[];
+    addEntitiesToArchetype: (archetype: bigint, ...entities: Entity[]) => World;
+    getArchetypes: () => [bigint, Set<Entity>][];
+    getEntitiesFromArchetype: (archetype: bigint) => Set<Entity> | undefined;
     getEntitiesByComponents: (...components: Component<unknown>[]) => Entity[];
-    isArchetypeRegistered: (archetype: Archetype) => boolean;
+    isArchetypeEmpty: (archetype: bigint) => boolean;
+    removeEntitiesFromArchetype: (archetype: bigint, ...entities: Entity[]) => World;
     updateArchetype: (entity: Entity, prev?: bigint) => World;
     getComponentById: (id: bigint) => Component<unknown> | undefined;
     getComponentByName: (name: string) => Component<unknown> | undefined;
@@ -118,10 +106,7 @@ interface World {
     registerQuery: (spec: QuerySpec) => Query;
     refreshQueries: () => World;
     unregisterQuery: (query: Query) => World;
-    pre: () => World;
-    post: (int: number) => World;
     step: (time: number) => World;
-    update: (dt: number) => World;
     getSystems: () => System[];
     getPostSystems: () => System[];
     getPreSystems: () => System[];
@@ -167,13 +152,13 @@ declare class Entity implements Toggleable, Poolable<Entity> {
     get enabled(): boolean;
     get next(): Entity | null;
     set next(next: Entity | null);
-    addComponent<T>(component: Component<T>, properties?: T): boolean;
-    clear(): void;
-    disable(): void;
-    enable(): void;
+    addComponent<T>(component: Component<T>, properties?: T): this;
+    clear(): this;
+    disable(): this;
+    enable(): this;
     getArchetype(): bigint;
     hasComponent<T>(component: Component<T> | string): boolean;
-    removeComponent<T>(component: Component<T>): boolean;
+    removeComponent<T>(component: Component<T>): this;
 }
 
 interface ComponentSpec<T> {

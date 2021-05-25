@@ -1,11 +1,11 @@
 // based on ECSY's canvas demo - https://github.com/ecsyjs/ecsy/blob/dev/site/examples/canvas/
 "use strict";
 
-import { createWorld } from "./miski.min.js";
+import { createWorld } from "../miski.min.js";
 import { fillCircle, drawLine, intersection, random } from "./utils.js";
 
-const WIDTH = 1920;
-const HEIGHT = 1080;
+const WIDTH = 1280;
+const HEIGHT = 720;
 
 const world = createWorld();
 window.world = world;
@@ -54,8 +54,8 @@ const cCanvasContext = world.registerComponent({
   name: "Canvas",
   defaults: {
     ctx: undefined,
-    width: 1920,
-    height: 1080,
+    width: window.innerWidth,
+    height: window.innerHeight,
   },
 });
 

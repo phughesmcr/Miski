@@ -2,12 +2,25 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover'">
   <title>Miski Demo</title>
   <meta name="description" content="Based on ECSY's 2d Canvas Demo">
   <meta name="msapplication-tap-highlight" content="no">
   <script type="module" src="demo.js"></script>
   <style>
+    :root {
+      --app-height: 100vh;
+    }
+    *,
+    *::before,
+    *::after {
+      box-sizing: inherit;
+    }
+    *:focus:not(:focus-visible),
+    *::before:focus:not(:focus-visible),
+    *::after:focus:not(:focus-visible) {
+      outline: none;
+    }
     html, body, canvas {
       -webkit-tap-highlight-color: transparent;
       backface-visibility: hidden;
@@ -16,14 +29,24 @@
       margin: 0;
       padding: 0;
     }
+    html {
+      height: 100vh;
+      height: -webkit-fill-available;
+      height: var(--app-height);
+    }
     body {
+      height: 100vh;
+      min-height: -webkit-fill-available;
+      min-height: var(--app-height);
       position: relative;
       display: flex;
       background-color: black;
       overflow: hidden;
     }
-    canvas {
+    main {
       flex: 1;
+    }
+    canvas {
       touch-action: none;
       user-select: none;
       width: 100%;
@@ -35,13 +58,17 @@
       image-rendering: optimize-contrast;
       -ms-interpolation-mode: nearest-neighbor;
     }
+    p {
+      margin: 0;
+      padding: 0;
+    }
     .top, .btm {
       position: absolute;
       width: fit-content;
       height: fit-content;
-      background-color: rgba(0, 255, 255, 0.2);
+      background-color: rgba(0, 255, 255, 0.4);
       padding: 5px;
-      border-radius: 4px;
+      border-radius: 0 4px 4px 0;
       left: 0;
     }
     .btm {
@@ -58,15 +85,32 @@
     .top {
       top: 0;
     }
+    /* iOS devices */
+    @supports(padding: max(0px)) {
+      body {
+        padding-left: max(0, env(safe-area-inset-left));
+        padding-right: max(0, env(safe-area-inset-right));
+      }
+    }
   </style>
 </head>
 <body>
-  <div class="top">
-    <p><span id="fps">29</span> FPS</p>
-  </div>
-  <canvas width="1280" height="720" tabindex="-1"></canvas>
-  <div class="btm">
-    <p>Based on the <a href="https://ecsy.io/" target="_blank" rel="noopener noreferrer">ECSY 2d canvas demo</a></p>
-  </div>
+  <main>
+    <div class="top">
+      <p><span id="fps">??</span> FPS</p>
+    </div>
+    <canvas width="1280" height="720" tabindex="-1"></canvas>
+    <div class="btm">
+      <p>Based on the <a href="https://ecsy.io/" target="_blank" rel="noopener noreferrer">ECSY canvas demo</a></p>
+    </div>
+  </main>
+  <script>
+    const appHeight = () => {
+      const doc = document.documentElement;
+      doc.style.setProperty('--app-height', `${window.innerHeight}px`);
+    };
+    window.addEventListener('resize', appHeight);
+    appHeight();
+  </script>
 </body>
 </html>
