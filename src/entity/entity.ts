@@ -91,11 +91,11 @@ export class Entity implements Toggleable, Poolable<Entity> {
   }
 
   clear(): this {
-    Object.keys(this._properties).forEach((key) => delete this[key]);
-    this._properties.clear();
     const prev = this._archetype.value;
     this._archetype.clear();
     this._world.updateArchetype(this, prev);
+    Object.keys(this._properties).forEach((key) => delete this[key]);
+    this._properties.clear();
     return this;
   }
 
