@@ -2,7 +2,6 @@
 // Based heavily on Geotic's queries (@see https://github.com/ddmills/geotic). MIT license.
 "use strict";
 
-import { Archetype } from '../archetype/archetype';
 import { Component } from '../component/component';
 import { Entity } from '../entity/entity';
 import { Mask } from '../mask/mask';
@@ -86,12 +85,9 @@ export class Query {
   }
 
   update(): void {
-    this._refresh();
     this._registry.clear();
-    this._world.getArchetypes().forEach((archetype: Archetype) => {
-      if (this.matches(archetype.id)) {
-        archetype.getEntities().forEach((entity) => this._registry.add(entity));
-      }
+    this._world.getArchetypes().forEach(([id, archetype]) => {
+      if (this.matches(id)) archetype.forEach((entity) => this._registry.add(entity));
     });
   }
 }

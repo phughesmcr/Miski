@@ -1,7 +1,6 @@
 // Copyright (c) 2021 P. Hughes. All rights reserved. MIT license.
 "use strict";
 
-import { Archetype } from './archetype/archetype';
 import { createArchetypeManager } from './archetype/archetype-manager';
 import { Component, ComponentSpec } from './component/component';
 import { createComponentManager } from "./component/component-manager";
@@ -27,10 +26,12 @@ export interface World {
   FORBIDDEN_NAMES: Readonly<string[]>,
   global: Entity;
   // archetype manager
-  getArchetype: (id: bigint) => Archetype | undefined;
-  getArchetypes: () => Archetype[];
+  addEntitiesToArchetype: (archetype: bigint, ...entities: Entity[]) => World;
+  getArchetypes: () => [bigint, Set<Entity>][];
+  getEntitiesFromArchetype: (archetype: bigint) => Set<Entity> | undefined;
   getEntitiesByComponents: (...components: Component<unknown>[]) => Entity[];
-  isArchetypeRegistered: (archetype: Archetype) => boolean;
+  isArchetypeEmpty: (archetype: bigint) => boolean;
+  removeEntitiesFromArchetype: (archetype: bigint, ...entities: Entity[]) => World;
   updateArchetype: (entity: Entity, prev?: bigint) => World;
   // component manager
   getComponentById: (id: bigint) => Component<unknown> | undefined;
