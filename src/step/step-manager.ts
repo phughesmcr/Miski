@@ -47,30 +47,37 @@ function createStep(maxUpdates: number, tempo: number, world: World) {
   let acc = 0;
   let lastTime: DOMHighResTimeStamp | number | null = null;
   let lastUpdate = 0;
-  const dt = tempo;
 
   const pre = createPre(world);
   const post = createPost(world);
   const update = createUpdate(world);
 
-  return function step(time: DOMHighResTimeStamp | number = 0): void {
+  /**
+   * Perform one complete step.
+   * i.e. Pre > Update > Post
+   * @param time the current DOMHighResTimeStamp (e.g., from requestAnimationFrame)
+   * @param overrideTempo an optional override tempo. defaults to configured `WorldSpec.tempo` (e.g., 1/60).
+   */
+  function step(time: DOMHighResTimeStamp | number = 0, overrideTempo: number = tempo): void {
     if (lastTime !== null) {
       acc += (time - lastTime) * 0.001;
       lastUpdate = 0;
       pre();
-      while (acc > dt) {
+      while (acc > overrideTempo) {
         if (lastUpdate >= maxUpdates) {
           acc = 1;
           break;
         }
-        update(dt);
-        acc -= dt;
+        update(overrideTempo);
+        acc -= overrideTempo;
         lastUpdate++;
       }
     }
     lastTime = time;
     post(acc / tempo);
-  };
+  }
+
+  return step;
 }
 
 function createUpdate(world: World) {
