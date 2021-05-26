@@ -5,6 +5,8 @@ import { Query } from '../query/query-manager';
 import { World } from '../world';
 import { Entity } from './entity';
 
+export type EntityRegistry = Map<number, Entity>;
+
 export interface EntityManagerSpec {
   entityPoolGrowthFactor: number;
   initialEntityPoolSize: number;
@@ -27,14 +29,14 @@ export interface EntityManager {
   getEntities: (query?: Query) => Entity[]
   /**
    * Find an entity by its id
-   * @param id the entity's id string
+   * @param id the entity's id number
    */
-  getEntityById: (id: string) => Entity | undefined;
+  getEntityById: (id: number) => Entity | undefined;
   /** @returns true if the entity is registered in this world */
   isEntityRegistered: (entity: Entity) => boolean;
 }
 
-function createCreateEntity(pool: Pool<Entity>, registry: Map<string, Entity>, world: World) {
+function createCreateEntity(pool: Pool<Entity>, registry: EntityRegistry, world: World) {
   return function createEntity(): Entity {
     const entity = pool.get();
     if (!entity || !(entity instanceof Entity)) {
@@ -46,7 +48,7 @@ function createCreateEntity(pool: Pool<Entity>, registry: Map<string, Entity>, w
   };
 }
 
-function createDestroyEntity(pool: Pool<Entity>, registry: Map<string, Entity>, world: World) {
+function createDestroyEntity(pool: Pool<Entity>, registry: EntityRegistry, world: World) {
   return function destroyEntity(entity: Entity): boolean {
     if (entity === world.global) {
       throw new Error('Destroying the global entity is forbidden.');
@@ -62,19 +64,19 @@ function createDestroyEntity(pool: Pool<Entity>, registry: Map<string, Entity>, 
   };
 }
 
-function createGetEntities(registry: Map<string, Entity>, world: World) {
+function createGetEntities(registry: EntityRegistry, world: World) {
   return function getEntities(query?: Query): Entity[] {
     return (query) ? world.getEntitiesFromQuery(query) : [...registry.values()];
   };
 }
 
-function createGetEntityById(registry: Map<string, Entity>) {
-  return function getEntityById(id: string): Entity | undefined {
+function createGetEntityById(registry: EntityRegistry) {
+  return function getEntityById(id: number): Entity | undefined {
     return registry.get(id);
   };
 }
 
-function createIsEntityRegistered(registry: Map<string, Entity>) {
+function createIsEntityRegistered(registry: EntityRegistry) {
   return function isEntityRegistered(entity: Entity): boolean {
     return registry.has(entity.id) || [...registry.values()].includes(entity);
   };
@@ -100,7 +102,7 @@ export function createEntityManager(world: World, spec: EntityManagerSpec): Enti
     world,
   });
 
-  const registry: Map<string, Entity> = new Map() as Map<string, Entity>;
+  const registry: EntityRegistry = new Map();
 
   return {
     createEntity: createCreateEntity(pool, registry, world),

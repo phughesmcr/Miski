@@ -11,15 +11,17 @@ export interface Entity {
 }
 
 export class Entity implements Toggleable, Poolable<Entity> {
+  static _id = 0;
+
   private _archetype: bigint;
   private _enabled: boolean;
   private _next: Entity | null;
   private _properties: Map<Component<unknown>, Record<string, unknown>>;
   private _world: World;
-  readonly id: string;
+  readonly id: number;
 
   constructor(world: World) {
-    this.id = `${Date.now().toString(36)}_${Math.random().toString(36).substr(2, 9)}`;
+    this.id = Entity._id++;
     this._archetype = 0n;
     this._enabled = false;
     this._next = null;

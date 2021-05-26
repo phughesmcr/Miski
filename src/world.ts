@@ -45,7 +45,7 @@ export interface World {
   createEntity: () => Entity;
   destroyEntity: (entity: Entity) => boolean;
   getEntities: (query?: Query) => Entity[];
-  getEntityById: (id: string) => Entity | undefined;
+  getEntityById: (id: number) => Entity | undefined;
   isEntityRegistered: (entity: Entity) => boolean;
   // query manager
   getEntitiesFromQuery: (query: Query) => Entity[];
