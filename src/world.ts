@@ -1,13 +1,12 @@
 // Copyright (c) 2021 P. Hughes. All rights reserved. MIT license.
 "use strict";
 
-import { createArchetypeManager } from './archetype/archetype-manager';
+import { Archetype, createArchetypeManager } from './archetype/archetype-manager';
 import { Component, ComponentSpec } from './component/component';
 import { createComponentManager } from "./component/component-manager";
 import { Entity } from './entity/entity';
 import { createEntityManager } from './entity/entity-manager';
-import { Query, QuerySpec } from './query/query';
-import { createQueryManager } from './query/query-manager';
+import { Query, QuerySpec, createQueryManager } from './query/query-manager';
 import { createStepManager } from './step/step-manager';
 import { System, SystemSpec } from './system/system';
 import { createSystemManager } from './system/system-manager';
@@ -28,9 +27,11 @@ export interface World {
   // archetype manager
   addEntitiesToArchetype: (archetype: bigint, ...entities: Entity[]) => World;
   getArchetypes: () => [bigint, Set<Entity>][];
+  getDirtyArchetypes: () => [bigint, Set<Entity>][];
   getEntitiesFromArchetype: (archetype: bigint) => Set<Entity> | undefined;
   getEntitiesByComponents: (...components: Component<unknown>[]) => Entity[];
-  isArchetypeEmpty: (archetype: bigint) => boolean;
+  isArchetypeDirty: (archetype: Archetype) => boolean;
+  purgeDirtyArchetypeCache: () => World;
   removeEntitiesFromArchetype: (archetype: bigint, ...entities: Entity[]) => World;
   updateArchetype: (entity: Entity, prev?: bigint) => World;
   // component manager
@@ -43,10 +44,11 @@ export interface World {
   // entity manager
   createEntity: () => Entity;
   destroyEntity: (entity: Entity) => boolean;
-  getEntities: () => Entity[];
+  getEntities: (query?: Query) => Entity[];
   getEntityById: (id: string) => Entity | undefined;
   isEntityRegistered: (entity: Entity) => boolean;
   // query manager
+  getEntitiesFromQuery: (query: Query) => Entity[];
   isQueryRegistered: (query: Query) => boolean;
   registerQuery: (spec: QuerySpec) => Query;
   refreshQueries: () => World;

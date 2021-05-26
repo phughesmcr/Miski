@@ -2,7 +2,7 @@
 "use strict";
 
 import { Entity } from '../entity/entity';
-import { Query } from '../query/query';
+import { Query } from '../query/query-manager';
 import { Toggleable } from '../utils';
 import { World } from '../world';
 
@@ -16,9 +16,9 @@ export function noopUpdate(_entities: Entity[], _global: Entity, _dt?: number): 
 export interface SystemSpec {
   /**
    * The associated query to gather entities for this system. @see world.registerQuery()
-   * null queries will gather all entities in the world.
+   * undefined queries will gather all entities in the world.
    */
-  query?: Query | null;
+  query?: Query;
   /** The name of the system. Must be a valid property name. */
   name: string;
   /**
@@ -49,7 +49,7 @@ export class System implements Toggleable {
   private _enabled: boolean;
   private _world: World;
   readonly name: string;
-  readonly query: Query | null;
+  readonly query?: Query;
   readonly pre: (entities: Entity[], global: Entity) => void;
   readonly post: (entities: Entity[], global: Entity, int?: number) => void;
   readonly update: (entities: Entity[], global: Entity, dt?: number) => void;
@@ -57,7 +57,7 @@ export class System implements Toggleable {
   constructor(world: World, spec: SystemSpec) {
     const {
       name,
-      query = null,
+      query = undefined,
       pre = noopPre,
       post = noopPost,
       update = noopUpdate,
@@ -78,7 +78,7 @@ export class System implements Toggleable {
   }
 
   get entities(): Entity[] {
-    return (this.query === null) ? this._world.getEntities() : this.query.getEntities();
+    return this._world.getEntities(this.query);
   }
 
   disable(): void {

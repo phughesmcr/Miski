@@ -16,7 +16,7 @@
 export type { Component, ComponentSpec } from './component/component';
 export type { Entity } from './entity/entity';
 export type { Poolable } from './pool/pool';
-export type { Query, QuerySpec } from './query/query';
+export type { Query, QuerySpec } from './query/query-manager';
 export type { System, SystemSpec } from './system/system';
 export type { Toggleable } from './utils';
 export type { World, WorldSpec } from './world';

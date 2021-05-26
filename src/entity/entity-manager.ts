@@ -1,6 +1,7 @@
 "use strict";
 
 import { Pool } from '../pool/pool';
+import { Query } from '../query/query-manager';
 import { World } from '../world';
 import { Entity } from './entity';
 
@@ -18,8 +19,12 @@ export interface EntityManager {
    * @returns true if the entity was successfully destroyed.
    */
   destroyEntity: (entity: Entity) => boolean;
-  /** @returns an array of all entities in the world */
-  getEntities: () => Entity[];
+  /**
+   * Get an arrary of all entities in the world or in a query
+   * @param query get entities matching the query if provided
+   * @returns an array of all entities in the world or provided query
+   */
+  getEntities: (query?: Query) => Entity[]
   /**
    * Find an entity by its id
    * @param id the entity's id string
@@ -57,9 +62,9 @@ function createDestroyEntity(pool: Pool<Entity>, registry: Map<string, Entity>, 
   };
 }
 
-function createGetEntities(registry: Map<string, Entity>) {
-  return function getEntities(): Entity[] {
-    return [...registry.values()];
+function createGetEntities(registry: Map<string, Entity>, world: World) {
+  return function getEntities(query?: Query): Entity[] {
+    return (query) ? world.getEntitiesFromQuery(query) : [...registry.values()];
   };
 }
 
@@ -100,7 +105,7 @@ export function createEntityManager(world: World, spec: EntityManagerSpec): Enti
   return {
     createEntity: createCreateEntity(pool, registry, world),
     destroyEntity: createDestroyEntity(pool, registry, world),
-    getEntities: createGetEntities(registry),
+    getEntities: createGetEntities(registry, world),
     getEntityById: createGetEntityById(registry),
     isEntityRegistered: createIsEntityRegistered(registry),
   };
