@@ -38,6 +38,7 @@ function createPost(world: World) {
   function post(int = 0): World {
     world.getPostSystems().forEach((system) => system.post(system.entities, world.global, int));
     world.refreshQueries();
+    world.purgeDirtyArchetypeCache();
     return world;
   }
   return post;
