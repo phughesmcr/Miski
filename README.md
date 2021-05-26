@@ -14,14 +14,15 @@ Miski is currently in alpha. Expect breaking changes every version until beta.
   * [Example](#example)
   * [Demos](#demos)
   * [Benchmarks](#benchmarks)
-  * [Goals](#goals)
-  * [Not Goals](#not-goals)
-  * [To-Do](#to-do-before-100-release)
+  * [Purpose](#purpose)
+    + [Goals](#goals)
+    + [Not Goals](#not-goals)
+  * [To-Do](#to-do)
   * [Acknowledgements](#acknowledgements)
   * [License](#license)
 
 ## Requirements
-Miski requires `BigInt` support.
+Miski uses ES2020 features and requires `BigInt` support.
 
 ## Install
 
@@ -231,32 +232,31 @@ Suite Velocity (2000 iterations)
   - geotic (v3)    516ms   1032155ms 2001000 updates    4489.0% slower
 ```
 
-## Goals
-* To provide a stable, readable ECS architecture using ES2020+ features
+## Purpose
+Miski's purpose is to provide a stable, feature-complete ECS for modern browsers.
+
+### Goals
+* To provide a stable, explicit, declarative API
+* To provide reasonable, predictable performance
 * To provide a high level of customisability
 
-## Not Goals
+### Not Goals
 * To be the fastest / smallest ECS on the web
-* To conform a particular style of coding - function over form
 * To support the majority of web users / web environments
 * To provide polyfills / workarounds etc. for ES2020+ features / older browser support
 
-
-## To-Do Before 1.0.0 release
-### General
-0. Decide between object / integer based entities
-1. Finalise core API
+## To-Do
+### Before Beta
+1. Decide between object / integer based entities
+2. Finalise core API
+### Before 1.0.0
+1. Write argument validation for all functions requiring user input
 2. Write comprehensive tests
-3. Write consistent code documentation throughout
-4. Write argument validation for all functions requiring user input
-5. Ensure high-quality Typescript definitions throughout
-### Features
+3. Ensure high-quality Typescript definitions throughout
+4. Write consistent code documentation throughout
+### Future
 1. Add schemas and schema validation for component properties
-2. Ensure Typescript definitions work consistently
-3. Allow for deferred removal of entities, components and systems
-4. Allow for "changed" and "not" in queries
-5. Add a plugin support system
-
+2. Allow for "changed" in queries
 
 ## Acknowledgements
 Miski is inspired by [ape-ecs](https://github.com/fritzy/ape-ecs), [bitECS](https://github.com/NateTheGreatt/bitECS), [ECSY](https://github.com/ecsyjs/ecsy), [Geotic](https://github.com/ddmills/geotic), [HECS](https://github.com/gohyperr/hecs), and [classless.md](https://gist.github.com/mpj/17d8d73275bca303e8d2)
