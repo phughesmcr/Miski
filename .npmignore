@@ -17,3 +17,6 @@ jsconfig.json
 rollup.config.js
 tsconfig.json
 tsconfig.testing.json
+CODE_OF_CONDUCT.md
+CONTRIBUTING.md
+pull_request_template.md
