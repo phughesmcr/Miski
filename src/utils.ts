@@ -41,6 +41,7 @@ export function clamp(n: number, min?: number, max?: number): number {
 
 /** Check if a string is a valid property name */
 export function validName(str: string): boolean {
+  str = str.trim();
   return /^(?![0-9])[a-zA-Z0-9$_]+$/.test(str) && !(FORBIDDEN_NAMES.includes(str));
 }
 
