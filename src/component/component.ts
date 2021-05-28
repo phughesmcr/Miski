@@ -1,41 +1,68 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 // Copyright (c) 2021 P. Hughes. All rights reserved. MIT license.
 "use strict";
 
-import { Entity } from '../entity/entity';
-import { deepAssignObjects } from '../utils';
-import { World } from '../world';
+import { deepAssignObjects, isObject, validName } from '../utils';
 
-export interface ComponentSpec<T> {
+export interface ComponentSpec<T extends Record<keyof T, T>> {
   name: string;
   defaults: T;
 }
 
-export class Component<T> {
-  private _world: World;
-  readonly defaults: Readonly<T>;
-  readonly id: bigint;
-  readonly name: string;
+export interface Component<T> extends IComponent {
+  name: string;
+  defaults: T;
+}
 
-  constructor(world: World, id: bigint, spec: ComponentSpec<T>) {
-    const { name } = spec;
+interface IComponent {
+  isComponent: true;
+}
 
-    this.id = id;
-    this.name = name;
-    this._world = world;
+/**
+ * Component properties must be non-empty objects
+ * @param defaults the default properties object to validate
+ * @returns true if object is valid
+ */
+function isValidDefaults<T>(defaults: T): defaults is T {
+  return isObject(defaults) && Object.keys(defaults).length > 0;
+}
 
-    this.defaults = deepAssignObjects({}, spec.defaults as Record<string, unknown>) as T;
-    Object.keys(this.defaults).forEach((key) => {
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-      Object.defineProperty(this, key, Object.getOwnPropertyDescriptor(this.defaults, key)!);
-    });
+function Component(this: IComponent) {
+  this.isComponent = true;
+}
+
+/**
+ * Test if an object is a valid component
+ * @param component the object to test
+ * @returns true if the
+ */
+export function isComponent(object: unknown): object is Component<unknown> {
+  return object instanceof Component;
+}
+
+export function createComponent<T extends Record<keyof T, T>>(spec: ComponentSpec<T>): Component<T> {
+  const { name, defaults } = spec;
+
+  // check validity of name
+  if (!validName(name)) {
+    throw new SyntaxError(`"${name}" is not a valid component name.`);
   }
 
-  getEntities(): Entity[] {
-    return this._world.getEntitiesByComponents(this);
+  // check validity of properties
+  if(!isValidDefaults(defaults)) {
+    throw new TypeError(`Component "${name}"'s default properties are invalid.`);
   }
 
-  isRegistered(): boolean {
-    return this._world.isComponentRegistered(this);
-  }
+  // deep clone default properties
+  const _defaults = Object.freeze(deepAssignObjects({}, defaults as unknown as Record<string, unknown>));
+
+  return Object.create(Component, {
+    defaults: {
+      value: _defaults,
+      enumerable: true,
+    },
+    name: {
+      value: name,
+      enumerable: true,
+    },
+  }) as Component<T>;
 }

@@ -1,7 +1,7 @@
 // Copyright (c) 2021 P. Hughes. All rights reserved. MIT license.
 "use strict";
 
-import { Component } from '../component/component';
+import { Component, isComponent } from '../component/component';
 import { Poolable } from '../pool/pool';
 import { deepAssignObjects, Toggleable } from '../utils';
 import { World } from '../world';
@@ -29,7 +29,6 @@ export class Entity implements Toggleable, Poolable<Entity> {
     this._world = world;
   }
 
-
   get enabled(): boolean {
     return this._enabled;
   }
@@ -52,42 +51,46 @@ export class Entity implements Toggleable, Poolable<Entity> {
       }
     }
 
-    if (component instanceof Component) {
+    if (isComponent(component)) {
       if (this._properties.has(component)) {
         throw new Error(`Entity already has component "${component.name}".`);
       }
-      // eslint-disable-next-line max-len
-      this._properties.set(component, deepAssignObjects({}, component.defaults as Record<string, unknown>, properties??{}));
+      const id = this._world.getComponentId(component);
+      if (!id) {
+        throw new Error('Component is not registered.');
+      }
+      this._properties.set(
+        component,
+        deepAssignObjects(
+          {},
+          component.defaults as Record<string, unknown>,
+          properties ?? {},
+        )
+      );
       Object.defineProperty(this, component.name, {
         get: () => {
           return this._properties.get(component);
         },
         set: (val: T) => {
           const _c = this._properties.get(component);
-          if (Object.isFrozen(_c)) {
-            throw new Error(`Properties in component "${component.name}" cannot be modified.`);
-          } else if (_c) {
+          if (_c) {
             // Prevent accidental adding of new keys
             Object.entries(val).forEach(([key, prop]) => {
               if (key in _c) {
                 _c[key] = prop;
-              } else {
-                throw new Error(`Property "${key}" does not exist in component "${component.name}".`);
               }
             });
-          } else {
-            throw new Error(`Component "${component.name}" does not exist in entity.`);
           }
         },
         enumerable: true,
         configurable: true,
       });
       const prev = this._archetype;
-      this._archetype |= (1n << component.id);
+      this._archetype |= (1n << id);
       this._world.updateArchetype(this, prev);
       return this;
     } else {
-      throw new SyntaxError('Invalid or unregistered component.');
+      throw new SyntaxError('Invalid component.');
     }
   }
 
@@ -131,6 +134,10 @@ export class Entity implements Toggleable, Poolable<Entity> {
     if (!(this._properties.has(component))) {
       throw new Error(`Entity ${this.id} has no component "${component.name}".`);
     }
+    const id = this._world.getComponentId(component);
+    if (!id) {
+      throw new Error('Component is not registered.');
+    }
     this._properties.delete(component);
     try {
       delete this[component.name];
@@ -138,7 +145,7 @@ export class Entity implements Toggleable, Poolable<Entity> {
       console.warn(`Could not remove property ${component.name} from entity.`);
     }
     const prev = this._archetype;
-    this._archetype &= ~(1n << component.id);
+    this._archetype &= ~(1n << id);
     this._world.updateArchetype(this, prev);
     return this;
   }

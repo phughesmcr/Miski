@@ -2,7 +2,7 @@
 "use strict";
 
 import { Archetype, createArchetypeManager } from './archetype/archetype-manager';
-import { Component, ComponentSpec } from './component/component';
+import { Component } from './component/component';
 import { createComponentManager } from "./component/component-manager";
 import { Entity } from './entity/entity';
 import { createEntityManager } from './entity/entity-manager';
@@ -25,21 +25,22 @@ export interface World {
   FORBIDDEN_NAMES: Readonly<string[]>,
   global: Entity;
   // archetype manager
-  addEntitiesToArchetype: (archetype: bigint, ...entities: Entity[]) => World;
-  getArchetypes: () => [bigint, Set<Entity>][];
-  getDirtyArchetypes: () => [bigint, Set<Entity>][];
-  getEntitiesFromArchetype: (archetype: bigint) => Set<Entity> | undefined;
-  getEntitiesByComponents: (...components: Component<unknown>[]) => Entity[];
+  addEntitiesToArchetype: (archetype: Archetype, ...entities: Entity[]) => World;
+  getArchetypes: () => [Archetype, Set<Entity>][];
+  getDirtyArchetypes: () => [Archetype, Set<Entity>][];
+  getEntitiesFromArchetype: (archetype: Archetype) => Entity[] | undefined;
   isArchetypeDirty: (archetype: Archetype) => boolean;
   purgeDirtyArchetypeCache: () => World;
-  removeEntitiesFromArchetype: (archetype: bigint, ...entities: Entity[]) => World;
-  updateArchetype: (entity: Entity, prev?: bigint) => World;
+  removeEntitiesFromArchetype: (archetype: Archetype, ...entities: Entity[]) => World;
+  updateArchetype: (entity: Entity, prev?: Archetype) => World;
   // component manager
+  getComponentEntities: <T>(component: Component<T>) => Entity[];
+  getComponentId: <T>(component: Component<T>) => bigint | undefined;
   getComponentById: (id: bigint) => Component<unknown> | undefined;
   getComponentByName: (name: string) => Component<unknown> | undefined;
   getComponents: () => Component<unknown>[];
   isComponentRegistered: <T>(component: Component<T>) => boolean;
-  registerComponent: <T>(spec: ComponentSpec<T>) => Component<T>;
+  registerComponent: <T>(component: Component<T>) => World;
   unregisterComponent: <T>(component: Component<T>) => World;
   // entity manager
   createEntity: () => Entity;

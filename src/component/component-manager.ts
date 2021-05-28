@@ -1,9 +1,12 @@
 // Copyright (c) 2021 P. Hughes. All rights reserved. MIT license.
 "use strict";
 
+import { Entity } from '../entity/entity';
 import { validName } from '../utils';
 import { World } from '../world';
-import { Component, ComponentSpec } from './component';
+import { Component, isComponent } from './component';
+
+export type ComponentRegistry = Map<bigint, Component<unknown>>;
 
 export interface ComponentManagerSpec {
   /** The maximum number of components to allow */
@@ -11,102 +14,135 @@ export interface ComponentManagerSpec {
 }
 
 export interface ComponentManager {
-  /**
-   * Find a component by its id
-   * @param id the components bigint id
-   */
+  getComponentEntities: <T>(component: Component<T>) => Entity[];
+  getComponentId: <T>(component: Component<T>) => bigint | undefined;
   getComponentById: (id: bigint) => Component<unknown> | undefined;
-  /**
-   * Find a component by its name
-   * @param name the component's name string
-   */
   getComponentByName: (name: string) => Component<unknown> | undefined;
-  /** @returns an array of all components in the world */
   getComponents: () => Component<unknown>[];
-  /** @returns true if the component is registered in this world */
   isComponentRegistered: <T>(component: Component<T>) => boolean;
-  /**
-   * Creates and registers a new component
-   * @param spec the component specification
-   * @returns the new component
-   */
-  registerComponent: <T>(spec: ComponentSpec<T>) => Component<T>;
-  /**
-   * Unregisters a given component
-   * @returns the world
-   */
+  registerComponent: <T>(component: Component<T>) => World;
   unregisterComponent: <T>(component: Component<T>) => World;
 }
 
-function createGetComponents(registry: Map<string, Component<unknown>>) {
+function createGetComponentId(registry: ComponentRegistry) {
+  function getComponentId<T>(component: Component<T>): bigint | undefined {
+    const entry = [...registry.entries()].find(([_, _c]) => component === _c);
+    return (entry === undefined) ? undefined : entry[0];
+  }
+  return getComponentId;
+}
+
+function createGetComponents(registry: ComponentRegistry) {
   return function getComponents(): Component<unknown>[] {
     return [...registry.values()];
   };
 }
 
-function createGetComponentById(registry: Map<string, Component<unknown>>) {
+function createGetComponentById(registry: ComponentRegistry) {
   return function getComponentById(id: bigint): Component<unknown> | undefined {
-    return [...registry.values()].find((component) => component.id === id);
+    if (typeof id !== "bigint") {
+      throw new SyntaxError(`Expected component id to be of type "bigint", found ${typeof id}.`);
+    }
+    return registry.get(id);
   };
 }
 
-function createGetComponentByName(registry: Map<string, Component<unknown>>) {
+function createGetComponentByName(registry: ComponentRegistry) {
   return function getComponentByName(name: string): Component<unknown> | undefined {
-    return registry.get(name);
+    if (typeof name !== "string") {
+      throw new SyntaxError(`Expected component name to be of type "string", found ${typeof name}.`);
+    }
+    if (!(validName(name))) {
+      throw new SyntaxError(`"${name}" is not a valid component name.`);
+    }
+    return [...registry.values()].find((component) => component.name === name);
   };
 }
 
-function createIsComponentRegistered(registry: Map<string, Component<unknown>>) {
+function createIsComponentRegistered(registry: ComponentRegistry) {
   return function isComponentRegistered<T>(component: Component<T>): boolean {
-    return registry.has(component.name) || [...registry.values()].includes(component);
+    if (isComponent(component) === false) {
+      throw new TypeError('Provided object is not a Component instance.');
+    }
+    return [...registry.values()].includes(component);
   };
 }
 
-// eslint-disable-next-line max-len
-function createRegisterComponent(registry: Map<string, Component<unknown>>, count: {value: bigint}, maxComponents: number, world: World) {
-  return function registerComponent<T>(spec: ComponentSpec<T>): Component<T> {
+function createRegisterComponent(
+    registry: ComponentRegistry,
+    count: {value: number},
+    maxComponents: number,
+    world: World,
+  ) {
+  return function registerComponent<T>(component: Component<T>): World {
     // check we haven't reached maximum capacity
     if (registry.size >= maxComponents) {
-      throw new Error('Maximum number of components reached.');
+      throw new Error('The maximum number of components has been reached.');
     }
-    // check validity of name
-    if (!validName(spec.name)) {
-      throw new SyntaxError(`"${spec.name}" is not a valid component name.`);
+    // check we're dealing with a component
+    if (isComponent(component) === false) {
+      throw new TypeError('Provided object is not a Component instance.');
+    }
+    const components = [...registry.values()];
+    // check component isn't already registered
+    if (components.includes(component)) {
+      throw new Error(`Component "${component.name}" is already registered.`);
     }
     // check for duplicate names
-    if (registry.has(spec.name)) {
-      throw new Error(`Component with name "${spec.name}" already registered.`);
+    if (components.find((_c) => component.name === _c.name)) {
+      throw new Error(`A component with name "${component.name}" is already registered.`);
     }
     // increment total count
-    count.value += 1n;
+    count.value += 1;
     // create and register component
-    const component = new Component(world, count.value, spec);
-    registry.set(component.name, component);
-    return component;
+    registry.set(BigInt(count.value), component);
+    return world;
   };
 }
 
-function createUnregisterComponent(registry: Map<string, Component<unknown>>, world: World) {
+function createUnregisterComponent(registry: ComponentRegistry, world: World) {
   return function unregisterComponent<T>(component: Component<T>): World {
+    // check we're dealing with a component
+    if (isComponent(component) === false) {
+      throw new TypeError('Provided object is not a Component instance.');
+    }
+    const entry = [...registry.entries()].find(([_, _c]) => _c === component);
     // check component is registered
-    if (!(registry.has(component.name))) {
+    if (!entry) {
       throw new Error(`Component "${component.name}" is not registered.`);
     }
-    // remove component from entities
-    component.getEntities().forEach((entity) => entity.removeComponent(component));
     // remove component from registry
-    registry.delete(component.name);
+    registry.delete(entry[0]);
+    // remove component from entities
+    world.getComponentEntities(component).forEach((entity) => entity.removeComponent(component));
     return world;
+  };
+}
+
+function createGetComponentEntities(world: World) {
+  return function getComponentEntities<T>(component: Component<T>): Entity[] {
+    const entities: Set<Entity> = new Set();
+    const id = world.getComponentId(component);
+    if (id !== undefined) {
+      world.getArchetypes().forEach(([archetype, set]) => {
+        if ((archetype & id) > 0) {
+          set.forEach((entity) => entities.add(entity));
+        }
+      });
+    }
+    return [...entities];
   };
 }
 
 export function createComponentManager(world: World, spec: ComponentManagerSpec): ComponentManager {
   const { maxComponents } = spec;
 
-  const count = { value: 0n };
-  const registry: Map<string, Component<unknown>> = new Map();
+  const count = { value: 0 };
+  const registry: ComponentRegistry = new Map();
 
   return {
+    getComponentEntities: createGetComponentEntities(world),
+    getComponentId: createGetComponentId(registry),
     getComponentById: createGetComponentById(registry),
     getComponentByName: createGetComponentByName(registry),
     getComponents: createGetComponents(registry),

@@ -30,9 +30,10 @@ export interface QueryManager {
   unregisterQuery: (query: Query) => World;
 }
 
-function archetypeFromComponents(components: Component<unknown>[]): bigint {
-  return components.reduce((mask, component) => {
-    mask |= (1n << component.id);
+function archetypeFromComponents(world: World, components: Component<unknown>[]): bigint {
+  const ids: bigint[] = components.map((component) => world.getComponentId(component)).filter(Boolean) as bigint[];
+  return ids.reduce((mask, id) => {
+    mask |= (1n << id);
     return mask;
   }, 0n);
 }
@@ -45,7 +46,7 @@ function isArchetypeQueryCandidate(query: Query, archetype: bigint): boolean {
   return _any && _all && _none;
 }
 
-function createQuery(spec: QuerySpec): Query {
+function createQuery(world: World, spec: QuerySpec): Query {
   const {
     all = [],
     any = [],
@@ -53,9 +54,9 @@ function createQuery(spec: QuerySpec): Query {
   } = spec;
 
   return [
-    archetypeFromComponents(all),
-    archetypeFromComponents(any),
-    archetypeFromComponents(none),
+    archetypeFromComponents(world, all),
+    archetypeFromComponents(world, any),
+    archetypeFromComponents(world, none),
   ];
 }
 
@@ -90,7 +91,7 @@ function createRegisterQuery(registry: QueryRegistry, world: World) {
    * @returns the new query
    */
   function registerQuery(spec: QuerySpec): Query {
-    const query = createQuery(spec);
+    const query = createQuery(world, spec);
     const entities = world.getEntitiesFromQuery(query);
     registry.set(query, new Set(entities));
     return query;
