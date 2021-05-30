@@ -17,6 +17,15 @@ interface IComponent {
   isComponent: true;
 }
 
+/** Component prototype */
+const Component = Object.create(null, {
+  isComponent: {
+    value: true,
+    enumerable: true,
+    configurable: false,
+  }
+}) as IComponent;
+
 /**
  * Component properties must be non-empty objects
  * @param defaults the default properties object to validate
@@ -26,9 +35,6 @@ function isValidDefaults<T>(defaults: T): defaults is T {
   return isObject(defaults) && Object.keys(defaults).length > 0;
 }
 
-function Component(this: IComponent) {
-  this.isComponent = true;
-}
 
 /**
  * Test if an object is a valid component
@@ -36,9 +42,20 @@ function Component(this: IComponent) {
  * @returns true if the
  */
 export function isComponent(object: unknown): object is Component<unknown> {
-  return object instanceof Component;
+  return Boolean(
+    isObject(object) &&
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    Object.getPrototypeOf(object)?.isComponent === true
+  );
 }
 
+/**
+ * Creates and returns a new component object
+ * @param spec the component's specification
+ * @param spec.name the component's name
+ * @param spec.defaults the component's default properties
+ * @returns the created component
+ */
 export function createComponent<T extends Record<keyof T, T>>(spec: ComponentSpec<T>): Component<T> {
   const { name, defaults } = spec;
 
@@ -53,7 +70,7 @@ export function createComponent<T extends Record<keyof T, T>>(spec: ComponentSpe
   }
 
   // deep clone default properties
-  const _defaults = Object.freeze(deepAssignObjects({}, defaults as unknown as Record<string, unknown>));
+  const _defaults = deepAssignObjects({}, defaults as unknown as Record<string, unknown>);
 
   return Object.create(Component, {
     defaults: {
