@@ -275,6 +275,11 @@ export default [
         file: "./dist/esm/index.min.d.ts",
         format: "es"
       },
+      // Demo
+      {
+        file: "./demo/miski.min.d.ts",
+        format: "es"
+      },
     ],
     plugins: [
       dts(),
