@@ -7,11 +7,11 @@ import { Toggleable } from '../utils';
 import { World } from '../world';
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function noopPre(_entities: Entity[], _global: Entity): void { return; }
+export function noopPre(_entities: Entity[]): void { return; }
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function noopPost(_entities: Entity[], _global: Entity, _int?: number): void { return; }
+export function noopPost(_entities: Entity[], _int?: number): void { return; }
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function noopUpdate(_entities: Entity[], _global: Entity, _dt?: number): void { return; }
+export function noopUpdate(_entities: Entity[], _dt?: number): void { return; }
 
 export interface SystemSpec {
   /**
@@ -25,34 +25,30 @@ export interface SystemSpec {
    * The system's pre-update function.
    * This runs once per step before the update function.
    * @param entities an array of entities associated with the system's query
-   * @param global the world's global entity
    */
-  pre?: (entities: Entity[], global: Entity) => void;
+  pre?: (entities: Entity[]) => void;
   /**
    * The system's post-update function.
    * This runs once per step after the update function.
    * @param entities an array of entities associated with the system's query
-   * @param global the world's global entity
    * @param int the step's interpolation alpha
    */
-  post?: (entities: Entity[], global: Entity, int?: number) => void;
+  post?: (entities: Entity[], int?: number) => void;
   /**
    * The system's update function.
    * @param entities an array of entities associated with the system's query
-   * @param global the world's global entity
    * @param dt the step's delta time
    */
-  update?: (entities: Entity[], global: Entity, dt?: number) => void;
+  update?: (entities: Entity[], dt?: number) => void;
 }
 
 export class System implements Toggleable {
   private _enabled: boolean;
   private _world: World;
   readonly name: string;
-  readonly query?: Query;
-  readonly pre: (entities: Entity[], global: Entity) => void;
-  readonly post: (entities: Entity[], global: Entity, int?: number) => void;
-  readonly update: (entities: Entity[], global: Entity, dt?: number) => void;
+  readonly pre: (entities: Entity[]) => void;
+  readonly post: (entities: Entity[], int?: number) => void;
+  readonly update: (entities: Entity[], dt?: number) => void;
 
   constructor(world: World, spec: SystemSpec) {
     const {

@@ -23,7 +23,7 @@ function createPre(world: World) {
    * @returns the world
    */
   function pre(): World {
-    world.getPreSystems().forEach((system) => system.pre(system.entities, world.global));
+    world.getPreSystems().forEach((system) => system.pre(system.entities));
     return world;
   }
   return pre;
@@ -36,7 +36,7 @@ function createPost(world: World) {
    * @returns the world
    */
   function post(int = 0): World {
-    world.getPostSystems().forEach((system) => system.post(system.entities, world.global, int));
+    world.getPostSystems().forEach((system) => system.post(system.entities, int));
     world.refreshQueries();
     world.purgeDirtyArchetypeCache();
     return world;
@@ -88,7 +88,7 @@ function createUpdate(world: World) {
    * @returns the world
    */
   function update(dt = 0): World {
-    world.getUpdateSystems().forEach((system) => system.update(system.entities, world.global, dt));
+    world.getUpdateSystems().forEach((system) => system.update(system.entities, dt));
     return world;
   }
   return update;
