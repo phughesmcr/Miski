@@ -8,12 +8,12 @@ export interface ComponentSpec<T extends Record<keyof T, T>> {
   defaults: T;
 }
 
-export interface Component<T> extends IComponent {
+export interface Component<T> extends ComponentPrototype {
   name: string;
   defaults: T;
 }
 
-interface IComponent {
+interface ComponentPrototype {
   isComponent: true;
 }
 
@@ -24,7 +24,7 @@ const Component = Object.create(null, {
     enumerable: true,
     configurable: false,
   }
-}) as IComponent;
+}) as ComponentPrototype;
 
 /**
  * Component properties must be non-empty objects
@@ -35,7 +35,6 @@ function isValidDefaults<T>(defaults: T): defaults is T {
   return isObject(defaults) && Object.keys(defaults).length > 0;
 }
 
-
 /**
  * Test if an object is a valid component
  * @param component the object to test
@@ -44,8 +43,9 @@ function isValidDefaults<T>(defaults: T): defaults is T {
 export function isComponent(object: unknown): object is Component<unknown> {
   return Boolean(
     isObject(object) &&
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-    Object.getPrototypeOf(object)?.isComponent === true
+    Object.is(Component, Object.getPrototypeOf(object)) &&
+    object['name'] !== undefined &&
+    object['defaults'] !== undefined
   );
 }
 
