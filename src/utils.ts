@@ -1,6 +1,9 @@
 // Copyright (c) 2021 P. Hughes. All rights reserved. MIT license.
 "use strict";
 
+/** The maximum value in a BigUint64Array (i.e. 2^64-1) */
+export const MAX_BIGUINT = 18446744000000000000n;
+
 /** An array of strings that cannot be used for component or system names */
 export const FORBIDDEN_NAMES = Object.freeze([
   // component properties
