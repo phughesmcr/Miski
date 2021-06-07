@@ -41,17 +41,20 @@ export function clamp(n: number, min?: number, max?: number): number {
 
 /** Check if a string is a valid property name */
 export function validName(str: string): boolean {
+  if (typeof str !== 'string') {
+    throw new TypeError(`Expected name to be of type "string", found ${typeof str}.`);
+  }
   str = str.trim();
-  return /^(?![0-9])[a-zA-Z0-9$_]+$/.test(str) && !(FORBIDDEN_NAMES.includes(str));
+  return str.length > 0 && /^(?![0-9])[a-zA-Z0-9$_]+$/.test(str) && !(FORBIDDEN_NAMES.includes(str));
 }
 
 /** Determine if a given item is an object and not an array */
-export function isObject(item: unknown): boolean {
+export function isObject(item: unknown): item is Record<string | number | symbol, unknown> {
   return Boolean(item && typeof item === 'object' && !Array.isArray(item));
 }
 
 /** Delete all the properties from an object */
-export function clearObject(obj: Record<string, unknown>): Record<string, unknown> {
+export function clearObject(obj: Record<string, unknown>): Record<string | number | symbol, unknown> {
   Object.keys(obj).forEach((key) => delete obj[key]);
   return obj;
 }
@@ -70,7 +73,7 @@ export function deepAssignObjects(target: Record<string, unknown>, ...sources: R
       if (descriptor !== undefined) {
         descriptors[key] = {...descriptor};
         if (isObject(descriptor.value)) {
-          deepAssignObjects(descriptor.value as Record<string, unknown>, source[key] as Record<string, unknown>);
+          deepAssignObjects(descriptor.value, source[key] as Record<string, unknown>);
         } else if (Array.isArray(descriptor.value)) {
           descriptor.value = [...source[key] as Array<unknown>];
         }
@@ -82,7 +85,7 @@ export function deepAssignObjects(target: Record<string, unknown>, ...sources: R
       if (descriptor !== undefined && descriptor.enumerable) {
         descriptors[symbol as unknown as string] = {...descriptor};
         if (isObject(descriptor.value)) {
-          deepAssignObjects(descriptor.value as Record<string, unknown>, source[symbol as unknown as string] as Record<string, unknown>);
+          deepAssignObjects(descriptor.value, source[symbol as unknown as string] as Record<string, unknown>);
         } else if (Array.isArray(descriptor.value)) {
           descriptor.value = [...source[symbol as unknown as string] as Array<unknown>];
         }
