@@ -3,7 +3,6 @@
 
 import { Entity } from '../entity/entity';
 import { Query } from '../query/query-manager';
-import { Toggleable } from '../utils';
 import { World } from '../world';
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -42,7 +41,7 @@ export interface SystemSpec {
   update?: (entities: Entity[], dt?: number) => void;
 }
 
-export class System implements Toggleable {
+export class System {
   private _enabled: boolean;
   private _world: World;
   readonly name: string;

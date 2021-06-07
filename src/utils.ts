@@ -25,13 +25,6 @@ export const FORBIDDEN_NAMES = Object.freeze([
   "__proto__",
 ]);
 
-/** Adds a toggleable 'enabled' property */
-export interface Toggleable {
-  readonly enabled: boolean;
-  disable: () => void;
-  enable: () => void;
-}
-
 /** Clamps a value between two extremes */
 export function clamp(n: number, min?: number, max?: number): number {
   if (min != undefined && n < min) return min;
