@@ -1,4 +1,3 @@
-/* eslint-disable max-len */
 // Copyright (c) 2021 P. Hughes. All rights reserved. MIT license.
 "use strict";
 
