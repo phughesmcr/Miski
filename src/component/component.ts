@@ -1,7 +1,7 @@
 // Copyright (c) 2021 P. Hughes. All rights reserved. MIT license.
 "use strict";
 
-import { deepAssignObjects, isObject, validName } from '../utils';
+import { deepAssignObjects, isObject, isValidName } from '../utils';
 
 export interface ComponentSpec<T extends Record<keyof T, T>> {
   name: string;
@@ -60,8 +60,8 @@ export function createComponent<T extends Record<keyof T, T>>(spec: ComponentSpe
   const { name, defaults } = spec;
 
   // check validity of name
-  if (!validName(name)) {
-    throw new SyntaxError(`"${name}" is not a valid component name.`);
+  if (!isValidName(name)) {
+    throw new SyntaxError('Component name is invalid.');
   }
 
   // check validity of properties

@@ -35,7 +35,7 @@ export function clamp(n: number, min?: number, max?: number): number {
 }
 
 /** Check if a string is a valid property name */
-export function validName(str: string): boolean {
+export function isValidName(str: string): boolean {
   if (typeof str !== 'string') {
     throw new TypeError(`Expected name to be of type "string", found ${typeof str}.`);
   }

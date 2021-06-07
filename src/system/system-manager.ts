@@ -1,7 +1,7 @@
 // Copyright (c) 2021 P. Hughes. All rights reserved. MIT license.
 "use strict";
 
-import { clamp, validName } from '../utils';
+import { clamp, isValidName } from '../utils';
 import { World } from '../world';
 import { noopPost, noopPre, noopUpdate, System, SystemSpec } from './system';
 
@@ -110,7 +110,7 @@ function createMoveSystem(executionOrder: System[]) {
 
 function createRegisterSystem(executionOrder: System[], registry: Map<string, System>, world: World) {
   return function registerSystem(spec: SystemSpec, idx?: number): System {
-    if (!validName(spec.name)) {
+    if (!isValidName(spec.name)) {
       throw new SyntaxError(`"${spec.name}" is not a valid system name.`);
     }
     if (registry.has(spec.name)) {
