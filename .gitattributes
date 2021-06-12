@@ -5,8 +5,6 @@ src/vendor/*      linguist-generated=true
 demo/*            linguist-documentation=true
 docs/*            linguist-documentation=true
 
-index.html        linguist-documentation=true
-
 *.css             text
 *.htm             text diff=html
 *.html            text diff=html
