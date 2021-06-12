@@ -2,7 +2,7 @@
   "root": true,
   "parser": "@typescript-eslint/parser",
   "parserOptions": {
-    "ecmaVersion": 2021,
+    "ecmaVersion": 2020,
     "sourceType": "module",
     "project": "./tsconfig.json"
   },
@@ -15,7 +15,7 @@
     "plugin:@typescript-eslint/recommended-requiring-type-checking"
   ],
   "env": {
-    "es2021": true,
+    "es2020": true,
     "node": true,
     "browser": true
   },
