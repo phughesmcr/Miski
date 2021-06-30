@@ -13,12 +13,13 @@
  */
 "use strict";
 
-export type { ComponentSpec } from './component/component';
-export type { Entity } from './entity/entity';
-export type { Poolable } from './pool/pool';
-export type { Query, QuerySpec } from './query/query-manager';
-export type { System, SystemSpec } from './system/system';
-export type { World, WorldSpec } from './world';
+export type { ComponentSpec } from "./component/component";
+export type { Entity } from "./entity/entity-manager";
+export type { Poolable } from "./pool/pool";
+export type { Query, QuerySpec } from "./query/query";
+export type { System, SystemSpec } from "./system/system";
+export type { World, WorldSpec } from "./world";
 
-export { createComponent } from './component/component';
-export { createWorld } from './world';
+export { createComponent } from "./component/component";
+export { createWorld } from "./world";
+export { Types } from "./component/schema";

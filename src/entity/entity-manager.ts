@@ -1,114 +1,100 @@
+/**
+ * @name        EntityManager
+ * @description The entity manager creates, destroys and manages the state of entities in the world.
+ * @author      P. Hughes <peter@phugh.es> (https://www.phugh.es)
+ * @copyright   2021 P. Hughes. All rights reserved.
+ * @license     MIT
+ */
 "use strict";
 
-import { Pool } from '../pool/pool';
-import { Query } from '../query/query-manager';
-import { World } from '../world';
-import { Entity } from './entity';
+import { Bitmask, createBitmask, getBitFromMask, getFirstFree, isBitOn, setBitOff, setBitOn } from "../utils/bitmasks";
+import { World } from "../world";
 
-export type EntityRegistry = Map<number, Entity>;
+/** Entities are indexes. */
+export type Entity = number;
 
-export interface EntityManagerSpec {
-  entityPoolGrowthFactor: number;
-  initialEntityPoolSize: number;
-  maxEntities: number;
-}
+/** Entity availability state is stored in a Uint8Array bitmask. */
+export type EntityRegistry = Bitmask;
+
+/**
+ * Entity availability state.
+ * 1 = unavailable
+ * 0 = available
+ */
+export type EntityState = 0 | 1;
 
 export interface EntityManager {
-  /** @returns a new entity */
   createEntity: () => Entity;
-  /**
-   * Destroys an entity and returns it to the object pool
-   * @returns true if the entity was successfully destroyed.
-   */
-  destroyEntity: (entity: Entity) => boolean;
-  /**
-   * Get an arrary of all entities in the world or in a query
-   * @param query get entities matching the query if provided
-   * @returns an array of all entities in the world or provided query
-   */
-  getEntities: (query?: Query) => Entity[]
-  /**
-   * Find an entity by its id
-   * @param id the entity's id number
-   */
-  getEntityById: (id: number) => Entity | undefined;
-  /** @returns true if the entity is registered in this world */
+  destroyEntity: (entity: Entity) => World;
+  getEntityState: (entity: Entity) => EntityState | undefined;
   isEntityRegistered: (entity: Entity) => boolean;
 }
 
-function createCreateEntity(pool: Pool<Entity>, registry: EntityRegistry, world: World) {
-  return function createEntity(): Entity {
-    const entity = pool.get();
-    if (!entity || !(entity instanceof Entity)) {
-      throw new Error('No entities left! Pool is empty.');
+function _createEntity(states: EntityRegistry) {
+  /**
+   * Creates a new entity
+   * @returns an entity
+   */
+  function createEntity(): Entity {
+    const entity = getFirstFree(states);
+    if (entity === undefined) {
+      throw new Error("createEntity: No available entities. Maximum entities reached.");
     }
-    registry.set(entity.id, entity);
-    world.updateArchetype(entity);
+    setBitOn(states, entity);
     return entity;
-  };
+  }
+  return createEntity;
 }
 
-function createDestroyEntity(pool: Pool<Entity>, registry: EntityRegistry, world: World) {
-  return function destroyEntity(entity: Entity): boolean {
-    if (entity === world.global) {
-      throw new Error('Destroying the global entity is forbidden.');
+function _destroyEntity(states: EntityRegistry, world: World) {
+  /**
+   * Destroys a given entity and marks it as recyclable
+   * @param entity the entity to destroy
+   * @returns the world
+   */
+  function destroyEntity(entity: Entity): World {
+    if (isBitOn(states, entity)) {
+      world.stripEntity(entity);
+      setBitOff(states, entity);
     }
-    if (registry.has(entity.id)) {
-      world.removeEntitiesFromArchetype(entity.getArchetype(), entity);
-      registry.delete(entity.id);
-      pool.release(entity);
-      return true;
-    } else {
-      return false;
-    }
-  };
+    return world;
+  }
+  return destroyEntity;
 }
 
-function createGetEntities(registry: EntityRegistry, world: World) {
-  return function getEntities(query?: Query): Entity[] {
-    return (query) ? world.getEntitiesFromQuery(query) : [...registry.values()];
-  };
+function _isEntityRegistered(states: EntityRegistry) {
+  /**
+   * Check if an entity is active in the world
+   * @param entity the entity to test
+   * @returns true if the entity is active in the world
+   */
+  function isEntityRegistered(entity: Entity): boolean {
+    return isBitOn(states, entity);
+  }
+  return isEntityRegistered;
 }
 
-function createGetEntityById(registry: EntityRegistry) {
-  return function getEntityById(id: number): Entity | undefined {
-    return registry.get(id);
-  };
+function _getEntityState(states: EntityRegistry) {
+  /**
+   * Get the state of a given entity
+   * @param entity the entity to get the state of
+   * @returns the state of the entity or undefined if entity not in world
+   */
+  function getEntityState(entity: Entity): EntityState | undefined {
+    return getBitFromMask(states, entity);
+  }
+  return getEntityState;
 }
 
-function createIsEntityRegistered(registry: EntityRegistry) {
-  return function isEntityRegistered(entity: Entity): boolean {
-    return registry.has(entity.id) || [...registry.values()].includes(entity);
-  };
-}
+export function createEntityManager(world: World): EntityManager {
+  const { maxEntities } = world.config;
 
-/**
- * Creates a new entity manager object
- * @param world the world object to associate this manager with
- * @param spec the entity manager's specification object
- * @param spec.initialEntityPoolSize the number of entities to pre-allocate in the object pool
- * @param spec.maxEntities the maximum number of entities this manager can register
- * @returns an entity manager object
- */
-export function createEntityManager(world: World, spec: EntityManagerSpec): EntityManager {
-  const { entityPoolGrowthFactor, initialEntityPoolSize, maxEntities } = spec;
-
-  const pool: Pool<Entity> = new Pool({
-    create: function() { return new Entity(world); },
-    destroy: function(entity: Entity) { entity.clear(); },
-    initialSize: initialEntityPoolSize,
-    growthFactor: entityPoolGrowthFactor,
-    maxSize: maxEntities,
-    world,
-  });
-
-  const registry: EntityRegistry = new Map();
+  const states: Bitmask = createBitmask(maxEntities);
 
   return {
-    createEntity: createCreateEntity(pool, registry, world),
-    destroyEntity: createDestroyEntity(pool, registry, world),
-    getEntities: createGetEntities(registry, world),
-    getEntityById: createGetEntityById(registry),
-    isEntityRegistered: createIsEntityRegistered(registry),
+    createEntity: _createEntity(states),
+    destroyEntity: _destroyEntity(states, world),
+    getEntityState: _getEntityState(states),
+    isEntityRegistered: _isEntityRegistered(states),
   };
 }

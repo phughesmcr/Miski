@@ -1,196 +1,133 @@
-// Copyright (c) 2021 P. Hughes. All rights reserved. MIT license.
+/**
+ * @name        ArchetypeManager
+ * @description The archetype manager creates, destroys & assigns archetypes
+ * @author      P. Hughes <peter@phugh.es> (https://www.phugh.es)
+ * @copyright   2021 P. Hughes. All rights reserved.
+ * @license     MIT
+ */
 "use strict";
 
-import { Entity } from '../entity/entity';
-import { World } from '../world';
+import { ComponentInstance } from "../component/component";
+import { Entity } from "../entity/entity-manager";
+import { createBitmask, isBitOn, toggleBit } from "../utils/bitmasks";
+import { World } from "../world";
+import { Archetype, createArchetype } from "./archetype";
 
-export type Archetype = bigint;
-
-export type ArchetypeRegistry = Map<Archetype, Set<Entity>>;
-
-export interface ArchetypeManagerSpec {
-  [key: string]: unknown;
-}
+export type ArchetypeRegistry = Record<string, Archetype>;
+export type EntityArchetypeRegistry = Archetype[];
 
 export interface ArchetypeManager {
-  addEntitiesToArchetype: (archetype: Archetype, ...entities: Entity[]) => World;
-  getArchetypes: () => [Archetype, Set<Entity>][];
-  getDirtyArchetypes: () => [Archetype, Set<Entity>][];
-  getEntitiesFromArchetype: (archetype: Archetype) => Entity[] | undefined;
-  isArchetypeDirty: (archetype: Archetype) => boolean;
-  purgeDirtyArchetypeCache: () => World;
-  removeEntitiesFromArchetype: (archetype: Archetype, ...entities: Entity[]) => World;
-  updateArchetype: (entity: Entity, prev?: Archetype) => World;
+  getArchetypes: () => Archetype[];
+  getEntityArchetype: (entity: number) => Archetype | undefined;
+  archetypeHasComponent: <T>(archetype: Archetype, component: ComponentInstance<T>) => boolean;
+  resetEntityArchetype: (entity: number) => Archetype;
+  updateEntityArchetype: (entity: number, ...components: ComponentInstance<unknown>[]) => Archetype;
 }
 
-function createAddEntitiesToArchetype(registry: ArchetypeRegistry, dirty: Set<Archetype>, world: World) {
+function _archetypeHasComponent() {
   /**
-   * Adds entities to an archetype's entity cache
-   * @param archetype the archetype to modify
-   * @param entities the entities to add to the archetype
-   * @returns the world
+   * Test if an archetype contains a component
+   * @param archetype the archetype to search
+   * @param component the component to search for
+   * @returns true if the archetype contains the component
    */
-  function addEntitiesToArchetype(archetype: Archetype, ...entities: Entity[]): World {
-    const set = registry.get(archetype);
-    if (set) {
-      entities.forEach((entity) => {
-        if (!(set.has(entity))) {
-          set.add(entity);
-          dirty.add(archetype);
-        }
-      });
-      return world;
-    } else {
-      throw new SyntaxError(`Archetype "${archetype}" does not exist.`);
-    }
+  function archetypeHasComponent<T>(archetype: Archetype, component: ComponentInstance<T>): boolean {
+    return isBitOn(archetype.mask, component.id);
   }
-  return addEntitiesToArchetype;
+  return archetypeHasComponent;
 }
 
-function createGetArchetypes(registry: Map<Archetype, Set<Entity>>) {
-  /**
-   * Get all the archetypes in the world
-   * @returns an array of archetypes and their associated entities
-   */
-  function getArchetypes(): [Archetype, Set<Entity>][] {
-    return [...registry.entries()];
+function _getArchetypes(archetypes: ArchetypeRegistry) {
+  /** @returns an array of all archetypes in the world */
+  function getArchetypes(): Archetype[] {
+    return [...Object.values(archetypes)];
   }
   return getArchetypes;
 }
 
-function createGetDirtyArchetypes(registry: ArchetypeRegistry, dirty: Set<Archetype>) {
+function _getEntityArchetype(entities: EntityArchetypeRegistry) {
   /**
-   * Get all the archetypes in the world
-   * which have been modified since the last world.step() or world.post()
-   * @returns an array of dirty archetypes and their associated entities
+   * Find and return the archetype for a given entity
+   * @param entity the entity
+   * @returns the entity's archetype or undefined
    */
-  function getDirtyArchetypes(): [Archetype, Set<Entity>][] {
-    return [...dirty].reduce((arr, archetype) => {
-      const entities = registry.get(archetype);
-      if (entities) {
-        arr.push([
-          archetype,
-          entities,
-        ]);
-      }
-      return arr;
-    }, new Array(dirty.size) as [Archetype, Set<Entity>][]);
+  function getEntityArchetype(entity: Entity): Archetype | undefined {
+    return entities[entity];
   }
-  return getDirtyArchetypes;
+  return getEntityArchetype;
 }
 
-function createGetEntitiesFromArchetype(registry: ArchetypeRegistry) {
-  /**
-   * Returns an array of entities from a given archetype.
-   * Invalid archetypes return empty arrays.
-   * @param archetype the array to get entities from
-   * @returns an array of entities
-   */
-  function getEntitiesFromArchetype(archetype: Archetype): Entity[] | undefined {
-    return [...registry.get(archetype) ?? []];
-  }
-  return getEntitiesFromArchetype;
-}
-
-function createIsArchetypeDirty(dirty: Set<Archetype>) {
-  /**
-   * Check if an archetype has been modified since the last world.step() or world.post()
-   * @param archetype the archetype to check
-   * @returns true if the archetype has been modified since last step
-   */
-  function isArchetypeDirty(archetype: Archetype): boolean {
-    return dirty.has(archetype);
-  }
-  return isArchetypeDirty;
-}
-
-// eslint-disable-next-line max-len
-function createPurgeDirtyArchetypeCache(registry: ArchetypeRegistry, dirty: Set<Archetype>, removal: Set<Archetype>, world: World) {
-  /**
-   * @danger
-   * Purge the cache of modified archetypes
-   * You probably don't want to use this manually as the
-   * archetype system handles this automatically.
-   * @returns the world
-   */
-  function purgeDirtyArchetypeCache(): World {
-    dirty.clear();
-    removal.forEach((archetype) => registry.delete(archetype));
-    removal.clear();
-    return world;
-  }
-  return purgeDirtyArchetypeCache;
-}
-
-// eslint-disable-next-line max-len
-function createRemoveEntitiesFromArchetype(registry: ArchetypeRegistry, dirty: Set<Archetype>, removal: Set<Archetype>, world: World) {
-  /**
-   * Remove entities from an archetype
-   * @param archetype the archetype to remove entities from
-   * @param entities the entities to remove from the archetype
-   * @returns the world
-   */
-  function removeEntitiesFromArchetype(archetype: Archetype, ...entities: Entity[]): World {
-    const set = registry.get(archetype);
-    if (set) {
-      entities.forEach((entity) => set.delete(entity));
-      dirty.add(archetype);
-      if (set.size === 0) {
-        removal.add(archetype);
+function _resetEntityArchetype(archetypes: ArchetypeRegistry, entities: EntityArchetypeRegistry, empty: Archetype) {
+  function resetEntityArchetype(entity: Entity): Archetype {
+    // handling current archetype
+    const current = entities[entity];
+    if (current !== undefined) {
+      current.remove(entity);
+      if (current.entities.size === 0) {
+        delete archetypes[current.name];
       }
     }
-    return world;
+    empty.add(entity);
+    entities[entity] = empty;
+    return empty;
   }
-  return removeEntitiesFromArchetype;
+  return resetEntityArchetype;
 }
 
-// eslint-disable-next-line max-len
-function createUpdateArchetype(registry: ArchetypeRegistry, dirty: Set<Archetype>, removal: Set<Archetype>, world: World) {
-  const _adder = createAddEntitiesToArchetype(registry, dirty, world);
-  const _remover = createRemoveEntitiesFromArchetype(registry, dirty, removal, world);
+function _updateEntityArchetype(archetypes: ArchetypeRegistry, entities: EntityArchetypeRegistry, world: World) {
   /**
-   * @danger
-   * Update the archetype of an entity.
-   * You probably don't want to use this manually as the
-   * archetype system handles this automatically.
-   * @param entity the entity to examine
-   * @param previous the entity's previous archetype
-   * @returns the world
+   * Update an entity's archetype following a change of components
+   * @param entity the entity
+   * @param component the added / removed component
+   * @returns the entity's new archetype
    */
-  function updateArchetype(entity: Entity, previous?: Archetype): World {
-    if (previous !== undefined) {
-      _remover(previous, entity);
+  function updateEntityArchetype(entity: Entity, component: ComponentInstance<unknown>): Archetype {
+    const current = entities[entity];
+    if (current !== undefined) {
+      current.remove(entity);
+      if (current.entities.size === 0) {
+        world.getQueries().forEach((query) => query.remove(current));
+        delete archetypes[current.name];
+      }
     }
-    const current = entity.getArchetype();
-    if (registry.has(current)) {
-      _adder(current, entity);
+
+    if (component?.id === undefined) {
+      throw new TypeError(`updateEntityArchetype: Expected component to be an instance!`);
+    }
+
+    const mask = entities[entity]?.mask ?? createBitmask(world.config.maxComponents);
+    toggleBit(mask, component.id);
+    const name = mask.toString();
+
+    let archetype: Archetype;
+    if (name in archetypes) {
+      archetype = archetypes[name];
     } else {
-      registry.set(current, new Set([entity]));
+      archetype = createArchetype(mask);
+      world.getQueries().forEach((query) => query.isMatch(archetype));
+      archetypes[name] = archetype;
     }
-    return world;
+
+    archetype.add(entity);
+    entities[entity] = archetype;
+    return archetype;
   }
-  return updateArchetype;
+  return updateEntityArchetype;
 }
 
-/**
- * Creates a new archetype manager object
- * @param world the world associated with this manager
- * @param _spec the archetype manager specification
- * @returns the new archetype manager object
- */
-export function createArchetypeManager(world: World, _spec: ArchetypeManagerSpec): ArchetypeManager {
-  const registry: ArchetypeRegistry = new Map(); // all archetypes and associated entity caches
-  const dirty: Set<Archetype> = new Set(); // archetypes modified since last world.step() or world.post()
-  const removal: Set<Archetype> = new Set(); // empty archetypes to be removed on next world.step() or world.post()
+export function createArchetypeManager(world: World): ArchetypeManager {
+  const { maxComponents, maxEntities } = world.config;
+
+  const emptyArchetype = createArchetype(createBitmask(maxComponents));
+
+  const archetypeRegistry: ArchetypeRegistry = {};
+  const entityArchetypes: EntityArchetypeRegistry = new Array(maxEntities).fill(emptyArchetype) as Archetype[];
 
   return {
-    addEntitiesToArchetype: createAddEntitiesToArchetype(registry, dirty, world),
-    getArchetypes: createGetArchetypes(registry),
-    getDirtyArchetypes: createGetDirtyArchetypes(registry, dirty),
-    getEntitiesFromArchetype: createGetEntitiesFromArchetype(registry),
-    isArchetypeDirty: createIsArchetypeDirty(dirty),
-    purgeDirtyArchetypeCache: createPurgeDirtyArchetypeCache(registry, dirty, removal, world),
-    removeEntitiesFromArchetype: createRemoveEntitiesFromArchetype(registry, dirty, removal, world),
-    updateArchetype: createUpdateArchetype(registry, dirty, removal, world),
+    archetypeHasComponent: _archetypeHasComponent(),
+    getArchetypes: _getArchetypes(archetypeRegistry),
+    getEntityArchetype: _getEntityArchetype(entityArchetypes),
+    resetEntityArchetype: _resetEntityArchetype(archetypeRegistry, entityArchetypes, emptyArchetype),
+    updateEntityArchetype: _updateEntityArchetype(archetypeRegistry, entityArchetypes, world),
   };
 }

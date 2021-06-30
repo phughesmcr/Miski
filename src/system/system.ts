@@ -1,23 +1,24 @@
-// Copyright (c) 2021 P. Hughes. All rights reserved. MIT license.
+/**
+ * @name        System
+ * @description Systems provide the functionality for sets of archetypes
+ * @author      P. Hughes <peter@phugh.es> (https://www.phugh.es)
+ * @copyright   2021 P. Hughes. All rights reserved.
+ * @license     MIT
+ */
 "use strict";
 
-import { Entity } from '../entity/entity';
-import { Query } from '../query/query-manager';
-import { World } from '../world';
+import { Entity } from "../entity/entity-manager";
+import { Query } from "../query/query";
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function noopPre(_entities: Entity[]): void { return; }
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function noopPost(_entities: Entity[], _int?: number): void { return; }
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function noopUpdate(_entities: Entity[], _dt?: number): void { return; }
+export interface System extends SystemPrototype {
+  entities: Entity[];
+  name: string;
+  query: Query;
+}
 
 export interface SystemSpec {
-  /**
-   * The associated query to gather entities for this system. @see world.registerQuery()
-   * undefined queries will gather all entities in the world.
-   */
-  query?: Query;
+  /** The associated query to gather entities for this system. */
+  query: Query;
   /** The name of the system. Must be a valid property name. */
   name: string;
   /**
@@ -30,57 +31,117 @@ export interface SystemSpec {
    * The system's post-update function.
    * This runs once per step after the update function.
    * @param entities an array of entities associated with the system's query
-   * @param int the step's interpolation alpha
+   * @param alpha the step's interpolation alpha
    */
-  post?: (entities: Entity[], int?: number) => void;
+  post?: (entities: Entity[], alpha?: number) => void;
   /**
    * The system's update function.
    * @param entities an array of entities associated with the system's query
-   * @param dt the step's delta time
+   * @param delta the step's delta time
    */
-  update?: (entities: Entity[], dt?: number) => void;
+  update?: (entities: Entity[], delta?: number) => void;
 }
 
-export class System {
-  private _enabled: boolean;
-  private _world: World;
-  readonly name: string;
-  readonly pre: (entities: Entity[]) => void;
-  readonly post: (entities: Entity[], int?: number) => void;
-  readonly update: (entities: Entity[], dt?: number) => void;
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function noopPre(_entities: Entity[]): void {
+  return;
+}
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function noopPost(_entities: Entity[], _alpha?: number): void {
+  return;
+}
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function noopUpdate(_entities: Entity[], _delta?: number): void {
+  return;
+}
 
-  constructor(world: World, spec: SystemSpec) {
-    const {
-      name,
-      query = undefined,
-      pre = noopPre,
-      post = noopPost,
-      update = noopUpdate,
-    } = spec;
+export interface SystemPrototype {
+  disable: () => void;
+  enable: () => void;
+  enabled: boolean;
+  isSystem: true;
+  post: (entities: Entity[], alpha?: number) => void;
+  pre: (entities: Entity[]) => void;
+  update: (entities: Entity[], delta?: number) => void;
+}
 
-    this.name = name;
-    this.query = query;
-    this.pre = pre;
-    this.post = post;
-    this.update = update;
+const System: SystemPrototype = Object.create(Object.prototype, {
+  isSystem: {
+    value: true,
+    enumerable: true,
+    configurable: false,
+    writable: false,
+  },
+  enabled: {
+    value: false,
+    enumerable: true,
+    configurable: false,
+    writable: true,
+  },
+  disable: {
+    value: function (this: System) {
+      return this.enabled === false;
+    },
+    enumerable: true,
+    configurable: false,
+    writable: false,
+  },
+  enable: {
+    value: function (this: System) {
+      return this.enabled === true;
+    },
+    enumerable: true,
+    configurable: false,
+    writable: false,
+  },
+  pre: {
+    value: noopPre,
+    enumerable: true,
+    configurable: false,
+    writable: true,
+  },
+  post: {
+    value: noopPost,
+    enumerable: true,
+    configurable: false,
+    writable: true,
+  },
+  update: {
+    value: noopUpdate,
+    enumerable: true,
+    configurable: false,
+    writable: true,
+  },
+}) as SystemPrototype;
 
-    this._enabled = false;
-    this._world = world;
-  }
+export function createSystem(spec: SystemSpec): System {
+  const { name, query, pre, post, update } = spec;
 
-  get enabled(): boolean {
-    return this._enabled;
-  }
+  const system: System = Object.create(System, {
+    name: {
+      value: name,
+      enumerable: true,
+      configurable: false,
+      writable: false,
+    },
+    query: {
+      value: query,
+      enumerable: true,
+      configurable: false,
+      writable: false,
+    },
+    entities: {
+      get(this: System) {
+        return this.query?.getEntities() ?? [];
+      },
+      enumerable: true,
+      configurable: false,
+    },
+  }) as System;
 
-  get entities(): Entity[] {
-    return this._world.getEntities(this.query);
-  }
+  if (pre) system.pre = pre;
+  if (post) system.post = post;
+  if (update) system.update = update;
 
-  disable(): void {
-    this._enabled = false;
-  }
-
-  enable(): void {
-    this._enabled = true;
-  }
+  return system;
 }

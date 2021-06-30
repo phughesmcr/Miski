@@ -1,85 +1,181 @@
-// Copyright (c) 2021 P. Hughes. All rights reserved. MIT license.
+/**
+ * @name        Component
+ * @description Components house data relating to entities
+ * @author      P. Hughes <peter@phugh.es> (https://www.phugh.es)
+ * @copyright   2021 P. Hughes. All rights reserved.
+ * @license     MIT
+ */
 "use strict";
 
-import { deepAssignObjects, isObject, isValidName } from '../utils';
+import { Bitmask, createBitmask } from "../utils/bitmasks";
+import { isObject, SOA } from "../utils/objects";
+import { isValidName } from "../utils/strings";
+import { isTypedArray, TypedArray } from "../utils/types";
+import { World } from "../world";
+import { isValidSchema, Schema, SchemaProperty } from "./schema";
 
-export interface ComponentSpec<T extends Record<keyof T, T>> {
+const $isComponent = Symbol();
+const $isComponentInstance = Symbol();
+
+/** Component specification object */
+export interface ComponentSpec<T> {
   name: string;
-  defaults: T;
+  schema: Schema<T>;
 }
 
-export interface Component<T> extends ComponentPrototype {
+/** Component object */
+export type Component<T> = ComponentPrototype & {
   name: string;
-  defaults: T;
+  schema: Schema<T>;
+};
+
+/** Component prototype object */
+export interface ComponentPrototype {
+  readonly [$isComponent]: true;
 }
 
-interface ComponentPrototype {
-  isComponent: true;
-}
-
-/** Component prototype */
-const Component = Object.create(null, {
-  isComponent: {
+/** Component prototype object */
+const ComponentProto = Object.create(Object.prototype, {
+  [$isComponent]: {
     value: true,
     enumerable: true,
     configurable: false,
-  }
+    writable: false,
+  },
 }) as ComponentPrototype;
 
-/**
- * Component properties must be non-empty objects
- * @param defaults the default properties object to validate
- * @returns true if object is valid
- */
-function isValidDefaults<T>(defaults: T): defaults is T {
-  return isObject(defaults) && Object.keys(defaults).length > 0;
+export interface ComponentInstanceSpec {
+  id: number;
+  world: World;
 }
 
-/**
- * Test if an object is a valid component
- * @param component the object to test
- * @returns true if the
- */
+export type ComponentInstance<T> = ComponentInstancePrototype &
+  Component<T> &
+  SOA<T> & {
+    entities: Bitmask;
+    id: number;
+    world: World;
+    getPropertyArrays: () => [string, unknown[] | TypedArray][];
+  };
+
+export interface ComponentInstancePrototype {
+  [$isComponentInstance]: true;
+}
+
+const InstanceProto = {
+  [$isComponentInstance]: {
+    value: true,
+    enumerable: true,
+    configurable: false,
+    writable: false,
+  },
+};
+
 export function isComponent(object: unknown): object is Component<unknown> {
-  return Boolean(
-    isObject(object) &&
-    Object.is(Component, Object.getPrototypeOf(object)) &&
-    object['name'] !== undefined &&
-    object['defaults'] !== undefined
-  );
+  return isObject(object) && Object.is(ComponentProto, Object.getPrototypeOf(object));
+}
+
+export function isComponentInstance(object: unknown): object is ComponentInstance<unknown> {
+  return isObject(object) && object[$isComponentInstance as never] === true;
+}
+
+export function createComponentInstance<T>(component: Component<T>, spec: ComponentInstanceSpec): ComponentInstance<T> {
+  // are we dealing with a valid component?
+  if (isComponent(component) === false) {
+    throw new TypeError("createComponentInstance: Invalid component provided.");
+  }
+
+  const { schema } = component;
+  const { id, world } = spec;
+
+  // create prototype
+  const proto = Object.create(component, InstanceProto) as ComponentInstancePrototype;
+
+  const instance = Object.create(proto, {
+    entities: {
+      value: createBitmask(world.config.maxEntities),
+      enumerable: true,
+      configurable: false,
+      writable: false,
+    },
+    id: {
+      value: id,
+      enumerable: true,
+      writable: false,
+      configurable: false,
+    },
+    world: {
+      value: world,
+      enumerable: true,
+      writable: false,
+      configurable: false,
+    },
+    getPropertyArrays: {
+      value: function (this: ComponentInstance<T>): [string, Array<unknown> | TypedArray][] {
+        const schema = Object.keys(this.schema);
+        return Object.entries(this).filter(([key, _]) => schema.includes(key)) as [
+          string,
+          Array<unknown> | TypedArray
+        ][];
+      },
+      enumerable: true,
+      writable: false,
+      configurable: false,
+    },
+  }) as ComponentInstance<T>;
+
+  Object.entries(schema).forEach(([key, value]) => {
+    const { clone, create, init } = value as SchemaProperty<unknown, unknown>;
+    let array;
+    if (isTypedArray(init)) {
+      const buffer = new ArrayBuffer(init.BYTES_PER_ELEMENT * world.config.maxEntities);
+      array = create(buffer);
+    } else {
+      array = new Array(world.config.maxEntities).fill(clone(init));
+    }
+    Object.defineProperty(instance, key, {
+      value: array,
+      enumerable: true,
+      configurable: false,
+      writable: false,
+    });
+  });
+
+  return instance;
 }
 
 /**
  * Creates and returns a new component object
  * @param spec the component's specification
  * @param spec.name the component's name
- * @param spec.defaults the component's default properties
+ * @param spec.schema the component's schema specification
  * @returns the created component
  */
-export function createComponent<T extends Record<keyof T, T>>(spec: ComponentSpec<T>): Component<T> {
-  const { name, defaults } = spec;
+export function createComponent<T>(spec: ComponentSpec<T>): Component<T> {
+  const { name, schema } = spec;
 
   // check validity of name
   if (!isValidName(name)) {
-    throw new SyntaxError('Component name is invalid.');
+    throw new SyntaxError("createComponent: supplied name is invalid.");
   }
 
   // check validity of properties
-  if(!isValidDefaults(defaults)) {
-    throw new TypeError(`Component "${name}"'s default properties are invalid.`);
+  if (!isValidSchema(schema)) {
+    throw new TypeError(`createComponent: Schema for "${name}" is invalid.`);
   }
 
-  // deep clone default properties
-  const _defaults = deepAssignObjects({}, defaults as unknown as Record<string, unknown>);
-
-  return Object.create(Component, {
-    defaults: {
-      value: _defaults,
-      enumerable: true,
-    },
+  return Object.create(ComponentProto, {
     name: {
       value: name,
       enumerable: true,
+      configurable: false,
+      writable: false,
+    },
+    schema: {
+      value: { ...schema },
+      enumerable: true,
+      configurable: false,
+      writable: false,
     },
   }) as Component<T>;
 }
