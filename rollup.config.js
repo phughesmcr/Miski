@@ -57,7 +57,7 @@ export default [
       typescript({
         exclude: [ "node_modules", "*.d.ts", "**/*.d.ts" ],
         include: [ "*.ts+(|x)", "**/*.ts+(|x)", "*.m?js+(|x)", "**/*.m?js+(|x)" ],
-        module: "ESNext",
+        module: "ES2020",
         tsconfig: "tsconfig.json",
         tslib: require('tslib'),
         typescript: require("typescript"),
@@ -71,7 +71,7 @@ export default [
       }),
 
       terser({
-        ecma: 2021,
+        ecma: 2020,
         module: true,
         keep_classnames: true,
         keep_fnames: true,
@@ -136,7 +136,7 @@ export default [
       }),
 
       terser({
-        ecma: 2021,
+        ecma: 2020,
         compress: true,
         mangle: true,
       }),
@@ -186,7 +186,7 @@ export default [
       }),
 
       terser({
-        ecma: 2021,
+        ecma: 2020,
         compress: true,
         mangle: true,
       }),
@@ -240,7 +240,7 @@ export default [
       }),
 
       terser({
-        ecma: 2021,
+        ecma: 2020,
         compress: true,
         mangle: true,
       }),
