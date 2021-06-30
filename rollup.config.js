@@ -63,6 +63,13 @@ export default [
         typescript: require("typescript"),
       }),
 
+      babel({
+        extensions,
+        babelHelpers: 'bundled',
+        include: ["src/**/*"],
+        exclude: ["node_modules/**/*"],
+      }),
+
       terser({
         ecma: 2021,
         module: true,
