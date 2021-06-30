@@ -3,23 +3,28 @@ export function random(a, b) {
   return Math.random() * (b - a) + a;
 }
 
+
 export function intersection(circleA, circleB) {
   var a, dx, dy, d, h, rx, ry;
   var x2, y2;
 
+  // [position.x, position.y, radius]
+  const [apx, apy, ar] = circleA;
+  const [bpx, bpy, br] = circleB;
+
   // dx and dy are the vertical and horizontal distances between the circle centers.
-  dx = circleB.Position.x - circleA.Position.x;
-  dy = circleB.Position.y - circleA.Position.y;
+  dx = bpx - apx;
+  dy = bpy - apy;
 
   // Distance between the centers
   d = Math.sqrt(dy * dy + dx * dx);
 
   // Check for solvability
-  if (d > circleA.Circle.radius + circleB.Circle.radius) {
+  if (d > ar + br) {
     // No solution: circles don't intersect
     return false;
   }
-  if (d < Math.abs(circleA.Circle.radius - circleB.Circle.radius)) {
+  if (d < Math.abs(ar - br)) {
     // No solution: one circle is contained in the other
     return false;
   }
@@ -31,19 +36,19 @@ export function intersection(circleA, circleB) {
 
   /* Determine the distance from point 0 to point 2. */
   a =
-    (circleA.Circle.radius * circleA.Circle.radius -
-      circleB.Circle.radius * circleB.Circle.radius +
+    (ar * ar -
+      br * br +
       d * d) /
     (2.0 * d);
 
   /* Determine the coordinates of point 2. */
-  x2 = circleA.Position.x + (dx * a) / d;
-  y2 = circleA.Position.y + (dy * a) / d;
+  x2 = apx + (dx * a) / d;
+  y2 = apy + (dy * a) / d;
 
   /* Determine the distance from point 2 to either of the
    * intersection points.
    */
-  h = Math.sqrt(circleA.Circle.radius * circleA.Circle.radius - a * a);
+  h = Math.sqrt(ar * ar - a * a);
 
   /* Now determine the offsets of the intersection points from
    * point 2.
