@@ -62,29 +62,34 @@
 				<section class="tsd-panel tsd-index-panel">
 					<div class="tsd-index-content">
 						<section class="tsd-index-section ">
-							<h3>Classes</h3>
-							<ul class="tsd-index-list">
-								<li class="tsd-kind-class tsd-has-type-parameter"><a href="classes/component.html" class="tsd-kind-icon">Component</a></li>
-								<li class="tsd-kind-class"><a href="classes/entity.html" class="tsd-kind-icon">Entity</a></li>
-								<li class="tsd-kind-class"><a href="classes/query.html" class="tsd-kind-icon">Query</a></li>
-								<li class="tsd-kind-class"><a href="classes/system.html" class="tsd-kind-icon">System</a></li>
-							</ul>
-						</section>
-						<section class="tsd-index-section ">
 							<h3>Interfaces</h3>
 							<ul class="tsd-index-list">
 								<li class="tsd-kind-interface tsd-has-type-parameter"><a href="interfaces/componentspec.html" class="tsd-kind-icon">Component<wbr>Spec</a></li>
 								<li class="tsd-kind-interface tsd-has-type-parameter"><a href="interfaces/poolable.html" class="tsd-kind-icon">Poolable</a></li>
+								<li class="tsd-kind-interface"><a href="interfaces/query.html" class="tsd-kind-icon">Query</a></li>
 								<li class="tsd-kind-interface"><a href="interfaces/queryspec.html" class="tsd-kind-icon">Query<wbr>Spec</a></li>
+								<li class="tsd-kind-interface"><a href="interfaces/system.html" class="tsd-kind-icon">System</a></li>
 								<li class="tsd-kind-interface"><a href="interfaces/systemspec.html" class="tsd-kind-icon">System<wbr>Spec</a></li>
-								<li class="tsd-kind-interface"><a href="interfaces/toggleable.html" class="tsd-kind-icon">Toggleable</a></li>
-								<li class="tsd-kind-interface"><a href="interfaces/world.html" class="tsd-kind-icon">World</a></li>
 								<li class="tsd-kind-interface"><a href="interfaces/worldspec.html" class="tsd-kind-icon">World<wbr>Spec</a></li>
+							</ul>
+						</section>
+						<section class="tsd-index-section ">
+							<h3>Type aliases</h3>
+							<ul class="tsd-index-list">
+								<li class="tsd-kind-type-alias"><a href="modules.html#entity" class="tsd-kind-icon">Entity</a></li>
+								<li class="tsd-kind-type-alias"><a href="modules.html#world" class="tsd-kind-icon">World</a></li>
+							</ul>
+						</section>
+						<section class="tsd-index-section ">
+							<h3>Variables</h3>
+							<ul class="tsd-index-list">
+								<li class="tsd-kind-variable"><a href="modules.html#types" class="tsd-kind-icon">Types</a></li>
 							</ul>
 						</section>
 						<section class="tsd-index-section ">
 							<h3>Functions</h3>
 							<ul class="tsd-index-list">
+								<li class="tsd-kind-function tsd-has-type-parameter"><a href="modules.html#createcomponent" class="tsd-kind-icon">create<wbr>Component</a></li>
 								<li class="tsd-kind-function"><a href="modules.html#createworld" class="tsd-kind-icon">create<wbr>World</a></li>
 							</ul>
 						</section>
@@ -92,18 +97,162 @@
 				</section>
 			</section>
 			<section class="tsd-panel-group tsd-member-group ">
+				<h2>Type aliases</h2>
+				<section class="tsd-panel tsd-member tsd-kind-type-alias">
+					<a name="entity" class="tsd-anchor"></a>
+					<h3>Entity</h3>
+					<div class="tsd-signature tsd-kind-icon">Entity<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span></div>
+					<aside class="tsd-sources">
+						<ul>
+							<li>Defined in <a href="https://github.com/phughesmcr/Miski/blob/daf1332/src/entity/entity-manager.ts#L14">entity/entity-manager.ts:14</a></li>
+						</ul>
+					</aside>
+					<div class="tsd-comment tsd-typography">
+						<div class="lead">
+							<p>Entities are indexes.</p>
+						</div>
+					</div>
+				</section>
+				<section class="tsd-panel tsd-member tsd-kind-type-alias">
+					<a name="world" class="tsd-anchor"></a>
+					<h3>World</h3>
+					<div class="tsd-signature tsd-kind-icon">World<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">ArchetypeManager</span><span class="tsd-signature-symbol"> &amp; </span><span class="tsd-signature-type">ComponentManager</span><span class="tsd-signature-symbol"> &amp; </span><span class="tsd-signature-type">EntityManager</span><span class="tsd-signature-symbol"> &amp; </span><span class="tsd-signature-type">QueryManager</span><span class="tsd-signature-symbol"> &amp; </span><span class="tsd-signature-type">StepManager</span><span class="tsd-signature-symbol"> &amp; </span><span class="tsd-signature-type">SystemManager</span><span class="tsd-signature-symbol"> &amp; </span><span class="tsd-signature-symbol">{ </span>config<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">Readonly</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">Required</span><span class="tsd-signature-symbol">&lt;</span><a href="interfaces/worldspec.html" class="tsd-signature-type" data-tsd-kind="Interface">WorldSpec</a><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">; </span>id<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">string</span><span class="tsd-signature-symbol"> }</span></div>
+					<aside class="tsd-sources">
+						<ul>
+							<li>Defined in <a href="https://github.com/phughesmcr/Miski/blob/daf1332/src/world.ts#L25">world.ts:25</a></li>
+						</ul>
+					</aside>
+				</section>
+			</section>
+			<section class="tsd-panel-group tsd-member-group ">
+				<h2>Variables</h2>
+				<section class="tsd-panel tsd-member tsd-kind-variable">
+					<a name="types" class="tsd-anchor"></a>
+					<h3><span class="tsd-flag ts-flagConst">Const</span> Types</h3>
+					<div class="tsd-signature tsd-kind-icon">Types<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">{ </span>Array<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">ArrayPropType</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">unknown</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">; </span>Boolean<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">BooleanPropType</span><span class="tsd-signature-symbol">; </span>JSON<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">JSONPropType</span><span class="tsd-signature-symbol">; </span>Map<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">MapPropType</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">unknown</span><span class="tsd-signature-symbol">, </span><span class="tsd-signature-type">unknown</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">; </span>Number<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">NumberPropType</span><span class="tsd-signature-symbol">; </span>Object<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">ObjectPropType</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">Record</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">, </span><span class="tsd-signature-type">unknown</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">; </span>Ref<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">RefPropType</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">unknown</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">; </span>Set<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">SetPropType</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">unknown</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">; </span>String<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">StringPropType</span><span class="tsd-signature-symbol">; </span>f32<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">TypedArrayType</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">Float32Array</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">; </span>f64<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">TypedArrayType</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">Float64Array</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">; </span>i16<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">TypedArrayType</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">Int16Array</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">; </span>i32<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">TypedArrayType</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">Int32Array</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">; </span>i64<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">TypedArrayType</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">BigInt64Array</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">; </span>i8<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">TypedArrayType</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">Int8Array</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">; </span>u16<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">TypedArrayType</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">Uint16Array</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">; </span>u32<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">TypedArrayType</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">Uint32Array</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">; </span>u64<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">TypedArrayType</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">BigUint64Array</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">; </span>u8<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">TypedArrayType</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">Uint8Array</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">; </span>u8c<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">TypedArrayType</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">Uint8ClampedArray</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol"> }</span><span class="tsd-signature-symbol"> = ...</span></div>
+					<aside class="tsd-sources">
+						<ul>
+							<li>Defined in <a href="https://github.com/phughesmcr/Miski/blob/daf1332/src/component/schema.ts#L305">component/schema.ts:305</a></li>
+						</ul>
+					</aside>
+					<div class="tsd-type-declaration">
+						<h4>Type declaration</h4>
+						<ul class="tsd-parameters">
+							<li class="tsd-parameter">
+								<h5>Array<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">ArrayPropType</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">unknown</span><span class="tsd-signature-symbol">&gt;</span></h5>
+							</li>
+							<li class="tsd-parameter">
+								<h5>Boolean<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">BooleanPropType</span></h5>
+							</li>
+							<li class="tsd-parameter">
+								<h5>JSON<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">JSONPropType</span></h5>
+							</li>
+							<li class="tsd-parameter">
+								<h5>Map<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">MapPropType</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">unknown</span><span class="tsd-signature-symbol">, </span><span class="tsd-signature-type">unknown</span><span class="tsd-signature-symbol">&gt;</span></h5>
+							</li>
+							<li class="tsd-parameter">
+								<h5>Number<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">NumberPropType</span></h5>
+							</li>
+							<li class="tsd-parameter">
+								<h5>Object<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">ObjectPropType</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">Record</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">, </span><span class="tsd-signature-type">unknown</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">&gt;</span></h5>
+							</li>
+							<li class="tsd-parameter">
+								<h5>Ref<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">RefPropType</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">unknown</span><span class="tsd-signature-symbol">&gt;</span></h5>
+							</li>
+							<li class="tsd-parameter">
+								<h5>Set<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">SetPropType</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">unknown</span><span class="tsd-signature-symbol">&gt;</span></h5>
+							</li>
+							<li class="tsd-parameter">
+								<h5>String<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">StringPropType</span></h5>
+							</li>
+							<li class="tsd-parameter">
+								<h5>f32<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">TypedArrayType</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">Float32Array</span><span class="tsd-signature-symbol">&gt;</span></h5>
+							</li>
+							<li class="tsd-parameter">
+								<h5>f64<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">TypedArrayType</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">Float64Array</span><span class="tsd-signature-symbol">&gt;</span></h5>
+							</li>
+							<li class="tsd-parameter">
+								<h5>i16<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">TypedArrayType</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">Int16Array</span><span class="tsd-signature-symbol">&gt;</span></h5>
+							</li>
+							<li class="tsd-parameter">
+								<h5>i32<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">TypedArrayType</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">Int32Array</span><span class="tsd-signature-symbol">&gt;</span></h5>
+							</li>
+							<li class="tsd-parameter">
+								<h5>i64<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">TypedArrayType</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">BigInt64Array</span><span class="tsd-signature-symbol">&gt;</span></h5>
+							</li>
+							<li class="tsd-parameter">
+								<h5>i8<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">TypedArrayType</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">Int8Array</span><span class="tsd-signature-symbol">&gt;</span></h5>
+							</li>
+							<li class="tsd-parameter">
+								<h5>u16<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">TypedArrayType</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">Uint16Array</span><span class="tsd-signature-symbol">&gt;</span></h5>
+							</li>
+							<li class="tsd-parameter">
+								<h5>u32<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">TypedArrayType</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">Uint32Array</span><span class="tsd-signature-symbol">&gt;</span></h5>
+							</li>
+							<li class="tsd-parameter">
+								<h5>u64<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">TypedArrayType</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">BigUint64Array</span><span class="tsd-signature-symbol">&gt;</span></h5>
+							</li>
+							<li class="tsd-parameter">
+								<h5>u8<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">TypedArrayType</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">Uint8Array</span><span class="tsd-signature-symbol">&gt;</span></h5>
+							</li>
+							<li class="tsd-parameter">
+								<h5>u8c<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">TypedArrayType</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">Uint8ClampedArray</span><span class="tsd-signature-symbol">&gt;</span></h5>
+							</li>
+						</ul>
+					</div>
+				</section>
+			</section>
+			<section class="tsd-panel-group tsd-member-group ">
 				<h2>Functions</h2>
-				<section class="tsd-panel tsd-member tsd-kind-function">
-					<a name="createworld" class="tsd-anchor"></a>
-					<h3>create<wbr>World</h3>
-					<ul class="tsd-signatures tsd-kind-function">
-						<li class="tsd-signature tsd-kind-icon">create<wbr>World<span class="tsd-signature-symbol">(</span>spec<span class="tsd-signature-symbol">?: </span><a href="interfaces/worldspec.html" class="tsd-signature-type" data-tsd-kind="Interface">WorldSpec</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><a href="interfaces/world.html" class="tsd-signature-type" data-tsd-kind="Interface">World</a></li>
+				<section class="tsd-panel tsd-member tsd-kind-function tsd-has-type-parameter">
+					<a name="createcomponent" class="tsd-anchor"></a>
+					<h3>create<wbr>Component</h3>
+					<ul class="tsd-signatures tsd-kind-function tsd-has-type-parameter">
+						<li class="tsd-signature tsd-kind-icon">create<wbr>Component&lt;T&gt;<span class="tsd-signature-symbol">(</span>spec<span class="tsd-signature-symbol">: </span><a href="interfaces/componentspec.html" class="tsd-signature-type" data-tsd-kind="Interface">ComponentSpec</a><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">T</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">Component</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">T</span><span class="tsd-signature-symbol">&gt;</span></li>
 					</ul>
 					<ul class="tsd-descriptions">
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<ul>
-									<li>Defined in <a href="https://github.com/phughesmcr/Miski/blob/a6f6ae0/src/world.ts#L83">world.ts:83</a></li>
+									<li>Defined in <a href="https://github.com/phughesmcr/Miski/blob/daf1332/src/component/component.ts#L154">component/component.ts:154</a></li>
+								</ul>
+							</aside>
+							<div class="tsd-comment tsd-typography">
+								<div class="lead">
+									<p>Creates and returns a new component object</p>
+								</div>
+							</div>
+							<h4 class="tsd-type-parameters-title">Type parameters</h4>
+							<ul class="tsd-type-parameters">
+								<li>
+									<h4>T</h4>
+								</li>
+							</ul>
+							<h4 class="tsd-parameters-title">Parameters</h4>
+							<ul class="tsd-parameters">
+								<li>
+									<h5>spec: <a href="interfaces/componentspec.html" class="tsd-signature-type" data-tsd-kind="Interface">ComponentSpec</a><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">T</span><span class="tsd-signature-symbol">&gt;</span></h5>
+									<div class="tsd-comment tsd-typography">
+										<p>the component&#39;s specification</p>
+									</div>
+								</li>
+							</ul>
+							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">Component</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">T</span><span class="tsd-signature-symbol">&gt;</span></h4>
+							<p>the created component</p>
+						</li>
+					</ul>
+				</section>
+				<section class="tsd-panel tsd-member tsd-kind-function">
+					<a name="createworld" class="tsd-anchor"></a>
+					<h3>create<wbr>World</h3>
+					<ul class="tsd-signatures tsd-kind-function">
+						<li class="tsd-signature tsd-kind-icon">create<wbr>World<span class="tsd-signature-symbol">(</span>spec<span class="tsd-signature-symbol">?: </span><a href="interfaces/worldspec.html" class="tsd-signature-type" data-tsd-kind="Interface">WorldSpec</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><a href="modules.html#world" class="tsd-signature-type" data-tsd-kind="Type alias">World</a></li>
+					</ul>
+					<ul class="tsd-descriptions">
+						<li class="tsd-description">
+							<aside class="tsd-sources">
+								<ul>
+									<li>Defined in <a href="https://github.com/phughesmcr/Miski/blob/daf1332/src/world.ts#L44">world.ts:44</a></li>
 								</ul>
 							</aside>
 							<div class="tsd-comment tsd-typography">
@@ -120,7 +269,7 @@
 									</div>
 								</li>
 							</ul>
-							<h4 class="tsd-returns-title">Returns <a href="interfaces/world.html" class="tsd-signature-type" data-tsd-kind="Interface">World</a></h4>
+							<h4 class="tsd-returns-title">Returns <a href="modules.html#world" class="tsd-signature-type" data-tsd-kind="Type alias">World</a></h4>
 							<p>a new World object</p>
 						</li>
 					</ul>
@@ -137,18 +286,6 @@
 			</nav>
 			<nav class="tsd-navigation secondary menu-sticky">
 				<ul class="before-current">
-					<li class=" tsd-kind-class tsd-has-type-parameter">
-						<a href="classes/component.html" class="tsd-kind-icon">Component</a>
-					</li>
-					<li class=" tsd-kind-class">
-						<a href="classes/entity.html" class="tsd-kind-icon">Entity</a>
-					</li>
-					<li class=" tsd-kind-class">
-						<a href="classes/query.html" class="tsd-kind-icon">Query</a>
-					</li>
-					<li class=" tsd-kind-class">
-						<a href="classes/system.html" class="tsd-kind-icon">System</a>
-					</li>
 					<li class=" tsd-kind-interface tsd-has-type-parameter">
 						<a href="interfaces/componentspec.html" class="tsd-kind-icon">Component<wbr>Spec</a>
 					</li>
@@ -156,19 +293,31 @@
 						<a href="interfaces/poolable.html" class="tsd-kind-icon">Poolable</a>
 					</li>
 					<li class=" tsd-kind-interface">
+						<a href="interfaces/query.html" class="tsd-kind-icon">Query</a>
+					</li>
+					<li class=" tsd-kind-interface">
 						<a href="interfaces/queryspec.html" class="tsd-kind-icon">Query<wbr>Spec</a>
+					</li>
+					<li class=" tsd-kind-interface">
+						<a href="interfaces/system.html" class="tsd-kind-icon">System</a>
 					</li>
 					<li class=" tsd-kind-interface">
 						<a href="interfaces/systemspec.html" class="tsd-kind-icon">System<wbr>Spec</a>
 					</li>
 					<li class=" tsd-kind-interface">
-						<a href="interfaces/toggleable.html" class="tsd-kind-icon">Toggleable</a>
-					</li>
-					<li class=" tsd-kind-interface">
-						<a href="interfaces/world.html" class="tsd-kind-icon">World</a>
-					</li>
-					<li class=" tsd-kind-interface">
 						<a href="interfaces/worldspec.html" class="tsd-kind-icon">World<wbr>Spec</a>
+					</li>
+					<li class=" tsd-kind-type-alias">
+						<a href="modules.html#entity" class="tsd-kind-icon">Entity</a>
+					</li>
+					<li class=" tsd-kind-type-alias">
+						<a href="modules.html#world" class="tsd-kind-icon">World</a>
+					</li>
+					<li class=" tsd-kind-variable">
+						<a href="modules.html#types" class="tsd-kind-icon">Types</a>
+					</li>
+					<li class=" tsd-kind-function tsd-has-type-parameter">
+						<a href="modules.html#createcomponent" class="tsd-kind-icon">create<wbr>Component</a>
 					</li>
 					<li class=" tsd-kind-function">
 						<a href="modules.html#createworld" class="tsd-kind-icon">create<wbr>World</a>
@@ -183,16 +332,7 @@
 		<h2>Legend</h2>
 		<div class="tsd-legend-group">
 			<ul class="tsd-legend">
-				<li class="tsd-kind-constructor tsd-parent-kind-class"><span class="tsd-kind-icon">Constructor</span></li>
-				<li class="tsd-kind-property tsd-parent-kind-class"><span class="tsd-kind-icon">Property</span></li>
-				<li class="tsd-kind-method tsd-parent-kind-class"><span class="tsd-kind-icon">Method</span></li>
-				<li class="tsd-kind-accessor tsd-parent-kind-class"><span class="tsd-kind-icon">Accessor</span></li>
-			</ul>
-			<ul class="tsd-legend">
 				<li class="tsd-kind-property tsd-parent-kind-interface"><span class="tsd-kind-icon">Property</span></li>
-			</ul>
-			<ul class="tsd-legend">
-				<li class="tsd-kind-property tsd-parent-kind-class tsd-is-private"><span class="tsd-kind-icon">Private property</span></li>
 			</ul>
 		</div>
 	</div>

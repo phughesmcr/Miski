@@ -65,6 +65,13 @@
 <div class="container container-main">
 	<div class="row">
 		<div class="col-8 col-content">
+			<section class="tsd-panel tsd-comment">
+				<div class="tsd-comment tsd-typography">
+					<div class="lead">
+						<p>Component specification object</p>
+					</div>
+				</div>
+			</section>
 			<section class="tsd-panel tsd-type-parameters">
 				<h3>Type parameters</h3>
 				<ul class="tsd-type-parameters">
@@ -88,8 +95,8 @@
 						<section class="tsd-index-section ">
 							<h3>Properties</h3>
 							<ul class="tsd-index-list">
-								<li class="tsd-kind-property tsd-parent-kind-interface"><a href="componentspec.html#defaults" class="tsd-kind-icon">defaults</a></li>
 								<li class="tsd-kind-property tsd-parent-kind-interface"><a href="componentspec.html#name" class="tsd-kind-icon">name</a></li>
+								<li class="tsd-kind-property tsd-parent-kind-interface"><a href="componentspec.html#schema" class="tsd-kind-icon">schema</a></li>
 							</ul>
 						</section>
 					</div>
@@ -98,22 +105,22 @@
 			<section class="tsd-panel-group tsd-member-group ">
 				<h2>Properties</h2>
 				<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-interface">
-					<a name="defaults" class="tsd-anchor"></a>
-					<h3>defaults</h3>
-					<div class="tsd-signature tsd-kind-icon">defaults<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">T</span></div>
-					<aside class="tsd-sources">
-						<ul>
-							<li>Defined in <a href="https://github.com/phughesmcr/Miski/blob/a6f6ae0/src/component/component.ts#L11">component/component.ts:11</a></li>
-						</ul>
-					</aside>
-				</section>
-				<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-interface">
 					<a name="name" class="tsd-anchor"></a>
 					<h3>name</h3>
 					<div class="tsd-signature tsd-kind-icon">name<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div>
 					<aside class="tsd-sources">
 						<ul>
-							<li>Defined in <a href="https://github.com/phughesmcr/Miski/blob/a6f6ae0/src/component/component.ts#L10">component/component.ts:10</a></li>
+							<li>Defined in <a href="https://github.com/phughesmcr/Miski/blob/daf1332/src/component/component.ts#L22">component/component.ts:22</a></li>
+						</ul>
+					</aside>
+				</section>
+				<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-interface">
+					<a name="schema" class="tsd-anchor"></a>
+					<h3>schema</h3>
+					<div class="tsd-signature tsd-kind-icon">schema<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">Schema</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">T</span><span class="tsd-signature-symbol">&gt;</span></div>
+					<aside class="tsd-sources">
+						<ul>
+							<li>Defined in <a href="https://github.com/phughesmcr/Miski/blob/daf1332/src/component/component.ts#L23">component/component.ts:23</a></li>
 						</ul>
 					</aside>
 				</section>
@@ -129,28 +136,16 @@
 			</nav>
 			<nav class="tsd-navigation secondary menu-sticky">
 				<ul class="before-current">
-					<li class=" tsd-kind-class tsd-has-type-parameter">
-						<a href="../classes/component.html" class="tsd-kind-icon">Component</a>
-					</li>
-					<li class=" tsd-kind-class">
-						<a href="../classes/entity.html" class="tsd-kind-icon">Entity</a>
-					</li>
-					<li class=" tsd-kind-class">
-						<a href="../classes/query.html" class="tsd-kind-icon">Query</a>
-					</li>
-					<li class=" tsd-kind-class">
-						<a href="../classes/system.html" class="tsd-kind-icon">System</a>
-					</li>
 				</ul>
 				<ul class="current">
 					<li class="current tsd-kind-interface tsd-has-type-parameter">
 						<a href="componentspec.html" class="tsd-kind-icon">Component<wbr>Spec</a>
 						<ul>
 							<li class=" tsd-kind-property tsd-parent-kind-interface">
-								<a href="componentspec.html#defaults" class="tsd-kind-icon">defaults</a>
+								<a href="componentspec.html#name" class="tsd-kind-icon">name</a>
 							</li>
 							<li class=" tsd-kind-property tsd-parent-kind-interface">
-								<a href="componentspec.html#name" class="tsd-kind-icon">name</a>
+								<a href="componentspec.html#schema" class="tsd-kind-icon">schema</a>
 							</li>
 						</ul>
 					</li>
@@ -160,19 +155,31 @@
 						<a href="poolable.html" class="tsd-kind-icon">Poolable</a>
 					</li>
 					<li class=" tsd-kind-interface">
+						<a href="query.html" class="tsd-kind-icon">Query</a>
+					</li>
+					<li class=" tsd-kind-interface">
 						<a href="queryspec.html" class="tsd-kind-icon">Query<wbr>Spec</a>
+					</li>
+					<li class=" tsd-kind-interface">
+						<a href="system.html" class="tsd-kind-icon">System</a>
 					</li>
 					<li class=" tsd-kind-interface">
 						<a href="systemspec.html" class="tsd-kind-icon">System<wbr>Spec</a>
 					</li>
 					<li class=" tsd-kind-interface">
-						<a href="toggleable.html" class="tsd-kind-icon">Toggleable</a>
-					</li>
-					<li class=" tsd-kind-interface">
-						<a href="world.html" class="tsd-kind-icon">World</a>
-					</li>
-					<li class=" tsd-kind-interface">
 						<a href="worldspec.html" class="tsd-kind-icon">World<wbr>Spec</a>
+					</li>
+					<li class=" tsd-kind-type-alias">
+						<a href="../modules.html#entity" class="tsd-kind-icon">Entity</a>
+					</li>
+					<li class=" tsd-kind-type-alias">
+						<a href="../modules.html#world" class="tsd-kind-icon">World</a>
+					</li>
+					<li class=" tsd-kind-variable">
+						<a href="../modules.html#types" class="tsd-kind-icon">Types</a>
+					</li>
+					<li class=" tsd-kind-function tsd-has-type-parameter">
+						<a href="../modules.html#createcomponent" class="tsd-kind-icon">create<wbr>Component</a>
 					</li>
 					<li class=" tsd-kind-function">
 						<a href="../modules.html#createworld" class="tsd-kind-icon">create<wbr>World</a>
@@ -187,16 +194,7 @@
 		<h2>Legend</h2>
 		<div class="tsd-legend-group">
 			<ul class="tsd-legend">
-				<li class="tsd-kind-constructor tsd-parent-kind-class"><span class="tsd-kind-icon">Constructor</span></li>
-				<li class="tsd-kind-property tsd-parent-kind-class"><span class="tsd-kind-icon">Property</span></li>
-				<li class="tsd-kind-method tsd-parent-kind-class"><span class="tsd-kind-icon">Method</span></li>
-				<li class="tsd-kind-accessor tsd-parent-kind-class"><span class="tsd-kind-icon">Accessor</span></li>
-			</ul>
-			<ul class="tsd-legend">
 				<li class="tsd-kind-property tsd-parent-kind-interface"><span class="tsd-kind-icon">Property</span></li>
-			</ul>
-			<ul class="tsd-legend">
-				<li class="tsd-kind-property tsd-parent-kind-class tsd-is-private"><span class="tsd-kind-icon">Private property</span></li>
 			</ul>
 		</div>
 	</div>

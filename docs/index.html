@@ -68,7 +68,11 @@
 					<h2>Contents</h2>
 				</a>
 				<ul>
-					<li><a href="#requirements">Requirements</a></li>
+					<li><a href="#purpose">Purpose</a><ul>
+							<li><a href="#goals">Goals</a></li>
+							<li><a href="#not-goals">Not Goals</a></li>
+						</ul>
+					</li>
 					<li><a href="#install">Install</a><ul>
 							<li><a href="#browser-etc">Browser etc.</a></li>
 							<li><a href="#npm">npm</a></li>
@@ -77,16 +81,30 @@
 					<li><a href="#example">Example</a></li>
 					<li><a href="#demos">Demos</a></li>
 					<li><a href="#benchmarks">Benchmarks</a></li>
-					<li><a href="#goals">Goals</a></li>
-					<li><a href="#not-goals">Not Goals</a></li>
-					<li><a href="#to-do-before-100-release">To-Do</a></li>
+					<li><a href="#to-do">To-Do</a></li>
+					<li><a href="#contributing">Contributing</a></li>
 					<li><a href="#acknowledgements">Acknowledgements</a></li>
 					<li><a href="#license">License</a></li>
 				</ul>
-				<a href="#requirements" id="requirements" style="color: inherit; text-decoration: none;">
-					<h2>Requirements</h2>
+				<a href="#purpose" id="purpose" style="color: inherit; text-decoration: none;">
+					<h2>Purpose</h2>
 				</a>
-				<p>Miski requires <code>BigInt</code> support.</p>
+				<p>Miski&#39;s purpose is to provide a stable ECS architecture for modern browsers.</p>
+				<a href="#goals" id="goals" style="color: inherit; text-decoration: none;">
+					<h3>Goals</h3>
+				</a>
+				<ul>
+					<li>To provide a stable, explicit, declarative API</li>
+					<li>To provide reasonable, predictable performance</li>
+				</ul>
+				<a href="#not-goals" id="not-goals" style="color: inherit; text-decoration: none;">
+					<h3>Not Goals</h3>
+				</a>
+				<ul>
+					<li>To be the fastest / smallest ECS on the web</li>
+					<li>To provide support for the majority of web users / web environments</li>
+					<li>To provide polyfills / workarounds / older browser support etc. for modern ECMAScript features</li>
+				</ul>
 				<a href="#install" id="install" style="color: inherit; text-decoration: none;">
 					<h2>Install</h2>
 				</a>
@@ -102,16 +120,14 @@
 				<a href="#example" id="example" style="color: inherit; text-decoration: none;">
 					<h2>Example</h2>
 				</a>
-				<pre><code class="language-javascript"><span style="color: #AF00DB">import</span><span style="color: #000000"> { </span><span style="color: #001080">createWorld</span><span style="color: #000000"> } </span><span style="color: #AF00DB">from</span><span style="color: #000000"> </span><span style="color: #A31515">&quot;../../dist/esm/index.min.js&quot;</span><span style="color: #000000">;</span>
+				<pre><code class="language-javascript"><span style="color: #AF00DB">import</span><span style="color: #000000"> { </span><span style="color: #001080">createComponent</span><span style="color: #000000">, </span><span style="color: #001080">createWorld</span><span style="color: #000000">, </span><span style="color: #001080">Types</span><span style="color: #000000"> } </span><span style="color: #AF00DB">from</span><span style="color: #000000"> </span><span style="color: #A31515">&#039;miski&#039;</span><span style="color: #000000">;</span>
 <span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">canvas</span><span style="color: #000000"> = </span><span style="color: #001080">document</span><span style="color: #000000">.</span><span style="color: #795E26">querySelector</span><span style="color: #000000">(</span><span style="color: #A31515">&#039;canvas&#039;</span><span style="color: #000000">);</span>
 <span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">ctx</span><span style="color: #000000"> = </span><span style="color: #001080">canvas</span><span style="color: #000000">.</span><span style="color: #795E26">getContext</span><span style="color: #000000">(</span><span style="color: #A31515">&#039;2d&#039;</span><span style="color: #000000">);</span>
 
 <span style="color: #008000">// create our world - most functions take place through the world object</span>
 <span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">world</span><span style="color: #000000"> = </span><span style="color: #795E26">createWorld</span><span style="color: #000000">({</span>
-<span style="color: #000000">  </span><span style="color: #001080">entityPoolGrowthFactor:</span><span style="color: #000000"> </span><span style="color: #098658">0.25</span><span style="color: #000000">,</span>
-<span style="color: #000000">  </span><span style="color: #001080">initialEntityPoolSize:</span><span style="color: #000000"> </span><span style="color: #098658">128</span><span style="color: #000000">,</span>
 <span style="color: #000000">  </span><span style="color: #001080">maxComponents:</span><span style="color: #000000"> </span><span style="color: #098658">256</span><span style="color: #000000">,</span>
-<span style="color: #000000">  </span><span style="color: #001080">maxEntities:</span><span style="color: #000000"> </span><span style="color: #267F99">Number</span><span style="color: #000000">.POSITIVE_INFINITY,</span>
+<span style="color: #000000">  </span><span style="color: #001080">maxEntities:</span><span style="color: #000000"> </span><span style="color: #098658">100_000</span><span style="color: #000000">,</span>
 <span style="color: #000000">  </span><span style="color: #001080">maxUpdates:</span><span style="color: #000000"> </span><span style="color: #098658">240</span><span style="color: #000000">,</span>
 <span style="color: #000000">  </span><span style="color: #001080">tempo:</span><span style="color: #000000"> </span><span style="color: #098658">1</span><span style="color: #000000"> / </span><span style="color: #098658">60</span><span style="color: #000000">,</span>
 <span style="color: #000000">});</span>
@@ -119,46 +135,56 @@
 <span style="color: #008000">// useful for debugging</span>
 <span style="color: #001080">window</span><span style="color: #000000">.</span><span style="color: #001080">world</span><span style="color: #000000"> = </span><span style="color: #001080">world</span><span style="color: #000000">;</span>
 
-<span style="color: #008000">// define some components</span>
-<span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">size</span><span style="color: #000000"> = </span><span style="color: #001080">world</span><span style="color: #000000">.</span><span style="color: #795E26">registerComponent</span><span style="color: #000000">({</span>
-<span style="color: #000000">  </span><span style="color: #008000">// component name can be any valid object property name</span>
+<span style="color: #008000">// define some components:</span>
+<span style="color: #008000">// components are reusable and not tied to a world instance</span>
+<span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">size</span><span style="color: #000000"> = </span><span style="color: #795E26">createComponent</span><span style="color: #000000">({</span>
 <span style="color: #000000">  </span><span style="color: #001080">name:</span><span style="color: #000000"> </span><span style="color: #A31515">&quot;size&quot;</span><span style="color: #000000">,</span>
-<span style="color: #000000">  </span><span style="color: #001080">defaults:</span><span style="color: #000000"> {</span>
-<span style="color: #000000">    </span><span style="color: #001080">height:</span><span style="color: #000000"> </span><span style="color: #098658">100</span><span style="color: #000000">,</span>
-<span style="color: #000000">    </span><span style="color: #001080">width:</span><span style="color: #000000"> </span><span style="color: #098658">100</span><span style="color: #000000">,</span>
+<span style="color: #000000">  </span><span style="color: #001080">schema:</span><span style="color: #000000"> {</span>
+<span style="color: #000000">    </span><span style="color: #001080">height:</span><span style="color: #000000"> </span><span style="color: #001080">Types</span><span style="color: #000000">.</span><span style="color: #001080">f32</span><span style="color: #000000">,</span>
+<span style="color: #000000">    </span><span style="color: #001080">width:</span><span style="color: #000000"> </span><span style="color: #001080">Types</span><span style="color: #000000">.</span><span style="color: #001080">f32</span><span style="color: #000000">,</span>
 <span style="color: #000000">  },</span>
 <span style="color: #000000">});</span>
 
-<span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">colour</span><span style="color: #000000"> = </span><span style="color: #001080">world</span><span style="color: #000000">.</span><span style="color: #795E26">registerComponent</span><span style="color: #000000">({</span>
+<span style="color: #008000">// we register components to a world like so:</span>
+<span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">iSize</span><span style="color: #000000"> = </span><span style="color: #001080">world</span><span style="color: #000000">.</span><span style="color: #795E26">registerComponent</span><span style="color: #000000">(</span><span style="color: #001080">size</span><span style="color: #000000">);</span>
+<span style="color: #008000">// this returns a ComponentInstance for use in queries</span>
+
+<span style="color: #008000">// lets continue making and registering components</span>
+<span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">colour</span><span style="color: #000000"> = </span><span style="color: #795E26">createComponent</span><span style="color: #000000">({</span>
 <span style="color: #000000">  </span><span style="color: #001080">name:</span><span style="color: #000000"> </span><span style="color: #A31515">&quot;colour&quot;</span><span style="color: #000000">,</span>
-<span style="color: #000000">  </span><span style="color: #001080">defaults:</span><span style="color: #000000"> {</span>
-<span style="color: #000000">    </span><span style="color: #001080">r:</span><span style="color: #000000"> </span><span style="color: #098658">255</span><span style="color: #000000">,</span>
-<span style="color: #000000">    </span><span style="color: #001080">g:</span><span style="color: #000000"> </span><span style="color: #098658">0</span><span style="color: #000000">,</span>
-<span style="color: #000000">    </span><span style="color: #001080">b:</span><span style="color: #000000"> </span><span style="color: #098658">0</span><span style="color: #000000">,</span>
+<span style="color: #000000">  </span><span style="color: #001080">schema:</span><span style="color: #000000"> {</span>
+<span style="color: #000000">    </span><span style="color: #001080">r:</span><span style="color: #000000"> </span><span style="color: #001080">Types</span><span style="color: #000000">.</span><span style="color: #001080">u8c</span><span style="color: #000000">,</span>
+<span style="color: #000000">    </span><span style="color: #001080">g:</span><span style="color: #000000"> </span><span style="color: #001080">Types</span><span style="color: #000000">.</span><span style="color: #001080">u8c</span><span style="color: #000000">,</span>
+<span style="color: #000000">    </span><span style="color: #001080">b:</span><span style="color: #000000"> </span><span style="color: #001080">Types</span><span style="color: #000000">.</span><span style="color: #001080">u8c</span><span style="color: #000000">,</span>
 <span style="color: #000000">  },</span>
 <span style="color: #000000">});</span>
+<span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">iColour</span><span style="color: #000000"> = </span><span style="color: #001080">world</span><span style="color: #000000">.</span><span style="color: #795E26">registerComponent</span><span style="color: #000000">(</span><span style="color: #001080">colour</span><span style="color: #000000">);</span>
 
-<span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">position</span><span style="color: #000000"> = </span><span style="color: #001080">world</span><span style="color: #000000">.</span><span style="color: #795E26">registerComponent</span><span style="color: #000000">({</span>
+<span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">position</span><span style="color: #000000"> = </span><span style="color: #795E26">createComponent</span><span style="color: #000000">({</span>
 <span style="color: #000000">  </span><span style="color: #001080">name:</span><span style="color: #000000"> </span><span style="color: #A31515">&quot;position&quot;</span><span style="color: #000000">,</span>
-<span style="color: #000000">  </span><span style="color: #001080">defaults:</span><span style="color: #000000"> {</span>
-<span style="color: #000000">    </span><span style="color: #001080">x:</span><span style="color: #000000"> </span><span style="color: #098658">0</span><span style="color: #000000">,</span>
-<span style="color: #000000">    </span><span style="color: #001080">y:</span><span style="color: #000000"> </span><span style="color: #098658">0</span><span style="color: #000000">,</span>
+<span style="color: #000000">  </span><span style="color: #001080">schema:</span><span style="color: #000000"> {</span>
+<span style="color: #000000">    </span><span style="color: #001080">height:</span><span style="color: #000000"> </span><span style="color: #001080">Types</span><span style="color: #000000">.</span><span style="color: #001080">f32</span><span style="color: #000000">,</span>
+<span style="color: #000000">    </span><span style="color: #001080">width:</span><span style="color: #000000"> </span><span style="color: #001080">Types</span><span style="color: #000000">.</span><span style="color: #001080">f32</span><span style="color: #000000">,</span>
 <span style="color: #000000">  },</span>
 <span style="color: #000000">});</span>
+<span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">iPosition</span><span style="color: #000000"> = </span><span style="color: #001080">world</span><span style="color: #000000">.</span><span style="color: #795E26">registerComponent</span><span style="color: #000000">(</span><span style="color: #001080">position</span><span style="color: #000000">);</span>
 
 <span style="color: #008000">// create our box entity - createEntity takes no arguments</span>
 <span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">box</span><span style="color: #000000"> = </span><span style="color: #001080">world</span><span style="color: #000000">.</span><span style="color: #795E26">createEntity</span><span style="color: #000000">();</span>
-<span style="color: #001080">box</span><span style="color: #000000">.</span><span style="color: #795E26">enable</span><span style="color: #000000">();</span>
 
 <span style="color: #008000">// add the components to the entity</span>
-<span style="color: #001080">box</span><span style="color: #000000">.</span><span style="color: #795E26">addComponent</span><span style="color: #000000">(</span><span style="color: #001080">colour</span><span style="color: #000000">);</span>
-<span style="color: #001080">box</span><span style="color: #000000">.</span><span style="color: #795E26">addComponent</span><span style="color: #000000">(</span><span style="color: #001080">position</span><span style="color: #000000">);</span>
-<span style="color: #001080">box</span><span style="color: #000000">.</span><span style="color: #795E26">addComponent</span><span style="color: #000000">(</span><span style="color: #001080">size</span><span style="color: #000000">);</span>
+<span style="color: #001080">box</span><span style="color: #000000">.</span><span style="color: #795E26">addComponent</span><span style="color: #000000">(</span><span style="color: #001080">iColour</span><span style="color: #000000">);</span>
+<span style="color: #001080">box</span><span style="color: #000000">.</span><span style="color: #795E26">addComponent</span><span style="color: #000000">(</span><span style="color: #001080">iPosition</span><span style="color: #000000">);</span>
+<span style="color: #001080">box</span><span style="color: #000000">.</span><span style="color: #795E26">addComponent</span><span style="color: #000000">(</span><span style="color: #001080">iSize</span><span style="color: #000000">);</span>
 
-<span style="color: #008000">// overwrite some of the default properties with entity specific properties</span>
-<span style="color: #001080">box</span><span style="color: #000000">.</span><span style="color: #001080">colour</span><span style="color: #000000"> = { </span><span style="color: #001080">r:</span><span style="color: #000000"> </span><span style="color: #098658">10</span><span style="color: #000000">, </span><span style="color: #001080">g:</span><span style="color: #000000"> </span><span style="color: #098658">255</span><span style="color: #000000">, </span><span style="color: #001080">b:</span><span style="color: #000000"> </span><span style="color: #098658">111</span><span style="color: #000000"> }; </span><span style="color: #008000">// rewriting the whole object is possible</span>
-<span style="color: #001080">box</span><span style="color: #000000">.</span><span style="color: #001080">position</span><span style="color: #000000">.</span><span style="color: #001080">x</span><span style="color: #000000"> = </span><span style="color: #098658">100</span><span style="color: #000000">;                    </span><span style="color: #008000">// but this way is preferred</span>
-<span style="color: #001080">box</span><span style="color: #000000">.</span><span style="color: #001080">position</span><span style="color: #000000">.</span><span style="color: #001080">y</span><span style="color: #000000"> = </span><span style="color: #098658">250</span><span style="color: #000000">;</span>
+<span style="color: #008000">// set some initial properties</span>
+<span style="color: #001080">iPosition</span><span style="color: #000000">.</span><span style="color: #001080">x</span><span style="color: #000000">[</span><span style="color: #001080">box</span><span style="color: #000000">] = </span><span style="color: #098658">10</span><span style="color: #000000">;</span>
+<span style="color: #001080">iPosition</span><span style="color: #000000">.</span><span style="color: #001080">y</span><span style="color: #000000">[</span><span style="color: #001080">box</span><span style="color: #000000">] = </span><span style="color: #098658">50</span><span style="color: #000000">;</span>
+<span style="color: #001080">iColour</span><span style="color: #000000">.</span><span style="color: #001080">r</span><span style="color: #000000">[</span><span style="color: #001080">box</span><span style="color: #000000">] = </span><span style="color: #098658">255</span><span style="color: #000000">;</span>
+<span style="color: #001080">iColour</span><span style="color: #000000">.</span><span style="color: #001080">g</span><span style="color: #000000">[</span><span style="color: #001080">box</span><span style="color: #000000">] = </span><span style="color: #098658">0</span><span style="color: #000000">;</span>
+<span style="color: #001080">iColour</span><span style="color: #000000">.</span><span style="color: #001080">b</span><span style="color: #000000">[</span><span style="color: #001080">box</span><span style="color: #000000">] = </span><span style="color: #098658">0</span><span style="color: #000000">;</span>
+<span style="color: #001080">iSize</span><span style="color: #000000">.</span><span style="color: #001080">height</span><span style="color: #000000">[</span><span style="color: #001080">box</span><span style="color: #000000">] = </span><span style="color: #098658">100</span><span style="color: #000000">;</span>
+<span style="color: #001080">iSize</span><span style="color: #000000">.</span><span style="color: #001080">width</span><span style="color: #000000">[</span><span style="color: #001080">box</span><span style="color: #000000">] = </span><span style="color: #098658">100</span><span style="color: #000000">;</span>
 
 <span style="color: #008000">// world systems support three functions</span>
 <span style="color: #008000">// 1) a pre-update function   - (&quot;pre&quot;)     - run once at the start of each frame</span>
@@ -166,39 +192,27 @@
 <span style="color: #008000">// 3) a post-update function  - (&quot;post&quot;)    - run once at the end of each frame</span>
 
 <span style="color: #008000">// a simple update function to move boxes around the canvas</span>
-<span style="color: #008000">// N.B. update functions you intend to use as systems must take the following:</span>
-<span style="color: #008000">//     entities {Entity[]} an array of entities</span>
-<span style="color: #008000">//     global {Entity} the world.global entity</span>
-<span style="color: #008000">//     dt {number} frame delta time</span>
-<span style="color: #0000FF">function</span><span style="color: #000000"> </span><span style="color: #795E26">moveBoxes</span><span style="color: #000000">(</span><span style="color: #001080">entities</span><span style="color: #000000">, </span><span style="color: #001080">global</span><span style="color: #000000">, </span><span style="color: #001080">dt</span><span style="color: #000000">) {</span>
-<span style="color: #000000">  </span><span style="color: #008000">// its generally a good idea to bail early if no entities are affected</span>
-<span style="color: #000000">  </span><span style="color: #AF00DB">if</span><span style="color: #000000"> (!</span><span style="color: #001080">entities</span><span style="color: #000000">.</span><span style="color: #001080">length</span><span style="color: #000000">) </span><span style="color: #AF00DB">return</span><span style="color: #000000">;</span>
+<span style="color: #0000FF">function</span><span style="color: #000000"> </span><span style="color: #795E26">moveBoxes</span><span style="color: #000000">(</span><span style="color: #001080">entities</span><span style="color: #000000">, </span><span style="color: #001080">delta</span><span style="color: #000000">) {</span>
 <span style="color: #000000">  </span><span style="color: #001080">entities</span><span style="color: #000000">.</span><span style="color: #795E26">forEach</span><span style="color: #000000">((</span><span style="color: #001080">entity</span><span style="color: #000000">) </span><span style="color: #0000FF">=&gt;</span><span style="color: #000000"> {</span>
 <span style="color: #000000">    </span><span style="color: #008000">// modify component properties</span>
-<span style="color: #000000">    </span><span style="color: #001080">entity</span><span style="color: #000000">.</span><span style="color: #001080">position</span><span style="color: #000000">.</span><span style="color: #001080">x</span><span style="color: #000000"> += (</span><span style="color: #098658">10</span><span style="color: #000000"> * </span><span style="color: #001080">dt</span><span style="color: #000000">);</span>
-<span style="color: #000000">    </span><span style="color: #001080">entity</span><span style="color: #000000">.</span><span style="color: #001080">position</span><span style="color: #000000">.</span><span style="color: #001080">y</span><span style="color: #000000"> -= (</span><span style="color: #098658">10</span><span style="color: #000000"> * </span><span style="color: #001080">dt</span><span style="color: #000000">);</span>
+<span style="color: #000000">    </span><span style="color: #001080">iPosition</span><span style="color: #000000">.</span><span style="color: #001080">x</span><span style="color: #000000">[</span><span style="color: #001080">entity</span><span style="color: #000000">] += (</span><span style="color: #098658">10</span><span style="color: #000000"> * </span><span style="color: #001080">delta</span><span style="color: #000000">);</span>
+<span style="color: #000000">    </span><span style="color: #001080">iPosition</span><span style="color: #000000">.</span><span style="color: #001080">y</span><span style="color: #000000">[</span><span style="color: #001080">entity</span><span style="color: #000000">] -= (</span><span style="color: #098658">10</span><span style="color: #000000"> * </span><span style="color: #001080">delta</span><span style="color: #000000">);</span>
 <span style="color: #000000">  });</span>
 <span style="color: #000000">}</span>
 
 <span style="color: #008000">// a simple render function to draw the boxes to the canvas</span>
-<span style="color: #008000">// N.B. function you intend to use as a post-update function must take the following:</span>
-<span style="color: #008000">//     entities {Entity[]} an array of entities</span>
-<span style="color: #008000">//     global {Entity} the world.global entity</span>
-<span style="color: #008000">//     int {number} frame interpolation amount</span>
-<span style="color: #0000FF">function</span><span style="color: #000000"> </span><span style="color: #795E26">draw</span><span style="color: #000000">(</span><span style="color: #001080">entities</span><span style="color: #000000">, </span><span style="color: #001080">global</span><span style="color: #000000">, </span><span style="color: #001080">int</span><span style="color: #000000">) {</span>
+<span style="color: #0000FF">function</span><span style="color: #000000"> </span><span style="color: #795E26">draw</span><span style="color: #000000">(</span><span style="color: #001080">entities</span><span style="color: #000000">, </span><span style="color: #001080">alpha</span><span style="color: #000000">) {</span>
 <span style="color: #000000">  </span><span style="color: #008000">// clear canvas every frame</span>
 <span style="color: #000000">  </span><span style="color: #001080">ctx</span><span style="color: #000000">.</span><span style="color: #795E26">clearRect</span><span style="color: #000000">(</span><span style="color: #098658">0</span><span style="color: #000000">, </span><span style="color: #098658">0</span><span style="color: #000000">, </span><span style="color: #001080">canvas</span><span style="color: #000000">.</span><span style="color: #001080">width</span><span style="color: #000000">, </span><span style="color: #001080">canvas</span><span style="color: #000000">.</span><span style="color: #001080">height</span><span style="color: #000000">);</span>
 <span style="color: #000000">  </span><span style="color: #008000">// draw each entity</span>
 <span style="color: #000000">  </span><span style="color: #001080">entities</span><span style="color: #000000">.</span><span style="color: #795E26">forEach</span><span style="color: #000000">((</span><span style="color: #001080">entity</span><span style="color: #000000">) </span><span style="color: #0000FF">=&gt;</span><span style="color: #000000"> {</span>
-<span style="color: #000000">    </span><span style="color: #AF00DB">if</span><span style="color: #000000"> (</span><span style="color: #001080">entity</span><span style="color: #000000">.</span><span style="color: #001080">enabled</span><span style="color: #000000"> === </span><span style="color: #0000FF">true</span><span style="color: #000000">) {</span>
-<span style="color: #000000">      </span><span style="color: #001080">ctx</span><span style="color: #000000">.</span><span style="color: #001080">fillStyle</span><span style="color: #000000"> = </span><span style="color: #A31515">`rgb(</span><span style="color: #0000FF">${</span><span style="color: #001080">entity</span><span style="color: #000000FF">.</span><span style="color: #001080">colour</span><span style="color: #000000FF">.</span><span style="color: #001080">r</span><span style="color: #0000FF">}</span><span style="color: #A31515">, </span><span style="color: #0000FF">${</span><span style="color: #001080">entity</span><span style="color: #000000FF">.</span><span style="color: #001080">colour</span><span style="color: #000000FF">.</span><span style="color: #001080">g</span><span style="color: #0000FF">}</span><span style="color: #A31515">, </span><span style="color: #0000FF">${</span><span style="color: #001080">entity</span><span style="color: #000000FF">.</span><span style="color: #001080">colour</span><span style="color: #000000FF">.</span><span style="color: #001080">b</span><span style="color: #0000FF">}</span><span style="color: #A31515">)`</span><span style="color: #000000">;</span>
-<span style="color: #000000">      </span><span style="color: #001080">ctx</span><span style="color: #000000">.</span><span style="color: #795E26">fillRect</span><span style="color: #000000">(</span>
-<span style="color: #000000">        </span><span style="color: #001080">entity</span><span style="color: #000000">.</span><span style="color: #001080">position</span><span style="color: #000000">.</span><span style="color: #001080">x</span><span style="color: #000000">,</span>
-<span style="color: #000000">        </span><span style="color: #001080">entity</span><span style="color: #000000">.</span><span style="color: #001080">position</span><span style="color: #000000">.</span><span style="color: #001080">y</span><span style="color: #000000">,</span>
-<span style="color: #000000">        </span><span style="color: #001080">entity</span><span style="color: #000000">.</span><span style="color: #001080">size</span><span style="color: #000000">.</span><span style="color: #001080">width</span><span style="color: #000000">,</span>
-<span style="color: #000000">        </span><span style="color: #001080">entity</span><span style="color: #000000">.</span><span style="color: #001080">size</span><span style="color: #000000">.</span><span style="color: #001080">height</span><span style="color: #000000">,</span>
-<span style="color: #000000">      );</span>
-<span style="color: #000000">    }</span>
+<span style="color: #000000">    </span><span style="color: #001080">ctx</span><span style="color: #000000">.</span><span style="color: #001080">fillStyle</span><span style="color: #000000"> = </span><span style="color: #A31515">`rgb(</span><span style="color: #0000FF">${</span><span style="color: #001080">iColour</span><span style="color: #000000FF">.</span><span style="color: #001080">r</span><span style="color: #000000FF">[</span><span style="color: #001080">entity</span><span style="color: #000000FF">]</span><span style="color: #0000FF">}</span><span style="color: #A31515">, </span><span style="color: #0000FF">${</span><span style="color: #001080">iColour</span><span style="color: #000000FF">.</span><span style="color: #001080">g</span><span style="color: #000000FF">[</span><span style="color: #001080">entity</span><span style="color: #000000FF">]</span><span style="color: #0000FF">}</span><span style="color: #A31515">, </span><span style="color: #0000FF">${</span><span style="color: #001080">iColour</span><span style="color: #000000FF">.</span><span style="color: #001080">b</span><span style="color: #000000FF">[</span><span style="color: #001080">entity</span><span style="color: #000000FF">]</span><span style="color: #0000FF">}</span><span style="color: #A31515">)`</span><span style="color: #000000">;</span>
+<span style="color: #000000">    </span><span style="color: #001080">ctx</span><span style="color: #000000">.</span><span style="color: #795E26">fillRect</span><span style="color: #000000">(</span>
+<span style="color: #000000">      </span><span style="color: #001080">iPosition</span><span style="color: #000000">.</span><span style="color: #001080">x</span><span style="color: #000000">[</span><span style="color: #001080">entity</span><span style="color: #000000">],</span>
+<span style="color: #000000">      </span><span style="color: #001080">iPosition</span><span style="color: #000000">.</span><span style="color: #001080">y</span><span style="color: #000000">[</span><span style="color: #001080">entity</span><span style="color: #000000">],</span>
+<span style="color: #000000">      </span><span style="color: #001080">iSize</span><span style="color: #000000">.</span><span style="color: #001080">width</span><span style="color: #000000">[</span><span style="color: #001080">entity</span><span style="color: #000000">],</span>
+<span style="color: #000000">      </span><span style="color: #001080">iSize</span><span style="color: #000000">.</span><span style="color: #001080">height</span><span style="color: #000000">[</span><span style="color: #001080">entity</span><span style="color: #000000">],</span>
+<span style="color: #000000">    );</span>
 <span style="color: #000000">  });</span>
 <span style="color: #000000">}</span>
 
@@ -240,105 +254,38 @@
 					<h2>Demos</h2>
 				</a>
 				<p>See <code>./demo</code> for more interesting working examples.</p>
-				<a href="#benchmarks" id="benchmarks" style="color: inherit; text-decoration: none;">
-					<h2>Benchmarks</h2>
+				<a href="#to-do" id="to-do" style="color: inherit; text-decoration: none;">
+					<h2>To-Do</h2>
 				</a>
-				<p><a href="https://github.com/ddmills/js-ecs-benchmarks">ddmills/js-ecs-benchmarks</a> results for 0.3.0:</p>
-				<pre><code><span style="color: #001080">Suite</span><span style="color: #000000"> </span><span style="color: #001080">Add</span><span style="color: #000000">/</span><span style="color: #795E26">Remove</span><span style="color: #000000"> (</span><span style="color: #098658">5000</span><span style="color: #000000"> </span><span style="color: #001080">iterations</span><span style="color: #000000">)</span>
-<span style="color: #000000">  - </span><span style="color: #001080">fastecs</span><span style="color: #000000">         12</span><span style="color: #001080">ms</span><span style="color: #000000">     60089</span><span style="color: #001080">ms</span><span style="color: #000000">    </span><span style="color: #098658">15000</span><span style="color: #000000"> </span><span style="color: #001080">updates</span><span style="color: #000000">       </span><span style="color: #098658">0.0</span><span style="color: #000000">% </span><span style="color: #001080">fastest</span>
-<span style="color: #000000">  - </span><span style="color: #001080">bitecs</span><span style="color: #000000">          32</span><span style="color: #001080">ms</span><span style="color: #000000">    161606</span><span style="color: #001080">ms</span><span style="color: #000000">  </span><span style="color: #098658">25010000</span><span style="color: #000000"> </span><span style="color: #001080">updates</span><span style="color: #000000">     </span><span style="color: #098658">168.9</span><span style="color: #000000">% </span><span style="color: #001080">slower</span>
-<span style="color: #000000">  - </span><span style="color: #001080">perform</span><span style="color: #000000">-</span><span style="color: #001080">ecs</span><span style="color: #000000">     55</span><span style="color: #001080">ms</span><span style="color: #000000">    276041</span><span style="color: #001080">ms</span><span style="color: #000000">  </span><span style="color: #098658">25010000</span><span style="color: #000000"> </span><span style="color: #001080">updates</span><span style="color: #000000">     </span><span style="color: #098658">359.4</span><span style="color: #000000">% </span><span style="color: #001080">slower</span>
-<span style="color: #000000">  - </span><span style="color: #001080">uecs</span><span style="color: #000000">            60</span><span style="color: #001080">ms</span><span style="color: #000000">    301533</span><span style="color: #001080">ms</span><span style="color: #000000">  </span><span style="color: #098658">25010000</span><span style="color: #000000"> </span><span style="color: #001080">updates</span><span style="color: #000000">     </span><span style="color: #098658">401.8</span><span style="color: #000000">% </span><span style="color: #001080">slower</span>
-<span style="color: #000000">  - </span><span style="color: #795E26">geotic</span><span style="color: #000000"> (</span><span style="color: #001080">v4</span><span style="color: #000000">)     81</span><span style="color: #001080">ms</span><span style="color: #000000">    405695</span><span style="color: #001080">ms</span><span style="color: #000000">  </span><span style="color: #098658">25010000</span><span style="color: #000000"> </span><span style="color: #001080">updates</span><span style="color: #000000">     </span><span style="color: #098658">575.2</span><span style="color: #000000">% </span><span style="color: #001080">slower</span>
-<span style="color: #000000">  - </span><span style="color: #001080">yagl</span><span style="color: #000000">-</span><span style="color: #001080">ecs</span><span style="color: #000000">       105</span><span style="color: #001080">ms</span><span style="color: #000000">    525279</span><span style="color: #001080">ms</span><span style="color: #000000">  </span><span style="color: #098658">25010000</span><span style="color: #000000"> </span><span style="color: #001080">updates</span><span style="color: #000000">     </span><span style="color: #098658">774.2</span><span style="color: #000000">% </span><span style="color: #001080">slower</span>
-<span style="color: #000000">  - </span><span style="color: #001080">tiny</span><span style="color: #000000">-</span><span style="color: #001080">ecs</span><span style="color: #000000">       150</span><span style="color: #001080">ms</span><span style="color: #000000">    750824</span><span style="color: #001080">ms</span><span style="color: #000000">  </span><span style="color: #098658">25010000</span><span style="color: #000000"> </span><span style="color: #001080">updates</span><span style="color: #000000">    </span><span style="color: #098658">1149.5</span><span style="color: #000000">% </span><span style="color: #001080">slower</span>
-<span style="color: #000000">  - </span><span style="color: #001080">nano</span><span style="color: #000000">-</span><span style="color: #001080">ecs</span><span style="color: #000000">       223</span><span style="color: #001080">ms</span><span style="color: #000000">   1114682</span><span style="color: #001080">ms</span><span style="color: #000000">  </span><span style="color: #098658">25010000</span><span style="color: #000000"> </span><span style="color: #001080">updates</span><span style="color: #000000">    </span><span style="color: #098658">1755.1</span><span style="color: #000000">% </span><span style="color: #001080">slower</span>
-<span style="color: #000000">  - </span><span style="color: #001080">miski</span><span style="color: #000000">          379</span><span style="color: #001080">ms</span><span style="color: #000000">   1894463</span><span style="color: #001080">ms</span><span style="color: #000000">                 ?    </span><span style="color: #098658">3052.8</span><span style="color: #000000">% </span><span style="color: #001080">slower</span>
-<span style="color: #000000">  - </span><span style="color: #001080">ape</span><span style="color: #000000">-</span><span style="color: #001080">ecs</span><span style="color: #000000">        552</span><span style="color: #001080">ms</span><span style="color: #000000">   2762271</span><span style="color: #001080">ms</span><span style="color: #000000">  </span><span style="color: #098658">25010000</span><span style="color: #000000"> </span><span style="color: #001080">updates</span><span style="color: #000000">    </span><span style="color: #098658">4497.0</span><span style="color: #000000">% </span><span style="color: #001080">slower</span>
-<span style="color: #000000">  - </span><span style="color: #795E26">geotic</span><span style="color: #000000"> (</span><span style="color: #001080">v3</span><span style="color: #000000">)   2635</span><span style="color: #001080">ms</span><span style="color: #000000">  13177163</span><span style="color: #001080">ms</span><span style="color: #000000">  </span><span style="color: #098658">25010000</span><span style="color: #000000"> </span><span style="color: #001080">updates</span><span style="color: #000000">   </span><span style="color: #098658">21829.4</span><span style="color: #000000">% </span><span style="color: #001080">slower</span>
-
-<span style="color: #001080">Suite</span><span style="color: #000000"> </span><span style="color: #795E26">Additions</span><span style="color: #000000"> (</span><span style="color: #098658">100000</span><span style="color: #000000"> </span><span style="color: #001080">iterations</span><span style="color: #000000">)</span>
-<span style="color: #000000">  - </span><span style="color: #001080">bitecs</span><span style="color: #000000">           0</span><span style="color: #001080">ms</span><span style="color: #000000">     21040</span><span style="color: #001080">ms</span><span style="color: #000000">       </span><span style="color: #098658">0.0</span><span style="color: #000000">% </span><span style="color: #001080">fastest</span>
-<span style="color: #000000">  - </span><span style="color: #001080">yagl</span><span style="color: #000000">-</span><span style="color: #001080">ecs</span><span style="color: #000000">         1</span><span style="color: #001080">ms</span><span style="color: #000000">     65114</span><span style="color: #001080">ms</span><span style="color: #000000">     </span><span style="color: #098658">209.5</span><span style="color: #000000">% </span><span style="color: #001080">slower</span>
-<span style="color: #000000">  - </span><span style="color: #001080">tiny</span><span style="color: #000000">-</span><span style="color: #001080">ecs</span><span style="color: #000000">         1</span><span style="color: #001080">ms</span><span style="color: #000000">    141095</span><span style="color: #001080">ms</span><span style="color: #000000">     </span><span style="color: #098658">570.6</span><span style="color: #000000">% </span><span style="color: #001080">slower</span>
-<span style="color: #000000">  - </span><span style="color: #001080">uecs</span><span style="color: #000000">             2</span><span style="color: #001080">ms</span><span style="color: #000000">    159334</span><span style="color: #001080">ms</span><span style="color: #000000">     </span><span style="color: #098658">657.3</span><span style="color: #000000">% </span><span style="color: #001080">slower</span>
-<span style="color: #000000">  - </span><span style="color: #001080">nano</span><span style="color: #000000">-</span><span style="color: #001080">ecs</span><span style="color: #000000">         2</span><span style="color: #001080">ms</span><span style="color: #000000">    197827</span><span style="color: #001080">ms</span><span style="color: #000000">     </span><span style="color: #098658">840.2</span><span style="color: #000000">% </span><span style="color: #001080">slower</span>
-<span style="color: #000000">  - </span><span style="color: #795E26">geotic</span><span style="color: #000000"> (</span><span style="color: #001080">v4</span><span style="color: #000000">)      3</span><span style="color: #001080">ms</span><span style="color: #000000">    301895</span><span style="color: #001080">ms</span><span style="color: #000000">    </span><span style="color: #098658">1334.8</span><span style="color: #000000">% </span><span style="color: #001080">slower</span>
-<span style="color: #000000">  - </span><span style="color: #001080">fastecs</span><span style="color: #000000">          3</span><span style="color: #001080">ms</span><span style="color: #000000">    305888</span><span style="color: #001080">ms</span><span style="color: #000000">    </span><span style="color: #098658">1353.8</span><span style="color: #000000">% </span><span style="color: #001080">slower</span>
-<span style="color: #000000">  - </span><span style="color: #001080">perform</span><span style="color: #000000">-</span><span style="color: #001080">ecs</span><span style="color: #000000">      3</span><span style="color: #001080">ms</span><span style="color: #000000">    322302</span><span style="color: #001080">ms</span><span style="color: #000000">    </span><span style="color: #098658">1431.8</span><span style="color: #000000">% </span><span style="color: #001080">slower</span>
-<span style="color: #000000">  - </span><span style="color: #001080">ape</span><span style="color: #000000">-</span><span style="color: #001080">ecs</span><span style="color: #000000">          8</span><span style="color: #001080">ms</span><span style="color: #000000">    826375</span><span style="color: #001080">ms</span><span style="color: #000000">    </span><span style="color: #098658">3827.6</span><span style="color: #000000">% </span><span style="color: #001080">slower</span>
-<span style="color: #000000">  - </span><span style="color: #001080">miski</span><span style="color: #000000">           11</span><span style="color: #001080">ms</span><span style="color: #000000">   1123688</span><span style="color: #001080">ms</span><span style="color: #000000">    </span><span style="color: #098658">5240.6</span><span style="color: #000000">% </span><span style="color: #001080">slower</span>
-<span style="color: #000000">  - </span><span style="color: #795E26">geotic</span><span style="color: #000000"> (</span><span style="color: #001080">v3</span><span style="color: #000000">)     13</span><span style="color: #001080">ms</span><span style="color: #000000">   1337423</span><span style="color: #001080">ms</span><span style="color: #000000">    </span><span style="color: #098658">6256.5</span><span style="color: #000000">% </span><span style="color: #001080">slower</span>
-
-<span style="color: #001080">Suite</span><span style="color: #000000"> </span><span style="color: #795E26">Destroy</span><span style="color: #000000"> (</span><span style="color: #098658">100000</span><span style="color: #000000"> </span><span style="color: #001080">iterations</span><span style="color: #000000">)</span>
-<span style="color: #000000">  - </span><span style="color: #001080">bitecs</span><span style="color: #000000">           2</span><span style="color: #001080">ms</span><span style="color: #000000">    168018</span><span style="color: #001080">ms</span><span style="color: #000000">       </span><span style="color: #098658">0.0</span><span style="color: #000000">% </span><span style="color: #001080">fastest</span>
-<span style="color: #000000">  - </span><span style="color: #001080">uecs</span><span style="color: #000000">             2</span><span style="color: #001080">ms</span><span style="color: #000000">    216921</span><span style="color: #001080">ms</span><span style="color: #000000">      </span><span style="color: #098658">29.1</span><span style="color: #000000">% </span><span style="color: #001080">slower</span>
-<span style="color: #000000">  - </span><span style="color: #001080">tiny</span><span style="color: #000000">-</span><span style="color: #001080">ecs</span><span style="color: #000000">         2</span><span style="color: #001080">ms</span><span style="color: #000000">    221882</span><span style="color: #001080">ms</span><span style="color: #000000">      </span><span style="color: #098658">32.1</span><span style="color: #000000">% </span><span style="color: #001080">slower</span>
-<span style="color: #000000">  - </span><span style="color: #001080">nano</span><span style="color: #000000">-</span><span style="color: #001080">ecs</span><span style="color: #000000">         3</span><span style="color: #001080">ms</span><span style="color: #000000">    308669</span><span style="color: #001080">ms</span><span style="color: #000000">      </span><span style="color: #098658">83.7</span><span style="color: #000000">% </span><span style="color: #001080">slower</span>
-<span style="color: #000000">  - </span><span style="color: #001080">perform</span><span style="color: #000000">-</span><span style="color: #001080">ecs</span><span style="color: #000000">      3</span><span style="color: #001080">ms</span><span style="color: #000000">    328951</span><span style="color: #001080">ms</span><span style="color: #000000">      </span><span style="color: #098658">95.8</span><span style="color: #000000">% </span><span style="color: #001080">slower</span>
-<span style="color: #000000">  - </span><span style="color: #795E26">geotic</span><span style="color: #000000"> (</span><span style="color: #001080">v4</span><span style="color: #000000">)      5</span><span style="color: #001080">ms</span><span style="color: #000000">    471950</span><span style="color: #001080">ms</span><span style="color: #000000">     </span><span style="color: #098658">180.9</span><span style="color: #000000">% </span><span style="color: #001080">slower</span>
-<span style="color: #000000">  - </span><span style="color: #001080">fastecs</span><span style="color: #000000">          7</span><span style="color: #001080">ms</span><span style="color: #000000">    707468</span><span style="color: #001080">ms</span><span style="color: #000000">     </span><span style="color: #098658">321.1</span><span style="color: #000000">% </span><span style="color: #001080">slower</span>
-<span style="color: #000000">  - </span><span style="color: #001080">ape</span><span style="color: #000000">-</span><span style="color: #001080">ecs</span><span style="color: #000000">          8</span><span style="color: #001080">ms</span><span style="color: #000000">    752111</span><span style="color: #001080">ms</span><span style="color: #000000">     </span><span style="color: #098658">347.6</span><span style="color: #000000">% </span><span style="color: #001080">slower</span>
-<span style="color: #000000">  - </span><span style="color: #001080">miski</span><span style="color: #000000">            9</span><span style="color: #001080">ms</span><span style="color: #000000">    923467</span><span style="color: #001080">ms</span><span style="color: #000000">     </span><span style="color: #098658">449.6</span><span style="color: #000000">% </span><span style="color: #001080">slower</span>
-<span style="color: #000000">  - </span><span style="color: #795E26">geotic</span><span style="color: #000000"> (</span><span style="color: #001080">v3</span><span style="color: #000000">)     15</span><span style="color: #001080">ms</span><span style="color: #000000">   1457818</span><span style="color: #001080">ms</span><span style="color: #000000">     </span><span style="color: #098658">767.7</span><span style="color: #000000">% </span><span style="color: #001080">slower</span>
-<span style="color: #000000">  - </span><span style="color: #001080">yagl</span><span style="color: #000000">-</span><span style="color: #001080">ecs</span><span style="color: #000000">        25</span><span style="color: #001080">ms</span><span style="color: #000000">   2520367</span><span style="color: #001080">ms</span><span style="color: #000000">    </span><span style="color: #098658">1400.1</span><span style="color: #000000">% </span><span style="color: #001080">slower</span>
-
-<span style="color: #001080">Suite</span><span style="color: #000000"> </span><span style="color: #795E26">Velocity</span><span style="color: #000000"> (</span><span style="color: #098658">2000</span><span style="color: #000000"> </span><span style="color: #001080">iterations</span><span style="color: #000000">)</span>
-<span style="color: #000000">  - </span><span style="color: #001080">bitecs</span><span style="color: #000000">          11</span><span style="color: #001080">ms</span><span style="color: #000000">     22492</span><span style="color: #001080">ms</span><span style="color: #000000"> </span><span style="color: #098658">2001000</span><span style="color: #000000"> </span><span style="color: #001080">updates</span><span style="color: #000000">       </span><span style="color: #098658">0.0</span><span style="color: #000000">% </span><span style="color: #001080">fastest</span>
-<span style="color: #000000">  - </span><span style="color: #001080">uecs</span><span style="color: #000000">            13</span><span style="color: #001080">ms</span><span style="color: #000000">     25924</span><span style="color: #001080">ms</span><span style="color: #000000"> </span><span style="color: #098658">2001000</span><span style="color: #000000"> </span><span style="color: #001080">updates</span><span style="color: #000000">      </span><span style="color: #098658">15.3</span><span style="color: #000000">% </span><span style="color: #001080">slower</span>
-<span style="color: #000000">  - </span><span style="color: #001080">perform</span><span style="color: #000000">-</span><span style="color: #001080">ecs</span><span style="color: #000000">     13</span><span style="color: #001080">ms</span><span style="color: #000000">     25981</span><span style="color: #001080">ms</span><span style="color: #000000"> </span><span style="color: #098658">2001000</span><span style="color: #000000"> </span><span style="color: #001080">updates</span><span style="color: #000000">      </span><span style="color: #098658">15.5</span><span style="color: #000000">% </span><span style="color: #001080">slower</span>
-<span style="color: #000000">  - </span><span style="color: #001080">fastecs</span><span style="color: #000000">         14</span><span style="color: #001080">ms</span><span style="color: #000000">     28492</span><span style="color: #001080">ms</span><span style="color: #000000"> </span><span style="color: #098658">2001000</span><span style="color: #000000"> </span><span style="color: #001080">updates</span><span style="color: #000000">      </span><span style="color: #098658">26.7</span><span style="color: #000000">% </span><span style="color: #001080">slower</span>
-<span style="color: #000000">  - </span><span style="color: #001080">yagl</span><span style="color: #000000">-</span><span style="color: #001080">ecs</span><span style="color: #000000">        16</span><span style="color: #001080">ms</span><span style="color: #000000">     32555</span><span style="color: #001080">ms</span><span style="color: #000000"> </span><span style="color: #098658">2001000</span><span style="color: #000000"> </span><span style="color: #001080">updates</span><span style="color: #000000">      </span><span style="color: #098658">44.7</span><span style="color: #000000">% </span><span style="color: #001080">slower</span>
-<span style="color: #000000">  - </span><span style="color: #795E26">geotic</span><span style="color: #000000"> (</span><span style="color: #001080">v4</span><span style="color: #000000">)     17</span><span style="color: #001080">ms</span><span style="color: #000000">     33086</span><span style="color: #001080">ms</span><span style="color: #000000"> </span><span style="color: #098658">2001000</span><span style="color: #000000"> </span><span style="color: #001080">updates</span><span style="color: #000000">      </span><span style="color: #098658">47.1</span><span style="color: #000000">% </span><span style="color: #001080">slower</span>
-<span style="color: #000000">  - </span><span style="color: #001080">tiny</span><span style="color: #000000">-</span><span style="color: #001080">ecs</span><span style="color: #000000">        18</span><span style="color: #001080">ms</span><span style="color: #000000">     36833</span><span style="color: #001080">ms</span><span style="color: #000000"> </span><span style="color: #098658">2001000</span><span style="color: #000000"> </span><span style="color: #001080">updates</span><span style="color: #000000">      </span><span style="color: #098658">63.8</span><span style="color: #000000">% </span><span style="color: #001080">slower</span>
-<span style="color: #000000">  - </span><span style="color: #001080">nano</span><span style="color: #000000">-</span><span style="color: #001080">ecs</span><span style="color: #000000">        26</span><span style="color: #001080">ms</span><span style="color: #000000">     51134</span><span style="color: #001080">ms</span><span style="color: #000000"> </span><span style="color: #098658">2001000</span><span style="color: #000000"> </span><span style="color: #001080">updates</span><span style="color: #000000">     </span><span style="color: #098658">127.3</span><span style="color: #000000">% </span><span style="color: #001080">slower</span>
-<span style="color: #000000">  - </span><span style="color: #001080">miski</span><span style="color: #000000">           67</span><span style="color: #001080">ms</span><span style="color: #000000">    134208</span><span style="color: #001080">ms</span><span style="color: #000000">               ?     </span><span style="color: #098658">496.7</span><span style="color: #000000">% </span><span style="color: #001080">slower</span>
-<span style="color: #000000">  - </span><span style="color: #001080">ape</span><span style="color: #000000">-</span><span style="color: #001080">ecs</span><span style="color: #000000">        118</span><span style="color: #001080">ms</span><span style="color: #000000">    235000</span><span style="color: #001080">ms</span><span style="color: #000000"> </span><span style="color: #098658">2001000</span><span style="color: #000000"> </span><span style="color: #001080">updates</span><span style="color: #000000">     </span><span style="color: #098658">944.8</span><span style="color: #000000">% </span><span style="color: #001080">slower</span>
-<span style="color: #000000">  - </span><span style="color: #795E26">geotic</span><span style="color: #000000"> (</span><span style="color: #001080">v3</span><span style="color: #000000">)    516</span><span style="color: #001080">ms</span><span style="color: #000000">   1032155</span><span style="color: #001080">ms</span><span style="color: #000000"> </span><span style="color: #098658">2001000</span><span style="color: #000000"> </span><span style="color: #001080">updates</span><span style="color: #000000">    </span><span style="color: #098658">4489.0</span><span style="color: #000000">% </span><span style="color: #001080">slower</span>
-</code></pre>
-				<a href="#goals" id="goals" style="color: inherit; text-decoration: none;">
-					<h2>Goals</h2>
+				<a href="#before-beta" id="before-beta" style="color: inherit; text-decoration: none;">
+					<h3>Before Beta</h3>
 				</a>
-				<ul>
-					<li>To provide a stable, readable ECS architecture using ES2020+ features</li>
-					<li>To provide a high level of customisability</li>
-				</ul>
-				<a href="#not-goals" id="not-goals" style="color: inherit; text-decoration: none;">
-					<h2>Not Goals</h2>
-				</a>
-				<ul>
-					<li>To be the fastest / smallest ECS on the web</li>
-					<li>To conform a particular style of coding - function over form</li>
-					<li>To support the majority of web users / web environments</li>
-					<li>To provide polyfills / workarounds etc. for ES2020+ features / older browser support</li>
-				</ul>
-				<a href="#to-do-before-100-release" id="to-do-before-100-release" style="color: inherit; text-decoration: none;">
-					<h2>To-Do Before 1.0.0 release</h2>
-				</a>
-				<a href="#general" id="general" style="color: inherit; text-decoration: none;">
-					<h3>General</h3>
-				</a>
-				<ol start="0">
-					<li>Decide between object / integer based entities</li>
-					<li>Finalise core API</li>
-					<li>Write comprehensive tests</li>
-					<li>Write consistent code documentation throughout</li>
-					<li>Write argument validation for all functions requiring user input</li>
-					<li>Ensure high-quality Typescript definitions throughout
-						<a href="#features" id="features" style="color: inherit; text-decoration: none;">
-							<h3>Features</h3>
+				<ol>
+					<li>Finalise API
+						<a href="#before-100" id="before-100" style="color: inherit; text-decoration: none;">
+							<h3>Before 1.0.0</h3>
 						</a>
 					</li>
-					<li>Add schemas and schema validation for component properties</li>
-					<li>Ensure Typescript definitions work consistently</li>
-					<li>Allow for deferred removal of entities, components and systems</li>
-					<li>Allow for &quot;changed&quot; and &quot;not&quot; in queries</li>
-					<li>Add a plugin support system</li>
+					<li>Write comprehensive tests</li>
+					<li>Ensure high-quality Typescript definitions throughout</li>
+					<li>Write consistent code documentation throughout
+						<a href="#future" id="future" style="color: inherit; text-decoration: none;">
+							<h3>Future</h3>
+						</a>
+					</li>
+					<li>Allow for &quot;changed&quot; in queries</li>
+					<li>Use of Async where appropriate</li>
+					<li>Multithreading support / playing nicely with WebWorkers / SharedArrayBuffers</li>
 				</ol>
+				<p>Feature requests are welcome. Please open an issue on Github to make a request.</p>
+				<a href="#contributing" id="contributing" style="color: inherit; text-decoration: none;">
+					<h2>Contributing</h2>
+				</a>
+				<p>Contributions are welcome and invited. See <code>CONTRIBUTING.md</code> for details.</p>
 				<a href="#acknowledgements" id="acknowledgements" style="color: inherit; text-decoration: none;">
 					<h2>Acknowledgements</h2>
 				</a>
-				<p>Miski is inspired by <a href="https://github.com/fritzy/ape-ecs">ape-ecs</a>, <a href="https://github.com/NateTheGreatt/bitECS">bitECS</a>, <a href="https://github.com/ecsyjs/ecsy">ECSY</a>, <a href="https://github.com/ddmills/geotic">Geotic</a>, <a href="https://github.com/gohyperr/hecs">HECS</a>, and <a href="https://gist.github.com/mpj/17d8d73275bca303e8d2">classless.md</a></p>
+				<p>Miski is inspired by <a href="https://github.com/fritzy/ape-ecs">ape-ecs</a>, <a href="https://github.com/NateTheGreatt/bitECS">bitECS</a>, <a href="https://github.com/ecsyjs/ecsy">ECSY</a>, <a href="https://github.com/ddmills/geotic">Geotic</a>, <a href="https://github.com/gohyperr/hecs">HECS</a>, <a href="https://github.com/EnderShadow8/wolf-ecs">Wolf ECS</a>, and <a href="https://gist.github.com/mpj/17d8d73275bca303e8d2">classless.md</a></p>
 				<a href="#license" id="license" style="color: inherit; text-decoration: none;">
 					<h2>License</h2>
 				</a>
@@ -356,18 +303,6 @@
 			</nav>
 			<nav class="tsd-navigation secondary menu-sticky">
 				<ul class="before-current">
-					<li class=" tsd-kind-class tsd-has-type-parameter">
-						<a href="classes/component.html" class="tsd-kind-icon">Component</a>
-					</li>
-					<li class=" tsd-kind-class">
-						<a href="classes/entity.html" class="tsd-kind-icon">Entity</a>
-					</li>
-					<li class=" tsd-kind-class">
-						<a href="classes/query.html" class="tsd-kind-icon">Query</a>
-					</li>
-					<li class=" tsd-kind-class">
-						<a href="classes/system.html" class="tsd-kind-icon">System</a>
-					</li>
 					<li class=" tsd-kind-interface tsd-has-type-parameter">
 						<a href="interfaces/componentspec.html" class="tsd-kind-icon">Component<wbr>Spec</a>
 					</li>
@@ -375,19 +310,31 @@
 						<a href="interfaces/poolable.html" class="tsd-kind-icon">Poolable</a>
 					</li>
 					<li class=" tsd-kind-interface">
+						<a href="interfaces/query.html" class="tsd-kind-icon">Query</a>
+					</li>
+					<li class=" tsd-kind-interface">
 						<a href="interfaces/queryspec.html" class="tsd-kind-icon">Query<wbr>Spec</a>
+					</li>
+					<li class=" tsd-kind-interface">
+						<a href="interfaces/system.html" class="tsd-kind-icon">System</a>
 					</li>
 					<li class=" tsd-kind-interface">
 						<a href="interfaces/systemspec.html" class="tsd-kind-icon">System<wbr>Spec</a>
 					</li>
 					<li class=" tsd-kind-interface">
-						<a href="interfaces/toggleable.html" class="tsd-kind-icon">Toggleable</a>
-					</li>
-					<li class=" tsd-kind-interface">
-						<a href="interfaces/world.html" class="tsd-kind-icon">World</a>
-					</li>
-					<li class=" tsd-kind-interface">
 						<a href="interfaces/worldspec.html" class="tsd-kind-icon">World<wbr>Spec</a>
+					</li>
+					<li class=" tsd-kind-type-alias">
+						<a href="modules.html#entity" class="tsd-kind-icon">Entity</a>
+					</li>
+					<li class=" tsd-kind-type-alias">
+						<a href="modules.html#world" class="tsd-kind-icon">World</a>
+					</li>
+					<li class=" tsd-kind-variable">
+						<a href="modules.html#types" class="tsd-kind-icon">Types</a>
+					</li>
+					<li class=" tsd-kind-function tsd-has-type-parameter">
+						<a href="modules.html#createcomponent" class="tsd-kind-icon">create<wbr>Component</a>
 					</li>
 					<li class=" tsd-kind-function">
 						<a href="modules.html#createworld" class="tsd-kind-icon">create<wbr>World</a>
@@ -402,16 +349,7 @@
 		<h2>Legend</h2>
 		<div class="tsd-legend-group">
 			<ul class="tsd-legend">
-				<li class="tsd-kind-constructor tsd-parent-kind-class"><span class="tsd-kind-icon">Constructor</span></li>
-				<li class="tsd-kind-property tsd-parent-kind-class"><span class="tsd-kind-icon">Property</span></li>
-				<li class="tsd-kind-method tsd-parent-kind-class"><span class="tsd-kind-icon">Method</span></li>
-				<li class="tsd-kind-accessor tsd-parent-kind-class"><span class="tsd-kind-icon">Accessor</span></li>
-			</ul>
-			<ul class="tsd-legend">
 				<li class="tsd-kind-property tsd-parent-kind-interface"><span class="tsd-kind-icon">Property</span></li>
-			</ul>
-			<ul class="tsd-legend">
-				<li class="tsd-kind-property tsd-parent-kind-class tsd-is-private"><span class="tsd-kind-icon">Private property</span></li>
 			</ul>
 		</div>
 	</div>
