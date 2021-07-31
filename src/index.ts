@@ -1,6 +1,6 @@
 /**!
  *
- * Help make this better:
+ * Help make Miski even better:
  * https://github.com/phughesmcr/Miski
  *
  * @name         Miski
@@ -13,13 +13,25 @@
  */
 "use strict";
 
-export type { ComponentSpec } from "./component/component";
-export type { Entity } from "./entity/entity-manager";
-export type { Poolable } from "./pool/pool";
-export type { Query, QuerySpec } from "./query/query";
-export type { System, SystemSpec } from "./system/system";
-export type { World, WorldSpec } from "./world";
-
-export { createComponent } from "./component/component";
-export { createWorld } from "./world";
-export { Types } from "./component/schema";
+export {
+  addComponentToEntity,
+  createComponent,
+  registerComponent,
+  removeComponentFromEntity,
+  unregisterComponent,
+} from "./component.js";
+export { createEntity, destroyEntity } from "./entity.js";
+export { createQuery } from "./query.js";
+export { defineDataStore, getDataFromStore, isValidSchema, setDataInStore } from "./schema.js";
+export { runPostSystems, runPreSystems, runUpdateSystems } from "./step.js";
+export {
+  createSystem,
+  disableSystem,
+  enableSystem,
+  isSystemEnabled,
+  registerSystem,
+  unregisterSystem,
+} from "./system.js";
+export * from "./types.js";
+export { isValidName } from "./utils.js";
+export { createWorld } from "./world.js";
