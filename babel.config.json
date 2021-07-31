@@ -1,10 +1,10 @@
 {
   "presets": [
     ["@babel/preset-env", {
-      "targets": "defaults, not safari < 14, not iOS_saf < 14.3, not Baidu >= 0, not Blackberry >= 0, not ie >= 0, not ie_mob >= 0, not OperaMobile >= 0, not UCAndroid >= 0, not kaios >= 0, not QQAndroid >= 0",
+      "targets": "defaults, not ie 11, not ie_mob 11",
       "bugfixes": true,
       "corejs": {
-        "version": "3.15",
+        "version": "3.16",
         "proposals": true
       },
       "useBuiltIns": "usage"

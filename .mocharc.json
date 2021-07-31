@@ -1,12 +1,5 @@
 {
-  "ignore": [
-    "test/mocha.env.js"
-  ],
-  "require": [
-    "test/mocha.env.js",
-    "ts-node/register"
-  ],
-  "extension": [
-    "ts"
-  ]
+  "extension": ["js"],
+  "require": ["ts-node/register"],
+  "spec": "test/**/*.spec.js"
 }
