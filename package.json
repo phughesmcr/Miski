@@ -66,7 +66,7 @@
     "clean:post": "rimraf types",
     "lint": "eslint \"./src/**/*.ts\"",
     "lint:fix": "eslint --fix \"./src/**/*.ts\"",
-    "test": "tsc -p tsconfig.json && ts-mocha -p tsconfig.testing.json -r ts-node/register -r esm 'test/**/*.ts'",
+    "test": "mocha",
     "check:types": "tsc --noEmit",
     "check:es5": "npx es-check es5 ./dist/iife/*.js --verbose",
     "check:es3": "npx es-check es3 ./dist/iife/*.js --verbose",
