@@ -10,10 +10,12 @@ Miski is currently in alpha. Expect breaking changes every version until beta.
   * [Purpose](#purpose)
     + [Goals](#goals)
     + [Not Goals](#not-goals)
+  * [Features](#features)
   * [Install](#install)
     + [Browser etc.](#browser-etc)
     + [npm](#npm)
   * [Example](#example)
+  * [API Reference](#api-reference)
   * [Demos](#demos)
   * [Benchmarks](#benchmarks)
   * [To-Do](#to-do)
@@ -22,163 +24,262 @@ Miski is currently in alpha. Expect breaking changes every version until beta.
   * [License](#license)
 
 ## Purpose
-Miski's purpose is to provide a stable ECS architecture for modern browsers.
+Miski's purpose is to provide a stable, user-friendly ECS architecture for modern browsers.
 
 ### Goals
-* To provide a stable, explicit, declarative API
-* To provide reasonable, predictable performance
+* To provide a stable, explicit, user-friendly API
+* To provide reasonable and relatively predictable performance
+* To provide a clean, readable, self-documenting, open-source code base
 
 ### Not Goals
-* To be the fastest / smallest ECS on the web
-* To provide support for the majority of web users / web environments
-* To provide polyfills / workarounds / older browser support etc. for modern ECMAScript features
+* To be the fastest or smallest ECS on the web
+* To provide support for the majority of web users or web environments
+* To provide polyfills, workarounds, or older browser support for modern ECMAScript features
+
+## Features
+* Simple, functional, human-friendly API
+* Ability to use more than 32 components in one world
+* Direct or Type-safe getters and setters for component properties
+  * e.g., `position.x[entity] = 100;` or `setDataInStore(position.x, entity, 100);` or `position.x.setProp(entity, 100);`
+* Define components and systems once, reuse them across worlds
+* Lots of unit tests
 
 ## Install
+See [API Reference](#api-reference) below for a complete list of named exports.
 
 ### Browser etc.
-`CJS`, `ESM`, `IIFE` and `UMD` builds are available in the `./dist` folder.
+`CJS`, `ES2020`, `ESM`, `IIFE` and `UMD` builds are available in the `./dist` folder.
+
+`ES2020` builds are `ESM` builds that have not been processed by Babel.
+
+Miski can then be used through its named exports:
+
+```javascript
+import { createWorld } from './es2020/index.min.js';
+const world = createWorld();
+```
+or for UMD/IIFE:
+```javascript
+<script src="./es2020/index.min.js" type="module">
+...
+const world = miski.createWorld();
+```
 
 ### npm
 ```bash
 npm install --production miski
 ```
+```javascript
+const miski = require('miski');
+```
 
 ## Example
+Creates some boxes that bounce around a canvas while changing colour:
 
 ```javascript
-import { createComponent, createWorld, Types } from 'miski';
-const canvas = document.querySelector('canvas');
-const ctx = canvas.getContext('2d');
+  const canvas = document.getElementsByTagName('canvas')[0];
+  const ctx = canvas.getContext('2d');
+  const SPEED = 10;
+  function rnd(a, b) { return Math.random() * (b - a) + a; }
 
-// create our world - most functions take place through the world object
-const world = createWorld({
-  maxComponents: 256,
-  maxEntities: 100_000,
-  maxUpdates: 240,
-  tempo: 1 / 60,
-});
+  // 1. Create a world
 
-// useful for debugging
-window.world = world;
+  const world = createWorld();
+  window.world = world; // useful for debugging
 
-// define some components:
-// components are reusable and not tied to a world instance
-const size = createComponent({
-  name: "size",
-  schema: {
-    height: Types.f32,
-    width: Types.f32,
-  },
-});
+  // 2. Define components
 
-// we register components to a world like so:
-const iSize = world.registerComponent(size);
-// this returns a ComponentInstance for use in queries
+  const cColour = createComponent({ name: "colour", schema: { r: ui8, g: ui8, b: ui8 }});
+  const cPosition = createComponent({ name: "position", schema: { x: f32, y: f32 }});
+  const cSize = createComponent({ name: "size", schema: { value: ui32 }});
+  const cVelocity = createComponent({ name: "velocity", schema: { dx: f32, dy: f32 }});
 
-// lets continue making and registering components
-const colour = createComponent({
-  name: "colour",
-  schema: {
-    r: Types.u8c,
-    g: Types.u8c,
-    b: Types.u8c,
-  },
-});
-const iColour = world.registerComponent(colour);
+  // 3. Register components
 
-const position = createComponent({
-  name: "position",
-  schema: {
-    height: Types.f32,
-    width: Types.f32,
-  },
-});
-const iPosition = world.registerComponent(position);
+  const iSize = await registerComponent(world, cSize);
+  const iPosition = await registerComponent(world, cPosition);
+  const iColour = await registerComponent(world, cColour);
+  const iVelocity = await registerComponent(world, cVelocity);
 
-// create our box entity - createEntity takes no arguments
-const box = world.createEntity();
+  // 4. Create Entities and give them some components
 
-// add the components to the entity
-box.addComponent(iColour);
-box.addComponent(iPosition);
-box.addComponent(iSize);
+  for (let i = 0, max = 32; i < max; i++) {
+    const box = await createEntity(world);
+    await addComponentToEntity(iSize, box, { value: rnd(25, 125) });
+    await addComponentToEntity(iPosition, box, { x: rnd(125, canvas.width - 125), y: rnd(125, canvas.height - 125) });
+    await addComponentToEntity(iColour, box, { r: rnd(0, 255), g: rnd(0, 255), b: rnd(0, 255) });
+    await addComponentToEntity(iVelocity, box, { dx: rnd(-10, 10), dy: rnd(-10, 10) });
+  }
 
-// set some initial properties
-iPosition.x[box] = 10;
-iPosition.y[box] = 50;
-iColour.r[box] = 255;
-iColour.g[box] = 0;
-iColour.b[box] = 0;
-iSize.height[box] = 100;
-iSize.width[box] = 100;
+  // 5. Create queries to group objects by components for use in systems
 
-// world systems support three functions
-// 1) a pre-update function   - ("pre")     - run once at the start of each frame
-// 2) an update function      - ("update")  - to potentially be called multiple times per frame
-// 3) a post-update function  - ("post")    - run once at the end of each frame
+  const qColour = createQuery({all: [ iColour, iSize, iPosition, iVelocity ]});
+  const qRender = createQuery({all: [ iSize, iColour, iPosition ]});
 
-// a simple update function to move boxes around the canvas
-function moveBoxes(entities, delta) {
-  entities.forEach((entity) => {
-    // modify component properties
-    iPosition.x[entity] += (10 * delta);
-    iPosition.y[entity] -= (10 * delta);
+  // 6. Define Systems
+
+  const sColourChange = createSystem({
+    name: "colour",
+    update: function(entities, components, delta) {
+      const { colour, position, size, velocity } = components;
+      const { r, g, b } = colour;
+      const { x, y } = position;
+      const { value } = size;
+      const { dx, dy } = velocity;
+
+      entities.forEach((entity) => {
+        // data for entities can be got/set in 3 ways:
+        // direct but type unsafe:
+        r[entity] += 1;
+        // indirect but more type safe:
+        setDataInStore(g, entity, getDataFromStore(g, entity) + 1);
+        b.setProp(entity, b.getProp(entity) + 1);
+
+        // bounce box off sides of canvas
+        const ds = value[entity];
+        const nx = x[entity] + dx[entity] * delta * SPEED;
+        const ny = y[entity] + dy[entity] * delta * SPEED;
+        if (nx >= canvas.width - ds || nx <= 0) {
+          dx[entity] = -dx[entity];
+        }
+        if (ny >= canvas.height - ds || ny <= 0) {
+          dy[entity] = -dy[entity];
+        }
+
+        // update position
+        x[entity] += dx[entity] * delta * SPEED;
+        y[entity] += dy[entity] * delta * SPEED;
+      });
+    },
   });
-}
 
-// a simple render function to draw the boxes to the canvas
-function draw(entities, alpha) {
-  // clear canvas every frame
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  // draw each entity
-  entities.forEach((entity) => {
-    ctx.fillStyle = `rgb(${iColour.r[entity]}, ${iColour.g[entity]}, ${iColour.b[entity]})`;
-    ctx.fillRect(
-      iPosition.x[entity],
-      iPosition.y[entity],
-      iSize.width[entity],
-      iSize.height[entity],
-    );
+  const sRender = createSystem({
+    name: "render",
+    post: function(entities, components, alpha) {
+      const { colour, position, size } = components;
+      const { r, g, b } = colour;
+      const { x, y } = position;
+      const { value } = size;
+      ctx.fillStyle = `white`;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      entities.forEach((entity) => {
+        ctx.fillStyle = `rgb(${r[entity]}, ${g[entity]}, ${b[entity]})`;
+        ctx.fillRect(x[entity], y[entity], value[entity], value[entity]);
+      });
+    }
   });
-}
 
-// Use queries to gather entities for use in systems:
-const qBox = world.registerQuery({
-  all: [
-    colour,
-    position,
-    size
-  ],
-  // also takes 'any' and 'none' arrays like Geotic
-});
+  // 7. Register Systems
 
-// turn the mover function into a system
-const mover = world.registerSystem({
-  // system name can be any valid object property name
-  name: "mover",
-  query: qBox,
-  update: moveBoxes,
-  post: draw,
-});
+  const iColourChange = await registerSystem(world, sColourChange, qColour);
+  enableSystem(iColourChange); // systems are disabled by default
 
-// enable the system
-mover.enable();
+  const iRender = await registerSystem(world, sRender, qRender);
+  enableSystem(iRender);
 
-// game loop example
-let lastTime = null;
-let accumulator = 0;
-const tempo = 1/60;
-let dt = tempo;
+  // 8. Define your game loop (not Miski specific)
 
-function onTick(time) {
-  world.step(time);
-  window.requestAnimationFrame(onTick);
-}
-onTick(0);
+  let stepLastTime = null;
+  let stepAccumulator = 0;
+  let stepLastUpdate = 0;
+  const tempo = 1 / 60;
+  const maxUpdates = 240;
+
+  function step(time) {
+    requestAnimationFrame(step);
+    if (stepLastTime !== null) {
+      stepAccumulator += (time - (stepLastTime || 0)) * 0.001;
+      stepLastUpdate = 0;
+
+      runPreSystems(world); // calls all systems' pre() function
+
+      while (stepAccumulator > tempo) {
+        if (stepLastUpdate >= maxUpdates) {
+          stepAccumulator = 1;
+          break;
+        }
+
+        runUpdateSystems(world, tempo); // calls all systems' update() function
+
+        stepAccumulator -= tempo;
+        stepLastUpdate++;
+      }
+    }
+    stepLastTime = time;
+    const alpha = stepAccumulator / tempo;
+
+    runPostSystems(world, alpha); // calls all systems' post() function
+  }
+  requestAnimationFrame(step);
+```
+
+## API Reference
+This is the complete API:
+
+```javascript
+  🌍 World
+  createWorld(WorldSpec) => World;
+
+  🧩 Components (T: schema)
+  await createComponent(ComponentSpec<T>) => Component<T>;
+  await registerComponent(World, Component<T>) => ComponentInstance<T>
+  await unregisterComponent(ComponentInstance<T>) => World;
+  await addComponentToEntity(ComponentInstance<T>, Entity, properties?) => ComponentInstance<T>;
+  await removeComponentFromEntity(ComponentInstance<T>, Entity) => ComponentInstance<T>;
+
+  👾 Entities (an Entity is just a number)
+  await createEntity(World) => Entity;
+  await destroyEntity(World, Entity) => World;
+
+  🔎 Queries
+  createQuery(QuerySpec) => Query;
+
+  📜 Schema DataStores (T: array type, D: acceptable types)
+  defineDataStore(DataStoreSpec<T, D>) => DataStore;
+  getDataFromStore(DataStoreInstance<T, D>, Entity) => D | undefined;
+  setDataInStore(DataStoreInstance<T, D>, Entity, <D>value) => boolean;
+
+  ⚡ Systems
+  createSystem(SystemSpec) => System;
+  await registerSystem(World, System) => SystemInstance;
+  await unregisterSystem(SystemInstance) => World;
+  disableSystem(SystemInstance) => SystemInstance;
+  enableSystem(SystemInstance) => SystemInstance;
+  isSystemEnabled(SystemInstance) => SystemInstance;
+
+  ⌚ Timestep
+  runPreSystems(World) => void;
+  runUpdateSystems(World) => void;
+  runPostSystems(World) => void;
+
+  🔨 Utils
+  isValidName(string) => boolean;
+  isValidSchema(Schema) => boolean;
+```
+
+Miski also comes with a set of data storage schemas for commonly used types:
+
+* Typed array storage: `i8, ui8, ui8c, i16, ui16, i32, ui32, i64, ui64, f32, f64`
+
+* Regular storage: `array, boolean, function, number, object, string`
+
+* Unsafe storage: `any`
+
+These can be used when defining components:
+
+```javascript
+  import { createComponent, f32 } from 'miski';
+  const position = createComponent({
+    name: "position",
+    schema: {
+      x: f32,
+      y: f32,
+    }
+  });
 ```
 
 ## Demos
-See `./demo` for more interesting working examples.
+See `./demo` for working examples.
 
 ## To-Do
 ### Before Beta
@@ -187,18 +288,20 @@ See `./demo` for more interesting working examples.
 1. Write comprehensive tests
 2. Ensure high-quality Typescript definitions throughout
 3. Write consistent code documentation throughout
+4. Validation for any user supplied arguments
+5. Optimise performance
 ### Future
 1. Allow for "changed" in queries
-2. Use of Async where appropriate
 3. Multithreading support / playing nicely with WebWorkers / SharedArrayBuffers
 
-Feature requests are welcome. Please open an issue on Github to make a request.
 
 ## Contributing
+Feature requests are welcome. Please open an issue on Github to make a request.
+
 Contributions are welcome and invited. See `CONTRIBUTING.md` for details.
 
 ## Acknowledgements
-Miski is inspired by [ape-ecs](https://github.com/fritzy/ape-ecs), [bitECS](https://github.com/NateTheGreatt/bitECS), [ECSY](https://github.com/ecsyjs/ecsy), [Geotic](https://github.com/ddmills/geotic), [HECS](https://github.com/gohyperr/hecs), [Wolf ECS](https://github.com/EnderShadow8/wolf-ecs), and [classless.md](https://gist.github.com/mpj/17d8d73275bca303e8d2)
+Miski is inspired by [ape-ecs](https://github.com/fritzy/ape-ecs), [bitECS](https://github.com/NateTheGreatt/bitECS), [ECSY](https://github.com/ecsyjs/ecsy), [Geotic](https://github.com/ddmills/geotic), [HECS](https://github.com/gohyperr/hecs), and [Wolf ECS](https://github.com/EnderShadow8/wolf-ecs).
 
 ## License
 &copy; 2021 P. Hughes. All rights reserved.

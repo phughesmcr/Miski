@@ -73,12 +73,14 @@
 							<li><a href="#not-goals">Not Goals</a></li>
 						</ul>
 					</li>
+					<li><a href="#features">Features</a></li>
 					<li><a href="#install">Install</a><ul>
 							<li><a href="#browser-etc">Browser etc.</a></li>
 							<li><a href="#npm">npm</a></li>
 						</ul>
 					</li>
 					<li><a href="#example">Example</a></li>
+					<li><a href="#api-reference">API Reference</a></li>
 					<li><a href="#demos">Demos</a></li>
 					<li><a href="#benchmarks">Benchmarks</a></li>
 					<li><a href="#to-do">To-Do</a></li>
@@ -89,171 +91,266 @@
 				<a href="#purpose" id="purpose" style="color: inherit; text-decoration: none;">
 					<h2>Purpose</h2>
 				</a>
-				<p>Miski&#39;s purpose is to provide a stable ECS architecture for modern browsers.</p>
+				<p>Miski&#39;s purpose is to provide a stable, user-friendly ECS architecture for modern browsers.</p>
 				<a href="#goals" id="goals" style="color: inherit; text-decoration: none;">
 					<h3>Goals</h3>
 				</a>
 				<ul>
-					<li>To provide a stable, explicit, declarative API</li>
-					<li>To provide reasonable, predictable performance</li>
+					<li>To provide a stable, explicit, user-friendly API</li>
+					<li>To provide reasonable and relatively predictable performance</li>
+					<li>To provide a clean, readable, self-documenting, open-source code base</li>
 				</ul>
 				<a href="#not-goals" id="not-goals" style="color: inherit; text-decoration: none;">
 					<h3>Not Goals</h3>
 				</a>
 				<ul>
-					<li>To be the fastest / smallest ECS on the web</li>
-					<li>To provide support for the majority of web users / web environments</li>
-					<li>To provide polyfills / workarounds / older browser support etc. for modern ECMAScript features</li>
+					<li>To be the fastest or smallest ECS on the web</li>
+					<li>To provide support for the majority of web users or web environments</li>
+					<li>To provide polyfills, workarounds, or older browser support for modern ECMAScript features</li>
+				</ul>
+				<a href="#features" id="features" style="color: inherit; text-decoration: none;">
+					<h2>Features</h2>
+				</a>
+				<ul>
+					<li>Simple, functional, human-friendly API</li>
+					<li>Ability to use more than 32 components in one world</li>
+					<li>Direct or Type-safe getters and setters for component properties<ul>
+							<li>e.g., <code>position.x[entity] = 100;</code> or <code>setDataInStore(position.x, entity, 100);</code> or <code>position.x.setProp(entity, 100);</code></li>
+						</ul>
+					</li>
+					<li>Define components and systems once, reuse them across worlds</li>
+					<li>Lots of unit tests</li>
 				</ul>
 				<a href="#install" id="install" style="color: inherit; text-decoration: none;">
 					<h2>Install</h2>
 				</a>
+				<p>See <a href="#api-reference">API Reference</a> below for a complete list of named exports.</p>
 				<a href="#browser-etc" id="browser-etc" style="color: inherit; text-decoration: none;">
 					<h3>Browser etc.</h3>
 				</a>
-				<p><code>CJS</code>, <code>ESM</code>, <code>IIFE</code> and <code>UMD</code> builds are available in the <code>./dist</code> folder.</p>
+				<p><code>CJS</code>, <code>ES2020</code>, <code>ESM</code>, <code>IIFE</code> and <code>UMD</code> builds are available in the <code>./dist</code> folder.</p>
+				<p><code>ES2020</code> builds are <code>ESM</code> builds that have not been processed by Babel.</p>
+				<p>Miski can then be used through its named exports:</p>
+				<pre><code class="language-javascript"><span style="color: #AF00DB">import</span><span style="color: #000000"> { </span><span style="color: #001080">createWorld</span><span style="color: #000000"> } </span><span style="color: #AF00DB">from</span><span style="color: #000000"> </span><span style="color: #A31515">&#039;./es2020/index.min.js&#039;</span><span style="color: #000000">;</span>
+<span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">world</span><span style="color: #000000"> = </span><span style="color: #795E26">createWorld</span><span style="color: #000000">();</span>
+</code></pre>
+				<p>or for UMD/IIFE:</p>
+				<pre><code class="language-javascript"><span style="color: #800000">&lt;script</span><span style="color: #000000"> </span><span style="color: #FF0000">src</span><span style="color: #000000">=</span><span style="color: #A31515">&quot;./es2020/index.min.js&quot;</span><span style="color: #000000"> </span><span style="color: #FF0000">type</span><span style="color: #000000">=</span><span style="color: #A31515">&quot;module&quot;</span><span style="color: #800000">&gt;</span>
+<span style="color: #000000">...</span>
+<span style="color: #000000">const world = miski.createWorld();</span>
+</code></pre>
 				<a href="#npm" id="npm" style="color: inherit; text-decoration: none;">
 					<h3>npm</h3>
 				</a>
 				<pre><code class="language-bash"><span style="color: #000000">npm install --production miski</span>
 </code></pre>
+				<pre><code class="language-javascript"><span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">miski</span><span style="color: #000000"> = </span><span style="color: #795E26">require</span><span style="color: #000000">(</span><span style="color: #A31515">&#039;miski&#039;</span><span style="color: #000000">);</span>
+</code></pre>
 				<a href="#example" id="example" style="color: inherit; text-decoration: none;">
 					<h2>Example</h2>
 				</a>
-				<pre><code class="language-javascript"><span style="color: #AF00DB">import</span><span style="color: #000000"> { </span><span style="color: #001080">createComponent</span><span style="color: #000000">, </span><span style="color: #001080">createWorld</span><span style="color: #000000">, </span><span style="color: #001080">Types</span><span style="color: #000000"> } </span><span style="color: #AF00DB">from</span><span style="color: #000000"> </span><span style="color: #A31515">&#039;miski&#039;</span><span style="color: #000000">;</span>
-<span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">canvas</span><span style="color: #000000"> = </span><span style="color: #001080">document</span><span style="color: #000000">.</span><span style="color: #795E26">querySelector</span><span style="color: #000000">(</span><span style="color: #A31515">&#039;canvas&#039;</span><span style="color: #000000">);</span>
-<span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">ctx</span><span style="color: #000000"> = </span><span style="color: #001080">canvas</span><span style="color: #000000">.</span><span style="color: #795E26">getContext</span><span style="color: #000000">(</span><span style="color: #A31515">&#039;2d&#039;</span><span style="color: #000000">);</span>
+				<p>Creates some boxes that bounce around a canvas while changing colour:</p>
+				<pre><code class="language-javascript"><span style="color: #000000">  </span><span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">canvas</span><span style="color: #000000"> = </span><span style="color: #001080">document</span><span style="color: #000000">.</span><span style="color: #795E26">getElementsByTagName</span><span style="color: #000000">(</span><span style="color: #A31515">&#039;canvas&#039;</span><span style="color: #000000">)[</span><span style="color: #098658">0</span><span style="color: #000000">];</span>
+<span style="color: #000000">  </span><span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">ctx</span><span style="color: #000000"> = </span><span style="color: #001080">canvas</span><span style="color: #000000">.</span><span style="color: #795E26">getContext</span><span style="color: #000000">(</span><span style="color: #A31515">&#039;2d&#039;</span><span style="color: #000000">);</span>
+<span style="color: #000000">  </span><span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">SPEED</span><span style="color: #000000"> = </span><span style="color: #098658">10</span><span style="color: #000000">;</span>
+<span style="color: #000000">  </span><span style="color: #0000FF">function</span><span style="color: #000000"> </span><span style="color: #795E26">rnd</span><span style="color: #000000">(</span><span style="color: #001080">a</span><span style="color: #000000">, </span><span style="color: #001080">b</span><span style="color: #000000">) { </span><span style="color: #AF00DB">return</span><span style="color: #000000"> </span><span style="color: #267F99">Math</span><span style="color: #000000">.</span><span style="color: #795E26">random</span><span style="color: #000000">() * (</span><span style="color: #001080">b</span><span style="color: #000000"> - </span><span style="color: #001080">a</span><span style="color: #000000">) + </span><span style="color: #001080">a</span><span style="color: #000000">; }</span>
 
-<span style="color: #008000">// create our world - most functions take place through the world object</span>
-<span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">world</span><span style="color: #000000"> = </span><span style="color: #795E26">createWorld</span><span style="color: #000000">({</span>
-<span style="color: #000000">  </span><span style="color: #001080">maxComponents:</span><span style="color: #000000"> </span><span style="color: #098658">256</span><span style="color: #000000">,</span>
-<span style="color: #000000">  </span><span style="color: #001080">maxEntities:</span><span style="color: #000000"> </span><span style="color: #098658">100_000</span><span style="color: #000000">,</span>
-<span style="color: #000000">  </span><span style="color: #001080">maxUpdates:</span><span style="color: #000000"> </span><span style="color: #098658">240</span><span style="color: #000000">,</span>
-<span style="color: #000000">  </span><span style="color: #001080">tempo:</span><span style="color: #000000"> </span><span style="color: #098658">1</span><span style="color: #000000"> / </span><span style="color: #098658">60</span><span style="color: #000000">,</span>
-<span style="color: #000000">});</span>
+<span style="color: #000000">  </span><span style="color: #008000">// 1. Create a world</span>
 
-<span style="color: #008000">// useful for debugging</span>
-<span style="color: #001080">window</span><span style="color: #000000">.</span><span style="color: #001080">world</span><span style="color: #000000"> = </span><span style="color: #001080">world</span><span style="color: #000000">;</span>
+<span style="color: #000000">  </span><span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">world</span><span style="color: #000000"> = </span><span style="color: #795E26">createWorld</span><span style="color: #000000">();</span>
+<span style="color: #000000">  </span><span style="color: #001080">window</span><span style="color: #000000">.</span><span style="color: #001080">world</span><span style="color: #000000"> = </span><span style="color: #001080">world</span><span style="color: #000000">; </span><span style="color: #008000">// useful for debugging</span>
 
-<span style="color: #008000">// define some components:</span>
-<span style="color: #008000">// components are reusable and not tied to a world instance</span>
-<span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">size</span><span style="color: #000000"> = </span><span style="color: #795E26">createComponent</span><span style="color: #000000">({</span>
-<span style="color: #000000">  </span><span style="color: #001080">name:</span><span style="color: #000000"> </span><span style="color: #A31515">&quot;size&quot;</span><span style="color: #000000">,</span>
-<span style="color: #000000">  </span><span style="color: #001080">schema:</span><span style="color: #000000"> {</span>
-<span style="color: #000000">    </span><span style="color: #001080">height:</span><span style="color: #000000"> </span><span style="color: #001080">Types</span><span style="color: #000000">.</span><span style="color: #001080">f32</span><span style="color: #000000">,</span>
-<span style="color: #000000">    </span><span style="color: #001080">width:</span><span style="color: #000000"> </span><span style="color: #001080">Types</span><span style="color: #000000">.</span><span style="color: #001080">f32</span><span style="color: #000000">,</span>
-<span style="color: #000000">  },</span>
-<span style="color: #000000">});</span>
+<span style="color: #000000">  </span><span style="color: #008000">// 2. Define components</span>
 
-<span style="color: #008000">// we register components to a world like so:</span>
-<span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">iSize</span><span style="color: #000000"> = </span><span style="color: #001080">world</span><span style="color: #000000">.</span><span style="color: #795E26">registerComponent</span><span style="color: #000000">(</span><span style="color: #001080">size</span><span style="color: #000000">);</span>
-<span style="color: #008000">// this returns a ComponentInstance for use in queries</span>
+<span style="color: #000000">  </span><span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">cColour</span><span style="color: #000000"> = </span><span style="color: #795E26">createComponent</span><span style="color: #000000">({ </span><span style="color: #001080">name:</span><span style="color: #000000"> </span><span style="color: #A31515">&quot;colour&quot;</span><span style="color: #000000">, </span><span style="color: #001080">schema:</span><span style="color: #000000"> { </span><span style="color: #001080">r:</span><span style="color: #000000"> </span><span style="color: #001080">ui8</span><span style="color: #000000">, </span><span style="color: #001080">g:</span><span style="color: #000000"> </span><span style="color: #001080">ui8</span><span style="color: #000000">, </span><span style="color: #001080">b:</span><span style="color: #000000"> </span><span style="color: #001080">ui8</span><span style="color: #000000"> }});</span>
+<span style="color: #000000">  </span><span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">cPosition</span><span style="color: #000000"> = </span><span style="color: #795E26">createComponent</span><span style="color: #000000">({ </span><span style="color: #001080">name:</span><span style="color: #000000"> </span><span style="color: #A31515">&quot;position&quot;</span><span style="color: #000000">, </span><span style="color: #001080">schema:</span><span style="color: #000000"> { </span><span style="color: #001080">x:</span><span style="color: #000000"> </span><span style="color: #001080">f32</span><span style="color: #000000">, </span><span style="color: #001080">y:</span><span style="color: #000000"> </span><span style="color: #001080">f32</span><span style="color: #000000"> }});</span>
+<span style="color: #000000">  </span><span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">cSize</span><span style="color: #000000"> = </span><span style="color: #795E26">createComponent</span><span style="color: #000000">({ </span><span style="color: #001080">name:</span><span style="color: #000000"> </span><span style="color: #A31515">&quot;size&quot;</span><span style="color: #000000">, </span><span style="color: #001080">schema:</span><span style="color: #000000"> { </span><span style="color: #001080">value:</span><span style="color: #000000"> </span><span style="color: #001080">ui32</span><span style="color: #000000"> }});</span>
+<span style="color: #000000">  </span><span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">cVelocity</span><span style="color: #000000"> = </span><span style="color: #795E26">createComponent</span><span style="color: #000000">({ </span><span style="color: #001080">name:</span><span style="color: #000000"> </span><span style="color: #A31515">&quot;velocity&quot;</span><span style="color: #000000">, </span><span style="color: #001080">schema:</span><span style="color: #000000"> { </span><span style="color: #001080">dx:</span><span style="color: #000000"> </span><span style="color: #001080">f32</span><span style="color: #000000">, </span><span style="color: #001080">dy:</span><span style="color: #000000"> </span><span style="color: #001080">f32</span><span style="color: #000000"> }});</span>
 
-<span style="color: #008000">// lets continue making and registering components</span>
-<span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">colour</span><span style="color: #000000"> = </span><span style="color: #795E26">createComponent</span><span style="color: #000000">({</span>
-<span style="color: #000000">  </span><span style="color: #001080">name:</span><span style="color: #000000"> </span><span style="color: #A31515">&quot;colour&quot;</span><span style="color: #000000">,</span>
-<span style="color: #000000">  </span><span style="color: #001080">schema:</span><span style="color: #000000"> {</span>
-<span style="color: #000000">    </span><span style="color: #001080">r:</span><span style="color: #000000"> </span><span style="color: #001080">Types</span><span style="color: #000000">.</span><span style="color: #001080">u8c</span><span style="color: #000000">,</span>
-<span style="color: #000000">    </span><span style="color: #001080">g:</span><span style="color: #000000"> </span><span style="color: #001080">Types</span><span style="color: #000000">.</span><span style="color: #001080">u8c</span><span style="color: #000000">,</span>
-<span style="color: #000000">    </span><span style="color: #001080">b:</span><span style="color: #000000"> </span><span style="color: #001080">Types</span><span style="color: #000000">.</span><span style="color: #001080">u8c</span><span style="color: #000000">,</span>
-<span style="color: #000000">  },</span>
-<span style="color: #000000">});</span>
-<span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">iColour</span><span style="color: #000000"> = </span><span style="color: #001080">world</span><span style="color: #000000">.</span><span style="color: #795E26">registerComponent</span><span style="color: #000000">(</span><span style="color: #001080">colour</span><span style="color: #000000">);</span>
+<span style="color: #000000">  </span><span style="color: #008000">// 3. Register components</span>
 
-<span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">position</span><span style="color: #000000"> = </span><span style="color: #795E26">createComponent</span><span style="color: #000000">({</span>
-<span style="color: #000000">  </span><span style="color: #001080">name:</span><span style="color: #000000"> </span><span style="color: #A31515">&quot;position&quot;</span><span style="color: #000000">,</span>
-<span style="color: #000000">  </span><span style="color: #001080">schema:</span><span style="color: #000000"> {</span>
-<span style="color: #000000">    </span><span style="color: #001080">height:</span><span style="color: #000000"> </span><span style="color: #001080">Types</span><span style="color: #000000">.</span><span style="color: #001080">f32</span><span style="color: #000000">,</span>
-<span style="color: #000000">    </span><span style="color: #001080">width:</span><span style="color: #000000"> </span><span style="color: #001080">Types</span><span style="color: #000000">.</span><span style="color: #001080">f32</span><span style="color: #000000">,</span>
-<span style="color: #000000">  },</span>
-<span style="color: #000000">});</span>
-<span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">iPosition</span><span style="color: #000000"> = </span><span style="color: #001080">world</span><span style="color: #000000">.</span><span style="color: #795E26">registerComponent</span><span style="color: #000000">(</span><span style="color: #001080">position</span><span style="color: #000000">);</span>
+<span style="color: #000000">  </span><span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">iSize</span><span style="color: #000000"> = </span><span style="color: #AF00DB">await</span><span style="color: #000000"> </span><span style="color: #795E26">registerComponent</span><span style="color: #000000">(</span><span style="color: #001080">world</span><span style="color: #000000">, </span><span style="color: #001080">cSize</span><span style="color: #000000">);</span>
+<span style="color: #000000">  </span><span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">iPosition</span><span style="color: #000000"> = </span><span style="color: #AF00DB">await</span><span style="color: #000000"> </span><span style="color: #795E26">registerComponent</span><span style="color: #000000">(</span><span style="color: #001080">world</span><span style="color: #000000">, </span><span style="color: #001080">cPosition</span><span style="color: #000000">);</span>
+<span style="color: #000000">  </span><span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">iColour</span><span style="color: #000000"> = </span><span style="color: #AF00DB">await</span><span style="color: #000000"> </span><span style="color: #795E26">registerComponent</span><span style="color: #000000">(</span><span style="color: #001080">world</span><span style="color: #000000">, </span><span style="color: #001080">cColour</span><span style="color: #000000">);</span>
+<span style="color: #000000">  </span><span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">iVelocity</span><span style="color: #000000"> = </span><span style="color: #AF00DB">await</span><span style="color: #000000"> </span><span style="color: #795E26">registerComponent</span><span style="color: #000000">(</span><span style="color: #001080">world</span><span style="color: #000000">, </span><span style="color: #001080">cVelocity</span><span style="color: #000000">);</span>
 
-<span style="color: #008000">// create our box entity - createEntity takes no arguments</span>
-<span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">box</span><span style="color: #000000"> = </span><span style="color: #001080">world</span><span style="color: #000000">.</span><span style="color: #795E26">createEntity</span><span style="color: #000000">();</span>
+<span style="color: #000000">  </span><span style="color: #008000">// 4. Create Entities and give them some components</span>
 
-<span style="color: #008000">// add the components to the entity</span>
-<span style="color: #001080">box</span><span style="color: #000000">.</span><span style="color: #795E26">addComponent</span><span style="color: #000000">(</span><span style="color: #001080">iColour</span><span style="color: #000000">);</span>
-<span style="color: #001080">box</span><span style="color: #000000">.</span><span style="color: #795E26">addComponent</span><span style="color: #000000">(</span><span style="color: #001080">iPosition</span><span style="color: #000000">);</span>
-<span style="color: #001080">box</span><span style="color: #000000">.</span><span style="color: #795E26">addComponent</span><span style="color: #000000">(</span><span style="color: #001080">iSize</span><span style="color: #000000">);</span>
+<span style="color: #000000">  </span><span style="color: #AF00DB">for</span><span style="color: #000000"> (</span><span style="color: #0000FF">let</span><span style="color: #000000"> </span><span style="color: #001080">i</span><span style="color: #000000"> = </span><span style="color: #098658">0</span><span style="color: #000000">, </span><span style="color: #001080">max</span><span style="color: #000000"> = </span><span style="color: #098658">32</span><span style="color: #000000">; </span><span style="color: #001080">i</span><span style="color: #000000"> &lt; </span><span style="color: #001080">max</span><span style="color: #000000">; </span><span style="color: #001080">i</span><span style="color: #000000">++) {</span>
+<span style="color: #000000">    </span><span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">box</span><span style="color: #000000"> = </span><span style="color: #AF00DB">await</span><span style="color: #000000"> </span><span style="color: #795E26">createEntity</span><span style="color: #000000">(</span><span style="color: #001080">world</span><span style="color: #000000">);</span>
+<span style="color: #000000">    </span><span style="color: #AF00DB">await</span><span style="color: #000000"> </span><span style="color: #795E26">addComponentToEntity</span><span style="color: #000000">(</span><span style="color: #001080">iSize</span><span style="color: #000000">, </span><span style="color: #001080">box</span><span style="color: #000000">, { </span><span style="color: #001080">value:</span><span style="color: #000000"> </span><span style="color: #795E26">rnd</span><span style="color: #000000">(</span><span style="color: #098658">25</span><span style="color: #000000">, </span><span style="color: #098658">125</span><span style="color: #000000">) });</span>
+<span style="color: #000000">    </span><span style="color: #AF00DB">await</span><span style="color: #000000"> </span><span style="color: #795E26">addComponentToEntity</span><span style="color: #000000">(</span><span style="color: #001080">iPosition</span><span style="color: #000000">, </span><span style="color: #001080">box</span><span style="color: #000000">, { </span><span style="color: #001080">x:</span><span style="color: #000000"> </span><span style="color: #795E26">rnd</span><span style="color: #000000">(</span><span style="color: #098658">125</span><span style="color: #000000">, </span><span style="color: #001080">canvas</span><span style="color: #000000">.</span><span style="color: #001080">width</span><span style="color: #000000"> - </span><span style="color: #098658">125</span><span style="color: #000000">), </span><span style="color: #001080">y:</span><span style="color: #000000"> </span><span style="color: #795E26">rnd</span><span style="color: #000000">(</span><span style="color: #098658">125</span><span style="color: #000000">, </span><span style="color: #001080">canvas</span><span style="color: #000000">.</span><span style="color: #001080">height</span><span style="color: #000000"> - </span><span style="color: #098658">125</span><span style="color: #000000">) });</span>
+<span style="color: #000000">    </span><span style="color: #AF00DB">await</span><span style="color: #000000"> </span><span style="color: #795E26">addComponentToEntity</span><span style="color: #000000">(</span><span style="color: #001080">iColour</span><span style="color: #000000">, </span><span style="color: #001080">box</span><span style="color: #000000">, { </span><span style="color: #001080">r:</span><span style="color: #000000"> </span><span style="color: #795E26">rnd</span><span style="color: #000000">(</span><span style="color: #098658">0</span><span style="color: #000000">, </span><span style="color: #098658">255</span><span style="color: #000000">), </span><span style="color: #001080">g:</span><span style="color: #000000"> </span><span style="color: #795E26">rnd</span><span style="color: #000000">(</span><span style="color: #098658">0</span><span style="color: #000000">, </span><span style="color: #098658">255</span><span style="color: #000000">), </span><span style="color: #001080">b:</span><span style="color: #000000"> </span><span style="color: #795E26">rnd</span><span style="color: #000000">(</span><span style="color: #098658">0</span><span style="color: #000000">, </span><span style="color: #098658">255</span><span style="color: #000000">) });</span>
+<span style="color: #000000">    </span><span style="color: #AF00DB">await</span><span style="color: #000000"> </span><span style="color: #795E26">addComponentToEntity</span><span style="color: #000000">(</span><span style="color: #001080">iVelocity</span><span style="color: #000000">, </span><span style="color: #001080">box</span><span style="color: #000000">, { </span><span style="color: #001080">dx:</span><span style="color: #000000"> </span><span style="color: #795E26">rnd</span><span style="color: #000000">(-</span><span style="color: #098658">10</span><span style="color: #000000">, </span><span style="color: #098658">10</span><span style="color: #000000">), </span><span style="color: #001080">dy:</span><span style="color: #000000"> </span><span style="color: #795E26">rnd</span><span style="color: #000000">(-</span><span style="color: #098658">10</span><span style="color: #000000">, </span><span style="color: #098658">10</span><span style="color: #000000">) });</span>
+<span style="color: #000000">  }</span>
 
-<span style="color: #008000">// set some initial properties</span>
-<span style="color: #001080">iPosition</span><span style="color: #000000">.</span><span style="color: #001080">x</span><span style="color: #000000">[</span><span style="color: #001080">box</span><span style="color: #000000">] = </span><span style="color: #098658">10</span><span style="color: #000000">;</span>
-<span style="color: #001080">iPosition</span><span style="color: #000000">.</span><span style="color: #001080">y</span><span style="color: #000000">[</span><span style="color: #001080">box</span><span style="color: #000000">] = </span><span style="color: #098658">50</span><span style="color: #000000">;</span>
-<span style="color: #001080">iColour</span><span style="color: #000000">.</span><span style="color: #001080">r</span><span style="color: #000000">[</span><span style="color: #001080">box</span><span style="color: #000000">] = </span><span style="color: #098658">255</span><span style="color: #000000">;</span>
-<span style="color: #001080">iColour</span><span style="color: #000000">.</span><span style="color: #001080">g</span><span style="color: #000000">[</span><span style="color: #001080">box</span><span style="color: #000000">] = </span><span style="color: #098658">0</span><span style="color: #000000">;</span>
-<span style="color: #001080">iColour</span><span style="color: #000000">.</span><span style="color: #001080">b</span><span style="color: #000000">[</span><span style="color: #001080">box</span><span style="color: #000000">] = </span><span style="color: #098658">0</span><span style="color: #000000">;</span>
-<span style="color: #001080">iSize</span><span style="color: #000000">.</span><span style="color: #001080">height</span><span style="color: #000000">[</span><span style="color: #001080">box</span><span style="color: #000000">] = </span><span style="color: #098658">100</span><span style="color: #000000">;</span>
-<span style="color: #001080">iSize</span><span style="color: #000000">.</span><span style="color: #001080">width</span><span style="color: #000000">[</span><span style="color: #001080">box</span><span style="color: #000000">] = </span><span style="color: #098658">100</span><span style="color: #000000">;</span>
+<span style="color: #000000">  </span><span style="color: #008000">// 5. Create queries to group objects by components for use in systems</span>
 
-<span style="color: #008000">// world systems support three functions</span>
-<span style="color: #008000">// 1) a pre-update function   - (&quot;pre&quot;)     - run once at the start of each frame</span>
-<span style="color: #008000">// 2) an update function      - (&quot;update&quot;)  - to potentially be called multiple times per frame</span>
-<span style="color: #008000">// 3) a post-update function  - (&quot;post&quot;)    - run once at the end of each frame</span>
+<span style="color: #000000">  </span><span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">qColour</span><span style="color: #000000"> = </span><span style="color: #795E26">createQuery</span><span style="color: #000000">({</span><span style="color: #001080">all:</span><span style="color: #000000"> [ </span><span style="color: #001080">iColour</span><span style="color: #000000">, </span><span style="color: #001080">iSize</span><span style="color: #000000">, </span><span style="color: #001080">iPosition</span><span style="color: #000000">, </span><span style="color: #001080">iVelocity</span><span style="color: #000000"> ]});</span>
+<span style="color: #000000">  </span><span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">qRender</span><span style="color: #000000"> = </span><span style="color: #795E26">createQuery</span><span style="color: #000000">({</span><span style="color: #001080">all:</span><span style="color: #000000"> [ </span><span style="color: #001080">iSize</span><span style="color: #000000">, </span><span style="color: #001080">iColour</span><span style="color: #000000">, </span><span style="color: #001080">iPosition</span><span style="color: #000000"> ]});</span>
 
-<span style="color: #008000">// a simple update function to move boxes around the canvas</span>
-<span style="color: #0000FF">function</span><span style="color: #000000"> </span><span style="color: #795E26">moveBoxes</span><span style="color: #000000">(</span><span style="color: #001080">entities</span><span style="color: #000000">, </span><span style="color: #001080">delta</span><span style="color: #000000">) {</span>
-<span style="color: #000000">  </span><span style="color: #001080">entities</span><span style="color: #000000">.</span><span style="color: #795E26">forEach</span><span style="color: #000000">((</span><span style="color: #001080">entity</span><span style="color: #000000">) </span><span style="color: #0000FF">=&gt;</span><span style="color: #000000"> {</span>
-<span style="color: #000000">    </span><span style="color: #008000">// modify component properties</span>
-<span style="color: #000000">    </span><span style="color: #001080">iPosition</span><span style="color: #000000">.</span><span style="color: #001080">x</span><span style="color: #000000">[</span><span style="color: #001080">entity</span><span style="color: #000000">] += (</span><span style="color: #098658">10</span><span style="color: #000000"> * </span><span style="color: #001080">delta</span><span style="color: #000000">);</span>
-<span style="color: #000000">    </span><span style="color: #001080">iPosition</span><span style="color: #000000">.</span><span style="color: #001080">y</span><span style="color: #000000">[</span><span style="color: #001080">entity</span><span style="color: #000000">] -= (</span><span style="color: #098658">10</span><span style="color: #000000"> * </span><span style="color: #001080">delta</span><span style="color: #000000">);</span>
+<span style="color: #000000">  </span><span style="color: #008000">// 6. Define Systems</span>
+
+<span style="color: #000000">  </span><span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">sColourChange</span><span style="color: #000000"> = </span><span style="color: #795E26">createSystem</span><span style="color: #000000">({</span>
+<span style="color: #000000">    </span><span style="color: #001080">name:</span><span style="color: #000000"> </span><span style="color: #A31515">&quot;colour&quot;</span><span style="color: #000000">,</span>
+<span style="color: #000000">    </span><span style="color: #795E26">update</span><span style="color: #001080">:</span><span style="color: #000000"> </span><span style="color: #0000FF">function</span><span style="color: #000000">(</span><span style="color: #001080">entities</span><span style="color: #000000">, </span><span style="color: #001080">components</span><span style="color: #000000">, </span><span style="color: #001080">delta</span><span style="color: #000000">) {</span>
+<span style="color: #000000">      </span><span style="color: #0000FF">const</span><span style="color: #000000"> { </span><span style="color: #0070C1">colour</span><span style="color: #000000">, </span><span style="color: #0070C1">position</span><span style="color: #000000">, </span><span style="color: #0070C1">size</span><span style="color: #000000">, </span><span style="color: #0070C1">velocity</span><span style="color: #000000"> } = </span><span style="color: #001080">components</span><span style="color: #000000">;</span>
+<span style="color: #000000">      </span><span style="color: #0000FF">const</span><span style="color: #000000"> { </span><span style="color: #0070C1">r</span><span style="color: #000000">, </span><span style="color: #0070C1">g</span><span style="color: #000000">, </span><span style="color: #0070C1">b</span><span style="color: #000000"> } = </span><span style="color: #001080">colour</span><span style="color: #000000">;</span>
+<span style="color: #000000">      </span><span style="color: #0000FF">const</span><span style="color: #000000"> { </span><span style="color: #0070C1">x</span><span style="color: #000000">, </span><span style="color: #0070C1">y</span><span style="color: #000000"> } = </span><span style="color: #001080">position</span><span style="color: #000000">;</span>
+<span style="color: #000000">      </span><span style="color: #0000FF">const</span><span style="color: #000000"> { </span><span style="color: #0070C1">value</span><span style="color: #000000"> } = </span><span style="color: #001080">size</span><span style="color: #000000">;</span>
+<span style="color: #000000">      </span><span style="color: #0000FF">const</span><span style="color: #000000"> { </span><span style="color: #0070C1">dx</span><span style="color: #000000">, </span><span style="color: #0070C1">dy</span><span style="color: #000000"> } = </span><span style="color: #001080">velocity</span><span style="color: #000000">;</span>
+
+<span style="color: #000000">      </span><span style="color: #001080">entities</span><span style="color: #000000">.</span><span style="color: #795E26">forEach</span><span style="color: #000000">((</span><span style="color: #001080">entity</span><span style="color: #000000">) </span><span style="color: #0000FF">=&gt;</span><span style="color: #000000"> {</span>
+<span style="color: #000000">        </span><span style="color: #008000">// data for entities can be got/set in 3 ways:</span>
+<span style="color: #000000">        </span><span style="color: #008000">// direct but type unsafe:</span>
+<span style="color: #000000">        </span><span style="color: #001080">r</span><span style="color: #000000">[</span><span style="color: #001080">entity</span><span style="color: #000000">] += </span><span style="color: #098658">1</span><span style="color: #000000">;</span>
+<span style="color: #000000">        </span><span style="color: #008000">// indirect but more type safe:</span>
+<span style="color: #000000">        </span><span style="color: #795E26">setDataInStore</span><span style="color: #000000">(</span><span style="color: #001080">g</span><span style="color: #000000">, </span><span style="color: #001080">entity</span><span style="color: #000000">, </span><span style="color: #795E26">getDataFromStore</span><span style="color: #000000">(</span><span style="color: #001080">g</span><span style="color: #000000">, </span><span style="color: #001080">entity</span><span style="color: #000000">) + </span><span style="color: #098658">1</span><span style="color: #000000">);</span>
+<span style="color: #000000">        </span><span style="color: #001080">b</span><span style="color: #000000">.</span><span style="color: #795E26">setProp</span><span style="color: #000000">(</span><span style="color: #001080">entity</span><span style="color: #000000">, </span><span style="color: #001080">b</span><span style="color: #000000">.</span><span style="color: #795E26">getProp</span><span style="color: #000000">(</span><span style="color: #001080">entity</span><span style="color: #000000">) + </span><span style="color: #098658">1</span><span style="color: #000000">);</span>
+
+<span style="color: #000000">        </span><span style="color: #008000">// bounce box off sides of canvas</span>
+<span style="color: #000000">        </span><span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">ds</span><span style="color: #000000"> = </span><span style="color: #001080">value</span><span style="color: #000000">[</span><span style="color: #001080">entity</span><span style="color: #000000">];</span>
+<span style="color: #000000">        </span><span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">nx</span><span style="color: #000000"> = </span><span style="color: #001080">x</span><span style="color: #000000">[</span><span style="color: #001080">entity</span><span style="color: #000000">] + </span><span style="color: #001080">dx</span><span style="color: #000000">[</span><span style="color: #001080">entity</span><span style="color: #000000">] * </span><span style="color: #001080">delta</span><span style="color: #000000"> * </span><span style="color: #0070C1">SPEED</span><span style="color: #000000">;</span>
+<span style="color: #000000">        </span><span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">ny</span><span style="color: #000000"> = </span><span style="color: #001080">y</span><span style="color: #000000">[</span><span style="color: #001080">entity</span><span style="color: #000000">] + </span><span style="color: #001080">dy</span><span style="color: #000000">[</span><span style="color: #001080">entity</span><span style="color: #000000">] * </span><span style="color: #001080">delta</span><span style="color: #000000"> * </span><span style="color: #0070C1">SPEED</span><span style="color: #000000">;</span>
+<span style="color: #000000">        </span><span style="color: #AF00DB">if</span><span style="color: #000000"> (</span><span style="color: #001080">nx</span><span style="color: #000000"> &gt;= </span><span style="color: #001080">canvas</span><span style="color: #000000">.</span><span style="color: #001080">width</span><span style="color: #000000"> - </span><span style="color: #001080">ds</span><span style="color: #000000"> || </span><span style="color: #001080">nx</span><span style="color: #000000"> &lt;= </span><span style="color: #098658">0</span><span style="color: #000000">) {</span>
+<span style="color: #000000">          </span><span style="color: #001080">dx</span><span style="color: #000000">[</span><span style="color: #001080">entity</span><span style="color: #000000">] = -</span><span style="color: #001080">dx</span><span style="color: #000000">[</span><span style="color: #001080">entity</span><span style="color: #000000">];</span>
+<span style="color: #000000">        }</span>
+<span style="color: #000000">        </span><span style="color: #AF00DB">if</span><span style="color: #000000"> (</span><span style="color: #001080">ny</span><span style="color: #000000"> &gt;= </span><span style="color: #001080">canvas</span><span style="color: #000000">.</span><span style="color: #001080">height</span><span style="color: #000000"> - </span><span style="color: #001080">ds</span><span style="color: #000000"> || </span><span style="color: #001080">ny</span><span style="color: #000000"> &lt;= </span><span style="color: #098658">0</span><span style="color: #000000">) {</span>
+<span style="color: #000000">          </span><span style="color: #001080">dy</span><span style="color: #000000">[</span><span style="color: #001080">entity</span><span style="color: #000000">] = -</span><span style="color: #001080">dy</span><span style="color: #000000">[</span><span style="color: #001080">entity</span><span style="color: #000000">];</span>
+<span style="color: #000000">        }</span>
+
+<span style="color: #000000">        </span><span style="color: #008000">// update position</span>
+<span style="color: #000000">        </span><span style="color: #001080">x</span><span style="color: #000000">[</span><span style="color: #001080">entity</span><span style="color: #000000">] += </span><span style="color: #001080">dx</span><span style="color: #000000">[</span><span style="color: #001080">entity</span><span style="color: #000000">] * </span><span style="color: #001080">delta</span><span style="color: #000000"> * </span><span style="color: #0070C1">SPEED</span><span style="color: #000000">;</span>
+<span style="color: #000000">        </span><span style="color: #001080">y</span><span style="color: #000000">[</span><span style="color: #001080">entity</span><span style="color: #000000">] += </span><span style="color: #001080">dy</span><span style="color: #000000">[</span><span style="color: #001080">entity</span><span style="color: #000000">] * </span><span style="color: #001080">delta</span><span style="color: #000000"> * </span><span style="color: #0070C1">SPEED</span><span style="color: #000000">;</span>
+<span style="color: #000000">      });</span>
+<span style="color: #000000">    },</span>
 <span style="color: #000000">  });</span>
-<span style="color: #000000">}</span>
 
-<span style="color: #008000">// a simple render function to draw the boxes to the canvas</span>
-<span style="color: #0000FF">function</span><span style="color: #000000"> </span><span style="color: #795E26">draw</span><span style="color: #000000">(</span><span style="color: #001080">entities</span><span style="color: #000000">, </span><span style="color: #001080">alpha</span><span style="color: #000000">) {</span>
-<span style="color: #000000">  </span><span style="color: #008000">// clear canvas every frame</span>
-<span style="color: #000000">  </span><span style="color: #001080">ctx</span><span style="color: #000000">.</span><span style="color: #795E26">clearRect</span><span style="color: #000000">(</span><span style="color: #098658">0</span><span style="color: #000000">, </span><span style="color: #098658">0</span><span style="color: #000000">, </span><span style="color: #001080">canvas</span><span style="color: #000000">.</span><span style="color: #001080">width</span><span style="color: #000000">, </span><span style="color: #001080">canvas</span><span style="color: #000000">.</span><span style="color: #001080">height</span><span style="color: #000000">);</span>
-<span style="color: #000000">  </span><span style="color: #008000">// draw each entity</span>
-<span style="color: #000000">  </span><span style="color: #001080">entities</span><span style="color: #000000">.</span><span style="color: #795E26">forEach</span><span style="color: #000000">((</span><span style="color: #001080">entity</span><span style="color: #000000">) </span><span style="color: #0000FF">=&gt;</span><span style="color: #000000"> {</span>
-<span style="color: #000000">    </span><span style="color: #001080">ctx</span><span style="color: #000000">.</span><span style="color: #001080">fillStyle</span><span style="color: #000000"> = </span><span style="color: #A31515">`rgb(</span><span style="color: #0000FF">${</span><span style="color: #001080">iColour</span><span style="color: #000000FF">.</span><span style="color: #001080">r</span><span style="color: #000000FF">[</span><span style="color: #001080">entity</span><span style="color: #000000FF">]</span><span style="color: #0000FF">}</span><span style="color: #A31515">, </span><span style="color: #0000FF">${</span><span style="color: #001080">iColour</span><span style="color: #000000FF">.</span><span style="color: #001080">g</span><span style="color: #000000FF">[</span><span style="color: #001080">entity</span><span style="color: #000000FF">]</span><span style="color: #0000FF">}</span><span style="color: #A31515">, </span><span style="color: #0000FF">${</span><span style="color: #001080">iColour</span><span style="color: #000000FF">.</span><span style="color: #001080">b</span><span style="color: #000000FF">[</span><span style="color: #001080">entity</span><span style="color: #000000FF">]</span><span style="color: #0000FF">}</span><span style="color: #A31515">)`</span><span style="color: #000000">;</span>
-<span style="color: #000000">    </span><span style="color: #001080">ctx</span><span style="color: #000000">.</span><span style="color: #795E26">fillRect</span><span style="color: #000000">(</span>
-<span style="color: #000000">      </span><span style="color: #001080">iPosition</span><span style="color: #000000">.</span><span style="color: #001080">x</span><span style="color: #000000">[</span><span style="color: #001080">entity</span><span style="color: #000000">],</span>
-<span style="color: #000000">      </span><span style="color: #001080">iPosition</span><span style="color: #000000">.</span><span style="color: #001080">y</span><span style="color: #000000">[</span><span style="color: #001080">entity</span><span style="color: #000000">],</span>
-<span style="color: #000000">      </span><span style="color: #001080">iSize</span><span style="color: #000000">.</span><span style="color: #001080">width</span><span style="color: #000000">[</span><span style="color: #001080">entity</span><span style="color: #000000">],</span>
-<span style="color: #000000">      </span><span style="color: #001080">iSize</span><span style="color: #000000">.</span><span style="color: #001080">height</span><span style="color: #000000">[</span><span style="color: #001080">entity</span><span style="color: #000000">],</span>
-<span style="color: #000000">    );</span>
+<span style="color: #000000">  </span><span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">sRender</span><span style="color: #000000"> = </span><span style="color: #795E26">createSystem</span><span style="color: #000000">({</span>
+<span style="color: #000000">    </span><span style="color: #001080">name:</span><span style="color: #000000"> </span><span style="color: #A31515">&quot;render&quot;</span><span style="color: #000000">,</span>
+<span style="color: #000000">    </span><span style="color: #795E26">post</span><span style="color: #001080">:</span><span style="color: #000000"> </span><span style="color: #0000FF">function</span><span style="color: #000000">(</span><span style="color: #001080">entities</span><span style="color: #000000">, </span><span style="color: #001080">components</span><span style="color: #000000">, </span><span style="color: #001080">alpha</span><span style="color: #000000">) {</span>
+<span style="color: #000000">      </span><span style="color: #0000FF">const</span><span style="color: #000000"> { </span><span style="color: #0070C1">colour</span><span style="color: #000000">, </span><span style="color: #0070C1">position</span><span style="color: #000000">, </span><span style="color: #0070C1">size</span><span style="color: #000000"> } = </span><span style="color: #001080">components</span><span style="color: #000000">;</span>
+<span style="color: #000000">      </span><span style="color: #0000FF">const</span><span style="color: #000000"> { </span><span style="color: #0070C1">r</span><span style="color: #000000">, </span><span style="color: #0070C1">g</span><span style="color: #000000">, </span><span style="color: #0070C1">b</span><span style="color: #000000"> } = </span><span style="color: #001080">colour</span><span style="color: #000000">;</span>
+<span style="color: #000000">      </span><span style="color: #0000FF">const</span><span style="color: #000000"> { </span><span style="color: #0070C1">x</span><span style="color: #000000">, </span><span style="color: #0070C1">y</span><span style="color: #000000"> } = </span><span style="color: #001080">position</span><span style="color: #000000">;</span>
+<span style="color: #000000">      </span><span style="color: #0000FF">const</span><span style="color: #000000"> { </span><span style="color: #0070C1">value</span><span style="color: #000000"> } = </span><span style="color: #001080">size</span><span style="color: #000000">;</span>
+<span style="color: #000000">      </span><span style="color: #001080">ctx</span><span style="color: #000000">.</span><span style="color: #001080">fillStyle</span><span style="color: #000000"> = </span><span style="color: #A31515">`white`</span><span style="color: #000000">;</span>
+<span style="color: #000000">      </span><span style="color: #001080">ctx</span><span style="color: #000000">.</span><span style="color: #795E26">fillRect</span><span style="color: #000000">(</span><span style="color: #098658">0</span><span style="color: #000000">, </span><span style="color: #098658">0</span><span style="color: #000000">, </span><span style="color: #001080">canvas</span><span style="color: #000000">.</span><span style="color: #001080">width</span><span style="color: #000000">, </span><span style="color: #001080">canvas</span><span style="color: #000000">.</span><span style="color: #001080">height</span><span style="color: #000000">);</span>
+<span style="color: #000000">      </span><span style="color: #001080">entities</span><span style="color: #000000">.</span><span style="color: #795E26">forEach</span><span style="color: #000000">((</span><span style="color: #001080">entity</span><span style="color: #000000">) </span><span style="color: #0000FF">=&gt;</span><span style="color: #000000"> {</span>
+<span style="color: #000000">        </span><span style="color: #001080">ctx</span><span style="color: #000000">.</span><span style="color: #001080">fillStyle</span><span style="color: #000000"> = </span><span style="color: #A31515">`rgb(</span><span style="color: #0000FF">${</span><span style="color: #001080">r</span><span style="color: #000000FF">[</span><span style="color: #001080">entity</span><span style="color: #000000FF">]</span><span style="color: #0000FF">}</span><span style="color: #A31515">, </span><span style="color: #0000FF">${</span><span style="color: #001080">g</span><span style="color: #000000FF">[</span><span style="color: #001080">entity</span><span style="color: #000000FF">]</span><span style="color: #0000FF">}</span><span style="color: #A31515">, </span><span style="color: #0000FF">${</span><span style="color: #001080">b</span><span style="color: #000000FF">[</span><span style="color: #001080">entity</span><span style="color: #000000FF">]</span><span style="color: #0000FF">}</span><span style="color: #A31515">)`</span><span style="color: #000000">;</span>
+<span style="color: #000000">        </span><span style="color: #001080">ctx</span><span style="color: #000000">.</span><span style="color: #795E26">fillRect</span><span style="color: #000000">(</span><span style="color: #001080">x</span><span style="color: #000000">[</span><span style="color: #001080">entity</span><span style="color: #000000">], </span><span style="color: #001080">y</span><span style="color: #000000">[</span><span style="color: #001080">entity</span><span style="color: #000000">], </span><span style="color: #001080">value</span><span style="color: #000000">[</span><span style="color: #001080">entity</span><span style="color: #000000">], </span><span style="color: #001080">value</span><span style="color: #000000">[</span><span style="color: #001080">entity</span><span style="color: #000000">]);</span>
+<span style="color: #000000">      });</span>
+<span style="color: #000000">    }</span>
 <span style="color: #000000">  });</span>
-<span style="color: #000000">}</span>
 
-<span style="color: #008000">// Use queries to gather entities for use in systems:</span>
-<span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">qBox</span><span style="color: #000000"> = </span><span style="color: #001080">world</span><span style="color: #000000">.</span><span style="color: #795E26">registerQuery</span><span style="color: #000000">({</span>
-<span style="color: #000000">  </span><span style="color: #001080">all:</span><span style="color: #000000"> [</span>
-<span style="color: #000000">    </span><span style="color: #001080">colour</span><span style="color: #000000">,</span>
-<span style="color: #000000">    </span><span style="color: #001080">position</span><span style="color: #000000">,</span>
-<span style="color: #000000">    </span><span style="color: #001080">size</span>
-<span style="color: #000000">  ],</span>
-<span style="color: #000000">  </span><span style="color: #008000">// also takes &#039;any&#039; and &#039;none&#039; arrays like Geotic</span>
-<span style="color: #000000">});</span>
+<span style="color: #000000">  </span><span style="color: #008000">// 7. Register Systems</span>
 
-<span style="color: #008000">// turn the mover function into a system</span>
-<span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">mover</span><span style="color: #000000"> = </span><span style="color: #001080">world</span><span style="color: #000000">.</span><span style="color: #795E26">registerSystem</span><span style="color: #000000">({</span>
-<span style="color: #000000">  </span><span style="color: #008000">// system name can be any valid object property name</span>
-<span style="color: #000000">  </span><span style="color: #001080">name:</span><span style="color: #000000"> </span><span style="color: #A31515">&quot;mover&quot;</span><span style="color: #000000">,</span>
-<span style="color: #000000">  </span><span style="color: #001080">query:</span><span style="color: #000000"> </span><span style="color: #001080">qBox</span><span style="color: #000000">,</span>
-<span style="color: #000000">  </span><span style="color: #001080">update:</span><span style="color: #000000"> </span><span style="color: #001080">moveBoxes</span><span style="color: #000000">,</span>
-<span style="color: #000000">  </span><span style="color: #001080">post:</span><span style="color: #000000"> </span><span style="color: #001080">draw</span><span style="color: #000000">,</span>
-<span style="color: #000000">});</span>
+<span style="color: #000000">  </span><span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">iColourChange</span><span style="color: #000000"> = </span><span style="color: #AF00DB">await</span><span style="color: #000000"> </span><span style="color: #795E26">registerSystem</span><span style="color: #000000">(</span><span style="color: #001080">world</span><span style="color: #000000">, </span><span style="color: #001080">sColourChange</span><span style="color: #000000">, </span><span style="color: #001080">qColour</span><span style="color: #000000">);</span>
+<span style="color: #000000">  </span><span style="color: #795E26">enableSystem</span><span style="color: #000000">(</span><span style="color: #001080">iColourChange</span><span style="color: #000000">); </span><span style="color: #008000">// systems are disabled by default</span>
 
-<span style="color: #008000">// enable the system</span>
-<span style="color: #001080">mover</span><span style="color: #000000">.</span><span style="color: #795E26">enable</span><span style="color: #000000">();</span>
+<span style="color: #000000">  </span><span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">iRender</span><span style="color: #000000"> = </span><span style="color: #AF00DB">await</span><span style="color: #000000"> </span><span style="color: #795E26">registerSystem</span><span style="color: #000000">(</span><span style="color: #001080">world</span><span style="color: #000000">, </span><span style="color: #001080">sRender</span><span style="color: #000000">, </span><span style="color: #001080">qRender</span><span style="color: #000000">);</span>
+<span style="color: #000000">  </span><span style="color: #795E26">enableSystem</span><span style="color: #000000">(</span><span style="color: #001080">iRender</span><span style="color: #000000">);</span>
 
-<span style="color: #008000">// game loop example</span>
-<span style="color: #0000FF">let</span><span style="color: #000000"> </span><span style="color: #001080">lastTime</span><span style="color: #000000"> = </span><span style="color: #0000FF">null</span><span style="color: #000000">;</span>
-<span style="color: #0000FF">let</span><span style="color: #000000"> </span><span style="color: #001080">accumulator</span><span style="color: #000000"> = </span><span style="color: #098658">0</span><span style="color: #000000">;</span>
-<span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">tempo</span><span style="color: #000000"> = </span><span style="color: #098658">1</span><span style="color: #000000">/</span><span style="color: #098658">60</span><span style="color: #000000">;</span>
-<span style="color: #0000FF">let</span><span style="color: #000000"> </span><span style="color: #001080">dt</span><span style="color: #000000"> = </span><span style="color: #001080">tempo</span><span style="color: #000000">;</span>
+<span style="color: #000000">  </span><span style="color: #008000">// 8. Define your game loop (not Miski specific)</span>
 
-<span style="color: #0000FF">function</span><span style="color: #000000"> </span><span style="color: #795E26">onTick</span><span style="color: #000000">(</span><span style="color: #001080">time</span><span style="color: #000000">) {</span>
-<span style="color: #000000">  </span><span style="color: #001080">world</span><span style="color: #000000">.</span><span style="color: #795E26">step</span><span style="color: #000000">(</span><span style="color: #001080">time</span><span style="color: #000000">);</span>
-<span style="color: #000000">  </span><span style="color: #001080">window</span><span style="color: #000000">.</span><span style="color: #795E26">requestAnimationFrame</span><span style="color: #000000">(</span><span style="color: #001080">onTick</span><span style="color: #000000">);</span>
-<span style="color: #000000">}</span>
-<span style="color: #795E26">onTick</span><span style="color: #000000">(</span><span style="color: #098658">0</span><span style="color: #000000">);</span>
+<span style="color: #000000">  </span><span style="color: #0000FF">let</span><span style="color: #000000"> </span><span style="color: #001080">stepLastTime</span><span style="color: #000000"> = </span><span style="color: #0000FF">null</span><span style="color: #000000">;</span>
+<span style="color: #000000">  </span><span style="color: #0000FF">let</span><span style="color: #000000"> </span><span style="color: #001080">stepAccumulator</span><span style="color: #000000"> = </span><span style="color: #098658">0</span><span style="color: #000000">;</span>
+<span style="color: #000000">  </span><span style="color: #0000FF">let</span><span style="color: #000000"> </span><span style="color: #001080">stepLastUpdate</span><span style="color: #000000"> = </span><span style="color: #098658">0</span><span style="color: #000000">;</span>
+<span style="color: #000000">  </span><span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">tempo</span><span style="color: #000000"> = </span><span style="color: #098658">1</span><span style="color: #000000"> / </span><span style="color: #098658">60</span><span style="color: #000000">;</span>
+<span style="color: #000000">  </span><span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">maxUpdates</span><span style="color: #000000"> = </span><span style="color: #098658">240</span><span style="color: #000000">;</span>
+
+<span style="color: #000000">  </span><span style="color: #0000FF">function</span><span style="color: #000000"> </span><span style="color: #795E26">step</span><span style="color: #000000">(</span><span style="color: #001080">time</span><span style="color: #000000">) {</span>
+<span style="color: #000000">    </span><span style="color: #795E26">requestAnimationFrame</span><span style="color: #000000">(</span><span style="color: #001080">step</span><span style="color: #000000">);</span>
+<span style="color: #000000">    </span><span style="color: #AF00DB">if</span><span style="color: #000000"> (</span><span style="color: #001080">stepLastTime</span><span style="color: #000000"> !== </span><span style="color: #0000FF">null</span><span style="color: #000000">) {</span>
+<span style="color: #000000">      </span><span style="color: #001080">stepAccumulator</span><span style="color: #000000"> += (</span><span style="color: #001080">time</span><span style="color: #000000"> - (</span><span style="color: #001080">stepLastTime</span><span style="color: #000000"> || </span><span style="color: #098658">0</span><span style="color: #000000">)) * </span><span style="color: #098658">0.001</span><span style="color: #000000">;</span>
+<span style="color: #000000">      </span><span style="color: #001080">stepLastUpdate</span><span style="color: #000000"> = </span><span style="color: #098658">0</span><span style="color: #000000">;</span>
+
+<span style="color: #000000">      </span><span style="color: #795E26">runPreSystems</span><span style="color: #000000">(</span><span style="color: #001080">world</span><span style="color: #000000">); </span><span style="color: #008000">// calls all systems&#039; pre() function</span>
+
+<span style="color: #000000">      </span><span style="color: #AF00DB">while</span><span style="color: #000000"> (</span><span style="color: #001080">stepAccumulator</span><span style="color: #000000"> &gt; </span><span style="color: #001080">tempo</span><span style="color: #000000">) {</span>
+<span style="color: #000000">        </span><span style="color: #AF00DB">if</span><span style="color: #000000"> (</span><span style="color: #001080">stepLastUpdate</span><span style="color: #000000"> &gt;= </span><span style="color: #001080">maxUpdates</span><span style="color: #000000">) {</span>
+<span style="color: #000000">          </span><span style="color: #001080">stepAccumulator</span><span style="color: #000000"> = </span><span style="color: #098658">1</span><span style="color: #000000">;</span>
+<span style="color: #000000">          </span><span style="color: #AF00DB">break</span><span style="color: #000000">;</span>
+<span style="color: #000000">        }</span>
+
+<span style="color: #000000">        </span><span style="color: #795E26">runUpdateSystems</span><span style="color: #000000">(</span><span style="color: #001080">world</span><span style="color: #000000">, </span><span style="color: #001080">tempo</span><span style="color: #000000">); </span><span style="color: #008000">// calls all systems&#039; update() function</span>
+
+<span style="color: #000000">        </span><span style="color: #001080">stepAccumulator</span><span style="color: #000000"> -= </span><span style="color: #001080">tempo</span><span style="color: #000000">;</span>
+<span style="color: #000000">        </span><span style="color: #001080">stepLastUpdate</span><span style="color: #000000">++;</span>
+<span style="color: #000000">      }</span>
+<span style="color: #000000">    }</span>
+<span style="color: #000000">    </span><span style="color: #001080">stepLastTime</span><span style="color: #000000"> = </span><span style="color: #001080">time</span><span style="color: #000000">;</span>
+<span style="color: #000000">    </span><span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">alpha</span><span style="color: #000000"> = </span><span style="color: #001080">stepAccumulator</span><span style="color: #000000"> / </span><span style="color: #001080">tempo</span><span style="color: #000000">;</span>
+
+<span style="color: #000000">    </span><span style="color: #795E26">runPostSystems</span><span style="color: #000000">(</span><span style="color: #001080">world</span><span style="color: #000000">, </span><span style="color: #001080">alpha</span><span style="color: #000000">); </span><span style="color: #008000">// calls all systems&#039; post() function</span>
+<span style="color: #000000">  }</span>
+<span style="color: #000000">  </span><span style="color: #795E26">requestAnimationFrame</span><span style="color: #000000">(</span><span style="color: #001080">step</span><span style="color: #000000">);</span>
+</code></pre>
+				<a href="#api-reference" id="api-reference" style="color: inherit; text-decoration: none;">
+					<h2>API Reference</h2>
+				</a>
+				<p>This is the complete API:</p>
+				<pre><code class="language-javascript"><span style="color: #000000">  🌍 </span><span style="color: #001080">World</span>
+<span style="color: #000000">  </span><span style="color: #795E26">createWorld</span><span style="color: #000000">(</span><span style="color: #001080">WorldSpec</span><span style="color: #000000">) </span><span style="color: #0000FF">=&gt;</span><span style="color: #000000"> </span><span style="color: #001080">World</span><span style="color: #000000">;</span>
+
+<span style="color: #000000">  🧩 </span><span style="color: #795E26">Components</span><span style="color: #000000"> (</span><span style="color: #0070C1">T</span><span style="color: #000000">: </span><span style="color: #001080">schema</span><span style="color: #000000">)</span>
+<span style="color: #000000">  </span><span style="color: #AF00DB">await</span><span style="color: #000000"> </span><span style="color: #795E26">createComponent</span><span style="color: #000000">(</span><span style="color: #001080">ComponentSpec</span><span style="color: #000000">&lt;</span><span style="color: #0070C1">T</span><span style="color: #000000">&gt;) </span><span style="color: #0000FF">=&gt;</span><span style="color: #000000"> </span><span style="color: #001080">Component</span><span style="color: #000000">&lt;</span><span style="color: #0070C1">T</span><span style="color: #000000">&gt;;</span>
+<span style="color: #000000">  </span><span style="color: #AF00DB">await</span><span style="color: #000000"> </span><span style="color: #795E26">registerComponent</span><span style="color: #000000">(</span><span style="color: #001080">World</span><span style="color: #000000">, </span><span style="color: #001080">Component</span><span style="color: #000000">&lt;</span><span style="color: #0070C1">T</span><span style="color: #000000">&gt;) </span><span style="color: #0000FF">=&gt;</span><span style="color: #000000"> </span><span style="color: #001080">ComponentInstance</span><span style="color: #000000">&lt;</span><span style="color: #0070C1">T</span><span style="color: #000000">&gt;</span>
+<span style="color: #000000">  </span><span style="color: #AF00DB">await</span><span style="color: #000000"> </span><span style="color: #795E26">unregisterComponent</span><span style="color: #000000">(</span><span style="color: #001080">ComponentInstance</span><span style="color: #000000">&lt;</span><span style="color: #0070C1">T</span><span style="color: #000000">&gt;) </span><span style="color: #0000FF">=&gt;</span><span style="color: #000000"> </span><span style="color: #001080">World</span><span style="color: #000000">;</span>
+<span style="color: #000000">  </span><span style="color: #AF00DB">await</span><span style="color: #000000"> </span><span style="color: #795E26">addComponentToEntity</span><span style="color: #000000">(</span><span style="color: #001080">ComponentInstance</span><span style="color: #000000">&lt;</span><span style="color: #0070C1">T</span><span style="color: #000000">&gt;, </span><span style="color: #001080">Entity</span><span style="color: #000000">, </span><span style="color: #001080">properties</span><span style="color: #000000">?) </span><span style="color: #0000FF">=&gt;</span><span style="color: #000000"> </span><span style="color: #001080">ComponentInstance</span><span style="color: #000000">&lt;</span><span style="color: #0070C1">T</span><span style="color: #000000">&gt;;</span>
+<span style="color: #000000">  </span><span style="color: #AF00DB">await</span><span style="color: #000000"> </span><span style="color: #795E26">removeComponentFromEntity</span><span style="color: #000000">(</span><span style="color: #001080">ComponentInstance</span><span style="color: #000000">&lt;</span><span style="color: #0070C1">T</span><span style="color: #000000">&gt;, </span><span style="color: #001080">Entity</span><span style="color: #000000">) </span><span style="color: #0000FF">=&gt;</span><span style="color: #000000"> </span><span style="color: #001080">ComponentInstance</span><span style="color: #000000">&lt;</span><span style="color: #0070C1">T</span><span style="color: #000000">&gt;;</span>
+
+<span style="color: #000000">  👾 </span><span style="color: #795E26">Entities</span><span style="color: #000000"> (</span><span style="color: #001080">an</span><span style="color: #000000"> </span><span style="color: #001080">Entity</span><span style="color: #000000"> </span><span style="color: #001080">is</span><span style="color: #000000"> </span><span style="color: #001080">just</span><span style="color: #000000"> </span><span style="color: #001080">a</span><span style="color: #000000"> </span><span style="color: #001080">number</span><span style="color: #000000">)</span>
+<span style="color: #000000">  </span><span style="color: #AF00DB">await</span><span style="color: #000000"> </span><span style="color: #795E26">createEntity</span><span style="color: #000000">(</span><span style="color: #001080">World</span><span style="color: #000000">) </span><span style="color: #0000FF">=&gt;</span><span style="color: #000000"> </span><span style="color: #001080">Entity</span><span style="color: #000000">;</span>
+<span style="color: #000000">  </span><span style="color: #AF00DB">await</span><span style="color: #000000"> </span><span style="color: #795E26">destroyEntity</span><span style="color: #000000">(</span><span style="color: #001080">World</span><span style="color: #000000">, </span><span style="color: #001080">Entity</span><span style="color: #000000">) </span><span style="color: #0000FF">=&gt;</span><span style="color: #000000"> </span><span style="color: #001080">World</span><span style="color: #000000">;</span>
+
+<span style="color: #000000">  🔎 </span><span style="color: #001080">Queries</span>
+<span style="color: #000000">  </span><span style="color: #795E26">createQuery</span><span style="color: #000000">(</span><span style="color: #001080">QuerySpec</span><span style="color: #000000">) </span><span style="color: #0000FF">=&gt;</span><span style="color: #000000"> </span><span style="color: #001080">Query</span><span style="color: #000000">;</span>
+
+<span style="color: #000000">  📜 </span><span style="color: #001080">Schema</span><span style="color: #000000"> </span><span style="color: #795E26">DataStores</span><span style="color: #000000"> (</span><span style="color: #0070C1">T</span><span style="color: #000000">: </span><span style="color: #001080">array</span><span style="color: #000000"> </span><span style="color: #001080">type</span><span style="color: #000000">, </span><span style="color: #0070C1">D</span><span style="color: #000000">: </span><span style="color: #001080">acceptable</span><span style="color: #000000"> </span><span style="color: #001080">types</span><span style="color: #000000">)</span>
+<span style="color: #000000">  </span><span style="color: #795E26">defineDataStore</span><span style="color: #000000">(</span><span style="color: #001080">DataStoreSpec</span><span style="color: #000000">&lt;</span><span style="color: #0070C1">T</span><span style="color: #000000">, </span><span style="color: #0070C1">D</span><span style="color: #000000">&gt;) </span><span style="color: #0000FF">=&gt;</span><span style="color: #000000"> </span><span style="color: #001080">DataStore</span><span style="color: #000000">;</span>
+<span style="color: #000000">  </span><span style="color: #795E26">getDataFromStore</span><span style="color: #000000">(</span><span style="color: #001080">DataStoreInstance</span><span style="color: #000000">&lt;</span><span style="color: #0070C1">T</span><span style="color: #000000">, </span><span style="color: #0070C1">D</span><span style="color: #000000">&gt;, </span><span style="color: #001080">Entity</span><span style="color: #000000">) </span><span style="color: #0000FF">=&gt;</span><span style="color: #000000"> </span><span style="color: #0070C1">D</span><span style="color: #000000"> | </span><span style="color: #0000FF">undefined</span><span style="color: #000000">;</span>
+<span style="color: #000000">  </span><span style="color: #795E26">setDataInStore</span><span style="color: #000000">(</span><span style="color: #001080">DataStoreInstance</span><span style="color: #000000">&lt;</span><span style="color: #0070C1">T</span><span style="color: #000000">, </span><span style="color: #0070C1">D</span><span style="color: #000000">&gt;, </span><span style="color: #001080">Entity</span><span style="color: #000000">, </span><span style="color: #800000">&lt;</span><span style="color: #267F99">D</span><span style="color: #800000">&gt;</span><span style="color: #000000">value) =&gt; boolean;</span>
+
+<span style="color: #000000">  ⚡ Systems</span>
+<span style="color: #000000">  createSystem(SystemSpec) =&gt; System;</span>
+<span style="color: #000000">  await registerSystem(World, System) =&gt; SystemInstance;</span>
+<span style="color: #000000">  await unregisterSystem(SystemInstance) =&gt; World;</span>
+<span style="color: #000000">  disableSystem(SystemInstance) =&gt; SystemInstance;</span>
+<span style="color: #000000">  enableSystem(SystemInstance) =&gt; SystemInstance;</span>
+<span style="color: #000000">  isSystemEnabled(SystemInstance) =&gt; SystemInstance;</span>
+
+<span style="color: #000000">  ⌚ Timestep</span>
+<span style="color: #000000">  runPreSystems(World) =&gt; void;</span>
+<span style="color: #000000">  runUpdateSystems(World) =&gt; void;</span>
+<span style="color: #000000">  runPostSystems(World) =&gt; void;</span>
+
+<span style="color: #000000">  🔨 Utils</span>
+<span style="color: #000000">  isValidName(string) =&gt; boolean;</span>
+<span style="color: #000000">  isValidSchema(Schema) =&gt; boolean;</span>
+</code></pre>
+				<p>Miski also comes with a set of data storage schemas for commonly used types:</p>
+				<ul>
+					<li><p>Typed array storage: <code>i8, ui8, ui8c, i16, ui16, i32, ui32, i64, ui64, f32, f64</code></p>
+					</li>
+					<li><p>Regular storage: <code>array, boolean, function, number, object, string</code></p>
+					</li>
+					<li><p>Unsafe storage: <code>any</code></p>
+					</li>
+				</ul>
+				<p>These can be used when defining components:</p>
+				<pre><code class="language-javascript"><span style="color: #000000">  </span><span style="color: #AF00DB">import</span><span style="color: #000000"> { </span><span style="color: #001080">createComponent</span><span style="color: #000000">, </span><span style="color: #001080">f32</span><span style="color: #000000"> } </span><span style="color: #AF00DB">from</span><span style="color: #000000"> </span><span style="color: #A31515">&#039;miski&#039;</span><span style="color: #000000">;</span>
+<span style="color: #000000">  </span><span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">position</span><span style="color: #000000"> = </span><span style="color: #795E26">createComponent</span><span style="color: #000000">({</span>
+<span style="color: #000000">    </span><span style="color: #001080">name:</span><span style="color: #000000"> </span><span style="color: #A31515">&quot;position&quot;</span><span style="color: #000000">,</span>
+<span style="color: #000000">    </span><span style="color: #001080">schema:</span><span style="color: #000000"> {</span>
+<span style="color: #000000">      </span><span style="color: #001080">x:</span><span style="color: #000000"> </span><span style="color: #001080">f32</span><span style="color: #000000">,</span>
+<span style="color: #000000">      </span><span style="color: #001080">y:</span><span style="color: #000000"> </span><span style="color: #001080">f32</span><span style="color: #000000">,</span>
+<span style="color: #000000">    }</span>
+<span style="color: #000000">  });</span>
 </code></pre>
 				<a href="#demos" id="demos" style="color: inherit; text-decoration: none;">
 					<h2>Demos</h2>
 				</a>
-				<p>See <code>./demo</code> for more interesting working examples.</p>
+				<p>See <code>./demo</code> for working examples.</p>
 				<a href="#to-do" id="to-do" style="color: inherit; text-decoration: none;">
 					<h2>To-Do</h2>
 				</a>
@@ -268,24 +365,25 @@
 					</li>
 					<li>Write comprehensive tests</li>
 					<li>Ensure high-quality Typescript definitions throughout</li>
-					<li>Write consistent code documentation throughout
+					<li>Write consistent code documentation throughout</li>
+					<li>Validation for any user supplied arguments</li>
+					<li>Optimise performance
 						<a href="#future" id="future" style="color: inherit; text-decoration: none;">
 							<h3>Future</h3>
 						</a>
 					</li>
 					<li>Allow for &quot;changed&quot; in queries</li>
-					<li>Use of Async where appropriate</li>
 					<li>Multithreading support / playing nicely with WebWorkers / SharedArrayBuffers</li>
 				</ol>
-				<p>Feature requests are welcome. Please open an issue on Github to make a request.</p>
 				<a href="#contributing" id="contributing" style="color: inherit; text-decoration: none;">
 					<h2>Contributing</h2>
 				</a>
+				<p>Feature requests are welcome. Please open an issue on Github to make a request.</p>
 				<p>Contributions are welcome and invited. See <code>CONTRIBUTING.md</code> for details.</p>
 				<a href="#acknowledgements" id="acknowledgements" style="color: inherit; text-decoration: none;">
 					<h2>Acknowledgements</h2>
 				</a>
-				<p>Miski is inspired by <a href="https://github.com/fritzy/ape-ecs">ape-ecs</a>, <a href="https://github.com/NateTheGreatt/bitECS">bitECS</a>, <a href="https://github.com/ecsyjs/ecsy">ECSY</a>, <a href="https://github.com/ddmills/geotic">Geotic</a>, <a href="https://github.com/gohyperr/hecs">HECS</a>, <a href="https://github.com/EnderShadow8/wolf-ecs">Wolf ECS</a>, and <a href="https://gist.github.com/mpj/17d8d73275bca303e8d2">classless.md</a></p>
+				<p>Miski is inspired by <a href="https://github.com/fritzy/ape-ecs">ape-ecs</a>, <a href="https://github.com/NateTheGreatt/bitECS">bitECS</a>, <a href="https://github.com/ecsyjs/ecsy">ECSY</a>, <a href="https://github.com/ddmills/geotic">Geotic</a>, <a href="https://github.com/gohyperr/hecs">HECS</a>, and <a href="https://github.com/EnderShadow8/wolf-ecs">Wolf ECS</a>.</p>
 				<a href="#license" id="license" style="color: inherit; text-decoration: none;">
 					<h2>License</h2>
 				</a>
@@ -303,41 +401,188 @@
 			</nav>
 			<nav class="tsd-navigation secondary menu-sticky">
 				<ul class="before-current">
-					<li class=" tsd-kind-interface tsd-has-type-parameter">
-						<a href="interfaces/componentspec.html" class="tsd-kind-icon">Component<wbr>Spec</a>
+					<li class=" tsd-kind-type-alias">
+						<a href="modules.html#AnyStore" class="tsd-kind-icon">Any<wbr>Store</a>
 					</li>
-					<li class=" tsd-kind-interface tsd-has-type-parameter">
-						<a href="interfaces/poolable.html" class="tsd-kind-icon">Poolable</a>
-					</li>
-					<li class=" tsd-kind-interface">
-						<a href="interfaces/query.html" class="tsd-kind-icon">Query</a>
-					</li>
-					<li class=" tsd-kind-interface">
-						<a href="interfaces/queryspec.html" class="tsd-kind-icon">Query<wbr>Spec</a>
-					</li>
-					<li class=" tsd-kind-interface">
-						<a href="interfaces/system.html" class="tsd-kind-icon">System</a>
-					</li>
-					<li class=" tsd-kind-interface">
-						<a href="interfaces/systemspec.html" class="tsd-kind-icon">System<wbr>Spec</a>
-					</li>
-					<li class=" tsd-kind-interface">
-						<a href="interfaces/worldspec.html" class="tsd-kind-icon">World<wbr>Spec</a>
+					<li class=" tsd-kind-type-alias tsd-has-type-parameter">
+						<a href="modules.html#ArrayStore" class="tsd-kind-icon">Array<wbr>Store</a>
 					</li>
 					<li class=" tsd-kind-type-alias">
-						<a href="modules.html#entity" class="tsd-kind-icon">Entity</a>
+						<a href="modules.html#BigUintStore" class="tsd-kind-icon">Big<wbr>Uint<wbr>Store</a>
 					</li>
 					<li class=" tsd-kind-type-alias">
-						<a href="modules.html#world" class="tsd-kind-icon">World</a>
+						<a href="modules.html#BigintStore" class="tsd-kind-icon">Bigint<wbr>Store</a>
+					</li>
+					<li class=" tsd-kind-type-alias">
+						<a href="modules.html#BooleanStore" class="tsd-kind-icon">Boolean<wbr>Store</a>
+					</li>
+					<li class=" tsd-kind-type-alias">
+						<a href="modules.html#ClampedUint8Store" class="tsd-kind-icon">Clamped<wbr>Uint8<wbr>Store</a>
+					</li>
+					<li class=" tsd-kind-type-alias">
+						<a href="modules.html#Float32Store" class="tsd-kind-icon">Float32<wbr>Store</a>
+					</li>
+					<li class=" tsd-kind-type-alias">
+						<a href="modules.html#Float64Store" class="tsd-kind-icon">Float64<wbr>Store</a>
+					</li>
+					<li class=" tsd-kind-type-alias">
+						<a href="modules.html#FunctionStore" class="tsd-kind-icon">Function<wbr>Store</a>
+					</li>
+					<li class=" tsd-kind-type-alias">
+						<a href="modules.html#Int16Store" class="tsd-kind-icon">Int16<wbr>Store</a>
+					</li>
+					<li class=" tsd-kind-type-alias">
+						<a href="modules.html#Int32Store" class="tsd-kind-icon">Int32<wbr>Store</a>
+					</li>
+					<li class=" tsd-kind-type-alias">
+						<a href="modules.html#Int8Store" class="tsd-kind-icon">Int8<wbr>Store</a>
+					</li>
+					<li class=" tsd-kind-type-alias">
+						<a href="modules.html#NumberStore" class="tsd-kind-icon">Number<wbr>Store</a>
+					</li>
+					<li class=" tsd-kind-type-alias tsd-has-type-parameter">
+						<a href="modules.html#ObjectStore" class="tsd-kind-icon">Object<wbr>Store</a>
+					</li>
+					<li class=" tsd-kind-type-alias">
+						<a href="modules.html#StringStore" class="tsd-kind-icon">String<wbr>Store</a>
+					</li>
+					<li class=" tsd-kind-type-alias">
+						<a href="modules.html#Uint16Store" class="tsd-kind-icon">Uint16<wbr>Store</a>
+					</li>
+					<li class=" tsd-kind-type-alias">
+						<a href="modules.html#Uint32Store" class="tsd-kind-icon">Uint32<wbr>Store</a>
+					</li>
+					<li class=" tsd-kind-type-alias">
+						<a href="modules.html#Uint8Store" class="tsd-kind-icon">Uint8<wbr>Store</a>
 					</li>
 					<li class=" tsd-kind-variable">
-						<a href="modules.html#types" class="tsd-kind-icon">Types</a>
+						<a href="modules.html#any" class="tsd-kind-icon">any</a>
+					</li>
+					<li class=" tsd-kind-variable">
+						<a href="modules.html#array" class="tsd-kind-icon">array</a>
+					</li>
+					<li class=" tsd-kind-variable">
+						<a href="modules.html#boolean" class="tsd-kind-icon">boolean</a>
+					</li>
+					<li class=" tsd-kind-variable">
+						<a href="modules.html#f32" class="tsd-kind-icon">f32</a>
+					</li>
+					<li class=" tsd-kind-variable">
+						<a href="modules.html#f64" class="tsd-kind-icon">f64</a>
+					</li>
+					<li class=" tsd-kind-variable">
+						<a href="modules.html#fnc" class="tsd-kind-icon">fnc</a>
+					</li>
+					<li class=" tsd-kind-variable">
+						<a href="modules.html#i16" class="tsd-kind-icon">i16</a>
+					</li>
+					<li class=" tsd-kind-variable">
+						<a href="modules.html#i32" class="tsd-kind-icon">i32</a>
+					</li>
+					<li class=" tsd-kind-variable">
+						<a href="modules.html#i64" class="tsd-kind-icon">i64</a>
+					</li>
+					<li class=" tsd-kind-variable">
+						<a href="modules.html#i8" class="tsd-kind-icon">i8</a>
+					</li>
+					<li class=" tsd-kind-variable">
+						<a href="modules.html#number" class="tsd-kind-icon">number</a>
+					</li>
+					<li class=" tsd-kind-variable">
+						<a href="modules.html#object" class="tsd-kind-icon">object</a>
+					</li>
+					<li class=" tsd-kind-variable">
+						<a href="modules.html#string" class="tsd-kind-icon">string</a>
+					</li>
+					<li class=" tsd-kind-variable">
+						<a href="modules.html#ui16" class="tsd-kind-icon">ui16</a>
+					</li>
+					<li class=" tsd-kind-variable">
+						<a href="modules.html#ui32" class="tsd-kind-icon">ui32</a>
+					</li>
+					<li class=" tsd-kind-variable">
+						<a href="modules.html#ui64" class="tsd-kind-icon">ui64</a>
+					</li>
+					<li class=" tsd-kind-variable">
+						<a href="modules.html#ui8" class="tsd-kind-icon">ui8</a>
+					</li>
+					<li class=" tsd-kind-variable">
+						<a href="modules.html#ui8c" class="tsd-kind-icon">ui8c</a>
 					</li>
 					<li class=" tsd-kind-function tsd-has-type-parameter">
-						<a href="modules.html#createcomponent" class="tsd-kind-icon">create<wbr>Component</a>
+						<a href="modules.html#addComponentToEntity" class="tsd-kind-icon">add<wbr>Component<wbr>ToEntity</a>
+					</li>
+					<li class=" tsd-kind-function tsd-has-type-parameter">
+						<a href="modules.html#createComponent" class="tsd-kind-icon">create<wbr>Component</a>
 					</li>
 					<li class=" tsd-kind-function">
-						<a href="modules.html#createworld" class="tsd-kind-icon">create<wbr>World</a>
+						<a href="modules.html#createEntity" class="tsd-kind-icon">create<wbr>Entity</a>
+					</li>
+					<li class=" tsd-kind-function">
+						<a href="modules.html#createQuery" class="tsd-kind-icon">create<wbr>Query</a>
+					</li>
+					<li class=" tsd-kind-function">
+						<a href="modules.html#createSystem" class="tsd-kind-icon">create<wbr>System</a>
+					</li>
+					<li class=" tsd-kind-function">
+						<a href="modules.html#createWorld" class="tsd-kind-icon">create<wbr>World</a>
+					</li>
+					<li class=" tsd-kind-function tsd-has-type-parameter">
+						<a href="modules.html#defineDataStore" class="tsd-kind-icon">define<wbr>Data<wbr>Store</a>
+					</li>
+					<li class=" tsd-kind-function">
+						<a href="modules.html#destroyEntity" class="tsd-kind-icon">destroy<wbr>Entity</a>
+					</li>
+					<li class=" tsd-kind-function">
+						<a href="modules.html#disableSystem" class="tsd-kind-icon">disable<wbr>System</a>
+					</li>
+					<li class=" tsd-kind-function">
+						<a href="modules.html#enableSystem" class="tsd-kind-icon">enable<wbr>System</a>
+					</li>
+					<li class=" tsd-kind-function tsd-has-type-parameter">
+						<a href="modules.html#getDataFromStore" class="tsd-kind-icon">get<wbr>Data<wbr>From<wbr>Store</a>
+					</li>
+					<li class=" tsd-kind-function">
+						<a href="modules.html#initToZero" class="tsd-kind-icon">init<wbr>ToZero</a>
+					</li>
+					<li class=" tsd-kind-function">
+						<a href="modules.html#isSystemEnabled" class="tsd-kind-icon">is<wbr>System<wbr>Enabled</a>
+					</li>
+					<li class=" tsd-kind-function">
+						<a href="modules.html#isValidName" class="tsd-kind-icon">is<wbr>Valid<wbr>Name</a>
+					</li>
+					<li class=" tsd-kind-function">
+						<a href="modules.html#isValidSchema" class="tsd-kind-icon">is<wbr>Valid<wbr>Schema</a>
+					</li>
+					<li class=" tsd-kind-function">
+						<a href="modules.html#numberGuard" class="tsd-kind-icon">number<wbr>Guard</a>
+					</li>
+					<li class=" tsd-kind-function tsd-has-type-parameter">
+						<a href="modules.html#registerComponent" class="tsd-kind-icon">register<wbr>Component</a>
+					</li>
+					<li class=" tsd-kind-function">
+						<a href="modules.html#registerSystem" class="tsd-kind-icon">register<wbr>System</a>
+					</li>
+					<li class=" tsd-kind-function tsd-has-type-parameter">
+						<a href="modules.html#removeComponentFromEntity" class="tsd-kind-icon">remove<wbr>Component<wbr>From<wbr>Entity</a>
+					</li>
+					<li class=" tsd-kind-function">
+						<a href="modules.html#runPostSystems" class="tsd-kind-icon">run<wbr>Post<wbr>Systems</a>
+					</li>
+					<li class=" tsd-kind-function">
+						<a href="modules.html#runPreSystems" class="tsd-kind-icon">run<wbr>Pre<wbr>Systems</a>
+					</li>
+					<li class=" tsd-kind-function">
+						<a href="modules.html#runUpdateSystems" class="tsd-kind-icon">run<wbr>Update<wbr>Systems</a>
+					</li>
+					<li class=" tsd-kind-function tsd-has-type-parameter">
+						<a href="modules.html#setDataInStore" class="tsd-kind-icon">set<wbr>Data<wbr>InStore</a>
+					</li>
+					<li class=" tsd-kind-function tsd-has-type-parameter">
+						<a href="modules.html#unregisterComponent" class="tsd-kind-icon">unregister<wbr>Component</a>
+					</li>
+					<li class=" tsd-kind-function">
+						<a href="modules.html#unregisterSystem" class="tsd-kind-icon">unregister<wbr>System</a>
 					</li>
 				</ul>
 			</nav>
@@ -348,9 +593,6 @@
 	<div class="container">
 		<h2>Legend</h2>
 		<div class="tsd-legend-group">
-			<ul class="tsd-legend">
-				<li class="tsd-kind-property tsd-parent-kind-interface"><span class="tsd-kind-icon">Property</span></li>
-			</ul>
 		</div>
 	</div>
 </footer>
