@@ -12,7 +12,7 @@ import {
   i8,
   createWorld,
   createEntity
-} from "../dist/es2020/index.min.js";
+} from "../demo/miski.min.js";
 
 const EXPECTED_COMPONENT_KEYS = [
   "name",

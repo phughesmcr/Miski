@@ -6,7 +6,7 @@ import {
   createWorld,
   createEntity,
   defineDataStore, getDataFromStore, isValidSchema, setDataInStore, createComponent, registerComponent, addComponentToEntity
-} from "../dist/es2020/index.min.js";
+} from "../demo/miski.min.js";
 
 const guard = (property) => (!isNaN(property));
 const initial = () => 0;

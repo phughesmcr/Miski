@@ -2,7 +2,7 @@ import mocha from "mocha";
 const { describe, it } = mocha;
 import { assert } from "chai";
 
-import { createWorld } from "../dist/es2020/index.min.js";
+import { createWorld } from "../demo/miski.min.js";
 
 const EXPECTED_WORLD_KEYS = [
   "spec",

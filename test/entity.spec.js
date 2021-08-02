@@ -6,7 +6,7 @@ import {
   createWorld,
   createEntity,
   destroyEntity
-} from "../dist/es2020/index.min.js";
+} from "../demo/miski.min.js";
 
 describe("Entity", function() {
   it("creates an Entity without error", async function() {

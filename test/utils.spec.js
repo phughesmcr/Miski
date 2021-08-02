@@ -2,7 +2,7 @@ import mocha from "mocha";
 const { describe, it } = mocha;
 import { assert } from "chai";
 
-import { isValidName } from "../dist/es2020/index.min.js";
+import { isValidName } from "../demo/miski.min.js";
 
 describe("isValidName", function() {
   it("returns true for valid name", function() {
