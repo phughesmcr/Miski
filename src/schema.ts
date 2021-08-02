@@ -9,7 +9,7 @@
  *  // Define out int32 storage (i.e. an Int32Array)
  *  const i32 = defineDataStore({
  *    arrayType: Int32Array, // "arrayType" can be omitted if storage doesn't used typed arrays
- *    guard: (property: unknown): property is number => (!Number.isNaN(property)),
+ *    guard: (property: unknown): property is number => (!isNaN(property)),
  *    initial: () => 0,
  *    name: "i32",
  *    // N.B. "prefill" property is ignored when arrayType is a typed array.
@@ -261,7 +261,7 @@ export function defineDataStore<T, D>(spec: DataSpec<T, D>): DataStore<T, D> {
   const tmp = new arrayType();
   const isTyped = isTypedArray(tmp);
 
-  if (isTyped && (typeof _init !== "number" || Number.isNaN(_init))) {
+  if (isTyped && (typeof _init !== "number" || isNaN(_init))) {
     throw new TypeError(`Initial property for typed array type must be a number. Found ${typeof _init}.`);
   }
 
