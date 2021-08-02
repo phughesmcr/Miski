@@ -2,7 +2,6 @@
 
 import { updateEntityArchetype } from "./archetype.js";
 import { Entity } from "./entity.js";
-import { Bitmask, createBitmask, setBitOn } from "./mask.js";
 import {
   createDataStorage,
   DataStore,
@@ -14,25 +13,6 @@ import {
 } from "./schema.js";
 import { indexOf, isValidName } from "./utils.js";
 import { World } from "./world.js";
-
-/**
- * Create a new bitmask from a set of component IDs
- * @param world the world to associate this mask with
- * @param components components to create a mask from
- * @returns a new bitmask
- */
-export function createBitmaskFromComponents(world: World, ...components: ComponentInstance<unknown>[]): Bitmask {
-  const mask = createBitmask(world.spec.maxComponents || 32);
-  if (!components.length) return mask;
-  const _add = <T>(component: ComponentInstance<T>) => {
-    if (component.world.id !== world.id) {
-      throw new Error("Components are not from the same world.");
-    }
-    setBitOn(mask, component.id);
-  };
-  components.forEach(_add);
-  return mask;
-}
 
 export interface ComponentSpec<T> {
   /** The component's label */

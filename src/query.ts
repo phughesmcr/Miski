@@ -1,10 +1,10 @@
 "use strict";
 
 import { Archetype } from "./archetype.js";
-import { Component, ComponentInstance, createBitmaskFromComponents } from "./component.js";
+import { Component, ComponentInstance } from "./component.js";
 import { Entity } from "./entity.js";
 import { Bitmask } from "./mask.js";
-import { indexOf, spliceOne } from "./utils.js";
+import { createBitmaskFromComponents, indexOf, spliceOne } from "./utils.js";
 import { World } from "./world.js";
 
 export interface QuerySpec {

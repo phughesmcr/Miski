@@ -5,9 +5,7 @@ import { Archetype } from "./archetype.js";
 import { ComponentInstance } from "./component.js";
 import { Query, QueryInstance } from "./query.js";
 import { SystemInstance } from "./system.js";
-
-const DEFAULT_MAX_COMPONENTS = 128;
-const DEFAULT_MAX_ENTITIES = 10_000;
+import { DEFAULT_MAX_COMPONENTS, DEFAULT_MAX_ENTITIES } from "./constants.js";
 
 /** World configuration */
 export interface WorldSpec {

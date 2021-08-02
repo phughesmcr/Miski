@@ -1,11 +1,12 @@
 "use strict";
 
-import { spliceOne } from "./utils.js";
-import { ComponentInstance, createBitmaskFromComponents } from "./component.js";
+import { createBitmaskFromComponents, spliceOne } from "./utils.js";
+import { ComponentInstance } from "./component.js";
 import { Entity } from "./entity.js";
 import { Bitmask, getMaskId } from "./mask.js";
 import { addArchetypeToQuery, isQueryCandidate, QueryInstance, removeArchetypeFromQuery } from "./query.js";
 import { World } from "./world.js";
+import { EntityState } from "./constants.js";
 
 /** Archetypes are unique groupings of entities by components */
 export interface Archetype {

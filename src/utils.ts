@@ -1,5 +1,28 @@
 "use strict";
 
+import { ComponentInstance } from "./component.js";
+import { Bitmask, createBitmask, setBitOn } from "./mask.js";
+import { World } from "./world.js";
+
+/**
+ * Create a new bitmask from a set of component IDs
+ * @param world the world to associate this mask with
+ * @param components components to create a mask from
+ * @returns a new bitmask
+ */
+export function createBitmaskFromComponents(world: World, ...components: ComponentInstance<unknown>[]): Bitmask {
+  const mask = createBitmask(world.spec.maxComponents || 32);
+  if (!components.length) return mask;
+  const _add = <T>(component: ComponentInstance<T>) => {
+    if (component.world.id !== world.id) {
+      throw new Error("Components are not from the same world.");
+    }
+    setBitOn(mask, component.id);
+  };
+  components.forEach(_add);
+  return mask;
+}
+
 /** Async indexOf */
 export async function indexOf<T>(arr: ArrayLike<T>, item: T): Promise<number> {
   for (let i = 0, len = arr.length; i != len; i++) {

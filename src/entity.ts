@@ -1,5 +1,6 @@
 "use strict";
 
+import { EntityState } from "./constants.js";
 import { updateEntityArchetype } from "./archetype.js";
 import { World } from "./world.js";
 
@@ -8,18 +9,6 @@ export type Entity = number;
 
 /** An array containing the index of each entity's archetype, or their state */
 export type EntityArray = Int16Array & { available: number[] };
-
-/**
- * The EntityArray contains either these states or archetypes.
- * States must be negative numbers as positive numbers are
- * the index of the entity's archetype in world.archetypes.
- */
-export const enum EntityState {
-  /** Empty but in-use */
-  EMPTY = -1,
-  /** Empty and out-of-use */
-  DESTROYED = -2,
-}
 
 /**
  * Creates the storage mechanism for the Entity Archetype array
