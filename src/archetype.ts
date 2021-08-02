@@ -66,21 +66,20 @@ export function updateEntityArchetype<T>(
   entity: Entity,
   component?: ComponentInstance<T>,
   removal = false
-): Archetype {
+): Archetype | null {
   const { archetypes, entities } = world;
+  let components: ComponentInstance<unknown>[] = [];
 
   const cidx = entities[entity];
   if (cidx === undefined || cidx < -1) {
     throw new Error("Entity is not available!");
-  }
-
-  let components: ComponentInstance<unknown>[] = [];
-
-  const old = archetypes.get(cidx);
-  if (old) {
-    components = [...old.components];
-    old.entities.delete(entity);
-    if (old.entities.size === 0) deleteArchetype(world, old, cidx);
+  } else if (cidx > -1) {
+    const old = archetypes.get(cidx);
+    if (old) {
+      components = [...old.components];
+      old.entities.delete(entity);
+      if (old.entities.size === 0) deleteArchetype(world, old, cidx);
+    }
   }
 
   if (component) {
@@ -90,6 +89,11 @@ export function updateEntityArchetype<T>(
       const idx = components.indexOf(component);
       if (idx > -1) spliceOne(components, idx);
     }
+  }
+
+  if (components.length === 0) {
+    entities[entity] = EntityState.EMPTY;
+    return null;
   }
 
   const tmp = createArchetype(world, ...components);
