@@ -56,6 +56,7 @@
   },
   "scripts": {
     "prebuild": "npm run clean && npm run lint:fix",
+    "dev": "npm run clean && npm run build:types && rollup -c ./rollup.config.dev.js && npm run clean:post",
     "build": "npm run build:types && rollup -c ./rollup.config.js",
     "postbuild": "npm run build:docs && npm run clean:post",
     "build:docs": "npx typedoc src/index.ts --out docs",
