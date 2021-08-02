@@ -3,8 +3,7 @@
 import { spliceOne } from "utils.js";
 import { ComponentInstance, createBitmaskFromComponents } from "./component.js";
 import { Entity } from "./entity.js";
-import { Bitmask } from "./mask.js";
-import { isQueryCandidate, QueryInstance, removeArchetypeFromQuery } from "./query.js";
+import { Bitmask, getMaskId } from "./mask.js";
 import { World } from "./world.js";
 
 /** Archetypes are unique groupings of entities by components */
@@ -12,7 +11,7 @@ export interface Archetype {
   components: Set<ComponentInstance<unknown>>;
   entities: Set<Entity>;
   mask: Bitmask;
-  name: string;
+  id: number;
 }
 
 /**
@@ -27,7 +26,7 @@ export async function createArchetype(world: World, ...components: ComponentInst
     components: new Set(components),
     entities: new Set(),
     mask,
-    name: mask.toString(),
+    id: getMaskId(mask),
   };
 }
 

@@ -31,3 +31,14 @@ export function setBitOff(mask: Bitmask, bit: number): Bitmask {
   mask[Math.floor(bit / 32)] &= ~(1 << bit % 32);
   return mask;
 }
+
+/**
+ * Compresses the mask into a smaller integer.
+ * Tested up to 4096 components.
+ */
+export function getMaskId(mask: Bitmask): number {
+  const max = getMaxBit(mask);
+  let id = 0;
+  mask.forEach((val, i) => (id += (val ^ max) + i));
+  return parseInt(Math.abs(id).toString(8), 8);
+}
