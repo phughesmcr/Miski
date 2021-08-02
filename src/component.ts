@@ -21,10 +21,7 @@ import { World } from "./world.js";
  * @param components components to create a mask from
  * @returns a new bitmask
  */
-export async function createBitmaskFromComponents(
-  world: World,
-  ...components: ComponentInstance<unknown>[]
-): Promise<Bitmask> {
+export function createBitmaskFromComponents(world: World, ...components: ComponentInstance<unknown>[]): Bitmask {
   const mask = createBitmask(world.spec.maxComponents || 32);
   if (!components.length) return mask;
   const _add = <T>(component: ComponentInstance<T>) => {
@@ -33,7 +30,7 @@ export async function createBitmaskFromComponents(
     }
     setBitOn(mask, component.id);
   };
-  await Promise.all(components.map(_add));
+  components.forEach(_add);
   return mask;
 }
 
@@ -184,7 +181,7 @@ export async function addComponentToEntity<T>(
     const _resetData = (key: string) => setDataInStore(instance[key as never], entity, properties[key as keyof T]);
     await Promise.all(Object.keys(schema).map(_resetData));
   }
-  await updateEntityArchetype(world, entity, instance, false);
+  updateEntityArchetype(world, entity, instance, false);
   return component;
 }
 
@@ -215,6 +212,6 @@ export async function removeComponentFromEntity<T>(
   instance.entities.delete(entity);
   const _resetData = (key: string) => resetDataInStore(instance[key as never], entity);
   await Promise.all(Object.keys(schema).map(_resetData));
-  await updateEntityArchetype(world, entity, component, true);
+  updateEntityArchetype(world, entity, component, true);
   return component;
 }

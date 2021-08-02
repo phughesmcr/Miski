@@ -65,7 +65,6 @@ export function isQueryCandidate(query: QueryInstance, archetype: Archetype): bo
     if ((query.and[i] & _target) !== query.and[i]) return false;
     if ((query.or[i] & _target) > 0) return false;
   }
-  addArchetypeToQuery(query, archetype);
   return true;
 }
 
@@ -116,7 +115,7 @@ export function getEntitiesFromQuery(query: QueryInstance): Entity[] {
  * @returns the registered query instance
  */
 export async function createQueryInstance(world: World, query: Query): Promise<QueryInstance> {
-  const { archetypes, components, queries } = world;
+  const { components, queries } = world;
 
   if (queries.has(query)) return queries.get(query) as QueryInstance;
 
@@ -133,9 +132,9 @@ export async function createQueryInstance(world: World, query: Query): Promise<Q
   ]);
 
   const [and, or, not] = await Promise.all([
-    await createBitmaskFromComponents(world, ...all),
-    await createBitmaskFromComponents(world, ...any),
-    await createBitmaskFromComponents(world, ...none),
+    createBitmaskFromComponents(world, ...all),
+    createBitmaskFromComponents(world, ...any),
+    createBitmaskFromComponents(world, ...none),
   ]);
 
   const instance: QueryInstance = {
@@ -146,10 +145,14 @@ export async function createQueryInstance(world: World, query: Query): Promise<Q
     world,
   };
 
-  const _isMatch = (archetype: Archetype) => isQueryCandidate(instance, archetype);
-  await Promise.all(Object.values(archetypes).map(_isMatch));
-
   queries.set(query, instance);
+
+  const archetypes = world.archetypes.values();
+  for (const archetype of archetypes) {
+    if (isQueryCandidate(instance, archetype)) {
+      addArchetypeToQuery(instance, archetype);
+    }
+  }
 
   return instance;
 }
