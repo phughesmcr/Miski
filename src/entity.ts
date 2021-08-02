@@ -52,7 +52,7 @@ export function destroyEntity(world: World, entity: Entity): World {
   if (entity < 0 || entity > maxEntities) throw new Error("Entity is out of range.");
   if (available.includes(entity)) return world;
   updateEntityArchetype(world, entity);
-  entities.available.push(entity);
+  available.push(entity);
   entities[entity] = EntityState.DESTROYED;
   return world;
 }
