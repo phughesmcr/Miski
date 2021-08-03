@@ -28,12 +28,9 @@ describe("World", function() {
     const { spec, id, archetypes, components, entities, queries, systems } = world;
     assert.isObject(spec);
     assert.isFrozen(spec);
-    assert.isObject(archetypes);
-    assert.isNotFrozen(archetypes);
-    assert.isExtensible(archetypes);
+    assert.instanceOf(archetypes, Map);
     assert.isArray(components);
     assert.isNotFrozen(components);
-    assert.isArray(entities);
     assert.isNotFrozen(entities);
     assert.isArray(systems);
     assert.isNotFrozen(systems);

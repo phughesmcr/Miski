@@ -34,7 +34,6 @@ describe("Component", function() {
   });
   it("creates a Component with expected keys of correct type", function() {
     const component = createComponent(testComponentSpec);
-    assert.hasAllKeys(component, EXPECTED_COMPONENT_KEYS);
     assert.isArray(component.instances);
     assert.isObject(component.schema);
     assert.isString(component.name);
@@ -79,12 +78,13 @@ describe("Component", function() {
     const component = createComponent(testComponentSpec);
     const world = createWorld();
     const { archetypes, entities } = world;
-    const entity = await createEntity(world);
+    const entity = createEntity(world);
     const inst = await registerComponent(world, component);
     await addComponentToEntity(inst, entity);
-    assert.exists(entities[0]);
-    assert.exists(archetypes["1,0,0,0"]);
-    assert.equal(archetypes["1,0,0,0"].entities.has(entity), true);
+    assert.equal(entities[0], 519);
+    const archetype = archetypes.get(519);
+    assert.exists(archetype);
+    assert.equal(archetype.entities.has(entity), true);
   });
   it("fails to add a component to an non-existent entity", async function() {
     const component = createComponent(testComponentSpec);
@@ -97,7 +97,7 @@ describe("Component", function() {
   it("fails to add to an entity a component which isn't registered", async function() {
     const component = createComponent(testComponentSpec);
     const world = createWorld();
-    const entity = await createEntity(world);
+    const entity = createEntity(world);
     return Promise.reject(() => addComponentToEntity(component, entity)())
       .then(() => { throw new Error("was not supposed to succeed!") })
       .catch((err) => {  assert.throws(err) });
@@ -105,19 +105,17 @@ describe("Component", function() {
   it("removes a component from an entity correctly", async function() {
     const component = createComponent(testComponentSpec);
     const world = createWorld();
-    const { archetypes, entities } = world;
-    const entity = await createEntity(world);
+    const { entities } = world;
+    const entity = createEntity(world);
     const inst = await registerComponent(world, component);
     await addComponentToEntity(inst, entity);
     await removeComponentFromEntity(inst, entity);
-    assert.exists(entities[0]);
-    assert.exists(archetypes["0,0,0,0"]);
-    assert.equal(archetypes["0,0,0,0"].entities.has(entity), true);
+    assert.equal(entities[0], -1);
   });
   it("fails to remove a component from a non-existent entity", async function() {
     const component = createComponent(testComponentSpec);
     const world = createWorld();
-    const entity = await createEntity(world);
+    const entity = createEntity(world);
     const inst = await registerComponent(world, component);
     await addComponentToEntity(inst, entity);
     return Promise.reject(() => removeComponentFromEntity(inst, 100_000)())
@@ -128,7 +126,7 @@ describe("Component", function() {
     const component = createComponent(testComponentSpec);
     const world = createWorld();
     const inst = await registerComponent(world, component);
-    const entity = await createEntity(world);
+    const entity = createEntity(world);
     return Promise.reject(() => removeComponentFromEntity(inst, entity)())
       .then(() => { throw new Error("was not supposed to succeed!") })
       .catch((err) => {  assert.throws(err) });

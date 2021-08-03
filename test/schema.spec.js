@@ -49,7 +49,6 @@ describe("Schema", function() {
     const i32 = defineDataStore(i32Proto);
     assert.exists(i32);
     assert.isObject(i32);
-    assert.hasAllKeys(i32, EXPECTED_DATASTORE_KEYS);
     assert.equal(i32.arrayType, arrayType);
     assert.equal(i32.guard, guard);
     assert.equal(i32.initial, initial);
@@ -70,7 +69,7 @@ describe("Schema", function() {
     const world = createWorld();
     const component = createComponent({...testComponentProto, schema: { value: i32 }});
     const inst = await registerComponent(world, component);
-    const entity = await createEntity(world);
+    const entity = createEntity(world);
     await addComponentToEntity(inst, entity);
     setDataInStore(inst.value, entity, 100);
     assert.equal(inst.value[entity], 100);
@@ -80,7 +79,7 @@ describe("Schema", function() {
     const world = createWorld();
     const component = createComponent({...testComponentProto, schema: { value: i32 }});
     const inst = await registerComponent(world, component);
-    const entity = await createEntity(world);
+    const entity = createEntity(world);
     await addComponentToEntity(inst, entity);
     assert.throws(() => setDataInStore(inst.value, entity, "hello"));
   });
@@ -89,7 +88,7 @@ describe("Schema", function() {
     const world = createWorld();
     const component = createComponent({...testComponentProto, schema: { value: i32 }});
     const inst = await registerComponent(world, component);
-    const entity = await createEntity(world);
+    const entity = createEntity(world);
     await addComponentToEntity(inst, entity);
     assert.throws(() => setDataInStore(inst.value, 100_000, 100));
   });
@@ -98,7 +97,7 @@ describe("Schema", function() {
     const world = createWorld();
     const component = createComponent({...testComponentProto, schema: { value: i32 }});
     const inst = await registerComponent(world, component);
-    const entity = await createEntity(world);
+    const entity = createEntity(world);
     await addComponentToEntity(inst, entity);
     setDataInStore(inst.value, entity, 100);
     const val = getDataFromStore(inst.value, entity);
@@ -106,7 +105,8 @@ describe("Schema", function() {
     assert.equal(inst.value[entity], 100);
   });
   it("isValidSchema returns true for valid schema", function() {
-    const isValid = isValidSchema(testComponentProto);
+    const i32 = defineDataStore(i32Proto);
+    const isValid = isValidSchema({...testComponentProto, schema: { value: i32 }});
     assert.equal(isValid, true);
   });
   it("isValidSchema returns false for invalid schema", function() {
