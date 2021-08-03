@@ -36,9 +36,6 @@ export type ComponentInstance<T> = Component<T> & {
   world: World;
 } & { [K in keyof T]: DataStore<T[K], unknown> };
 
-/** Used for validating components in query spec arrays */
-export const componentProto = { isComponent: true };
-
 /** Component type guard */
 export function isValidComponent<T>(component: unknown): component is Component<T> {
   return isObject(component) && Object.prototype.hasOwnProperty.call(component, VALID_COMPONENT_KEY);
@@ -169,8 +166,8 @@ export async function addComponentToEntity<T>(
   }
   instance.entities.add(entity);
   if (properties) {
-    const _resetData = (key: string) => setDataInStore(instance[key as never], entity, properties[key as keyof T]);
-    await Promise.all(Object.keys(schema).map(_resetData));
+    const _setData = (key: string) => setDataInStore(instance[key as never], entity, properties[key as keyof T]);
+    await Promise.all(Object.keys(schema).map(_setData));
   }
   updateEntityArchetype(world, entity, instance, false);
   return component;
