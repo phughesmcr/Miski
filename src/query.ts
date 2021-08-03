@@ -1,7 +1,7 @@
 "use strict";
 
 import { Archetype } from "./archetype.js";
-import { Component, ComponentInstance } from "./component.js";
+import { Component, ComponentInstance, isValidComponent } from "./component.js";
 import { Entity } from "./entity.js";
 import { Bitmask } from "./mask.js";
 import { createBitmaskFromComponents, indexOf, spliceOne } from "./utils.js";
@@ -43,7 +43,8 @@ export interface QueryInstance {
 export function createQuery(spec: QuerySpec): Query {
   if (!spec) throw new Error("Query spec object required.");
   const { all = [], any = [], none = [] } = spec;
-  // @todo validate arrays contain only components
+  const valid = [...all, ...any, ...none].every(isValidComponent);
+  if (!valid) throw new Error("Spec arrays must contain only Components.");
   return {
     instances: [],
     all: [...all],
