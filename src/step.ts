@@ -10,7 +10,7 @@ const _filterEnabled = (system: SystemInstance) => system.enabled === true;
 /** Call all enabled system's pre functions */
 export function runPreSystems(world: World): void {
   const _pre = (system: SystemInstance) => system.pre(getEntitiesFromQuery(system.query));
-  [...world.systems].filter(_filterEnabled).forEach(_pre);
+  world.systems.filter(_filterEnabled).forEach(_pre);
 }
 
 /**
@@ -22,7 +22,7 @@ export function runPostSystems(world: World, alpha = 1): void {
   const _post = (system: SystemInstance) => {
     system.post(getEntitiesFromQuery(system.query), getComponentsFromQuery(system.query), alpha);
   };
-  [...world.systems].filter(_filterEnabled).forEach(_post);
+  world.systems.filter(_filterEnabled).forEach(_post);
 }
 
 /**
@@ -34,5 +34,5 @@ export function runUpdateSystems(world: World, delta = 0): void {
   const _update = (system: SystemInstance) => {
     system.update(getEntitiesFromQuery(system.query), getComponentsFromQuery(system.query), delta);
   };
-  [...world.systems].filter(_filterEnabled).forEach(_update);
+  world.systems.filter(_filterEnabled).forEach(_update);
 }
