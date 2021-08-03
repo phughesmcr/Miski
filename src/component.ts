@@ -154,7 +154,7 @@ export function addComponentToEntity<T>(
   properties?: T
 ): ComponentInstance<T> {
   if (!component) throw new SyntaxError("Component instance required.");
-  if (typeof entity !== "number") throw new SyntaxError("Invalid or undefined entity provided.");
+  if (isNaN(entity)) throw new SyntaxError("Invalid or undefined entity provided.");
   const { id, name, schema, world } = component;
   const { spec, components } = world;
   if (entity < 0 || entity > spec.maxEntities) {
@@ -167,7 +167,6 @@ export function addComponentToEntity<T>(
   if (instance.entities.has(entity)) {
     throw new Error(`Entity "${entity}" already has component "${name}".`);
   }
-  instance.entities.add(entity);
   if (properties) {
     const keys = Object.keys(schema);
     for (let i = 0, n = keys.length; i < n; i++) {
@@ -175,6 +174,7 @@ export function addComponentToEntity<T>(
       setDataInStore(instance[key as never], entity, properties[key as keyof T]);
     }
   }
+  instance.entities.add(entity);
   updateEntityArchetype(world, entity, instance, false);
   return component;
 }
@@ -187,7 +187,7 @@ export function addComponentToEntity<T>(
  */
 export function removeComponentFromEntity<T>(component: ComponentInstance<T>, entity: Entity): ComponentInstance<T> {
   if (!component) throw new SyntaxError("Component instance required.");
-  if (typeof entity !== "number") throw new SyntaxError("Invalid or undefined entity provided.");
+  if (isNaN(entity)) throw new SyntaxError("Invalid or undefined entity provided.");
   const { id, name, schema, world } = component;
   const { spec, components } = world;
   if (entity < 0 || entity > spec.maxEntities) {
@@ -200,12 +200,12 @@ export function removeComponentFromEntity<T>(component: ComponentInstance<T>, en
   if (!instance.entities.has(entity)) {
     throw new Error(`Entity "${entity}" does not have component "${name}" to remove.`);
   }
-  instance.entities.delete(entity);
   const keys = Object.keys(schema);
   for (let i = 0, n = keys.length; i < n; i++) {
     const key = keys[i];
     resetDataInStore(instance[key as never], entity);
   }
+  instance.entities.delete(entity);
   updateEntityArchetype(world, entity, component, true);
   return component;
 }
