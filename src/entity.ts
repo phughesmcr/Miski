@@ -3,6 +3,7 @@
 import { EntityState } from "./constants.js";
 import { updateEntityArchetype } from "./archetype.js";
 import { World } from "./world.js";
+import { removeComponentFromEntity } from "component.js";
 
 /** Entities are indexes */
 export type Entity = number;
@@ -46,11 +47,18 @@ export function createEntity(world: World): Entity | undefined {
 export function destroyEntity(world: World, entity: Entity): boolean {
   if (!world) throw new SyntaxError("Entity destruction requires a World object.");
   if (isNaN(entity)) throw new SyntaxError("Invalid or undefined entity provided.");
-  const { spec, entities } = world;
+  const { components, entities, spec } = world;
   const { available } = entities;
   const { maxEntities } = spec;
   if (entity < 0 || entity > maxEntities) throw new Error("Entity is out of range.");
   if (available.includes(entity)) return false;
+  for (let i = 0, n = components.length; i < n; i++) {
+    const component = components[i];
+    if (!component) continue;
+    if (component.entities.has(entity)) {
+      removeComponentFromEntity(component, entity);
+    }
+  }
   updateEntityArchetype(world, entity);
   available.push(entity);
   entities[entity] = EntityState.DESTROYED;
