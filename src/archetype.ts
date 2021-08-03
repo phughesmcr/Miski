@@ -101,8 +101,9 @@ export function updateEntityArchetype<T>(
   const archetype = archetypes.get(id);
 
   if (archetype === undefined) {
-    const { queries } = world;
-    for (const query of queries.values()) {
+    const qs = [...world.queries.values()];
+    for (let i = 0, n = qs.length; i < n; i++) {
+      const query = qs[i];
       if (isQueryCandidate(query, tmp)) {
         addArchetypeToQuery(query, tmp);
       }

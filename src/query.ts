@@ -144,8 +144,9 @@ export async function createQueryInstance(world: World, query: Query): Promise<Q
 
   queries.set(query, instance);
 
-  const archetypes = world.archetypes.values();
-  for (const archetype of archetypes) {
+  const archetypes = [...world.archetypes.values()];
+  for (let i = 0, n = archetypes.length; i < n; i++) {
+    const archetype = archetypes[i];
     if (isQueryCandidate(instance, archetype)) {
       addArchetypeToQuery(instance, archetype);
     }
