@@ -4,7 +4,7 @@ import { createBitmaskFromComponents, spliceOne } from "./utils.js";
 import { ComponentInstance } from "./component.js";
 import { Entity } from "./entity.js";
 import { Bitmask, getMaskId } from "./mask.js";
-import { addArchetypeToQuery, isQueryCandidate, QueryInstance, removeArchetypeFromQuery } from "./query.js";
+import { addArchetypeToQuery, isQueryCandidate, removeArchetypeFromQuery } from "./query.js";
 import { World } from "./world.js";
 import { EntityState } from "./constants.js";
 
@@ -48,8 +48,10 @@ export function deleteArchetype(world: World, archetype: Archetype, idx?: number
   if (archetypes.get(idx) !== archetype) {
     throw new Error("mismatch");
   }
-  const _removeArchetype = (query: QueryInstance) => removeArchetypeFromQuery(query, archetype);
-  [...queries.values()].forEach(_removeArchetype);
+  const qs = [...queries.values()];
+  for (let i = 0, n = qs.length; i < n; i++) {
+    removeArchetypeFromQuery(qs[i], archetype);
+  }
   archetypes.delete(idx);
   return archetype;
 }

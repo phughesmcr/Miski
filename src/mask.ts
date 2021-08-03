@@ -39,6 +39,8 @@ export function setBitOff(mask: Bitmask, bit: number): Bitmask {
 export function getMaskId(mask: Bitmask): number {
   const max = getMaxBit(mask);
   let id = 0;
-  mask.forEach((val, i) => (id += (val ^ max) + i));
+  for (let i = 0, n = mask.length; i < n; i++) {
+    id += (mask[i] ^ max) + i;
+  }
   return parseInt(Math.abs(id).toString(8), 8);
 }

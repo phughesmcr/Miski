@@ -156,7 +156,7 @@ export function clearDataStoreInstance<T, D>(store: DataStoreInstance<T, D>): Da
  */
 export function cloneDataStoreInstance<T, D>(store: DataStoreInstance<T, D>): DataStoreInstance<T, D> {
   const clone = createDataStorage(store.world, Object.getPrototypeOf(store));
-  store.forEach((val, i) => (clone[i] = val));
+  for (let i = 0, n = store.length; i < n; i++) clone[i] = store[i];
   return clone as DataStoreInstance<T, D>;
 }
 
