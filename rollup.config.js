@@ -89,7 +89,7 @@ export default [
       exports: "named",
       file: "./demo/miski.min.js",
       format: "es",
-      sourcemap: false,
+      sourcemap: true,
       globals,
     }],
   },
