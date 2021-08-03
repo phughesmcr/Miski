@@ -36,23 +36,19 @@ export function createArchetype(world: World, ...components: ComponentInstance<u
  * Remove an archetype from the world
  * @param world the world to remove the archetype from
  * @param archetype the archetype to remove
- * @param idx the index of the archetype in world.archetypes
  * @returns the removed archetype
  */
-export function deleteArchetype(world: World, archetype: Archetype, idx?: number): Archetype {
+export function deleteArchetype(world: World, archetype: Archetype): Archetype {
   const { archetypes, queries } = world;
-  if (idx === undefined || idx === -1) {
-    idx = [...archetypes.values()].findIndex((a) => a.id === archetype.id);
-    if (idx === -1) throw new Error("not found");
-  }
-  if (archetypes.get(idx) !== archetype) {
-    throw new Error("mismatch");
+  const { id } = archetype;
+  if (archetypes.get(id) !== archetype) {
+    throw new Error("Archetype not found in world.");
   }
   const qs = [...queries.values()];
   for (let i = 0, n = qs.length; i < n; i++) {
     removeArchetypeFromQuery(qs[i], archetype);
   }
-  archetypes.delete(idx);
+  archetypes.delete(id);
   return archetype;
 }
 
@@ -80,7 +76,7 @@ export function updateEntityArchetype<T>(
     if (old) {
       components = [...old.components];
       old.entities.delete(entity);
-      if (old.entities.size === 0) deleteArchetype(world, old, cidx);
+      if (old.entities.size === 0) deleteArchetype(world, old);
     }
   }
 
