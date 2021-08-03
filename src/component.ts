@@ -1,6 +1,7 @@
 "use strict";
 
 import { updateEntityArchetype } from "./archetype.js";
+import { VALID_COMPONENT_KEY } from "./constants.js";
 import { Entity } from "./entity.js";
 import {
   createDataStorage,
@@ -11,7 +12,7 @@ import {
   Schema,
   setDataInStore,
 } from "./schema.js";
-import { indexOf, isValidName } from "./utils.js";
+import { indexOf, isObject, isValidName } from "./utils.js";
 import { World } from "./world.js";
 
 export interface ComponentSpec<T> {
@@ -23,6 +24,7 @@ export interface ComponentSpec<T> {
 
 /** Components are the base component context */
 export interface Component<T> extends ComponentSpec<T> {
+  [VALID_COMPONENT_KEY]: true;
   /** Register of instances of this component */
   instances: ComponentInstance<T>[];
 }
@@ -33,6 +35,14 @@ export type ComponentInstance<T> = Component<T> & {
   id: number;
   world: World;
 } & { [K in keyof T]: DataStore<T[K], unknown> };
+
+/** Used for validating components in query spec arrays */
+export const componentProto = { isComponent: true };
+
+/** Component type guard */
+export function isValidComponent<T>(component: unknown): component is Component<T> {
+  return isObject(component) && Object.prototype.hasOwnProperty.call(component, VALID_COMPONENT_KEY);
+}
 
 /**
  * Create a new component.
@@ -47,6 +57,7 @@ export function createComponent<T>(spec: ComponentSpec<T>): Component<T> {
   if (!isValidName(name)) throw new SyntaxError("Component name is invalid.");
   if (!isValidSchema(schema)) throw new SyntaxError("Component schema is invalid.");
   return {
+    [VALID_COMPONENT_KEY]: true,
     instances: [],
     name,
     schema,

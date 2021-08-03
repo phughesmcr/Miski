@@ -13,3 +13,6 @@ export const enum EntityState {
 export const DEFAULT_MAX_COMPONENTS = 128;
 
 export const DEFAULT_MAX_ENTITIES = 10_000;
+
+export const VALID_COMPONENT_KEY = Symbol();
+
