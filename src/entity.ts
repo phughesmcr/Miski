@@ -43,16 +43,16 @@ export function createEntity(world: World): Entity | undefined {
  * @param entity the entity to destroy
  * @returns the world
  */
-export function destroyEntity(world: World, entity: Entity): World {
+export function destroyEntity(world: World, entity: Entity): boolean {
   if (!world) throw new SyntaxError("Entity destruction requires a World object.");
   if (isNaN(entity)) throw new SyntaxError("Invalid or undefined entity provided.");
   const { spec, entities } = world;
   const { available } = entities;
   const { maxEntities } = spec;
   if (entity < 0 || entity > maxEntities) throw new Error("Entity is out of range.");
-  if (available.includes(entity)) return world;
+  if (available.includes(entity)) return false;
   updateEntityArchetype(world, entity);
   available.push(entity);
   entities[entity] = EntityState.DESTROYED;
-  return world;
+  return true;
 }
