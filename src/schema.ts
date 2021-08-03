@@ -43,6 +43,7 @@
  */
 "use strict";
 
+import { VALID_SCHEMA_KEY } from "./constants.js";
 import { Entity } from "./entity.js";
 import { Constructable, isObject, isTypedArray, isValidName, TypedArray, TypedArrayConstructor } from "./utils.js";
 import { World } from "./world.js";
@@ -54,9 +55,14 @@ import { World } from "./world.js";
  */
 export function isValidSchema(schema: unknown): schema is Schema<unknown> {
   if (!schema) return false;
-  const isObj = isObject(schema);
-  // @todo validate keys
-  return isObj;
+  if (!isObject(schema)) return false;
+  if (Object.hasOwnProperty.call(schema, "schema")) {
+    schema = schema.schema;
+    if (!isObject(schema)) return false;
+  }
+  const values = Object.values(schema);
+  if (values.length === 0) return false;
+  return values.every((prop) => (prop as DataStore<unknown, unknown>)[VALID_SCHEMA_KEY] === true);
 }
 
 /** Schemas define data storage for component properties */
@@ -99,6 +105,7 @@ export interface DataSpec<T, D> {
 type DataArray<D> = Array<D> | TypedArray;
 
 interface DataArrayMethods<T, D> {
+  [VALID_SCHEMA_KEY]: true;
   /** Get an entity's data from a component's datastore */
   getProp: (entity: Entity) => D | undefined;
   /** Validate and set data for entity in component storage */
@@ -303,6 +310,10 @@ export function defineDataStore<T, D>(spec: DataSpec<T, D>): DataStore<T, D> {
     },
     prefill: {
       value: prefill,
+      enumerable: true,
+    },
+    [VALID_SCHEMA_KEY]: {
+      value: true,
       enumerable: true,
     },
   }) as DataStore<T, D>;

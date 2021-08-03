@@ -16,3 +16,4 @@ export const DEFAULT_MAX_ENTITIES = 10_000;
 
 export const VALID_COMPONENT_KEY = Symbol();
 
+export const VALID_SCHEMA_KEY = Symbol();
