@@ -23,12 +23,12 @@ export function createBitmaskFromComponents(world: World, ...components: Compone
   return mask;
 }
 
-/** Async indexOf */
-export async function indexOf<T>(arr: ArrayLike<T>, item: T): Promise<number> {
+/** indexOf allowing for sparse arrays */
+export function indexOf<T>(arr: ArrayLike<T>, item: T): number {
   for (let i = 0, len = arr.length; i != len; i++) {
-    if (arr[i] === item) return Promise.resolve(i);
+    if (arr[i] === item) return i;
   }
-  return Promise.resolve(-1);
+  return -1;
 }
 
 /** Garbage free splice */

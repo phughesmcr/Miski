@@ -55,50 +55,50 @@ describe("Schema", function() {
     assert.equal(i32.name, name);
     assert.equal(i32.prefill, prefill);
   });
-  it("defines a DataStoreInstance without error", async function() {
+  it("defines a DataStoreInstance without error", function() {
     const i32 = defineDataStore(i32Proto);
     const world = createWorld();
     const component = createComponent({...testComponentProto, schema: { value: i32 }});
-    const inst = await registerComponent(world, component);
+    const inst = registerComponent(world, component);
     assert.exists(inst);
     assert.hasAnyKeys(inst.value, EXPECTED_INSTANCE_KEYS);
     assert.instanceOf(inst.value, arrayType);
   });
-  it("sets data in a DataStoreInstance without error", async function() {
+  it("sets data in a DataStoreInstance without error", function() {
     const i32 = defineDataStore(i32Proto);
     const world = createWorld();
     const component = createComponent({...testComponentProto, schema: { value: i32 }});
-    const inst = await registerComponent(world, component);
+    const inst = registerComponent(world, component);
     const entity = createEntity(world);
-    await addComponentToEntity(inst, entity);
+    addComponentToEntity(inst, entity);
     setDataInStore(inst.value, entity, 100);
     assert.equal(inst.value[entity], 100);
   });
-  it("fails to set invalid data in a DataStoreInstance", async function() {
+  it("fails to set invalid data in a DataStoreInstance", function() {
     const i32 = defineDataStore(i32Proto);
     const world = createWorld();
     const component = createComponent({...testComponentProto, schema: { value: i32 }});
-    const inst = await registerComponent(world, component);
+    const inst = registerComponent(world, component);
     const entity = createEntity(world);
-    await addComponentToEntity(inst, entity);
+    addComponentToEntity(inst, entity);
     assert.throws(() => setDataInStore(inst.value, entity, "hello"));
   });
-  it("fails to set data for nonexistent entity in a DataStoreInstance", async function() {
+  it("fails to set data for nonexistent entity in a DataStoreInstance", function() {
     const i32 = defineDataStore(i32Proto);
     const world = createWorld();
     const component = createComponent({...testComponentProto, schema: { value: i32 }});
-    const inst = await registerComponent(world, component);
+    const inst = registerComponent(world, component);
     const entity = createEntity(world);
-    await addComponentToEntity(inst, entity);
+    addComponentToEntity(inst, entity);
     assert.throws(() => setDataInStore(inst.value, 100_000, 100));
   });
-  it("gets data from a DataStoreInstance without error", async function() {
+  it("gets data from a DataStoreInstance without error", function() {
     const i32 = defineDataStore(i32Proto);
     const world = createWorld();
     const component = createComponent({...testComponentProto, schema: { value: i32 }});
-    const inst = await registerComponent(world, component);
+    const inst = registerComponent(world, component);
     const entity = createEntity(world);
-    await addComponentToEntity(inst, entity);
+    addComponentToEntity(inst, entity);
     setDataInStore(inst.value, entity, 100);
     const val = getDataFromStore(inst.value, entity);
     assert.equal(val, 100);

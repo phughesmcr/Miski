@@ -69,7 +69,7 @@ export function createComponent<T>(spec: ComponentSpec<T>): Component<T> {
  * @param component the component to register in the world.
  * @returns the registered component instance.
  */
-export async function registerComponent<T>(world: World, component: Component<T>): Promise<ComponentInstance<T>> {
+export function registerComponent<T>(world: World, component: Component<T>): ComponentInstance<T> {
   if (!world) throw new SyntaxError("Component registration requires a World object.");
   if (!component) throw new SyntaxError("Component registration requires a Component object.");
   const { instances, name, schema } = component;
@@ -78,7 +78,7 @@ export async function registerComponent<T>(world: World, component: Component<T>
     throw new Error(`Component with name "${name}" is already registered.`);
   }
   // get id
-  const idx = await indexOf(components, undefined);
+  const idx = indexOf(components, undefined);
   if (idx === -1) throw new Error("Maximum components reached.");
   // create instance
   const instance = Object.create(component, {
@@ -100,7 +100,9 @@ export async function registerComponent<T>(world: World, component: Component<T>
     },
   }) as ComponentInstance<T>;
   // add schema keys
-  const _defineKey = ([key, value]: [string, unknown]) => {
+  const entries = Object.entries(schema);
+  for (let i = 0, n = entries.length; i < n; i++) {
+    const [key, value] = entries[i];
     if (!isValidName(key)) {
       throw new SyntaxError(`Property name "${String(key)}" is invalid or forbidden.`);
     }
@@ -110,8 +112,7 @@ export async function registerComponent<T>(world: World, component: Component<T>
       enumerable: true,
       writable: false,
     });
-  };
-  await Promise.all(Object.entries(schema).map(_defineKey));
+  }
   // register
   instances.push(instance);
   components[idx] = instance;
@@ -124,7 +125,7 @@ export async function registerComponent<T>(world: World, component: Component<T>
  * @param component the component instance to unregister.
  * @returns the world object.
  */
-export async function unregisterComponent<T>(component: ComponentInstance<T>): Promise<World> {
+export function unregisterComponent<T>(component: ComponentInstance<T>): World {
   if (!component) throw new SyntaxError("Component instance required.");
   const { id, name, world } = component;
   const { components } = world;
@@ -132,8 +133,10 @@ export async function unregisterComponent<T>(component: ComponentInstance<T>): P
   if (!instance || component !== instance) {
     throw new Error(`Component "${name}" does not exist in this world.`);
   }
-  const _removeEntity = (entity: Entity) => removeComponentFromEntity(instance, entity);
-  await Promise.all([...instance.entities].map(_removeEntity));
+  const entities = [...instance.entities];
+  for (let i = 0, n = entities.length; i < n; i++) {
+    removeComponentFromEntity(instance, entities[i]);
+  }
   delete components[id];
   return world;
 }
@@ -145,11 +148,11 @@ export async function unregisterComponent<T>(component: ComponentInstance<T>): P
  * @param properties optional initial properties to set
  * @returns the component instance
  */
-export async function addComponentToEntity<T>(
+export function addComponentToEntity<T>(
   component: ComponentInstance<T>,
   entity: Entity,
   properties?: T
-): Promise<ComponentInstance<T>> {
+): ComponentInstance<T> {
   if (!component) throw new SyntaxError("Component instance required.");
   if (typeof entity !== "number") throw new SyntaxError("Invalid or undefined entity provided.");
   const { id, name, schema, world } = component;
@@ -166,8 +169,11 @@ export async function addComponentToEntity<T>(
   }
   instance.entities.add(entity);
   if (properties) {
-    const _setData = (key: string) => setDataInStore(instance[key as never], entity, properties[key as keyof T]);
-    await Promise.all(Object.keys(schema).map(_setData));
+    const keys = Object.keys(schema);
+    for (let i = 0, n = keys.length; i < n; i++) {
+      const key = keys[i];
+      setDataInStore(instance[key as never], entity, properties[key as keyof T]);
+    }
   }
   updateEntityArchetype(world, entity, instance, false);
   return component;
@@ -179,10 +185,7 @@ export async function addComponentToEntity<T>(
  * @param entity the entity to remove the component from
  * @returns the component instance
  */
-export async function removeComponentFromEntity<T>(
-  component: ComponentInstance<T>,
-  entity: Entity
-): Promise<ComponentInstance<T>> {
+export function removeComponentFromEntity<T>(component: ComponentInstance<T>, entity: Entity): ComponentInstance<T> {
   if (!component) throw new SyntaxError("Component instance required.");
   if (typeof entity !== "number") throw new SyntaxError("Invalid or undefined entity provided.");
   const { id, name, schema, world } = component;
@@ -198,8 +201,11 @@ export async function removeComponentFromEntity<T>(
     throw new Error(`Entity "${entity}" does not have component "${name}" to remove.`);
   }
   instance.entities.delete(entity);
-  const _resetData = (key: string) => resetDataInStore(instance[key as never], entity);
-  await Promise.all(Object.keys(schema).map(_resetData));
+  const keys = Object.keys(schema);
+  for (let i = 0, n = keys.length; i < n; i++) {
+    const key = keys[i];
+    resetDataInStore(instance[key as never], entity);
+  }
   updateEntityArchetype(world, entity, component, true);
   return component;
 }

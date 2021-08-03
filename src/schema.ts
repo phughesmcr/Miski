@@ -166,18 +166,17 @@ export function cloneDataStoreInstance<T, D>(store: DataStoreInstance<T, D>): Da
  * @param dest the destination DataStore
  * @returns dest store as a copy of src store
  */
-export async function copyDataStoreInstance<T, D>(
+export function copyDataStoreInstance<T, D>(
   src: DataStoreInstance<T, D>,
   dest: DataStoreInstance<T, D>
-): Promise<DataStoreInstance<T, D>> {
-  if (src.length !== dest.length) {
+): DataStoreInstance<T, D> {
+  const n = src.length;
+  if (n !== dest.length) {
     throw new Error("Source and destination stores are different sizes.");
   }
   if (src.arrayType !== dest.arrayType) {
     throw new TypeError("Source and destination have different arrayType properties.");
   }
-
-  const _copy = (val: D, idx: number) => (dest[idx] = val);
 
   switch (dest.isTypedArray) {
     case true:
@@ -185,8 +184,10 @@ export async function copyDataStoreInstance<T, D>(
       break;
     case false:
       (dest as D[]).length = 0;
-      (dest as D[]).length = src.length;
-      await Promise.all(src.map(_copy as never));
+      (dest as D[]).length = n;
+      for (let i = 0; i < n; i++) {
+        dest[i] = src[i];
+      }
       break;
   }
 

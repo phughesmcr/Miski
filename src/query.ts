@@ -108,7 +108,7 @@ export function getEntitiesFromQuery(query: QueryInstance): Entity[] {
  * @param query the query to register
  * @returns the registered query instance
  */
-export async function createQueryInstance(world: World, query: Query): Promise<QueryInstance> {
+export function createQueryInstance(world: World, query: Query): QueryInstance {
   const { queries } = world;
 
   if (queries.has(query)) return queries.get(query) as QueryInstance;
@@ -116,31 +116,29 @@ export async function createQueryInstance(world: World, query: Query): Promise<Q
   const _sameWorld = (c: ComponentInstance<unknown>) => c.world === world;
   const _getInstance = (component: Component<unknown>) => component.instances.filter(_sameWorld);
 
-  const [all, any, none] = await Promise.all([
-    query.all.flatMap(_getInstance),
-    query.any.flatMap(_getInstance),
-    query.none.flatMap(_getInstance),
-  ]);
+  const all = query.all.flatMap(_getInstance);
+  const any = query.any.flatMap(_getInstance);
+  const none = query.none.flatMap(_getInstance);
 
-  const [and, or, not] = await Promise.all([
-    createBitmaskFromComponents(world, ...all),
-    createBitmaskFromComponents(world, ...any),
-    createBitmaskFromComponents(world, ...none),
-  ]);
+  const and = createBitmaskFromComponents(world, ...all);
+  const or = createBitmaskFromComponents(world, ...any);
+  const not = createBitmaskFromComponents(world, ...none);
+
+  const components = Object.freeze(
+    [...all, ...any].reduce((obj, component) => {
+      obj[component.name] = component;
+      return obj;
+    }, {} as Record<string, ComponentInstance<unknown>>)
+  );
 
   const instance: QueryInstance = {
     archetypes: [],
-    components: [...all, ...any].reduce((obj, component) => {
-      obj[component.name] = component;
-      return obj;
-    }, {} as Record<string, ComponentInstance<unknown>>),
+    components,
     and,
     or,
     not,
     world,
   };
-
-  Object.freeze(instance.components);
 
   queries.set(query, instance);
 
