@@ -9,3 +9,4 @@ test/
 types/
 babel.config.json
 rollup.config.js
+rollup.config.dev.js

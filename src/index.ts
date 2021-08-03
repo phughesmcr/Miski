@@ -19,6 +19,7 @@ export {
   registerComponent,
   removeComponentFromEntity,
   unregisterComponent,
+  isValidComponent,
 } from "./component.js";
 export { createEntity, destroyEntity } from "./entity.js";
 export { createQuery } from "./query.js";

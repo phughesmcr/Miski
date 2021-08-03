@@ -14,14 +14,12 @@ import {
   ui32,
   f32,
   ui8,
-  setDataInStore,
-  getDataFromStore,
 } from '../miski.min.js';
 
 (async () => {
+  const SPEED = 10;
   const canvas = document.getElementsByTagName('canvas')[0];
   const ctx = canvas.getContext('2d');
-  const SPEED = 10;
   function rnd(a, b) { return Math.random() * (b - a) + a; }
 
   // 1. Create a world
@@ -46,7 +44,7 @@ import {
   // 4. Create Entities and give them some components
 
   for (let i = 0, max = 32; i < max; i++) {
-    const box = await createEntity(world);
+    const box = createEntity(world);
     await addComponentToEntity(iSize, box, { value: rnd(25, 125) });
     await addComponentToEntity(iPosition, box, { x: rnd(125, canvas.width - 125), y: rnd(125, canvas.height - 125) });
     await addComponentToEntity(iColour, box, { r: rnd(0, 255), g: rnd(0, 255), b: rnd(0, 255) });
@@ -55,8 +53,8 @@ import {
 
   // 5. Create queries to group objects by components for use in systems
 
-  const qColour = createQuery({all: [ iColour, iSize, iPosition, iVelocity ]});
-  const qRender = createQuery({all: [ iSize, iColour, iPosition ]});
+  const qColour = createQuery({all: [ cColour, cSize, cPosition, cVelocity ]});
+  const qRender = createQuery({all: [ cSize, cColour, cPosition ]});
 
   // 6. Define Systems
 
@@ -70,12 +68,9 @@ import {
       const { dx, dy } = velocity;
 
       entities.forEach((entity) => {
-        // data for entities can be got/set in 3 ways:
-        // direct but type unsafe:
         r[entity] += 1;
-        // indirect but more type safe:
-        setDataInStore(g, entity, getDataFromStore(g, entity) + 1);
-        b.setProp(entity, b.getProp(entity) + 1);
+        g[entity] += 1;
+        b[entity] += 1;
 
         // bounce box off sides of canvas
         const ds = value[entity];
@@ -102,7 +97,7 @@ import {
       const { r, g, b } = colour;
       const { x, y } = position;
       const { value } = size;
-      ctx.fillStyle = `white`;
+      ctx.fillStyle = "white";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       entities.forEach((entity) => {
         ctx.fillStyle = `rgb(${r[entity]}, ${g[entity]}, ${b[entity]})`;

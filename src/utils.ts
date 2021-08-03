@@ -1,11 +1,34 @@
 "use strict";
 
-/** Async indexOf */
-export async function indexOf<T>(arr: ArrayLike<T>, item: T): Promise<number> {
-  for (let i = 0, len = arr.length; i != len; i++) {
-    if (arr[i] === item) return Promise.resolve(i);
+import { ComponentInstance } from "./component.js";
+import { Bitmask, createBitmask, setBitOn } from "./mask.js";
+import { World } from "./world.js";
+
+/**
+ * Create a new bitmask from a set of component IDs
+ * @param world the world to associate this mask with
+ * @param components components to create a mask from
+ * @returns a new bitmask
+ */
+export function createBitmaskFromComponents(world: World, ...components: ComponentInstance<unknown>[]): Bitmask {
+  const mask = createBitmask(world.spec.maxComponents || 32);
+  if (!components.length) return mask;
+  for (let i = 0, n = components.length; i < n; i++) {
+    const component = components[i];
+    if (component.world.id !== world.id) {
+      throw new Error("Components are not from the same world.");
+    }
+    setBitOn(mask, component.id);
   }
-  return Promise.resolve(-1);
+  return mask;
+}
+
+/** indexOf allowing for sparse arrays */
+export function indexOf<T>(arr: ArrayLike<T>, item: T): number {
+  for (let i = 0, len = arr.length; i != len; i++) {
+    if (arr[i] === item) return i;
+  }
+  return -1;
 }
 
 /** Garbage free splice */

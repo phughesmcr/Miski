@@ -2,7 +2,7 @@
 
 import { ComponentInstance } from "./component.js";
 import { createQueryInstance, Query, QueryInstance } from "./query.js";
-import { indexOf, isValidName, spliceOne, systemNoop } from "./utils.js";
+import { isValidName, spliceOne, systemNoop } from "./utils.js";
 import { World } from "./world.js";
 
 /** A function which runs once at the start of each frame */
@@ -87,10 +87,10 @@ export function createSystem(spec: SystemSpec): System {
  * @param query the query to associate with the system instance.
  * @returns the registered system instance.
  */
-export async function registerSystem(world: World, system: System, query: Query): Promise<SystemInstance> {
+export function registerSystem(world: World, system: System, query: Query): SystemInstance {
   const { systems } = world;
 
-  const queryInstance = await createQueryInstance(world, query);
+  const queryInstance = createQueryInstance(world, query);
 
   let enabled = false;
 
@@ -129,10 +129,10 @@ export async function registerSystem(world: World, system: System, query: Query)
  * @param system the system instance to unregister.
  * @returns the world object.
  */
-export async function unregisterSystem(system: SystemInstance): Promise<World> {
+export function unregisterSystem(system: SystemInstance): World {
   const { world } = system;
   const { systems } = world;
-  const idx = await indexOf(systems, system);
+  const idx = systems.indexOf(system);
   if (idx === undefined) return world;
   spliceOne(systems, idx);
   return world;

@@ -1,8 +1,8 @@
 "use strict";
 
 import { updateEntityArchetype } from "./archetype.js";
+import { VALID_COMPONENT_KEY } from "./constants.js";
 import { Entity } from "./entity.js";
-import { Bitmask, createBitmask, setBitOn } from "./mask.js";
 import {
   createDataStorage,
   DataStore,
@@ -12,30 +12,8 @@ import {
   Schema,
   setDataInStore,
 } from "./schema.js";
-import { indexOf, isValidName } from "./utils.js";
+import { indexOf, isObject, isValidName } from "./utils.js";
 import { World } from "./world.js";
-
-/**
- * Create a new bitmask from a set of component IDs
- * @param world the world to associate this mask with
- * @param components components to create a mask from
- * @returns a new bitmask
- */
-export async function createBitmaskFromComponents(
-  world: World,
-  ...components: ComponentInstance<unknown>[]
-): Promise<Bitmask> {
-  const mask = createBitmask(world.spec.maxComponents || 32);
-  if (!components.length) return mask;
-  const _add = <T>(component: ComponentInstance<T>) => {
-    if (component.world.id !== world.id) {
-      throw new Error("Components are not from the same world.");
-    }
-    setBitOn(mask, component.id);
-  };
-  await Promise.all(components.map(_add));
-  return mask;
-}
 
 export interface ComponentSpec<T> {
   /** The component's label */
@@ -46,6 +24,7 @@ export interface ComponentSpec<T> {
 
 /** Components are the base component context */
 export interface Component<T> extends ComponentSpec<T> {
+  [VALID_COMPONENT_KEY]: true;
   /** Register of instances of this component */
   instances: ComponentInstance<T>[];
 }
@@ -56,6 +35,11 @@ export type ComponentInstance<T> = Component<T> & {
   id: number;
   world: World;
 } & { [K in keyof T]: DataStore<T[K], unknown> };
+
+/** Component type guard */
+export function isValidComponent<T>(component: unknown): component is Component<T> {
+  return isObject(component) && Object.prototype.hasOwnProperty.call(component, VALID_COMPONENT_KEY);
+}
 
 /**
  * Create a new component.
@@ -70,6 +54,7 @@ export function createComponent<T>(spec: ComponentSpec<T>): Component<T> {
   if (!isValidName(name)) throw new SyntaxError("Component name is invalid.");
   if (!isValidSchema(schema)) throw new SyntaxError("Component schema is invalid.");
   return {
+    [VALID_COMPONENT_KEY]: true,
     instances: [],
     name,
     schema,
@@ -84,7 +69,7 @@ export function createComponent<T>(spec: ComponentSpec<T>): Component<T> {
  * @param component the component to register in the world.
  * @returns the registered component instance.
  */
-export async function registerComponent<T>(world: World, component: Component<T>): Promise<ComponentInstance<T>> {
+export function registerComponent<T>(world: World, component: Component<T>): ComponentInstance<T> {
   if (!world) throw new SyntaxError("Component registration requires a World object.");
   if (!component) throw new SyntaxError("Component registration requires a Component object.");
   const { instances, name, schema } = component;
@@ -93,7 +78,7 @@ export async function registerComponent<T>(world: World, component: Component<T>
     throw new Error(`Component with name "${name}" is already registered.`);
   }
   // get id
-  const idx = await indexOf(components, undefined);
+  const idx = indexOf(components, undefined);
   if (idx === -1) throw new Error("Maximum components reached.");
   // create instance
   const instance = Object.create(component, {
@@ -115,7 +100,9 @@ export async function registerComponent<T>(world: World, component: Component<T>
     },
   }) as ComponentInstance<T>;
   // add schema keys
-  const _defineKey = ([key, value]: [string, unknown]) => {
+  const entries = Object.entries(schema);
+  for (let i = 0, n = entries.length; i < n; i++) {
+    const [key, value] = entries[i];
     if (!isValidName(key)) {
       throw new SyntaxError(`Property name "${String(key)}" is invalid or forbidden.`);
     }
@@ -125,8 +112,7 @@ export async function registerComponent<T>(world: World, component: Component<T>
       enumerable: true,
       writable: false,
     });
-  };
-  await Promise.all(Object.entries(schema).map(_defineKey));
+  }
   // register
   instances.push(instance);
   components[idx] = instance;
@@ -139,7 +125,7 @@ export async function registerComponent<T>(world: World, component: Component<T>
  * @param component the component instance to unregister.
  * @returns the world object.
  */
-export async function unregisterComponent<T>(component: ComponentInstance<T>): Promise<World> {
+export function unregisterComponent<T>(component: ComponentInstance<T>): World {
   if (!component) throw new SyntaxError("Component instance required.");
   const { id, name, world } = component;
   const { components } = world;
@@ -147,8 +133,10 @@ export async function unregisterComponent<T>(component: ComponentInstance<T>): P
   if (!instance || component !== instance) {
     throw new Error(`Component "${name}" does not exist in this world.`);
   }
-  const _removeEntity = (entity: Entity) => removeComponentFromEntity(instance, entity);
-  await Promise.all([...instance.entities].map(_removeEntity));
+  const entities = [...instance.entities];
+  for (let i = 0, n = entities.length; i < n; i++) {
+    removeComponentFromEntity(instance, entities[i]);
+  }
   delete components[id];
   return world;
 }
@@ -160,13 +148,13 @@ export async function unregisterComponent<T>(component: ComponentInstance<T>): P
  * @param properties optional initial properties to set
  * @returns the component instance
  */
-export async function addComponentToEntity<T>(
+export function addComponentToEntity<T>(
   component: ComponentInstance<T>,
   entity: Entity,
   properties?: T
-): Promise<ComponentInstance<T>> {
+): ComponentInstance<T> {
   if (!component) throw new SyntaxError("Component instance required.");
-  if (typeof entity !== "number") throw new SyntaxError("Invalid or undefined entity provided.");
+  if (isNaN(entity)) throw new SyntaxError("Invalid or undefined entity provided.");
   const { id, name, schema, world } = component;
   const { spec, components } = world;
   if (entity < 0 || entity > spec.maxEntities) {
@@ -179,12 +167,15 @@ export async function addComponentToEntity<T>(
   if (instance.entities.has(entity)) {
     throw new Error(`Entity "${entity}" already has component "${name}".`);
   }
-  instance.entities.add(entity);
   if (properties) {
-    const _resetData = (key: string) => setDataInStore(instance[key as never], entity, properties[key as keyof T]);
-    await Promise.all(Object.keys(schema).map(_resetData));
+    const keys = Object.keys(schema);
+    for (let i = 0, n = keys.length; i < n; i++) {
+      const key = keys[i];
+      setDataInStore(instance[key as never], entity, properties[key as keyof T]);
+    }
   }
-  await updateEntityArchetype(world, entity, instance, false);
+  instance.entities.add(entity);
+  updateEntityArchetype(world, entity, instance, false);
   return component;
 }
 
@@ -194,12 +185,9 @@ export async function addComponentToEntity<T>(
  * @param entity the entity to remove the component from
  * @returns the component instance
  */
-export async function removeComponentFromEntity<T>(
-  component: ComponentInstance<T>,
-  entity: Entity
-): Promise<ComponentInstance<T>> {
+export function removeComponentFromEntity<T>(component: ComponentInstance<T>, entity: Entity): ComponentInstance<T> {
   if (!component) throw new SyntaxError("Component instance required.");
-  if (typeof entity !== "number") throw new SyntaxError("Invalid or undefined entity provided.");
+  if (isNaN(entity)) throw new SyntaxError("Invalid or undefined entity provided.");
   const { id, name, schema, world } = component;
   const { spec, components } = world;
   if (entity < 0 || entity > spec.maxEntities) {
@@ -212,9 +200,12 @@ export async function removeComponentFromEntity<T>(
   if (!instance.entities.has(entity)) {
     throw new Error(`Entity "${entity}" does not have component "${name}" to remove.`);
   }
+  const keys = Object.keys(schema);
+  for (let i = 0, n = keys.length; i < n; i++) {
+    const key = keys[i];
+    resetDataInStore(instance[key as never], entity);
+  }
   instance.entities.delete(entity);
-  const _resetData = (key: string) => resetDataInStore(instance[key as never], entity);
-  await Promise.all(Object.keys(schema).map(_resetData));
-  await updateEntityArchetype(world, entity, component, true);
+  updateEntityArchetype(world, entity, component, true);
   return component;
 }

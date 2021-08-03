@@ -2,7 +2,7 @@ import mocha from "mocha";
 const { describe, it } = mocha;
 import { assert } from "chai";
 
-import { createWorld } from "../dist/es2020/index.min.js";
+import { createWorld } from "../demo/miski.min.js";
 
 const EXPECTED_WORLD_KEYS = [
   "spec",
@@ -28,12 +28,9 @@ describe("World", function() {
     const { spec, id, archetypes, components, entities, queries, systems } = world;
     assert.isObject(spec);
     assert.isFrozen(spec);
-    assert.isObject(archetypes);
-    assert.isNotFrozen(archetypes);
-    assert.isExtensible(archetypes);
+    assert.instanceOf(archetypes, Map);
     assert.isArray(components);
     assert.isNotFrozen(components);
-    assert.isArray(entities);
     assert.isNotFrozen(entities);
     assert.isArray(systems);
     assert.isNotFrozen(systems);

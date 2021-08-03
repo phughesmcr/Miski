@@ -1,10 +1,10 @@
 "use strict";
 
 import { Archetype } from "./archetype.js";
-import { Component, ComponentInstance, createBitmaskFromComponents } from "./component.js";
+import { Component, ComponentInstance, isValidComponent } from "./component.js";
 import { Entity } from "./entity.js";
 import { Bitmask } from "./mask.js";
-import { indexOf, spliceOne } from "./utils.js";
+import { createBitmaskFromComponents, spliceOne } from "./utils.js";
 import { World } from "./world.js";
 
 export interface QuerySpec {
@@ -25,6 +25,8 @@ export interface Query extends Required<QuerySpec> {
 export interface QueryInstance {
   /** The archetypes which match this query */
   archetypes: Archetype[];
+  /** The components matched by the and/or bitmasks */
+  components: Record<string, ComponentInstance<unknown>>;
   /** A bitmask for the AND match criteria */
   and: Bitmask;
   /** A bitmask for the OR match criteria */
@@ -43,7 +45,8 @@ export interface QueryInstance {
 export function createQuery(spec: QuerySpec): Query {
   if (!spec) throw new Error("Query spec object required.");
   const { all = [], any = [], none = [] } = spec;
-  // @todo validate arrays contain only components
+  const valid = [...all, ...any, ...none].every(isValidComponent);
+  if (!valid) throw new Error("Spec arrays must contain only Components.");
   return {
     instances: [],
     all: [...all],
@@ -65,7 +68,6 @@ export function isQueryCandidate(query: QueryInstance, archetype: Archetype): bo
     if ((query.and[i] & _target) !== query.and[i]) return false;
     if ((query.or[i] & _target) > 0) return false;
   }
-  addArchetypeToQuery(query, archetype);
   return true;
 }
 
@@ -84,18 +86,9 @@ export function removeArchetypeFromQuery(query: QueryInstance, archetype: Archet
   return query;
 }
 
-/** helper function for flat-mapping archetype components */
-function _getComponents(archetype: Archetype): ComponentInstance<unknown>[] {
-  return [...archetype.components];
-}
-
 /** Get an object of components by name */
 export function getComponentsFromQuery(query: QueryInstance): Record<string, ComponentInstance<unknown>> {
-  /** @todo caching */
-  return query.archetypes.flatMap(_getComponents).reduce((obj, component) => {
-    obj[component.name] = component;
-    return obj;
-  }, {} as Record<string, ComponentInstance<unknown>>);
+  return query.components;
 }
 
 /** helper function for flat-mapping archetype entities */
@@ -115,41 +108,47 @@ export function getEntitiesFromQuery(query: QueryInstance): Entity[] {
  * @param query the query to register
  * @returns the registered query instance
  */
-export async function createQueryInstance(world: World, query: Query): Promise<QueryInstance> {
-  const { archetypes, components, queries } = world;
+export function createQueryInstance(world: World, query: Query): QueryInstance {
+  const { queries } = world;
 
   if (queries.has(query)) return queries.get(query) as QueryInstance;
 
-  const _getInstance = async (component: Component<unknown>) => {
-    const idx = await indexOf(components, component);
-    if (idx === -1) throw new Error("ComponentInstance not found.");
-    return components[idx];
-  };
+  const _sameWorld = (c: ComponentInstance<unknown>) => c.world === world;
+  const _getInstance = (component: Component<unknown>) => component.instances.filter(_sameWorld);
 
-  const [all, any, none] = await Promise.all([
-    await Promise.all(query.all.map(_getInstance)),
-    await Promise.all(query.any.map(_getInstance)),
-    await Promise.all(query.none.map(_getInstance)),
-  ]);
+  const all = query.all.flatMap(_getInstance);
+  const any = query.any.flatMap(_getInstance);
+  const none = query.none.flatMap(_getInstance);
 
-  const [and, or, not] = await Promise.all([
-    await createBitmaskFromComponents(world, ...all),
-    await createBitmaskFromComponents(world, ...any),
-    await createBitmaskFromComponents(world, ...none),
-  ]);
+  const and = createBitmaskFromComponents(world, ...all);
+  const or = createBitmaskFromComponents(world, ...any);
+  const not = createBitmaskFromComponents(world, ...none);
+
+  const components = Object.freeze(
+    [...all, ...any].reduce((obj, component) => {
+      obj[component.name] = component;
+      return obj;
+    }, {} as Record<string, ComponentInstance<unknown>>)
+  );
 
   const instance: QueryInstance = {
     archetypes: [],
+    components,
     and,
     or,
     not,
     world,
   };
 
-  const _isMatch = (archetype: Archetype) => isQueryCandidate(instance, archetype);
-  await Promise.all(Object.values(archetypes).map(_isMatch));
-
   queries.set(query, instance);
+
+  const archetypes = [...world.archetypes.values()];
+  for (let i = 0, n = archetypes.length; i < n; i++) {
+    const archetype = archetypes[i];
+    if (isQueryCandidate(instance, archetype)) {
+      addArchetypeToQuery(instance, archetype);
+    }
+  }
 
   return instance;
 }

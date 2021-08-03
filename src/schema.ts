@@ -9,7 +9,7 @@
  *  // Define out int32 storage (i.e. an Int32Array)
  *  const i32 = defineDataStore({
  *    arrayType: Int32Array, // "arrayType" can be omitted if storage doesn't used typed arrays
- *    guard: (property: unknown): property is number => (!Number.isNaN(property)),
+ *    guard: (property: unknown): property is number => (!isNaN(property)),
  *    initial: () => 0,
  *    name: "i32",
  *    // N.B. "prefill" property is ignored when arrayType is a typed array.
@@ -43,6 +43,7 @@
  */
 "use strict";
 
+import { VALID_SCHEMA_KEY } from "./constants.js";
 import { Entity } from "./entity.js";
 import { Constructable, isObject, isTypedArray, isValidName, TypedArray, TypedArrayConstructor } from "./utils.js";
 import { World } from "./world.js";
@@ -54,9 +55,14 @@ import { World } from "./world.js";
  */
 export function isValidSchema(schema: unknown): schema is Schema<unknown> {
   if (!schema) return false;
-  const isObj = isObject(schema);
-  // @todo validate keys
-  return isObj;
+  if (!isObject(schema)) return false;
+  if (Object.hasOwnProperty.call(schema, "schema")) {
+    schema = schema.schema;
+    if (!isObject(schema)) return false;
+  }
+  const values = Object.values(schema);
+  if (values.length === 0) return false;
+  return values.every((prop) => (prop as DataStore<unknown, unknown>)[VALID_SCHEMA_KEY] === true);
 }
 
 /** Schemas define data storage for component properties */
@@ -99,6 +105,7 @@ export interface DataSpec<T, D> {
 type DataArray<D> = Array<D> | TypedArray;
 
 interface DataArrayMethods<T, D> {
+  [VALID_SCHEMA_KEY]: true;
   /** Get an entity's data from a component's datastore */
   getProp: (entity: Entity) => D | undefined;
   /** Validate and set data for entity in component storage */
@@ -149,7 +156,7 @@ export function clearDataStoreInstance<T, D>(store: DataStoreInstance<T, D>): Da
  */
 export function cloneDataStoreInstance<T, D>(store: DataStoreInstance<T, D>): DataStoreInstance<T, D> {
   const clone = createDataStorage(store.world, Object.getPrototypeOf(store));
-  store.forEach((val, i) => (clone[i] = val));
+  for (let i = 0, n = store.length; i < n; i++) clone[i] = store[i];
   return clone as DataStoreInstance<T, D>;
 }
 
@@ -159,18 +166,17 @@ export function cloneDataStoreInstance<T, D>(store: DataStoreInstance<T, D>): Da
  * @param dest the destination DataStore
  * @returns dest store as a copy of src store
  */
-export async function copyDataStoreInstance<T, D>(
+export function copyDataStoreInstance<T, D>(
   src: DataStoreInstance<T, D>,
   dest: DataStoreInstance<T, D>
-): Promise<DataStoreInstance<T, D>> {
-  if (src.length !== dest.length) {
+): DataStoreInstance<T, D> {
+  const n = src.length;
+  if (n !== dest.length) {
     throw new Error("Source and destination stores are different sizes.");
   }
   if (src.arrayType !== dest.arrayType) {
     throw new TypeError("Source and destination have different arrayType properties.");
   }
-
-  const _copy = (val: D, idx: number) => (dest[idx] = val);
 
   switch (dest.isTypedArray) {
     case true:
@@ -178,8 +184,10 @@ export async function copyDataStoreInstance<T, D>(
       break;
     case false:
       (dest as D[]).length = 0;
-      (dest as D[]).length = src.length;
-      await Promise.all(src.map(_copy as never));
+      (dest as D[]).length = n;
+      for (let i = 0; i < n; i++) {
+        dest[i] = src[i];
+      }
       break;
   }
 
@@ -261,7 +269,7 @@ export function defineDataStore<T, D>(spec: DataSpec<T, D>): DataStore<T, D> {
   const tmp = new arrayType();
   const isTyped = isTypedArray(tmp);
 
-  if (isTyped && (typeof _init !== "number" || Number.isNaN(_init))) {
+  if (isTyped && (typeof _init !== "number" || isNaN(_init))) {
     throw new TypeError(`Initial property for typed array type must be a number. Found ${typeof _init}.`);
   }
 
@@ -303,6 +311,10 @@ export function defineDataStore<T, D>(spec: DataSpec<T, D>): DataStore<T, D> {
     },
     prefill: {
       value: prefill,
+      enumerable: true,
+    },
+    [VALID_SCHEMA_KEY]: {
+      value: true,
       enumerable: true,
     },
   }) as DataStore<T, D>;

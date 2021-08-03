@@ -29,7 +29,7 @@ export type StringStore = DataStore<string[], string>;
 
 /** number type guard */
 export function numberGuard(property: unknown): property is number {
-  return typeof property === "number" && !Number.isNaN(property);
+  return typeof property === "number" && !isNaN(property);
 }
 
 /** @returns 0 */

@@ -11,7 +11,7 @@ import {
   i8,
   createWorld,
   createEntity
-} from "../dist/es2020/index.min.js";
+} from "../demo/miski.min.js";
 
 /* describe("System", function() {
   it("defines a DataStore without error", function() {

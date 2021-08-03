@@ -1,12 +1,11 @@
 "use strict";
 
+import { createEntityArray, EntityArray } from "./entity.js";
 import { Archetype } from "./archetype.js";
 import { ComponentInstance } from "./component.js";
 import { Query, QueryInstance } from "./query.js";
 import { SystemInstance } from "./system.js";
-
-const DEFAULT_MAX_COMPONENTS = 128;
-const DEFAULT_MAX_ENTITIES = 10_000;
+import { DEFAULT_MAX_COMPONENTS, DEFAULT_MAX_ENTITIES } from "./constants.js";
 
 /** World configuration */
 export interface WorldSpec {
@@ -34,9 +33,9 @@ export interface World {
   spec: Readonly<WorldSpec>;
   id: string;
   // storage
-  archetypes: Record<string, Archetype>;
+  archetypes: Map<number, Archetype>;
   components: ComponentInstance<unknown>[];
-  entities: Archetype[];
+  entities: EntityArray;
   queries: Map<Query, QueryInstance>;
   systems: SystemInstance[];
 }
@@ -49,13 +48,14 @@ export interface World {
  */
 export function createWorld(spec: Partial<WorldSpec> = defaultWorldSpec): World {
   const { maxComponents = DEFAULT_MAX_COMPONENTS, maxEntities = DEFAULT_MAX_ENTITIES } = spec;
-  return {
-    archetypes: {},
+  const world = {
+    archetypes: new Map() as Map<number, Archetype>,
     components: new Array(maxComponents) as ComponentInstance<unknown>[],
-    entities: new Array(maxEntities) as Archetype[],
+    entities: createEntityArray(maxEntities),
     id: `${Date.now().toString(36)}_${Math.random().toString(36).substr(2, 9)}`,
     queries: new Map(),
     spec: Object.freeze({ maxComponents, maxEntities }),
     systems: [],
   };
+  return world;
 }
