@@ -1,3 +1,6 @@
+declare const VALID_COMPONENT_KEY: unique symbol;
+declare const VALID_SCHEMA_KEY: unique symbol;
+
 declare type Bitmask = Uint32Array;
 
 /** Archetypes are unique groupings of entities by components */
@@ -5,7 +8,7 @@ interface Archetype {
     components: Set<ComponentInstance<unknown>>;
     entities: Set<Entity>;
     mask: Bitmask;
-    name: string;
+    id: number;
 }
 
 interface QuerySpec {
@@ -24,6 +27,8 @@ interface Query extends Required<QuerySpec> {
 interface QueryInstance {
     /** The archetypes which match this query */
     archetypes: Archetype[];
+    /** The components matched by the and/or bitmasks */
+    components: Record<string, ComponentInstance<unknown>>;
     /** A bitmask for the AND match criteria */
     and: Bitmask;
     /** A bitmask for the OR match criteria */
@@ -97,14 +102,14 @@ declare function createSystem(spec: SystemSpec): System;
  * @param query the query to associate with the system instance.
  * @returns the registered system instance.
  */
-declare function registerSystem(world: World, system: System, query: Query): Promise<SystemInstance>;
+declare function registerSystem(world: World, system: System, query: Query): SystemInstance;
 /**
  * Remove a system from the world.
  * Takes a `SystemInstance` an unregisters it from its `World`.
  * @param system the system instance to unregister.
  * @returns the world object.
  */
-declare function unregisterSystem(system: SystemInstance): Promise<World>;
+declare function unregisterSystem(system: SystemInstance): World;
 declare function enableSystem(system: SystemInstance): SystemInstance;
 declare function disableSystem(system: SystemInstance): SystemInstance;
 declare function isSystemEnabled(system: SystemInstance): boolean;
@@ -126,9 +131,9 @@ interface WorldSpec {
 interface World {
     spec: Readonly<WorldSpec>;
     id: string;
-    archetypes: Record<string, Archetype>;
+    archetypes: Map<number, Archetype>;
     components: ComponentInstance<unknown>[];
-    entities: Archetype[];
+    entities: EntityArray;
     queries: Map<Query, QueryInstance>;
     systems: SystemInstance[];
 }
@@ -142,19 +147,23 @@ declare function createWorld(spec?: Partial<WorldSpec>): World;
 
 /** Entities are indexes */
 declare type Entity = number;
+/** An array containing the index of each entity's archetype, or their state */
+declare type EntityArray = Int16Array & {
+    available: number[];
+};
 /**
  * Create an entity in the world
  * @param world the world to create the entity in
- * @returns the entity
+ * @returns the entity or `undefined` if the world has no available entities
  */
-declare function createEntity(world: World): Promise<Entity>;
+declare function createEntity(world: World): Entity | undefined;
 /**
  * Remove an entity from the world and destroy any component data associated
  * @param world the world the entity is associated with
  * @param entity the entity to destroy
  * @returns the world
  */
-declare function destroyEntity(world: World, entity: Entity): Promise<World>;
+declare function destroyEntity(world: World, entity: Entity): boolean;
 
 /** Check if a string is a valid property name */
 declare function isValidName(str: string): boolean;
@@ -208,6 +217,7 @@ interface DataSpec<T, D> {
 }
 declare type DataArray<D> = Array<D> | TypedArray;
 interface DataArrayMethods<T, D> {
+    [VALID_SCHEMA_KEY]: true;
     /** Get an entity's data from a component's datastore */
     getProp: (entity: Entity) => D | undefined;
     /** Validate and set data for entity in component storage */
@@ -252,6 +262,7 @@ interface ComponentSpec<T> {
 }
 /** Components are the base component context */
 interface Component<T> extends ComponentSpec<T> {
+    [VALID_COMPONENT_KEY]: true;
     /** Register of instances of this component */
     instances: ComponentInstance<T>[];
 }
@@ -263,6 +274,8 @@ declare type ComponentInstance<T> = Component<T> & {
 } & {
     [K in keyof T]: DataStore<T[K], unknown>;
 };
+/** Component type guard */
+declare function isValidComponent<T>(component: unknown): component is Component<T>;
 /**
  * Create a new component.
  * Takes a `ComponentSpec` and produces a `Component`.
@@ -279,14 +292,14 @@ declare function createComponent<T>(spec: ComponentSpec<T>): Component<T>;
  * @param component the component to register in the world.
  * @returns the registered component instance.
  */
-declare function registerComponent<T>(world: World, component: Component<T>): Promise<ComponentInstance<T>>;
+declare function registerComponent<T>(world: World, component: Component<T>): ComponentInstance<T>;
 /**
  * Remove a component from the world.
  * Takes a `ComponentInstance` an unregisters it from its `World`.
  * @param component the component instance to unregister.
  * @returns the world object.
  */
-declare function unregisterComponent<T>(component: ComponentInstance<T>): Promise<World>;
+declare function unregisterComponent<T>(component: ComponentInstance<T>): World;
 /**
  * Gives a component to an entity.
  * @param component the component instance to add to the entity
@@ -294,14 +307,14 @@ declare function unregisterComponent<T>(component: ComponentInstance<T>): Promis
  * @param properties optional initial properties to set
  * @returns the component instance
  */
-declare function addComponentToEntity<T>(component: ComponentInstance<T>, entity: Entity, properties?: T): Promise<ComponentInstance<T>>;
+declare function addComponentToEntity<T>(component: ComponentInstance<T>, entity: Entity, properties?: T): ComponentInstance<T>;
 /**
  * Removes a component from an entity, deleting its properties
  * @param component the component instance to remove
  * @param entity the entity to remove the component from
  * @returns the component instance
  */
-declare function removeComponentFromEntity<T>(component: ComponentInstance<T>, entity: Entity): Promise<ComponentInstance<T>>;
+declare function removeComponentFromEntity<T>(component: ComponentInstance<T>, entity: Entity): ComponentInstance<T>;
 
 /** Call all enabled system's pre functions */
 declare function runPreSystems(world: World): void;
@@ -377,4 +390,4 @@ declare const object: ObjectStore<object>;
 /** String data storage */
 declare const string: StringStore;
 
-export { AnyStore, ArrayStore, BigUintStore, BigintStore, BooleanStore, ClampedUint8Store, Float32Store, Float64Store, FunctionStore, Int16Store, Int32Store, Int8Store, NumberStore, ObjectStore, StringStore, Uint16Store, Uint32Store, Uint8Store, addComponentToEntity, any, array, boolean, createComponent, createEntity, createQuery, createSystem, createWorld, defineDataStore, destroyEntity, disableSystem, enableSystem, f32, f64, fnc, getDataFromStore, i16, i32, i64, i8, initToZero, isSystemEnabled, isValidName, isValidSchema, number, numberGuard, object, registerComponent, registerSystem, removeComponentFromEntity, runPostSystems, runPreSystems, runUpdateSystems, setDataInStore, string, ui16, ui32, ui64, ui8, ui8c, unregisterComponent, unregisterSystem };
+export { AnyStore, ArrayStore, BigUintStore, BigintStore, BooleanStore, ClampedUint8Store, Float32Store, Float64Store, FunctionStore, Int16Store, Int32Store, Int8Store, NumberStore, ObjectStore, StringStore, Uint16Store, Uint32Store, Uint8Store, addComponentToEntity, any, array, boolean, createComponent, createEntity, createQuery, createSystem, createWorld, defineDataStore, destroyEntity, disableSystem, enableSystem, f32, f64, fnc, getDataFromStore, i16, i32, i64, i8, initToZero, isSystemEnabled, isValidComponent, isValidName, isValidSchema, number, numberGuard, object, registerComponent, registerSystem, removeComponentFromEntity, runPostSystems, runPreSystems, runUpdateSystems, setDataInStore, string, ui16, ui32, ui64, ui8, ui8c, unregisterComponent, unregisterSystem };
