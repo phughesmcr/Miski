@@ -2,10 +2,9 @@
   "name": "miski",
   "version": "0.6.0",
   "description": "A simple ECS architecture in Typescript",
-  "main": "dist/cjs/index.min.js",
-  "module": "dist/esm/index.min.js",
-  "browser": "dist/iife/index.min.js",
-  "types": "dist/cjs/index.d.ts",
+  "main": "dist/miski.min.js",
+  "module": "dist/miski.min.js",
+  "types": "dist/miski.min.d.ts",
   "type": "module",
   "directories": {
     "dist": "dist",
@@ -13,20 +12,10 @@
     "test": "test"
   },
   "exports": {
-    "require": "./dist/umd/index.min.js",
-    "import": "./dist/esm/index.min.js",
-    "node": "./dist/cjs/index.min.js",
-    "browser": "./dist/iife/index.min.js"
+    "import": "./dist/miski.min.js",
+    "types": "./dist/esm/miski.min.d.ts"
   },
   "devDependencies": {
-    "@babel/cli": "^7.14.8",
-    "@babel/core": "^7.14.8",
-    "@babel/plugin-proposal-class-properties": "^7.14.5",
-    "@babel/plugin-proposal-object-rest-spread": "^7.14.7",
-    "@babel/plugin-syntax-bigint": "^7.8.3",
-    "@babel/preset-env": "^7.14.8",
-    "@babel/preset-typescript": "^7.14.5",
-    "@rollup/plugin-babel": "^5.3.0",
     "@rollup/plugin-commonjs": "^21.0.1",
     "@rollup/plugin-node-resolve": "^13.0.4",
     "@rollup/plugin-typescript": "^8.2.4",
@@ -56,7 +45,6 @@
   },
   "scripts": {
     "prebuild": "npm run clean && npm run lint:fix",
-    "dev": "npm run clean && npm run build:types && rollup -c ./rollup.config.dev.js && npm run clean:post",
     "build": "npm run build:types && rollup -c ./rollup.config.js",
     "postbuild": "npm run build:docs && npm run clean:post",
     "build:docs": "npx typedoc src/index.ts --out docs",
@@ -69,8 +57,6 @@
     "lint:fix": "eslint --fix \"./src/**/*.ts\"",
     "test": "mocha",
     "check:types": "tsc --noEmit",
-    "check:es5": "npx es-check es5 ./dist/iife/*.js --verbose",
-    "check:es3": "npx es-check es3 ./dist/iife/*.js --verbose",
     "gh-pages": "gh-pages --dist=./demo --dotfiles=true"
   },
   "repository": {
@@ -93,8 +79,5 @@
   "bugs": {
     "url": "https://github.com/phughesmcr/Miski/issues"
   },
-  "homepage": "https://github.com/phughesmcr/Miski",
-  "dependencies": {
-    "core-js": "^3.16.0"
-  }
+  "homepage": "https://github.com/phughesmcr/Miski"
 }
