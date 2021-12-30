@@ -38,7 +38,7 @@ export default [
         exclude: [ "node_modules", "*.d.ts", "**/*.d.ts" ],
         include: [ "*.ts+(|x)", "**/*.ts+(|x)", "*.m?js+(|x)", "**/*.m?js+(|x)" ],
         module: "ES2020",
-        tsconfig: "tsconfig.dev.json",
+        tsconfig: "tsconfig.json",
         tslib: require("tslib"),
         typescript: require("typescript"),
       }),
