@@ -2,21 +2,25 @@
   "root": true,
   "parser": "@typescript-eslint/parser",
   "parserOptions": {
-    "ecmaVersion": 2020,
+    "ecmaVersion": 2021,
+    "ecmaFeatures": {
+      "modules": true
+    },
     "sourceType": "module",
     "project": "./tsconfig.json"
   },
   "plugins": [
+    "prettier",
     "@typescript-eslint"
   ],
   "extends": [
     "eslint:recommended",
-    "plugin:prettier/recommended",
     "plugin:@typescript-eslint/recommended",
-    "plugin:@typescript-eslint/recommended-requiring-type-checking"
+    "plugin:@typescript-eslint/recommended-requiring-type-checking",
+    "plugin:prettier/recommended"
   ],
   "env": {
-    "es2020": true,
+    "es2021": true,
     "node": true,
     "browser": true
   }
