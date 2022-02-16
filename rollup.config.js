@@ -8,7 +8,8 @@ import dts from "rollup-plugin-dts";
 import { terser } from "rollup-plugin-terser";
 import * as pkg from "./package.json";
 
-const bannerText = `/*! Miski v${pkg.version}. MIT license. (C) 2021 P. Hughes<github@phugh.es>(https://www.phugh.es). All rights reserved. **/\n`;
+const CURRENT_YEAR = new Date().getFullYear();
+const bannerText = `/*! Miski v${pkg.version}. MIT license. (C) 2021-${CURRENT_YEAR} P. Hughes<github@phugh.es>(https://www.phugh.es). All rights reserved. **/\n`;
 const extensions = [...DEFAULT_EXTENSIONS, ".ts", ".tsx"];
 const external = [...Object.keys(pkg.dependencies || {}), ...Object.keys(pkg.peerDependencies || {})];
 const globals = {};
