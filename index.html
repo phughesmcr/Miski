@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Miski - Typescript Entity Component System (ECS)</title>
+    <meta name="description" content="An open source, ECS for your Javascript projects." />
+    <meta name="theme-color" content="#1ddfec" />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🍬</text></svg>">
+    <style>
+      :root {
+        font-size: 18px;
+        font-family: Arial, Helvetica, sans-serif;
+      }
+      *,
+        *::before,
+        *::after {
+            box-sizing: inherit;
+        }
+        *:focus {
+            outline: 2px solid #fff;
+            outline-offset: 1px;
+        }
+        *:focus:not(:focus-visible),
+        *::before:focus:not(:focus-visible),
+        *::after:focus:not(:focus-visible) {
+            outline: none;
+        }
+        a {
+            color: #fff347;
+        }
+        a:hover {
+            color: #ecf0c8;
+            transition: 0.7s;
+        }
+        html {
+            height: 100%;
+            width: 100%;
+        }
+        html, body {
+            box-sizing: border-box;
+        }
+        body {
+            margin: 0;
+            padding: 1rem;
+            background-color: #1b365d;
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-self: center;
+            align-items: center;
+            flex-wrap: nowrap;
+            align-content: center;
+        }
+        h1 {
+            font-size: 2em;
+            margin-top: 0;
+            margin-bottom: 0.2em;
+        }
+        h2 {
+            font-size: 1.25em;
+            margin-top: 1.33rem;
+            margin-bottom: 0.5em;
+        }
+        main {
+            text-rendering: optimizeLegibility;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            max-width: 80ch;
+            margin: 1rem;
+        }
+        ul {
+          line-height: 2em;
+        }
+        .center {
+          justify-content: center;
+          text-align: center;
+          width: 100%;
+        }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="center">
+        <h1 class="center">🍬<br/>Miski</h1>
+        <p>An archetypal entity-component-system (ECS) architecture written in Typescript.</p>
+        <img src="https://badgen.net/badge/license/MIT/blue" alt="MIT License" />
+        <img src="https://badgen.net/badge/icon/typescript?icon=typescript&label">
+        <hr />
+      </div>
+      <h2>Downloads</h2>
+      <ul>
+        <li>
+          <a href="https://www.npmjs.com/package/miski" target="_blank" rel="noopener noreferrer>"
+            >📦 NPM - Node package</a
+          >
+        </li>
+        <li>
+          <a
+            href="https://gitcdn.link/repo/phughesmcr/Miski/master/dist/miski.min.js"
+            target="_blank"
+            rel="noopener noreferrer>"
+            >🔗 CDN - Minified Javascript module (.min.js)</a
+          >
+        </li>
+        <li>
+          <a href="https://github.com/phughesmcr/Miski" target="_blank" rel="noopener noreferrer>"
+            >💾 Github - Source code</a
+          >
+        </li>
+      </ul>
+      <h2>Documentation</h2>
+      <ul>
+        <li>
+          <a href="docs/index.html" target="_blank" rel="noopener noreferrer>">📚 Docs - Typedoc documentation</a>
+        </li>
+        <li><a href="README.md" target="_blank" rel="noopener noreferrer>">📘 README.md - Quick-start guide</a></li>
+        <li><a href="LICENSE" target="_blank" rel="noopener noreferrer>">⚖ License - MIT license</a></li>
+      </ul>
+      <h2>Demos</h2>
+      <ul>
+        <li><a href="demo/boxes/index.html" target="_blank" rel="noopener noreferrer>">⏹️ - Boxes: A simple canvas 2d demo</a></li>
+      </ul>
+      <div class="center">
+        <small>MIT License - &copy; P. Hughes 2022. All rights reserved.</small>
+      </div>
+    </main>
+  </body>
+</html>

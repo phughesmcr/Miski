@@ -57,7 +57,7 @@
     "lint:fix": "eslint --fix \"./src/**/*.ts\"",
     "test": "mocha",
     "check:types": "tsc --noEmit",
-    "gh-pages": "gh-pages --dist=./demo --dotfiles=true"
+    "gh-pages": "gh-pages --dist=./ --dotfiles=true"
   },
   "repository": {
     "type": "git",

@@ -25,3 +25,4 @@ rollup.config.js
 tsconfig.dev.json
 tsconfig.json
 tsconfig.testing.json
+index.html
