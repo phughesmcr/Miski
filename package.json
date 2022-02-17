@@ -1,7 +1,6 @@
 {
   "name": "miski",
-  "version": "0.6.0",
-  "description": "A simple ECS architecture in Typescript",
+  "description": "An ECS architecture in Typescript",
   "main": "dist/miski.min.js",
   "module": "dist/miski.min.js",
   "types": "dist/miski.min.d.ts",
@@ -68,7 +67,11 @@
     "entity-component-system",
     "entity",
     "component",
-    "system"
+    "system",
+    "simulation",
+    "sim",
+    "gamedev",
+    "game engine"
   ],
   "author": {
     "name": "Peter Hughes",
