@@ -57,11 +57,11 @@
     "lint:fix": "eslint --fix \"./src/**/*.ts\"",
     "test": "mocha",
     "check:types": "tsc --noEmit",
-    "gh-pages": "gh-pages --dist=./ --dotfiles=true"
+    "gh-pages": "gh-pages --dist=./ --branch=master --dotfiles=true"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/phughesmcr/Miski"
+    "url": "git+https://github.com/phughesmcr/Miski.git"
   },
   "keywords": [
     "ecs",
@@ -74,11 +74,7 @@
     "gamedev",
     "game engine"
   ],
-  "author": {
-    "name": "Peter Hughes",
-    "email": "peter@phugh.es",
-    "url": "https://www.phugh.es"
-  },
+  "author": "Peter Hughes <peter@phugh.es> (https://www.phugh.es)",
   "license": "MIT",
   "bugs": {
     "url": "https://github.com/phughesmcr/Miski/issues"
