@@ -1,6 +1,36 @@
-.vscode/
+# Intermediate build steps / generated files
 build/
-node_modules/
 types/
+
+# API keys and secrets
 .env
+
+# Node/NPM directories
+node_modules/
+npm-debug.log
 package-lock.json
+
+# OS metadata
+.DS_Store
+Thumbs.db
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Stores VSCode versions used for testing VSCode extensions
+.vscode-test
+
+# SvelteKit build / generate output
+.svelte-kit

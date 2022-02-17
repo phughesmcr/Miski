@@ -1,95 +1,10 @@
-"use strict";
+/* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
-import { ComponentInstance } from "./component.js";
-import { Bitmask, createBitmask, setBitOn } from "./mask.js";
-import { World } from "./world.js";
+import { FORBIDDEN_NAMES, MAX_UINT32, VALID_NAME_PATTERN } from "./constants.js";
 
-/**
- * Create a new bitmask from a set of component IDs
- * @param world the world to associate this mask with
- * @param components components to create a mask from
- * @returns a new bitmask
- */
-export function createBitmaskFromComponents(world: World, ...components: ComponentInstance<unknown>[]): Bitmask {
-  const mask = createBitmask(world.spec.maxComponents || 32);
-  if (!components.length) return mask;
-  for (let i = 0, n = components.length; i < n; i++) {
-    const component = components[i];
-    if (component.world.id !== world.id) {
-      throw new Error("Components are not from the same world.");
-    }
-    setBitOn(mask, component.id);
-  }
-  return mask;
-}
-
-/** indexOf allowing for sparse arrays */
-export function indexOf<T>(arr: ArrayLike<T>, item: T): number {
-  for (let i = 0, len = arr.length; i != len; i++) {
-    if (arr[i] === item) return i;
-  }
-  return -1;
-}
-
-/** Garbage free splice */
-export function spliceOne<T>(arr: T[], index: number): T[] {
-  const length = arr.length;
-  if (!length) return arr;
-  while (index < length) {
-    arr[index] = arr[index + 1];
-    index++;
-  }
-  arr.length = arr.length - 1;
-  return arr;
-}
-
-/** Test if an object is a valid Record  */
-export function isObject(object: unknown): object is Record<string, unknown> {
-  return Boolean(typeof object === "object" && !Array.isArray(object));
-}
-
-/** An empty function for use in Systems */
-export function systemNoop(_: number[]): void {
-  return void _;
-}
-
-const _validName = /^(?![0-9])[a-zA-Z0-9$_]+$/;
-
-/** Check if a string is a valid property name */
-export function isValidName(str: string): boolean {
-  if (typeof str !== "string") return false;
-  str = str.trim();
-  return str.length > 0 && _validName.test(str) && !FORBIDDEN_NAMES.has(str);
-}
-
-/** An array of strings that cannot be used for component or system names */
-export const FORBIDDEN_NAMES = new Set([
-  // component properties
-  "entities",
-  "id",
-  "instances",
-  "name",
-  "schema",
-  "world",
-  // object properties
-  "constructor",
-  "hasOwnProperty",
-  "isPrototypeOf",
-  "propertyIsEnumerable",
-  "prototype",
-  "toLocaleString",
-  "toString",
-  "valueOf",
-  "__defineGetter__",
-  "__defineSetter__",
-  "__lookupGetter__",
-  "__lookupGetter__",
-  "__proto__",
-]);
-
-export interface Constructable<T> {
-  new (...args: unknown[]): T;
-  constructor: (...args: unknown[]) => T;
+/** @returns `true` if n is a number, >= 0, <= 2^32 - 1 */
+export function isUint32(n: number): n is number {
+  return !isNaN(n) && n >= 0 && n <= MAX_UINT32;
 }
 
 /** Test if an object is a typed array and not a dataview */
@@ -97,6 +12,7 @@ export function isTypedArray(object: unknown): object is TypedArrayConstructor {
   return Boolean(ArrayBuffer.isView(object) && !(object instanceof DataView));
 }
 
+/** All the various kinds of typed arrays */
 export type TypedArray =
   | Int8Array
   | Uint8Array
@@ -110,6 +26,7 @@ export type TypedArray =
   | BigInt64Array
   | BigUint64Array;
 
+/** All the various kinds of typed array constructors */
 export type TypedArrayConstructor =
   | Int8ArrayConstructor
   | Uint8ArrayConstructor
@@ -122,3 +39,27 @@ export type TypedArrayConstructor =
   | Float64ArrayConstructor
   | BigInt64ArrayConstructor
   | BigUint64ArrayConstructor;
+
+/** @returns `true` if the given string is an valid name / label */
+export function isValidName(str: string): boolean {
+  return Boolean(
+    (typeof str === "string" && str.length > 0 && VALID_NAME_PATTERN.test(str) === true) ||
+      !FORBIDDEN_NAMES.includes(str),
+  );
+}
+
+/** Test if an object is a valid Record  */
+export function isObject(object: unknown): object is Record<string, unknown> {
+  return Boolean(typeof object === "object" && !Array.isArray(object));
+}
+
+/** An empty function for use in Systems */
+export function noop(): void {
+  return void 0;
+}
+
+/** */
+export const pipe =
+  <T, U>(...fns: ((arg: T) => T)[]) =>
+  (value: T) =>
+    fns.reduce((acc, fn) => fn(acc), value) as unknown as U;

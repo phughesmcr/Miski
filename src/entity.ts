@@ -1,66 +1,84 @@
-"use strict";
+/* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
-import { EntityState } from "./constants.js";
-import { updateEntityArchetype } from "./archetype.js";
-import { World } from "./world.js";
-import { removeComponentFromEntity } from "component.js";
+import { Archetype } from "./archetype/archetype.js";
+import { isUint32 } from "./utils.js";
 
-/** Entities are indexes */
+/** Entities are indexes of an EntityArray */
 export type Entity = number;
 
-/** An array containing the index of each entity's archetype, or their state */
-export type EntityArray = Int16Array & { available: number[] };
+export interface EntityManagerSpec {
+  availableEntities: Entity[];
+  entityArchetypes: Archetype[];
+  entityCapacity: number;
+}
 
-/**
- * Creates the storage mechanism for the Entity Archetype array
- * @param world the world to create the EntityArray for
- * @returns the created EntityArray
- */
-export function createEntityArray(length: number): EntityArray {
-  if (isNaN(length)) throw new TypeError("Array length must be a number.");
-  const entities = new Int16Array(length).fill(EntityState.DESTROYED);
-  const total = length - 1;
-  const available = Array.from({ length }, (_, i) => total - i);
-  return Object.assign(entities, { available });
+export interface EntityManager {
+  createEntity: () => Entity | undefined;
+  destroyEntity: (entity: Entity) => boolean;
+  getEntityArchetype: (entity: Entity) => Archetype | undefined;
+  hasEntity: (entity: Entity) => boolean;
+  setEntityArchetype: (entity: Entity, archetype: Archetype) => boolean;
 }
 
 /**
- * Create an entity in the world
- * @param world the world to create the entity in
- * @returns the entity or `undefined` if the world has no available entities
+ *
+ * @param capacity
+ * @returns
  */
-export function createEntity(world: World): Entity | undefined {
-  if (!world) throw new SyntaxError("Entity creation requires a World object.");
-  const idx = world.entities.available.pop();
-  if (idx === undefined) return undefined;
-  world.entities[idx] = EntityState.EMPTY;
-  updateEntityArchetype(world, idx);
-  return idx;
+function entityValidator(capacity: number): (entity: Entity) => entity is Entity {
+  /** @return `true` if the given entity is valid for the given capacity */
+  return function isValidEntity(entity: number): entity is Entity {
+    if (!isUint32(entity) || entity > capacity) return false;
+    return true;
+  };
 }
 
-/**
- * Remove an entity from the world and destroy any component data associated
- * @param world the world the entity is associated with
- * @param entity the entity to destroy
- * @returns the world
- */
-export function destroyEntity(world: World, entity: Entity): boolean {
-  if (!world) throw new SyntaxError("Entity destruction requires a World object.");
-  if (isNaN(entity)) throw new SyntaxError("Invalid or undefined entity provided.");
-  const { components, entities, spec } = world;
-  const { available } = entities;
-  const { maxEntities } = spec;
-  if (entity < 0 || entity > maxEntities) throw new Error("Entity is out of range.");
-  if (available.includes(entity)) return false;
-  for (let i = 0, n = components.length; i < n; i++) {
-    const component = components[i];
-    if (!component) continue;
-    if (component.entities.has(entity)) {
-      removeComponentFromEntity(component, entity);
-    }
-  }
-  updateEntityArchetype(world, entity);
-  available.push(entity);
-  entities[entity] = EntityState.DESTROYED;
-  return true;
+/** Manages the creation, destruction and recycling of entities */
+export function createEntityManager(spec: EntityManagerSpec): Readonly<EntityManager> {
+  if (!spec) throw new SyntaxError("EntityManager creation requires a spec object.");
+  const { availableEntities, entityArchetypes, entityCapacity } = spec;
+  const isValidEntity = entityValidator(entityCapacity);
+
+  return Object.freeze({
+    /** @returns the next available Entity or `undefined` if no Entity is available */
+    createEntity(): Entity | undefined {
+      return availableEntities.pop();
+    },
+
+    /**
+     * Remove and recycle an Entity
+     * @returns `true` if there was an archetype change
+     */
+    destroyEntity(entity: Entity): boolean {
+      if (isValidEntity(entity) && entityArchetypes[entity] != undefined) {
+        const a = entityArchetypes[entity];
+        if (a) a.removeEntity(entity);
+        availableEntities.push(entity);
+        delete entityArchetypes[entity];
+        return true;
+      } else {
+        delete entityArchetypes[entity]; // just in case
+        return false;
+      }
+    },
+
+    /** @returns the Entity's Archetype or undefined if Entity is not alive */
+    getEntityArchetype(entity: Entity): Archetype | undefined {
+      return entityArchetypes[entity];
+    },
+
+    /** @return `true` if the Entity !== undefined */
+    hasEntity(entity: Entity): boolean {
+      return isValidEntity(entity) && entityArchetypes[entity] !== undefined;
+    },
+
+    /** @returns `true` if the Archetype was changed successfully */
+    setEntityArchetype(entity: Entity, archetype: Archetype): boolean {
+      if (isValidEntity(entity)) {
+        entityArchetypes[entity] = archetype;
+        return true;
+      }
+      return false;
+    },
+  });
 }

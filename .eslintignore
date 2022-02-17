@@ -1,12 +1,2 @@
-.github/
-.vscode/
-build/
-demo/
-dist/
-docs/
-node_modules/
-test/
-types/
-babel.config.json
-rollup.config.js
-rollup.config.dev.js
+/*
+!/src

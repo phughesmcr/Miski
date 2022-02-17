@@ -1,9 +1,10 @@
 *                 text=auto eol=lf
 
-dist/*            linguist-generated=true
-src/vendor/*      linguist-generated=true
 demo/*            linguist-documentation=true
+dist/*            linguist-generated=true
 docs/*            linguist-documentation=true
+src/vendor/*      linguist-generated=true
+index.html        linguist-generated=true
 
 *.css             text
 *.htm             text diff=html
@@ -16,7 +17,7 @@ docs/*            linguist-documentation=true
 *.sass            text
 *.scm             text
 *.scss            text diff=css
-*.sh              text eol=lf
+*.sh              text
 *.sql             text
 *.ts              text
 *.tsx             text

@@ -1,19 +1,43 @@
-/**
- * The EntityArray contains either these states or archetypes.
- * States must be negative numbers as positive numbers are
- * the index of the entity's archetype in world.archetypes.
- */
-export const enum EntityState {
-  /** Empty but in-use */
-  EMPTY = -1,
-  /** Empty and out-of-use */
-  DESTROYED = -2,
-}
+/* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
-export const DEFAULT_MAX_COMPONENTS = 128;
+import * as pkg from "../package.json";
 
-export const DEFAULT_MAX_ENTITIES = 10_000;
+/** Miski version */
+export const VERSION: string = pkg.version;
 
-export const VALID_COMPONENT_KEY = Symbol();
+/** Default maximum entities value */
+export const DEFAULT_MAX_ENTITIES = 1_000_000;
 
-export const VALID_SCHEMA_KEY = Symbol();
+/** Maximum 32-bit integer (2^32 - 1) */
+export const MAX_UINT32 = 4_294_967_295;
+
+/** An array of strings that cannot be used for component or schema property names */
+export const FORBIDDEN_NAMES = Object.freeze([
+  // component properties
+  "component",
+  "id",
+  "isTag",
+  "name",
+  "schema",
+  "size",
+  // object properties
+  "constructor",
+  "hasOwnProperty",
+  "isPrototypeOf",
+  "propertyIsEnumerable",
+  "prototype",
+  "toLocaleString",
+  "toString",
+  "valueOf",
+  "__defineGetter__",
+  "__defineSetter__",
+  "__lookupGetter__",
+  "__lookupGetter__",
+  "__proto__",
+]);
+
+/** Valid string name characters */
+export const VALID_NAME_PATTERN = /^(?![0-9])[a-zA-Z0-9$_]+$/;
+
+/** The number 8 - to avoid magic numbers */
+export const ONE_BYTE = 8;
