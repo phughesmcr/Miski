@@ -55,7 +55,7 @@ Because Miski is designed to be used inside other projects, we'll let those devs
 The javascript module `miski.min.js` is found in the `./dist` folder, along with a sourcemap file and typescript definitions `.d.ts` file.
 
 ```javascript
-import { createComponent, createQuery, createWorld } from './miski.min.js';
+import { createComponent, createQuery, createSystem, createWorld } from './miski.min.js';
 ```
 
 See [API Reference](#api-reference) below for a complete list of named exports.
@@ -71,6 +71,9 @@ createComponent: <T extends Schema<T>>(spec: ComponentSpec<T>) => Component<T>;
 🔎 Queries
 createQuery: (spec: QuerySpec) => Query;
   query.getResult: (world: World) => [Entity[], ComponentRecord];
+
+🔃 Systems
+createSystem: <T, U>(system: System<T, U>) => (world: World) => (...args: U) => ReturnType<T>;
 
 🌍 World
 createWorld: (spec: WorldSpec) => World;

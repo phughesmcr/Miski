@@ -63,3 +63,6 @@ export const pipe =
   <T, U>(...fns: ((arg: T) => T)[]) =>
   (value: T) =>
     fns.reduce((acc, fn) => fn(acc), value) as unknown as U;
+
+/** @author https://stackoverflow.com/a/67605309 */
+export type ParametersExceptFirst<F> = F extends (arg0: any, ...rest: infer R) => any ? R : never;

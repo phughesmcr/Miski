@@ -15,6 +15,7 @@
 
 export { createComponent } from "./component/component.js";
 export { createQuery } from "./query/query.js";
+export { createSystem } from "./system.js";
 export { createWorld } from "./world.js";
 
 export type { Archetype } from "./archetype/archetype.js";
@@ -24,5 +25,6 @@ export type { Bitfield } from "./bitfield.js";
 export type { Query, QuerySpec } from "./query/query.js";
 export type { QueryInstance } from "./query/instance.js";
 export type { Schema, SchemaProps } from "./component/schema.js";
+export type { System } from "./system.js";
 export type { TypedArrayConstructor } from "./utils.js";
 export type { World, WorldSpec } from "./world.js";
