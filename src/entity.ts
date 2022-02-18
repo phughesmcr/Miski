@@ -9,7 +9,7 @@ export type Entity = number;
 export interface EntityManagerSpec {
   availableEntities: Entity[];
   entityArchetypes: Archetype[];
-  entityCapacity: number;
+  capacity: number;
 }
 
 export interface EntityManager {
@@ -36,8 +36,8 @@ function entityValidator(capacity: number): (entity: Entity) => entity is Entity
 /** Manages the creation, destruction and recycling of entities */
 export function createEntityManager(spec: EntityManagerSpec): Readonly<EntityManager> {
   if (!spec) throw new SyntaxError("EntityManager creation requires a spec object.");
-  const { availableEntities, entityArchetypes, entityCapacity } = spec;
-  const isValidEntity = entityValidator(entityCapacity);
+  const { availableEntities, entityArchetypes, capacity } = spec;
+  const isValidEntity = entityValidator(capacity);
 
   return Object.freeze({
     /** @returns the next available Entity or `undefined` if no Entity is available */

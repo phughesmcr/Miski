@@ -16,7 +16,7 @@ export interface ComponentManager {
 
 export interface ComponentManagerSpec {
   components: Component<unknown>[];
-  entityCapacity: number;
+  capacity: number;
   getEntityArchetype: (entity: Entity) => Archetype | undefined;
   updateArchetype: <T>(entity: Entity, component: ComponentInstance<T>) => Archetype;
 }
@@ -50,12 +50,12 @@ function instantiateComponents(spec: {
  * @param spec.components
  */
 export function createComponentManager(spec: ComponentManagerSpec): Readonly<ComponentManager> {
-  const { components, entityCapacity, getEntityArchetype, updateArchetype } = spec;
+  const { components, capacity, getEntityArchetype, updateArchetype } = spec;
 
   /** { component_name: ComponentInstance } */
   const instances = (() => {
-    const buffer = createComponentBuffer({ entityCapacity, components });
-    const partitioner = createComponentBufferPartitioner({ buffer, entityCapacity });
+    const buffer = createComponentBuffer({ capacity, components });
+    const partitioner = createComponentBufferPartitioner({ buffer, capacity });
     return instantiateComponents({ components, partitioner });
   })();
 

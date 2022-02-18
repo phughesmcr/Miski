@@ -78,7 +78,7 @@ createWorld: (spec: WorldSpec) => World;
 
   ❓ World info
   world.capacity: number; // Maximum number of Entities
-  world.vacancies: number; // Number of available (i.e., unused) Entities
+  world.getVacancyCount: () => number; // Number of available (i.e., unused) Entities
   world.version: string; // Miski build version
 
   👾 World Entity methods // ('Entity' is just a type alias for 'number')

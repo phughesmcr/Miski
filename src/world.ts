@@ -18,7 +18,7 @@ export interface WorldSpec {
   /** Components to instantiate in the world  */
   components: Component<unknown>[];
   /** The maximum number of entities allowed in the world */
-  entityCapacity: number;
+  capacity: number;
 }
 
 export interface WorldProto {
@@ -26,13 +26,13 @@ export interface WorldProto {
 }
 
 export interface World extends WorldProto {
-  capacity: number;
-  vacancies: number;
+  readonly capacity: number;
   createEntity: () => number | undefined;
   destroyEntity: (entity: Entity) => boolean;
   getComponentInstance: <T>(component: Component<T> | string) => ComponentInstance<T> | undefined;
   getEntityArchetype: (entity: number) => Archetype | undefined;
   getQueryResult: (query: Query) => [Entity[], ComponentRecord];
+  getVacancyCount: () => number;
   hasEntity: (entity: number) => boolean;
   addComponentToEntity: <T>(component: Component<T>, entity: number, props?: SchemaProps<T> | undefined) => boolean;
   entityHasComponent: <T>(component: Component<T>, entity: number) => boolean;
@@ -47,10 +47,10 @@ export const WORLD_PROTO: WorldProto = Object.freeze({
 
 function validateWorldSpec(spec: WorldSpec): Required<WorldSpec> {
   if (!spec) throw new SyntaxError("World creation requires a specification object.");
-  const { components = [], entityCapacity = DEFAULT_MAX_ENTITIES } = spec;
-  if (!isUint32(entityCapacity)) throw new SyntaxError("World creation: spec.entityCapacity invalid.");
+  const { components = [], capacity = DEFAULT_MAX_ENTITIES } = spec;
+  if (!isUint32(capacity)) throw new SyntaxError("World creation: spec.capacity invalid.");
   if (!components.length) throw new SyntaxError("World creation: spec.components invalid.");
-  return { components, entityCapacity };
+  return { components, capacity };
 }
 
 function addBitfieldFactory({ capacity }: { capacity: number }) {
@@ -59,31 +59,31 @@ function addBitfieldFactory({ capacity }: { capacity: number }) {
   return { bitfieldFactory };
 }
 
-function addAvailableEntityArray({ entityCapacity }: { entityCapacity: number }) {
+function addAvailableEntityArray({ capacity }: { capacity: number }) {
   // @todo would this be better as a generator?
   const availableEntities: Entity[] = ((length: number) => {
     const total = length - 1;
     return Array.from({ length }, (_, i) => total - i);
-  })(entityCapacity);
+  })(capacity);
   return { availableEntities };
 }
 
-function addArchetypeArray({ entityCapacity }: { entityCapacity: number }) {
+function addArchetypeArray({ capacity }: { capacity: number }) {
   const entityArchetypes: Archetype[] = [];
-  entityArchetypes.length = entityCapacity; // @note V8 hack, quicker/smaller than new Array(capacity)
+  entityArchetypes.length = capacity; // @note V8 hack, quicker/smaller than new Array(capacity)
   return { entityArchetypes };
 }
 
 export function createWorld(spec: WorldSpec): Readonly<World> {
-  const { components, entityCapacity } = validateWorldSpec(spec);
-  const { availableEntities } = addAvailableEntityArray({ entityCapacity });
-  const { entityArchetypes } = addArchetypeArray({ entityCapacity });
+  const { components, capacity } = validateWorldSpec(spec);
+  const { availableEntities } = addAvailableEntityArray({ capacity });
+  const { entityArchetypes } = addArchetypeArray({ capacity });
   const { bitfieldFactory } = addBitfieldFactory({ capacity: components.length });
 
   const { createEntity, destroyEntity, getEntityArchetype, hasEntity, setEntityArchetype } = createEntityManager({
     availableEntities,
     entityArchetypes,
-    entityCapacity,
+    capacity,
   });
 
   const { archetypeMap, updateArchetype } = createArchetypeManager({
@@ -94,7 +94,7 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
 
   const { componentMap, addComponentToEntity, entityHasComponent, removeComponentFromEntity } = createComponentManager({
     components,
-    entityCapacity,
+    capacity,
     getEntityArchetype,
     updateArchetype,
   });
@@ -126,25 +126,24 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
     return [instance.getEntities(), instance.getComponents()];
   }
 
+  function getVacancyCount() {
+    return availableEntities.length;
+  }
+
   return Object.freeze(
     Object.assign(Object.create(WORLD_PROTO), {
+      capacity,
       createEntity,
       destroyEntity,
       getComponentInstance,
       getEntityArchetype,
       getQueryResult,
+      getVacancyCount,
       hasEntity,
       addComponentToEntity,
       entityHasComponent,
       removeComponentFromEntity,
       refresh,
-
-      get capacity(): number {
-        return entityCapacity;
-      },
-      get vacancies(): number {
-        return availableEntities.length;
-      },
     }) as World,
   );
 }
