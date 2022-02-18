@@ -40,7 +40,7 @@ function getInstancer<T>(state: Component<T>) {
  * @param spec.schema the component's optional schema object.
  * @returns A valid Component object - a reusable definitions for the creation of ComponentInstances
  */
-export function createComponent<T>(spec: ComponentSpec<T>): Component<T> {
+export function createComponent<T extends Schema<T>>(spec: ComponentSpec<T>): Component<T> {
   if (!spec) throw new SyntaxError("Component creation requires a specification object.");
   const { name, schema } = spec;
   if (!isValidName(name)) throw new SyntaxError("Component name is invalid.");
