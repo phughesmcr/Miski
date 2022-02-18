@@ -44,7 +44,7 @@ export interface World extends WorldData {
   addComponentToEntity: <T>(component: Component<T>, entity: number, props?: SchemaProps<T> | undefined) => boolean;
   entityHasComponent: <T>(component: Component<T>, entity: number) => boolean;
   removeComponentFromEntity: <T>(component: Component<T>, entity: number) => boolean;
-  refreshWorld: () => void;
+  refresh: () => void;
 }
 
 /** World.prototype - Miski version data etc. */
@@ -119,12 +119,12 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
     bitfieldFactory,
   }) as WorldData;
 
-  function refreshWorld() {
+  function refresh() {
     const archetypes = [...archetypeMap.values()];
     const refresh = (instance: QueryInstance) => instance.refresh(archetypes);
     queries.forEach(refresh);
   }
-  refreshWorld();
+  refresh();
 
   return Object.freeze(
     Object.assign(Object.create(world), {
@@ -135,7 +135,7 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
       addComponentToEntity,
       entityHasComponent,
       removeComponentFromEntity,
-      refreshWorld,
+      refresh,
     }) as World,
   );
 }

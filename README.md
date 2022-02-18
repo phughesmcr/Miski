@@ -90,7 +90,7 @@ createWorld: (spec: WorldSpec) => World;
   world.removeComponentFromEntity: <T>(component: Component<T>, entity: number) => boolean;
 
   🔧 World maintenance methods
-  world.refreshWorld: () => void;
+  world.refresh: () => void;
   world.version: string; // Miski build version
 ```
 
