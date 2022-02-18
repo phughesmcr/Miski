@@ -59,22 +59,12 @@ function createBitfieldFactory(capacity: number) {
   return bitfieldFactory;
 }
 
-function createArchetypeArray(capacity: number) {
-  const entityArchetypes: Archetype[] = [];
-  entityArchetypes.length = capacity; // @note V8 hack, quicker/smaller than new Array(capacity)
-  return entityArchetypes;
-}
-
 export function createWorld(spec: WorldSpec): Readonly<World> {
   const { components, capacity } = validateWorldSpec(spec);
-  const entityArchetypes = createArchetypeArray(capacity);
   const bitfieldFactory = createBitfieldFactory(components.length);
 
   const { createEntity, destroyEntity, getEntityArchetype, getVacancyCount, hasEntity, setEntityArchetype } =
-    createEntityManager({
-      entityArchetypes,
-      capacity,
-    });
+    createEntityManager({ capacity });
 
   const { archetypeMap, updateArchetype } = createArchetypeManager({
     bitfieldFactory,

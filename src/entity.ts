@@ -7,7 +7,6 @@ import { isUint32 } from "./utils.js";
 export type Entity = number;
 
 export interface EntityManagerSpec {
-  entityArchetypes: Archetype[];
   capacity: number;
 }
 
@@ -18,6 +17,12 @@ export interface EntityManager {
   getVacancyCount: () => number;
   hasEntity: (entity: Entity) => boolean;
   setEntityArchetype: (entity: Entity, archetype: Archetype) => boolean;
+}
+
+function createEntityArchetypeArray(capacity: number) {
+  const entityArchetypes: Archetype[] = [];
+  entityArchetypes.length = capacity; // @note V8 hack, quicker/smaller than new Array(capacity)
+  return entityArchetypes;
 }
 
 function createAvailableEntityArray(capacity: number): Entity[] {
@@ -44,8 +49,9 @@ function entityValidator(capacity: number): (entity: Entity) => entity is Entity
 /** Manages the creation, destruction and recycling of entities */
 export function createEntityManager(spec: EntityManagerSpec): Readonly<EntityManager> {
   if (!spec) throw new SyntaxError("EntityManager creation requires a spec object.");
-  const { entityArchetypes, capacity } = spec;
+  const { capacity } = spec;
 
+  const entityArchetypes = createEntityArchetypeArray(capacity);
   const availableEntities = createAvailableEntityArray(capacity);
   const isValidEntity = entityValidator(capacity);
 
