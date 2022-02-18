@@ -22,7 +22,7 @@ export interface WorldSpec {
 }
 
 export interface WorldProto {
-  version: string;
+  readonly version: string;
 }
 
 export interface WorldData extends WorldProto {
