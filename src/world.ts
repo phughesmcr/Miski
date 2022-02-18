@@ -26,6 +26,8 @@ export interface WorldProto {
 }
 
 export interface World extends WorldProto {
+  capacity: number;
+  vacancies: number;
   createEntity: () => number | undefined;
   destroyEntity: (entity: Entity) => boolean;
   getComponentInstance: <T>(component: Component<T> | string) => ComponentInstance<T> | undefined;
@@ -136,6 +138,13 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
       entityHasComponent,
       removeComponentFromEntity,
       refresh,
+
+      get capacity(): number {
+        return entityCapacity;
+      },
+      get vacancies(): number {
+        return availableEntities.length;
+      },
     }) as World,
   );
 }

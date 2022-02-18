@@ -76,6 +76,11 @@ createSystem: <T, U>(system: System<T, U>) => (world: World) => (...args: U) => 
 🌍 World
 createWorld: (spec: WorldSpec) => World;
 
+  ❓ World info
+  world.capacity: number; // Maximum number of Entities
+  world.vacancies: number; // Number of available (i.e., unused) Entities
+  world.version: string; // Miski build version
+
   👾 World Entity methods // ('Entity' is just a type alias for 'number')
   world.createEntity: () => number | undefined;
   world.destroyEntity: (entity: Entity) => boolean;
@@ -93,7 +98,6 @@ createWorld: (spec: WorldSpec) => World;
 
   🔧 World maintenance methods
   world.refresh: () => void;
-  world.version: string; // Miski build version
 ```
 
 ## Demos
