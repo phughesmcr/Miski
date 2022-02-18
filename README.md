@@ -1,6 +1,5 @@
 # 🍬 Miski ECS
 
-
 __Miski__: Quechuan adjective meaning "sweet".
 
 __ECS__: Entity-Component-System; A software architecture pattern.
@@ -9,10 +8,11 @@ __Miski ECS__: A sweet ECS architecture written in Typescript.
 
 ⚠️ Miski is currently in alpha. Expect breaking changes every version until beta.
 
-<a href="https://github.com/phughesmcr/miski/blob/master/LICENSE">
-  <img src="https://badgen.net/badge/license/MIT/blue" alt="MIT License" />
-</a>
-<img src="https://badgen.net/badge/icon/typescript?icon=typescript&label">
+<p align="left">
+  <img src="https://badgen.net/badge/icon/typescript?icon=typescript&label" alt="" />
+  <img src="https://badgen.net/badge/license/MIT/blue" alt="" />
+  <img src="https://img.shields.io/npm/v/miski.svg" alt="" />
+</p>
 
 ## Contents
   * [Purpose](#purpose)
@@ -64,13 +64,13 @@ See [API Reference](#api-reference) below for a complete list of named exports.
 This is the complete API:
 
 ```typescript
-🧩 Components // (T: schema)
+🧩 Components
 createComponent: <T extends Schema<T>>(spec: ComponentSpec<T>) => Component<T>;
 
 🔎 Queries
 createQuery: (spec: QuerySpec) => Query;
 
-🔃 Systems
+🔃 Systems // optional but helps with type safety
 createSystem: <T, U>(system: System<T, U>) => (world: World) => (...args: U) => ReturnType<T>;
 
 🌍 World
@@ -82,15 +82,15 @@ createWorld: (spec: WorldSpec) => World;
   world.version: string; // Miski build version
 
   👾 World Entity methods // ('Entity' is just a type alias for 'number')
-  world.createEntity: () => number | undefined;
+  world.createEntity: () => Entity | undefined;
   world.destroyEntity: (entity: Entity) => boolean;
-  world.hasEntity: (entity: number) => boolean;
-  world.getEntityArchetype: (entity: number) => Archetype | undefined;
+  world.hasEntity: (entity: Entity) => boolean;
+  world.getEntityArchetype: (entity: Entity) => Archetype | undefined;
   world.entityHasComponent: <T>(entity: Entity, component: Component<T>) => boolean;
 
   🧩 World Component methods
-  world.addComponentToEntity: <T>(component: Component<T>, entity: number, props?: SchemaProps<T> | undefined) => boolean;
-  world.removeComponentFromEntity: <T>(component: Component<T>, entity: number) => boolean;
+  world.addComponentToEntity: <T>(component: Component<T>, entity: Entity, props?: SchemaProps<T>) => boolean;
+  world.removeComponentFromEntity: <T>(component: Component<T>, entity: Entity) => boolean;
   world.getComponentInstance: <T>(component: Component<T> | string) => ComponentInstance<T> | undefined;
 
   🔎 World Query methods
@@ -129,6 +129,8 @@ npm run build
 3. Serialisation
 4. Multithreading support / playing nicely with WebWorkers / SharedArrayBuffers
 5. Proper Deno support
+6. Resizable/dynamic component data storage
+7. Object pooling
 
 ## Contributing
 Contributions are also welcome and invited. See `CONTRIBUTING.md` for details.
