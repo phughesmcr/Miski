@@ -8,7 +8,7 @@ import { Bitfield } from "../bitfield.js";
 import { Query } from "./query.js";
 
 export interface QueryInstanceSpec {
-  components: Map<Component<unknown>, ComponentInstance<unknown>>;
+  componentMap: Map<Component<unknown>, ComponentInstance<unknown>>;
   bitfieldFactory: (components?: ComponentInstance<unknown>[] | undefined) => Readonly<Bitfield>;
   query: Query;
 }
@@ -43,7 +43,7 @@ export interface QueryInstanceConstructorSpec {
 }
 
 export function createQueryInstance(spec: QueryInstanceSpec): Readonly<QueryInstance> {
-  const { components, bitfieldFactory, query } = spec;
+  const { componentMap, bitfieldFactory, query } = spec;
 
   /** */
   const all: ComponentRecord = {};
@@ -61,7 +61,7 @@ export function createQueryInstance(spec: QueryInstanceSpec): Readonly<QueryInst
 
   if (query.all.length) {
     const instances = query.all.reduce((arr, component) => {
-      const inst = components.get(component);
+      const inst = componentMap.get(component);
       if (!inst) throw new Error(`Component ${component.name} not found.`);
       all[component.name] = inst;
       arr.push(inst);
@@ -72,7 +72,7 @@ export function createQueryInstance(spec: QueryInstanceSpec): Readonly<QueryInst
 
   if (query.any.length) {
     const instances = query.any.reduce((arr, component) => {
-      const inst = components.get(component);
+      const inst = componentMap.get(component);
       if (!inst) throw new Error(`Component ${component.name} not found.`);
       any[component.name] = inst;
       arr.push(inst);
@@ -83,7 +83,7 @@ export function createQueryInstance(spec: QueryInstanceSpec): Readonly<QueryInst
 
   if (query.none.length) {
     const instances = query.none.reduce((arr, component) => {
-      const inst = components.get(component);
+      const inst = componentMap.get(component);
       if (!inst) throw new Error(`Component ${component.name} not found.`);
       none[component.name] = inst;
       arr.push(inst);
