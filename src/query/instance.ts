@@ -129,5 +129,14 @@ export function createQueryInstance(spec: QueryInstanceSpec): Readonly<QueryInst
     });
   };
 
-  return Object.freeze(Object.assign(instance, { getComponents, getEntities, refresh }));
+  return Object.freeze(
+    Object.assign(
+      Object.create(query),
+      Object.assign(instance, {
+        getComponents,
+        getEntities,
+        refresh,
+      }),
+    ) as QueryInstance,
+  );
 }
