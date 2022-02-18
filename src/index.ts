@@ -26,5 +26,5 @@ export type { Query, QuerySpec } from "./query/query.js";
 export type { QueryInstance } from "./query/instance.js";
 export type { Schema, SchemaProps } from "./component/schema.js";
 export type { System } from "./system.js";
-export type { TypedArrayConstructor } from "./utils.js";
+export type { ParametersExceptFirst, TypedArrayConstructor } from "./utils.js";
 export type { World, WorldSpec } from "./world.js";
