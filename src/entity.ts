@@ -7,7 +7,6 @@ import { isUint32 } from "./utils.js";
 export type Entity = number;
 
 export interface EntityManagerSpec {
-  availableEntities: Entity[];
   entityArchetypes: Archetype[];
   capacity: number;
 }
@@ -16,8 +15,17 @@ export interface EntityManager {
   createEntity: () => Entity | undefined;
   destroyEntity: (entity: Entity) => boolean;
   getEntityArchetype: (entity: Entity) => Archetype | undefined;
+  getVacancyCount: () => number;
   hasEntity: (entity: Entity) => boolean;
   setEntityArchetype: (entity: Entity, archetype: Archetype) => boolean;
+}
+
+function createAvailableEntityArray(capacity: number): Entity[] {
+  // @todo would this be better as a generator?
+  return ((length: number) => {
+    const total = length - 1;
+    return Array.from({ length }, (_, i) => total - i);
+  })(capacity);
 }
 
 /**
@@ -36,7 +44,9 @@ function entityValidator(capacity: number): (entity: Entity) => entity is Entity
 /** Manages the creation, destruction and recycling of entities */
 export function createEntityManager(spec: EntityManagerSpec): Readonly<EntityManager> {
   if (!spec) throw new SyntaxError("EntityManager creation requires a spec object.");
-  const { availableEntities, entityArchetypes, capacity } = spec;
+  const { entityArchetypes, capacity } = spec;
+
+  const availableEntities = createAvailableEntityArray(capacity);
   const isValidEntity = entityValidator(capacity);
 
   return Object.freeze({
@@ -65,6 +75,11 @@ export function createEntityManager(spec: EntityManagerSpec): Readonly<EntityMan
     /** @returns the Entity's Archetype or undefined if Entity is not alive */
     getEntityArchetype(entity: Entity): Archetype | undefined {
       return entityArchetypes[entity];
+    },
+
+    /** @returns the number of available entities */
+    getVacancyCount() {
+      return availableEntities.length;
     },
 
     /** @return `true` if the Entity !== undefined */

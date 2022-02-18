@@ -59,15 +59,6 @@ function addBitfieldFactory({ capacity }: { capacity: number }) {
   return { bitfieldFactory };
 }
 
-function addAvailableEntityArray({ capacity }: { capacity: number }) {
-  // @todo would this be better as a generator?
-  const availableEntities: Entity[] = ((length: number) => {
-    const total = length - 1;
-    return Array.from({ length }, (_, i) => total - i);
-  })(capacity);
-  return { availableEntities };
-}
-
 function addArchetypeArray({ capacity }: { capacity: number }) {
   const entityArchetypes: Archetype[] = [];
   entityArchetypes.length = capacity; // @note V8 hack, quicker/smaller than new Array(capacity)
@@ -76,15 +67,14 @@ function addArchetypeArray({ capacity }: { capacity: number }) {
 
 export function createWorld(spec: WorldSpec): Readonly<World> {
   const { components, capacity } = validateWorldSpec(spec);
-  const { availableEntities } = addAvailableEntityArray({ capacity });
   const { entityArchetypes } = addArchetypeArray({ capacity });
   const { bitfieldFactory } = addBitfieldFactory({ capacity: components.length });
 
-  const { createEntity, destroyEntity, getEntityArchetype, hasEntity, setEntityArchetype } = createEntityManager({
-    availableEntities,
-    entityArchetypes,
-    capacity,
-  });
+  const { createEntity, destroyEntity, getEntityArchetype, getVacancyCount, hasEntity, setEntityArchetype } =
+    createEntityManager({
+      entityArchetypes,
+      capacity,
+    });
 
   const { archetypeMap, updateArchetype } = createArchetypeManager({
     bitfieldFactory,
@@ -124,10 +114,6 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
       queries.set(query, instance);
     }
     return [instance.getEntities(), instance.getComponents()];
-  }
-
-  function getVacancyCount() {
-    return availableEntities.length;
   }
 
   return Object.freeze(
