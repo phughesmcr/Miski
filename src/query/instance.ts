@@ -13,7 +13,7 @@ export interface QueryInstanceSpec {
   query: Query;
 }
 
-export interface QueryInstance {
+export interface QueryInstance extends Query {
   /** */
   archetypes: Set<Archetype>;
   /** */
