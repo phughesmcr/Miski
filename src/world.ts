@@ -53,22 +53,22 @@ function validateWorldSpec(spec: WorldSpec): Required<WorldSpec> {
   return { components, capacity };
 }
 
-function addBitfieldFactory({ capacity }: { capacity: number }) {
+function createBitfieldFactory(capacity: number) {
   const emptyBitfield = bitfield({ capacity });
   const bitfieldFactory = bitfieldCloner(emptyBitfield);
-  return { bitfieldFactory };
+  return bitfieldFactory;
 }
 
-function addArchetypeArray({ capacity }: { capacity: number }) {
+function createArchetypeArray(capacity: number) {
   const entityArchetypes: Archetype[] = [];
   entityArchetypes.length = capacity; // @note V8 hack, quicker/smaller than new Array(capacity)
-  return { entityArchetypes };
+  return entityArchetypes;
 }
 
 export function createWorld(spec: WorldSpec): Readonly<World> {
   const { components, capacity } = validateWorldSpec(spec);
-  const { entityArchetypes } = addArchetypeArray({ capacity });
-  const { bitfieldFactory } = addBitfieldFactory({ capacity: components.length });
+  const entityArchetypes = createArchetypeArray(capacity);
+  const bitfieldFactory = createBitfieldFactory(components.length);
 
   const { createEntity, destroyEntity, getEntityArchetype, getVacancyCount, hasEntity, setEntityArchetype } =
     createEntityManager({
@@ -89,12 +89,12 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
     updateArchetype,
   });
 
-  const queries: Map<Query, QueryInstance> = new Map();
+  const queryMap: Map<Query, QueryInstance> = new Map();
 
   function refresh() {
     const archetypes = [...archetypeMap.values()];
     const refresh = (instance: QueryInstance) => instance.refresh(archetypes);
-    queries.forEach(refresh);
+    queryMap.forEach(refresh);
   }
   refresh();
 
@@ -108,10 +108,10 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
 
   /** @returns a tuple of Entities and Components which match the Query criteria */
   function getQueryResult(query: Query): [Entity[], ComponentRecord] {
-    let instance = queries.get(query);
+    let instance = queryMap.get(query);
     if (!instance) {
       instance = createQueryInstance({ componentMap, bitfieldFactory, query });
-      queries.set(query, instance);
+      queryMap.set(query, instance);
     }
     return [instance.getEntities(), instance.getComponents()];
   }
