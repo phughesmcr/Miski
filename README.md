@@ -94,7 +94,7 @@ createWorld: (spec: WorldSpec) => World;
   world.getComponentInstance: <T>(component: Component<T> | string) => ComponentInstance<T> | undefined;
 
   🔎 World Query methods
-  world.getQueryResult: (query: Query | QueryInstance) => [Entity[], ComponentRecord];
+  world.getQueryResult: (query: Query) => [Entity[], ComponentRecord];
 
   🔧 World maintenance methods
   world.refresh: () => void;
