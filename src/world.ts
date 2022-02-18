@@ -2,14 +2,14 @@
 
 import { Archetype } from "./archetype/archetype.js";
 import { createArchetypeManager } from "./archetype/manager.js";
-import { Component } from "./component/component.js";
+import { Component, ComponentRecord } from "./component/component.js";
 import { ComponentInstance } from "./component/instance.js";
 import { createComponentManager } from "./component/manager.js";
 import { DEFAULT_MAX_ENTITIES, VERSION } from "./constants.js";
 import { Entity } from "./entity.js";
 import { createEntityManager } from "./entity.js";
 import { Bitfield, bitfield, bitfieldCloner } from "./bitfield.js";
-import { QueryInstance } from "./query/instance.js";
+import { createQueryInstance, QueryInstance } from "./query/instance.js";
 import { Query } from "./query/query.js";
 import { isUint32 } from "./utils.js";
 import { SchemaProps } from "./component/schema.js";
@@ -41,6 +41,7 @@ export interface World extends WorldData {
   destroyEntity: (entity: Entity) => boolean;
   getComponentInstance: <T>(component: Component<T> | string) => ComponentInstance<T> | undefined;
   getEntityArchetype: (entity: number) => Archetype | undefined;
+  getQueryResult: (query: Query) => [Entity[], ComponentRecord];
   hasEntity: (entity: number) => boolean;
   addComponentToEntity: <T>(component: Component<T>, entity: number, props?: SchemaProps<T> | undefined) => boolean;
   entityHasComponent: <T>(component: Component<T>, entity: number) => boolean;
@@ -135,12 +136,23 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
     }
   }
 
+  /** @returns a tuple of Entities and Components which match the Query criteria */
+  function getQueryResult(query: Query): [Entity[], ComponentRecord] {
+    let instance = queries.get(query);
+    if (!instance) {
+      instance = createQueryInstance({ componentMap, bitfieldFactory, query });
+      queries.set(query, instance);
+    }
+    return [instance.getEntities(), instance.getComponents()];
+  }
+
   return Object.freeze(
     Object.assign(Object.create(world), {
       createEntity,
       destroyEntity,
       getComponentInstance,
       getEntityArchetype,
+      getQueryResult,
       hasEntity,
       addComponentToEntity,
       entityHasComponent,

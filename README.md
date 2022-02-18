@@ -69,7 +69,6 @@ createComponent: <T extends Schema<T>>(spec: ComponentSpec<T>) => Component<T>;
 
 🔎 Queries
 createQuery: (spec: QuerySpec) => Query;
-  query.getResult: (world: World) => [Entity[], ComponentRecord];
 
 🔃 Systems
 createSystem: <T, U>(system: System<T, U>) => (world: World) => (...args: U) => ReturnType<T>;
@@ -88,6 +87,9 @@ createWorld: (spec: WorldSpec) => World;
   world.addComponentToEntity: <T>(component: Component<T>, entity: number, props?: SchemaProps<T> | undefined) => boolean;
   world.removeComponentFromEntity: <T>(component: Component<T>, entity: number) => boolean;
   world.getComponentInstance: <T>(component: Component<T> | string) => ComponentInstance<T> | undefined;
+
+  🔎 World Query methods
+  world.getQueryResult: (query: Query | QueryInstance) => [Entity[], ComponentRecord];
 
   🔧 World maintenance methods
   world.refresh: () => void;
