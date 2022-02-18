@@ -8,7 +8,7 @@ import { createComponentManager } from "./component/manager.js";
 import { DEFAULT_MAX_ENTITIES, VERSION } from "./constants.js";
 import { Entity } from "./entity.js";
 import { createEntityManager } from "./entity.js";
-import { Bitfield, bitfield, bitfieldCloner } from "./bitfield.js";
+import { bitfield, bitfieldCloner } from "./bitfield.js";
 import { createQueryInstance, QueryInstance } from "./query/instance.js";
 import { Query } from "./query/query.js";
 import { isUint32 } from "./utils.js";
@@ -25,18 +25,7 @@ export interface WorldProto {
   readonly version: string;
 }
 
-export interface WorldData extends WorldProto {
-  archetypes: Map<string, Archetype>;
-  availableEntities: Entity[];
-  components: Map<Component<unknown>, ComponentInstance<unknown>>;
-  emptyBitfield: Bitfield;
-  entityArchetypes: Archetype[];
-  entityCapacity: number;
-  bitfieldFactory: (components?: ComponentInstance<unknown>[]) => Bitfield;
-  queries: Map<Query, QueryInstance>;
-}
-
-export interface World extends WorldData {
+export interface World extends WorldProto {
   createEntity: () => number | undefined;
   destroyEntity: (entity: Entity) => boolean;
   getComponentInstance: <T>(component: Component<T> | string) => ComponentInstance<T> | undefined;
@@ -65,7 +54,7 @@ function validateWorldSpec(spec: WorldSpec): Required<WorldSpec> {
 function addBitfieldFactory({ capacity }: { capacity: number }) {
   const emptyBitfield = bitfield({ capacity });
   const bitfieldFactory = bitfieldCloner(emptyBitfield);
-  return { emptyBitfield, bitfieldFactory };
+  return { bitfieldFactory };
 }
 
 function addAvailableEntityArray({ entityCapacity }: { entityCapacity: number }) {
@@ -87,7 +76,7 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
   const { components, entityCapacity } = validateWorldSpec(spec);
   const { availableEntities } = addAvailableEntityArray({ entityCapacity });
   const { entityArchetypes } = addArchetypeArray({ entityCapacity });
-  const { emptyBitfield, bitfieldFactory } = addBitfieldFactory({ capacity: components.length });
+  const { bitfieldFactory } = addBitfieldFactory({ capacity: components.length });
 
   const { createEntity, destroyEntity, getEntityArchetype, hasEntity, setEntityArchetype } = createEntityManager({
     availableEntities,
@@ -109,17 +98,6 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
   });
 
   const queries: Map<Query, QueryInstance> = new Map();
-
-  const world: WorldData = Object.assign(Object.create(WORLD_PROTO), {
-    entityCapacity,
-    availableEntities,
-    entityArchetypes,
-    archetypes: archetypeMap,
-    components: componentMap,
-    queries,
-    emptyBitfield,
-    bitfieldFactory,
-  }) as WorldData;
 
   function refresh() {
     const archetypes = [...archetypeMap.values()];
@@ -147,7 +125,7 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
   }
 
   return Object.freeze(
-    Object.assign(Object.create(world), {
+    Object.assign(Object.create(WORLD_PROTO), {
       createEntity,
       destroyEntity,
       getComponentInstance,
