@@ -83,11 +83,11 @@ createWorld: (spec: WorldSpec) => World;
   world.destroyEntity: (entity: Entity) => boolean;
   world.hasEntity: (entity: number) => boolean;
   world.getEntityArchetype: (entity: number) => Archetype | undefined;
+  world.entityHasComponent: <T>(entity: Entity, component: Component<T>) => boolean;
 
   🧩 World Component methods
   world.addComponentToEntity: <T>(component: Component<T>, entity: number, props?: SchemaProps<T> | undefined) => boolean;
   world.removeComponentFromEntity: <T>(component: Component<T>, entity: number) => boolean;
-  world.entityHasComponent: <T>(component: Component<T>, entity: number) => boolean;
 
   🔧 World maintenance methods
   world.refreshWorld: () => void;

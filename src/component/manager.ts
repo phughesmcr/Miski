@@ -10,7 +10,7 @@ import { SchemaProps } from "./schema.js";
 export interface ComponentManager {
   componentMap: Map<Component<unknown>, ComponentInstance<unknown>>;
   addComponentToEntity: <T>(component: Component<T>, entity: Entity, props?: SchemaProps<T>) => boolean;
-  entityHasComponent: <T>(component: Component<T>, entity: Entity) => boolean;
+  entityHasComponent: <T>(entity: Entity, component: Component<T>) => boolean;
   removeComponentFromEntity: <T>(component: Component<T>, entity: Entity) => boolean;
 }
 
@@ -91,7 +91,7 @@ export function createComponentManager(spec: ComponentManagerSpec): Readonly<Com
       return true;
     },
 
-    entityHasComponent<T>(component: Component<T>, entity: Entity): boolean {
+    entityHasComponent<T>(entity: Entity, component: Component<T>): boolean {
       const inst = getComponentInstance(component);
       if (!inst) return false;
       const arch = getEntityArchetype(entity);
