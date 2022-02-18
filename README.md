@@ -66,7 +66,6 @@ This is the complete API:
 ```typescript
 🧩 Components // (T: schema)
 createComponent: <T extends Schema<T>>(spec: ComponentSpec<T>) => Component<T>;
-  component.getInstance: (world: World) => ComponentInstance<T> | undefined;
 
 🔎 Queries
 createQuery: (spec: QuerySpec) => Query;
@@ -88,6 +87,7 @@ createWorld: (spec: WorldSpec) => World;
   🧩 World Component methods
   world.addComponentToEntity: <T>(component: Component<T>, entity: number, props?: SchemaProps<T> | undefined) => boolean;
   world.removeComponentFromEntity: <T>(component: Component<T>, entity: number) => boolean;
+  world.getComponentInstance: <T>(component: Component<T> | string) => ComponentInstance<T> | undefined;
 
   🔧 World maintenance methods
   world.refresh: () => void;

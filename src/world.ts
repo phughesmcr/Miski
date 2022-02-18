@@ -39,6 +39,7 @@ export interface WorldData extends WorldProto {
 export interface World extends WorldData {
   createEntity: () => number | undefined;
   destroyEntity: (entity: Entity) => boolean;
+  getComponentInstance: <T>(component: Component<T> | string) => ComponentInstance<T> | undefined;
   getEntityArchetype: (entity: number) => Archetype | undefined;
   hasEntity: (entity: number) => boolean;
   addComponentToEntity: <T>(component: Component<T>, entity: number, props?: SchemaProps<T> | undefined) => boolean;
@@ -126,10 +127,19 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
   }
   refresh();
 
+  function getComponentInstance<T>(component: Component<T> | string): ComponentInstance<T> | undefined {
+    if (typeof component === "string") {
+      return [...componentMap.values()].filter((c) => c.name === component)[0] as ComponentInstance<T> | undefined;
+    } else {
+      return componentMap.get(component) as ComponentInstance<T> | undefined;
+    }
+  }
+
   return Object.freeze(
     Object.assign(Object.create(world), {
       createEntity,
       destroyEntity,
+      getComponentInstance,
       getEntityArchetype,
       hasEntity,
       addComponentToEntity,
