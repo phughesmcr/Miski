@@ -52,12 +52,11 @@ function instantiateComponents(spec: {
 export function createComponentManager(spec: ComponentManagerSpec): Readonly<ComponentManager> {
   const { components, capacity, getEntityArchetype, updateArchetype } = spec;
 
-  /** { component_name: ComponentInstance } */
-  const instances = (() => {
     const buffer = createComponentBuffer({ capacity, components });
     const partitioner = createComponentBufferPartitioner({ buffer, capacity });
-    return instantiateComponents({ components, partitioner });
-  })();
+
+  /** { component_name: ComponentInstance } */
+  const instances = instantiateComponents({ components, partitioner });
 
   /** <Component, ComponentInstance> */
   const componentMap: Map<Component<unknown>, ComponentInstance<unknown>> = new Map();
