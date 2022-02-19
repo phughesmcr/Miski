@@ -91,7 +91,6 @@ createWorld: (spec: WorldSpec) => World;
   🧩 World Component methods
   world.addComponentToEntity: <T>(component: Component<T>, entity: Entity, props?: SchemaProps<T>) => boolean;
   world.removeComponentFromEntity: <T>(component: Component<T>, entity: Entity) => boolean;
-  world.getComponentInstance: <T>(component: Component<T> | string) => ComponentInstance<T> | undefined;
 
   🔎 World Query methods
   world.getQueryResult: (query: Query) => [Entity[], ComponentRecord];

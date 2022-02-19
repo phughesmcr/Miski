@@ -3,7 +3,6 @@
 import { Archetype } from "./archetype/archetype.js";
 import { createArchetypeManager } from "./archetype/manager.js";
 import { Component, ComponentRecord } from "./component/component.js";
-import { ComponentInstance } from "./component/instance.js";
 import { createComponentManager } from "./component/manager.js";
 import { DEFAULT_MAX_ENTITIES, VERSION } from "./constants.js";
 import { Entity } from "./entity.js";
@@ -29,7 +28,6 @@ export interface World extends WorldProto {
   readonly capacity: number;
   createEntity: () => number | undefined;
   destroyEntity: (entity: Entity) => boolean;
-  getComponentInstance: <T>(component: Component<T> | string) => ComponentInstance<T> | undefined;
   getEntityArchetype: (entity: number) => Archetype | undefined;
   getQueryResult: (query: Query) => [Entity[], ComponentRecord];
   getVacancyCount: () => number;
@@ -88,14 +86,6 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
   }
   refresh();
 
-  function getComponentInstance<T>(component: Component<T> | string): ComponentInstance<T> | undefined {
-    if (typeof component === "string") {
-      return [...componentMap.values()].filter((c) => c.name === component)[0] as ComponentInstance<T> | undefined;
-    } else {
-      return componentMap.get(component) as ComponentInstance<T> | undefined;
-    }
-  }
-
   /** @returns a tuple of Entities and Components which match the Query criteria */
   function getQueryResult(query: Query): [Entity[], ComponentRecord] {
     let instance = queryMap.get(query);
@@ -111,7 +101,6 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
       capacity,
       createEntity,
       destroyEntity,
-      getComponentInstance,
       getEntityArchetype,
       getQueryResult,
       getVacancyCount,
