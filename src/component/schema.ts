@@ -8,8 +8,15 @@ export type SchemaProps<T> = Record<keyof T, number>;
 /** Component data storage */
 export type SchemaStorage<T> = Record<keyof T, TypedArray>;
 
-/** Schemas are component storage definitions: e.g., { property: Int8Array } */
-export type Schema<T> = Record<keyof T, TypedArrayConstructor>;
+/**
+ * Schemas are component storage definitions:
+ * Schemas use TypedArray objects and so can only store a single number per property per entity.
+ *
+ * For example, `{ property: Int8Array }`;
+ * Values in the array are initialised to 0 by default.
+ * To set your own default value: `{ property: [Int8Array, default value] }`.
+ */
+export type Schema<T> = Record<keyof T, TypedArrayConstructor | [TypedArrayConstructor, number]>;
 
 /** Schema type guard */
 export function isValidSchema<T>(schema: unknown): schema is Schema<T> {
@@ -21,7 +28,10 @@ export function isValidSchema<T>(schema: unknown): schema is Schema<T> {
  * @see calculateSchemaSize
  */
 function byteSum(total: unknown, value: unknown): number {
-  return (total as number) + (value as TypedArray).BYTES_PER_ELEMENT;
+  const size = Array.isArray(value)
+    ? (value[0] as TypedArray).BYTES_PER_ELEMENT
+    : (value as TypedArray).BYTES_PER_ELEMENT;
+  return (total as number) + size;
 }
 
 /** @returns the size in bytes that a component's storage requires for one entity */

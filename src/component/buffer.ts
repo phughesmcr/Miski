@@ -1,7 +1,7 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
 import { ONE_BYTE } from "../constants.js";
-import { TypedArray, TypedArrayConstructor } from "../utils.js";
+import { TypedArrayConstructor } from "../utils.js";
 import { Component } from "./component.js";
 import { SchemaStorage } from "./schema.js";
 
@@ -61,14 +61,26 @@ export function createComponentBufferPartitioner(spec: ComponentBufferPartitione
     }
 
     let componentOffset = 0;
-    function partition(res: Record<keyof T, TypedArray>, [key, TypedArray]: [keyof T, TypedArrayConstructor]) {
-      res[key] = new TypedArray(buffer, bufferOffset + componentOffset, capacity);
-      componentOffset += TypedArray.BYTES_PER_ELEMENT * capacity;
+    function partition(
+      res: SchemaStorage<T>,
+      [key, value]: [keyof T, TypedArrayConstructor | [TypedArrayConstructor, number]],
+    ) {
+      let typedArray = value as TypedArrayConstructor;
+      let initialValue = 0;
+      if (Array.isArray(value)) {
+        const [arrayConstructor, defaultValue] = value;
+        typedArray = arrayConstructor;
+        initialValue = defaultValue;
+      }
+      res[key] = new typedArray(buffer, bufferOffset + componentOffset, capacity);
+      if (initialValue !== 0) res[key].fill(initialValue as never);
+      componentOffset += typedArray.BYTES_PER_ELEMENT * capacity;
       return res;
     }
 
-    const data = Object.entries(schema as Record<keyof T, TypedArrayConstructor>) as [keyof T, TypedArrayConstructor][];
-    const storage = data.reduce(partition, {} as Record<keyof T, TypedArray>);
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    const data = Object.entries(schema!) as [keyof T, TypedArrayConstructor][];
+    const storage = data.reduce(partition, {} as SchemaStorage<T>);
 
     bufferOffset += componentOffset;
     if (bufferOffset > buffer.byteLength) full = true;

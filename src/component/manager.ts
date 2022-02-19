@@ -71,6 +71,18 @@ export function createComponentManager(spec: ComponentManagerSpec): Readonly<Com
       const inst = componentMap.get(component);
       if (!inst) return false;
       updateArchetype(entity, inst);
+      // set any default initial properties
+      if (component.schema) {
+        Object.entries(component.schema).forEach(([key, value]) => {
+          if (Array.isArray(value)) {
+            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+            // @ts-ignore
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment
+            inst[key][entity] = value[1] ?? 0;
+          }
+        });
+      }
+      // set any custom initial properties
       if (props) {
         Object.entries(props).forEach(([key, value]) => {
           // eslint-disable-next-line @typescript-eslint/ban-ts-comment
