@@ -1,6 +1,7 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
 import { Component } from "../component/component.js";
+import { EMPTY_ARRAY } from "../constants.js";
 
 export interface QuerySpec {
   /** AND - Gather entities as long as they have all these components */
@@ -30,7 +31,7 @@ export interface Query {
  */
 export function createQuery(spec: QuerySpec): Readonly<Query> {
   if (!spec) throw new SyntaxError("createQuery: specification object is required.");
-  const { all = [], any = [], none = [] } = spec;
+  const { all = EMPTY_ARRAY, any = EMPTY_ARRAY, none = EMPTY_ARRAY } = spec;
   if (![...all, ...any, ...none].every((component) => Object.prototype.hasOwnProperty.call(component, "name"))) {
     throw new SyntaxError("Query specification object is invalid.");
   }

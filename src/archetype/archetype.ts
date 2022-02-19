@@ -12,7 +12,7 @@
 import { ComponentInstance } from "../component/instance.js";
 import { Entity } from "../entity.js";
 import { Bitfield } from "../bitfield.js";
-import { QueryInstance } from "../query/instance.js";
+import { EMPTY_ARRAY } from "../constants.js";
 
 export interface ArchetypeSpec {
   /** Optional */
@@ -119,9 +119,9 @@ function candidateChecker(state: Archetype) {
     isCandidate: function (query: QueryInstance): boolean {
       if (cache.has(query)) return cache.get(query) || false;
       const { and, or, not } = query;
-      const _not = not?.array ?? _empty;
-      const _and = and?.array ?? _empty;
-      const _or = or?.array ?? _empty;
+      const _not = not?.array ?? EMPTY_ARRAY;
+      const _and = and?.array ?? EMPTY_ARRAY;
+      const _or = or?.array ?? EMPTY_ARRAY;
       function checkStatus(target: number, i: number): boolean {
         // is ?? 0 right here??
         const _n = _not[i] ?? 0;

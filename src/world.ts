@@ -46,7 +46,7 @@ export const WORLD_PROTO: WorldProto = Object.freeze({
 
 function validateWorldSpec(spec: WorldSpec): Required<WorldSpec> {
   if (!spec) throw new SyntaxError("World creation requires a specification object.");
-  const { components = [], capacity = DEFAULT_MAX_ENTITIES } = spec;
+  const { components, capacity = DEFAULT_MAX_ENTITIES } = spec;
   if (!isUint32(capacity)) throw new SyntaxError("World creation: spec.capacity invalid.");
   if (!components.length) throw new SyntaxError("World creation: spec.components invalid.");
   return { components, capacity };
