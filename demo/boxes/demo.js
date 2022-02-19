@@ -1,6 +1,6 @@
 "use strict";
 
-import { createComponent, createQuery, createWorld } from "../../dist/miski.min.js";
+import { createComponent, createQuery, createSystem, createWorld } from "../../dist/miski.min.js";
 
 function rnd(a, b) { return Math.random() * (b - a) + a; }
 
@@ -9,25 +9,37 @@ let SPEED = 50;
 
 const canvas = document.getElementsByTagName('canvas')[0];
 const ctx = canvas.getContext('2d');
+let halfX = Math.floor(window.innerWidth / 2);
+let halfY = Math.floor(window.innerHeight / 2);
 ctx.strokeStyle = "#000";
 ctx.lineWidth = 5;
 
-// 1. Define components
+/* 1. Define components
+ *
+ * Components are reusable data storage definitions.
+ * They consist of a name (must be unique), and an optional storage schema.
+ * A storage schema is an object where the key is a string and the value is a TypedArrayConstructor.
+ * Components without schemas are "tags". As such, a tag has no properties.
+ * Tags can be included in queries just like a regular component.
+ * Tags and components can be tested for using `world.entityHasComponent(entity, component)`.
+ */
 const cColour = createComponent({ name: "colour", schema: { r: Uint8ClampedArray, g: Uint8ClampedArray, b: Uint8ClampedArray }});
-const cPosition = createComponent({ name: "position", schema: { x: Float32Array, y: Float32Array }});
 const cSize = createComponent({ name: "size", schema: { value: Uint32Array }});
 const cVelocity = createComponent({ name: "velocity", schema: { dx: Float32Array, dy: Float32Array }});
-
-// 1b. Components can also be Tags, just omit the schema
+// a tag component:
 const tBorder = createComponent({ name: "border" });
+// you can set default values for your component properties like so:
+const cPosition = createComponent({ name: "position", schema: { x: [Float32Array, halfX], y: [Float32Array, halfY] }});
 
-// 2. Create queries to group objects by components for use in systems
-const qMove = createQuery({all: [ cSize, cPosition, cVelocity ]});
-const qColour = createQuery({all: [ cColour ]});
-const qRender = createQuery({all: [ cSize, cColour, cPosition ], any: [tBorder]});
-const qPos = createQuery({all: [ cPosition ]});
-
-// 3. Create a world and destructure functions
+/* 2. Create a world and destructure functions
+ *
+ * To create a world you need two things:
+ *  i. components: an array of components to register in the world (required)
+ * ii. capacity: the maximum number of entities you want to allow in the world (default = 1_000_000)
+ *
+ * Components cannot be registered after the world has been created.
+ * The default maximum number of entities is 1 million but you should set this manually to avoid wasting memory.
+ */
 const world = createWorld({
   components: [
     cColour,
@@ -36,25 +48,53 @@ const world = createWorld({
     cVelocity,
     tBorder
   ],
-  entityCapacity: ENTITIES,
+  capacity: ENTITIES,
 });
 
-// 3b. Expose the world object for debugging (optional)
+// Expose the world object for debugging (optional - don't do this in production!)
 window.world = world;
 
-// 3c. Decompose functions from the world
+// Functions can be destructured from the world (optional)
 const {
+  capacity,
+  version,
   addComponentToEntity,
-  removeComponentFromEntity,
-  entityHasComponent,
   createEntity,
   destroyEntity,
-  refreshWorld
+  entityHasComponent,
+  getEntityArchetype,
+  getQueryResult,
+  getVacancyCount,
+  hasEntity,
+  refresh,
+  removeComponentFromEntity,
 } = world;
 
-// 4. Define Systems
-const sColour = (world, delta = 1) => {
-  const [entities, components] =  qColour.getResult(world);
+/* 3. Create queries
+ *
+ * Queries group objects by components for use in systems
+ * Queries can take 3 arrays of components: `all` (AND), `any` (OR), `none` (NOT).
+ * You can get the result of a query inside a system by calling `world.getQueryResult(query)`.
+ * getQueryResult returns an tuple (array) of [Entity[], Record<string, ComponentInstance]
+ * I recommend you destructure it as:
+ * `const [entities, components] = world.getQueryResult(query);`
+ * Note: the entities array is essentially in a random order (by archetype id) so you may want to sort it yourself.
+ */
+const qMove = createQuery({all: [ cSize, cPosition, cVelocity ]});
+const qColour = createQuery({all: [ cColour ]});
+const qRender = createQuery({all: [ cSize, cColour, cPosition ], any: [tBorder]});
+const qPos = createQuery({all: [ cPosition ]});
+
+/* 4. Define Systems
+ *
+ * Systems are functions of any arity where the first parameter is always the world.
+ * For example: `function(world) {...}` or `function(world, data)`, etc.
+ * Defining systems using `createSystem` isn't necessary but doing so ensures type safety.
+ * Systems created using `createSystem` will return whatever your function returns.
+ */
+const sColour = createSystem((world, delta = 1) => {
+  // Note: the entities array is essentially in a random order (by archetype id) so you may want to sort it yourself.
+  const [entities, components] =  world.getQueryResult(qColour);
   const { colour } = components;
   const { r, g, b } = colour;
   function changeColour(entity) {
@@ -63,10 +103,10 @@ const sColour = (world, delta = 1) => {
     b[entity] = (b[entity] + 1 * delta) % 255;
   }
   entities.forEach(changeColour);
-}
+})(world);
 
-const sMove = (world, delta = 1) => {
-  const [entities, components] =  qMove.getResult(world);
+const sMove = createSystem((world, delta = 1) => {
+  const [entities, components] =  world.getQueryResult(qMove);
   const { position, size, velocity } = components;
   const { x, y } = position;
   const { value } = size;
@@ -89,10 +129,11 @@ const sMove = (world, delta = 1) => {
     y[entity] += dy[entity] * delta * SPEED;
   }
   entities.forEach(changePosition);
-}
+})(world);
 
-const sRender = (world, alpha = 0) => {
-  const [entities, components] = qRender.getResult(world);
+const sRender = createSystem((world, alpha = 0) => {
+  const [entities, components] = world.getQueryResult(qRender);
+  entities.sort((a, b) => a - b);
   const { colour, position, size } = components;
   const { r, g, b } = colour;
   const { x, y } = position;
@@ -105,20 +146,30 @@ const sRender = (world, alpha = 0) => {
     const _s = value[entity];
     ctx.fillStyle = `rgb(${r[entity]}, ${g[entity]}, ${b[entity]})`;
     ctx.fillRect(_x, _y, _s, _s);
-    if (entityHasComponent(tBorder, entity)) {
+    if (entityHasComponent(entity, tBorder)) {
       ctx.strokeRect(_x, _y, _s, _s);
     }
   }
   entities.forEach(renderShape);
-}
+})(world);
 
-// 5. Create Entities and give them some components
+/* 5. Create Entities and give them some components */
 for (let i = 0, max = ENTITIES; i < max; i++) {
+  // An entity is just an integer
   const box = createEntity(world);
+  /*
+   * Adding components to an entity takes an optional third parameter
+   * which defines the entity's initial component property values
+   */
+  addComponentToEntity(cPosition, box);
+  // you can set initial values for the entity's properties like so:
   addComponentToEntity(cSize, box, { value: rnd(25, 125) });
-  addComponentToEntity(cPosition, box, { x: rnd(125, canvas.width - 125), y: rnd(125, canvas.height - 125) });
   addComponentToEntity(cColour, box, { r: rnd(0, 255), g: rnd(0, 255), b: rnd(0, 255) });
   addComponentToEntity(cVelocity, box, { dx: rnd(-10, 10), dy: rnd(-10, 10) });
+  /**
+   * adding tag components is the same, but the third parameter
+   * should not be provided (it will be ignored)
+   */
   if (i % 2) addComponentToEntity(tBorder, box);
 }
 
@@ -171,13 +222,14 @@ function handleResize() {
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
   const { width, height } = canvas;
+  halfX = Math.floor(width / 2);
+  halfY = Math.floor(height / 2);
   sResX.textContent = width;
   sResY.textContent = height;
-  const [entities, components] = qPos.getResult(world);
+
+  const [entities, components] = world.getQueryResult(qPos);
   const { position } = components;
   const { x, y } = position;
-  const halfX = Math.floor(width / 2);
-  const halfY = Math.floor(height / 2);
   entities.forEach((entity) => {
     const _x = x[entity];
     const _y = y[entity];
@@ -190,9 +242,9 @@ function handleResize() {
   });
 }
 handleResize();
-window.addEventListener("resize", handleResize, {passive: true});
+window.addEventListener("resize", throttle(handleResize, 32), {passive: true});
 
-const tUpdateFrame =  throttle(updateFrame, 50);
+const tUpdateFrame =  throttle(updateFrame, 32);
 
 // 6. Define your game loop (not Miski specific)
 let stepLastTime = null;
@@ -209,7 +261,9 @@ function step(time) {
     stepAccumulator += (time - (stepLastTime || 0)) * 0.001;
     stepLastUpdate = 0;
 
-    refreshWorld(); // runs World maintenance functions
+    // runs World maintenance functions
+    // I recommend calling this once per frame
+    refresh();
 
     while (stepAccumulator > tempo) {
       if (stepLastUpdate >= maxUpdates) {
@@ -217,8 +271,9 @@ function step(time) {
         break;
       }
 
-      sColour(world, tempo);
-      sMove(world, tempo);
+      // call your systems just like regular functions
+      sColour(tempo);
+      sMove(tempo);
 
       stepAccumulator -= tempo;
       stepLastUpdate++;
@@ -227,7 +282,8 @@ function step(time) {
 
   stepLastTime = time;
   const alpha = stepAccumulator / tempo;
-  sRender(world, alpha);
+  // call your systems just like regular functions
+  sRender(alpha);
 
   updateFps(time);
   tUpdateFrame();
