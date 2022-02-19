@@ -64,16 +64,14 @@ export function createEntityManager(spec: EntityManagerSpec): Readonly<EntityMan
      * @returns `true` if there was an archetype change
      */
     destroyEntity(entity: Entity): boolean {
-      if (isValidEntity(entity) && entityArchetypes[entity] != undefined) {
-        const a = entityArchetypes[entity];
-        if (a) a.removeEntity(entity);
-        availableEntities.push(entity);
+      const archetype = entityArchetypes[entity];
+      if (isValidEntity(entity) && archetype !== undefined) {
+        archetype.removeEntity(entity);
         delete entityArchetypes[entity];
+        availableEntities.push(entity);
         return true;
-      } else {
-        delete entityArchetypes[entity]; // just in case
-        return false;
       }
+      return false;
     },
 
     /** @returns the Entity's Archetype or undefined if Entity is not alive */
