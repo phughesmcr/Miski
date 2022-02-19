@@ -8,10 +8,11 @@ import { DEFAULT_MAX_ENTITIES, VERSION } from "./constants.js";
 import { Entity } from "./entity.js";
 import { createEntityManager } from "./entity.js";
 import { bitfield, bitfieldCloner } from "./bitfield.js";
-import { createQueryInstance, QueryInstance } from "./query/instance.js";
+import { QueryInstance } from "./query/instance.js";
 import { Query } from "./query/query.js";
 import { isUint32 } from "./utils.js";
 import { SchemaProps } from "./component/schema.js";
+import { createQueryManager } from "./query/manager.js";
 
 export interface WorldSpec {
   /** Components to instantiate in the world  */
@@ -77,7 +78,7 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
     updateArchetype,
   });
 
-  const queryMap: Map<Query, QueryInstance> = new Map();
+  const { queryMap, getQueryResult } = createQueryManager({ bitfieldFactory, componentMap });
 
   function refresh() {
     const archetypes = [...archetypeMap.values()];
@@ -85,16 +86,6 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
     queryMap.forEach(refreshQueries);
   }
   refresh();
-
-  /** @returns a tuple of Entities and Components which match the Query criteria */
-  function getQueryResult(query: Query): [Entity[], ComponentRecord] {
-    let instance = queryMap.get(query);
-    if (!instance) {
-      instance = createQueryInstance({ componentMap, bitfieldFactory, query });
-      queryMap.set(query, instance);
-    }
-    return [instance.getEntities(), instance.getComponents()];
-  }
 
   return Object.freeze(
     Object.assign(Object.create(WORLD_PROTO), {
