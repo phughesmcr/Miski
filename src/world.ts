@@ -90,16 +90,16 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
   return Object.freeze(
     Object.assign(Object.create(WORLD_PROTO), {
       capacity,
+      addComponentToEntity,
       createEntity,
       destroyEntity,
+      entityHasComponent,
       getEntityArchetype,
       getQueryResult,
       getVacancyCount,
       hasEntity,
-      addComponentToEntity,
-      entityHasComponent,
-      removeComponentFromEntity,
       refresh,
+      removeComponentFromEntity,
     }) as World,
   );
 }
