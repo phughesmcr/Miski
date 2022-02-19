@@ -27,10 +27,8 @@ function createEntityArchetypeArray(capacity: number) {
 
 function createAvailableEntityArray(capacity: number): Entity[] {
   // @todo would this be better as a generator?
-  return ((length: number) => {
-    const total = length - 1;
-    return Array.from({ length }, (_, i) => total - i);
-  })(capacity);
+  const total = capacity - 1;
+  return Array.from({ length: capacity }, (_, i) => total - i);
 }
 
 /**
