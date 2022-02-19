@@ -84,7 +84,7 @@ function cloner(state: Archetype) {
       if (cache.has(component)) return cache.get(component)!;
       const { id } = component;
       const bitfieldCopy = bitfield.copy().toggle(id);
-      const clone = createArchetype({ bitfield: bitfieldCopy, id: bitfieldCopy.toString() });
+      const clone = createArchetype({ bitfield: bitfieldCopy });
       cache.set(component, clone);
       return clone;
     },
@@ -95,10 +95,11 @@ function cloner(state: Archetype) {
       } else {
         const { id } = component;
         const bitfieldCopy = bitfield.copy().toggle(id);
+        const bitfieldId = bitfieldCopy.toString();
         return [
-          bitfieldCopy.toString(),
+          bitfieldId,
           function () {
-            const clone = createArchetype({ bitfield: bitfieldCopy, id: bitfieldCopy.toString() });
+            const clone = createArchetype({ bitfield: bitfieldCopy, id: bitfieldId });
             cache.set(component, clone);
             return clone;
           },
