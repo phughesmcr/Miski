@@ -83,8 +83,8 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
 
   function refresh() {
     const archetypes = [...archetypeMap.values()];
-    const refresh = (instance: QueryInstance) => instance.refresh(archetypes);
-    queryMap.forEach(refresh);
+    const refreshQueries = (instance: QueryInstance) => instance.refresh(archetypes);
+    queryMap.forEach(refreshQueries);
   }
   refresh();
 

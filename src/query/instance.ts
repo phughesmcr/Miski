@@ -16,8 +16,6 @@ export interface QueryInstanceSpec {
 export interface QueryInstance extends Query {
   /** */
   archetypes: Set<Archetype>;
-  /** */
-  archetypeCache: Map<Archetype, boolean>;
   /** The components matched by the and/or bitfields */
   components: Readonly<ComponentRecord>;
   /** A bitfield for the AND match criteria */
@@ -97,7 +95,6 @@ export function createQueryInstance(spec: QueryInstanceSpec): Readonly<QueryInst
 
   const instance = {
     and,
-    archetypeCache: new Map(),
     archetypes: new Set(),
     components: _components,
     not,
@@ -109,24 +106,13 @@ export function createQueryInstance(spec: QueryInstanceSpec): Readonly<QueryInst
   /** @todo cache entities per archetype and add a dirty flag to archetypes - only update entities from dirty archetypes */
   const getEntities = (): Entity[] => [...instance.archetypes].flatMap((archetype) => [...archetype.entities]);
 
-  const refresh = (archetypes: Archetype[]) => {
-    archetypes.forEach((archetype) => {
-      const cached = instance.archetypeCache.get(archetype);
-      if (cached === true) {
-        instance.archetypes.add(archetype);
-      } else if (cached === false) {
-        instance.archetypes.delete(archetype);
-      } else {
-        if (archetype.isCandidate(instance)) {
-          instance.archetypes.add(archetype);
-          instance.archetypeCache.set(archetype, true);
-        } else {
-          instance.archetypes.delete(archetype);
-          instance.archetypeCache.set(archetype, false);
-        }
-      }
-    });
+  const refresher = (archetype: Archetype) => {
+    if (archetype.isCandidate(instance)) {
+      instance.archetypes.add(archetype);
+    }
   };
+
+  const refresh = (archetypes: Archetype[]) => archetypes.forEach(refresher);
 
   return Object.freeze(
     Object.assign(
