@@ -12,6 +12,7 @@
 import { ComponentInstance } from "../component/instance.js";
 import { Entity } from "../entity.js";
 import { Bitfield } from "../bitfield.js";
+import { QueryData } from "../query/instance.js";
 import { EMPTY_ARRAY } from "../constants.js";
 
 export interface ArchetypeSpec {
@@ -41,7 +42,7 @@ export interface Archetype {
   /** Get the ID of an archetype based on this with a toggled component */
   cloneInStep: <T>(component: ComponentInstance<T>) => [string, () => Archetype];
   /** @returns `true` if the query criteria match this archetype */
-  isCandidate: (spec: QueryInstance) => boolean;
+  isCandidate: (query: QueryData) => boolean;
 }
 
 function validateSpec(spec: ArchetypeSpec): Required<ArchetypeSpec> {
@@ -112,11 +113,10 @@ function cloner(state: Archetype) {
 function candidateChecker(state: Archetype) {
   const { bitfield } = state;
   const _bitfield = bitfield.array;
-  const _empty: number[] = [];
-  const cache: Map<QueryInstance, boolean> = new Map();
+  const cache: Map<QueryData, boolean> = new Map();
   return {
     /** @returns `true` if the query criteria match this archetype */
-    isCandidate: function (query: QueryInstance): boolean {
+    isCandidate: function (query: QueryData): boolean {
       if (cache.has(query)) return cache.get(query) || false;
       const { and, or, not } = query;
       const _not = not?.array ?? EMPTY_ARRAY;
