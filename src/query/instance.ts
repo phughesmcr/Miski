@@ -107,8 +107,7 @@ export function createQueryInstance(spec: QueryInstanceSpec): Readonly<QueryInst
   const getComponents = (): ComponentRecord => _components;
 
   /** @todo cache entities per archetype and add a dirty flag to archetypes - only update entities from dirty archetypes */
-  const getEntities = (): Entity[] =>
-    [...new Set([...instance.archetypes].flatMap((archetype) => [...archetype.entities]))] as Entity[];
+  const getEntities = (): Entity[] => [...instance.archetypes].flatMap((archetype) => [...archetype.entities]);
 
   const refresh = (archetypes: Archetype[]) => {
     archetypes.forEach((archetype) => {

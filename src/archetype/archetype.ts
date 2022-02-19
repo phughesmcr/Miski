@@ -30,8 +30,8 @@ export interface Archetype {
   bitfield: Bitfield;
   /** Add an entity to the inhabitants list */
   addEntity: (entity: Entity) => Archetype;
-  /** @returns an array of Entities which inhabit this Archetype */
-  getEntities: () => Entity[];
+  /** @returns an iterator of Entities which inhabit this Archetype */
+  getEntities: () => IterableIterator<Entity>;
   /** @returns `true` if the Entity inhabits this Archetype */
   hasEntity: (entity: Entity) => boolean;
   /** Remove an entity from the inhabitants list */
@@ -60,8 +60,8 @@ function entityFns(state: Archetype) {
       return state;
     },
     /** @returns an array of Entities which inhabit this Archetype */
-    getEntities: function (): Entity[] {
-      return [...entities];
+    getEntities: function (): IterableIterator<Entity> {
+      return entities.values();
     },
     /** @returns `true` if the Entity inhabits this Archetype */
     hasEntity: function (entity: Entity): boolean {
