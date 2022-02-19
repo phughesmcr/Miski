@@ -52,8 +52,8 @@ function instantiateComponents(spec: {
 export function createComponentManager(spec: ComponentManagerSpec): Readonly<ComponentManager> {
   const { components, capacity, getEntityArchetype, updateArchetype } = spec;
 
-    const buffer = createComponentBuffer({ capacity, components });
-    const partitioner = createComponentBufferPartitioner({ buffer, capacity });
+  const buffer = createComponentBuffer({ capacity, components });
+  const partitioner = createComponentBufferPartitioner({ buffer, capacity });
 
   /** { component_name: ComponentInstance } */
   const instances = instantiateComponents({ components, partitioner });
@@ -61,22 +61,14 @@ export function createComponentManager(spec: ComponentManagerSpec): Readonly<Com
   /** <Component, ComponentInstance> */
   const componentMap: Map<Component<unknown>, ComponentInstance<unknown>> = new Map();
   Object.values(instances).forEach(<T>(instance: ComponentInstance<T>) => {
-    componentMap.set(instance.component, instance);
+    componentMap.set(Object.getPrototypeOf(instance) as Component<T>, instance);
   });
-
-  function getComponentInstance<T>(component: Component<T> | string): ComponentInstance<T> | undefined {
-    if (typeof component === "string") {
-      return instances[component] as ComponentInstance<T> | undefined;
-    } else {
-      return componentMap.get(component) as ComponentInstance<T> | undefined;
-    }
-  }
 
   return Object.freeze({
     componentMap,
 
     addComponentToEntity<T>(component: Component<T>, entity: Entity, props?: SchemaProps<T>): boolean {
-      const inst = getComponentInstance(component);
+      const inst = componentMap.get(component);
       if (!inst) return false;
       updateArchetype(entity, inst);
       if (props) {
@@ -91,7 +83,7 @@ export function createComponentManager(spec: ComponentManagerSpec): Readonly<Com
     },
 
     entityHasComponent<T>(entity: Entity, component: Component<T>): boolean {
-      const inst = getComponentInstance(component);
+      const inst = componentMap.get(component);
       if (!inst) return false;
       const arch = getEntityArchetype(entity);
       if (!arch) return false;
@@ -100,7 +92,7 @@ export function createComponentManager(spec: ComponentManagerSpec): Readonly<Com
     },
 
     removeComponentFromEntity<T>(component: Component<T>, entity: Entity): boolean {
-      const inst = getComponentInstance(component);
+      const inst = componentMap.get(component);
       if (!inst) return false;
       updateArchetype(entity, inst);
       return true;
