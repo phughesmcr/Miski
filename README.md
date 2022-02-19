@@ -60,17 +60,19 @@ import { createComponent, createQuery, createSystem, createWorld } from './miski
 
 See [API Reference](#api-reference) below for a complete list of named exports.
 
+Various type definitions are also exported - see index.ts for a complete list.
+
 ## API Reference
 This is the complete API:
 
 ```typescript
-🧩 Components
+🧩 Components // Schema = Record<string, TypedArrayConstructor>. E.g., { r: Uint8ClampedArray, g: Uint8ClampedArray, b: Uint8ClampedArray };
 createComponent: <T extends Schema<T>>(spec: ComponentSpec<T>) => Component<T>;
 
 🔎 Queries
 createQuery: (spec: QuerySpec) => Query;
 
-🔃 Systems // optional but helps with type safety
+🔃 Systems // optional but helps with type safety - A system is a function of any arity where the first parameter is the World
 createSystem: <T, U>(system: System<T, U>) => (world: World) => (...args: U) => ReturnType<T>;
 
 🌍 World
@@ -129,7 +131,7 @@ npm run build
 4. Multithreading support / playing nicely with WebWorkers / SharedArrayBuffers
 5. Proper Deno support
 6. Resizable/dynamic component data storage
-7. Object pooling
+7. Object pooling where necessary
 
 ## Contributing
 Contributions are also welcome and invited. See `CONTRIBUTING.md` for details.
