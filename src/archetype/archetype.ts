@@ -47,6 +47,8 @@ export interface Archetype {
   cloneInStep: <T>(component: ComponentInstance<T>) => [string, () => Archetype];
   /** @returns `true` if the query criteria match this archetype */
   isCandidate: (query: QueryData) => boolean;
+  /** Purge various archetype related caches */
+  purge: () => void;
   /** Run archetype maintenance functions */
   refresh: () => void;
 }
@@ -115,6 +117,9 @@ function cloner(state: Archetype) {
         ];
       }
     },
+    purgeCloneCache: function () {
+      return cache.clear();
+    },
   };
 }
 
@@ -144,6 +149,9 @@ function candidateChecker(state: Archetype) {
       cache.set(query, status);
       return status;
     },
+    purgeCandidateCache: function () {
+      return cache.clear();
+    },
   };
 }
 
@@ -155,11 +163,15 @@ export function createArchetype(spec: ArchetypeSpec): Archetype {
   const exited: Set<Entity> = new Set();
   const data = { entities, entered, exited, id, bitfield } as Archetype;
   const { addEntity, getEntities, removeEntity } = entityFns(data);
-  const { cloneWithToggle, cloneInStep } = cloner(data);
-  const { isCandidate } = candidateChecker(data);
+  const { cloneWithToggle, cloneInStep, purgeCloneCache } = cloner(data);
+  const { isCandidate, purgeCandidateCache } = candidateChecker(data);
   const refresh = () => {
     entered.clear();
     exited.clear();
+  };
+  const purge = () => {
+    purgeCandidateCache();
+    purgeCloneCache();
   };
   const result = Object.assign(data, {
     addEntity,
@@ -168,6 +180,7 @@ export function createArchetype(spec: ArchetypeSpec): Archetype {
     cloneInStep,
     cloneWithToggle,
     isCandidate,
+    purge,
     refresh,
   });
   return Object.freeze(result);

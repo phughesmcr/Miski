@@ -106,6 +106,7 @@ createWorld: (spec: WorldSpec) => World;
 
   🔧 World maintenance methods
   world.refresh: () => void;
+  world.purgeCaches: () => void;
 ```
 
 ## Demos

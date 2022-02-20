@@ -38,6 +38,7 @@ export interface World extends WorldProto {
   getVacancyCount: () => number;
   hasEntity: (entity: number) => boolean;
   load: (data: MiskiData) => boolean;
+  purgeCaches: () => void;
   refresh: () => void;
   removeComponentFromEntity: <T>(component: Component<T>, entity: number) => boolean;
   save: () => Readonly<MiskiData>;
@@ -90,7 +91,11 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
 
   const { load, save } = createSerializationManager({ getBuffer, setBuffer });
 
-  function purgeCaches() {}
+  function purgeCaches() {
+    const archetypes = [...archetypeMap.values()];
+    const purgeArchetypes = (archetype: Archetype) => archetype.purge();
+    archetypes.forEach(purgeArchetypes);
+  }
   purgeCaches();
 
   function refresh() {
@@ -116,6 +121,7 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
       getVacancyCount,
       hasEntity,
       load,
+      purgeCaches,
       refresh,
       removeComponentFromEntity,
       save,
