@@ -23,6 +23,10 @@ export interface ArchetypeSpec {
 }
 
 export interface Archetype {
+  /** Entities which have entered this archetype since last refresh */
+  entered: Set<Entity>;
+  /** Entities which have exited this archetype since last refresh */
+  exited: Set<Entity>;
   /** Set of Entities which inhabit this Archetype */
   entities: Set<Entity>;
   /** The Archetype's unique ID */
@@ -43,6 +47,8 @@ export interface Archetype {
   cloneInStep: <T>(component: ComponentInstance<T>) => [string, () => Archetype];
   /** @returns `true` if the query criteria match this archetype */
   isCandidate: (query: QueryData) => boolean;
+  /** Run archetype maintenance functions */
+  refresh: () => void;
 }
 
 function validateSpec(spec: ArchetypeSpec): Required<ArchetypeSpec> {
@@ -53,11 +59,12 @@ function validateSpec(spec: ArchetypeSpec): Required<ArchetypeSpec> {
 }
 
 function entityFns(state: Archetype) {
-  const { entities } = state;
+  const { entities, entered, exited } = state;
   return {
     /** Add an entity to the inhabitants list */
     addEntity: function (entity: Entity): Archetype {
       entities.add(entity);
+      entered.add(entity);
       return state;
     },
     /** @returns an array of Entities which inhabit this Archetype */
@@ -71,6 +78,7 @@ function entityFns(state: Archetype) {
     /** Remove an entity from the inhabitants list */
     removeEntity: function (entity: Entity): Archetype {
       entities.delete(entity);
+      exited.add(entity);
       return state;
     },
   };
@@ -143,10 +151,16 @@ function candidateChecker(state: Archetype) {
 export function createArchetype(spec: ArchetypeSpec): Archetype {
   const { id, bitfield } = validateSpec(spec);
   const entities: Set<Entity> = new Set();
-  const data = { entities, id, bitfield } as Archetype;
+  const entered: Set<Entity> = new Set();
+  const exited: Set<Entity> = new Set();
+  const data = { entities, entered, exited, id, bitfield } as Archetype;
   const { addEntity, getEntities, removeEntity } = entityFns(data);
   const { cloneWithToggle, cloneInStep } = cloner(data);
   const { isCandidate } = candidateChecker(data);
+  const refresh = () => {
+    entered.clear();
+    exited.clear();
+  };
   const result = Object.assign(data, {
     addEntity,
     getEntities,
@@ -154,6 +168,7 @@ export function createArchetype(spec: ArchetypeSpec): Archetype {
     cloneInStep,
     cloneWithToggle,
     isCandidate,
+    refresh,
   });
   return Object.freeze(result);
 }

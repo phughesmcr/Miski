@@ -96,6 +96,8 @@ createWorld: (spec: WorldSpec) => World;
 
   🔎 World Query methods
   world.getQueryResult: (query: Query) => [Entity[], ComponentRecord];
+  world.getQueryEntered: (query: Query) => [Entity[], ComponentRecord];
+  world.getQueryExited: (query: Query) => [Entity[], ComponentRecord];
 
   🔧 World maintenance methods
   world.refresh: () => void;
@@ -126,12 +128,11 @@ npm run build
 2. Consistent code style throughout
 ### Future
 1. Allow for "changed" in queries
-2. Allow for `onEnter` & `onLeave` events in archetypes
-3. Serialisation
-4. Multithreading support / playing nicely with WebWorkers / SharedArrayBuffers
-5. Proper Deno support
-6. Resizable/dynamic component data storage
-7. Object pooling where necessary
+2. Serialisation
+3. Multithreading support / playing nicely with WebWorkers / SharedArrayBuffers
+4. Proper Deno support
+5. Resizable/dynamic component data storage
+6. Object pooling where necessary
 
 ## Contributing
 Contributions are also welcome and invited. See `CONTRIBUTING.md` for details.

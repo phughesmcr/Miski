@@ -16,6 +16,10 @@ export interface QueryInstanceSpec {
 export interface QueryInstance extends Query {
   getComponents: () => ComponentRecord;
   getEntities: () => Entity[];
+  /** Entities which have entered this query since last refresh */
+  getEntered: () => Entity[];
+  /** Entities which have exited this query since last refresh */
+  getExited: () => Entity[];
   refresh: (archetypes: Archetype[]) => void;
 }
 
@@ -74,6 +78,10 @@ export function createQueryInstance(spec: QueryInstanceSpec): Readonly<QueryInst
   /** @todo cache entities per archetype and add a dirty flag to archetypes - only update entities from dirty archetypes */
   const getEntities = (): Entity[] => [...archetypes].flatMap((archetype) => [...archetype.entities]);
 
+  const getEntered = (): Entity[] => [...archetypes].flatMap((archetype) => [...archetype.entered]);
+
+  const getExited = (): Entity[] => [...archetypes].flatMap((archetype) => [...archetype.exited]);
+
   const refresher = (archetype: Archetype) => {
     if (archetype.isCandidate(fields)) {
       archetypes.add(archetype);
@@ -82,5 +90,13 @@ export function createQueryInstance(spec: QueryInstanceSpec): Readonly<QueryInst
 
   const refresh = (archetypes: Archetype[]) => archetypes.forEach(refresher);
 
-  return Object.freeze(Object.assign(Object.create(query), { getComponents, getEntities, refresh }) as QueryInstance);
+  return Object.freeze(
+    Object.assign(Object.create(query), {
+      getComponents,
+      getEntities,
+      getEntered,
+      getExited,
+      refresh,
+    }) as QueryInstance,
+  );
 }

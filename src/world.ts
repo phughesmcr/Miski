@@ -31,6 +31,8 @@ export interface World extends WorldProto {
   destroyEntity: (entity: Entity) => boolean;
   getEntityArchetype: (entity: number) => Archetype | undefined;
   getQueryResult: (query: Query) => [Entity[], ComponentRecord];
+  getQueryEntered: (query: Query) => [Entity[], ComponentRecord];
+  getQueryExited: (query: Query) => [Entity[], ComponentRecord];
   getVacancyCount: () => number;
   hasEntity: (entity: number) => boolean;
   addComponentToEntity: <T>(component: Component<T>, entity: number, props?: SchemaProps<T> | undefined) => boolean;
@@ -78,12 +80,17 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
     updateArchetype,
   });
 
-  const { queryMap, getQueryResult } = createQueryManager({ bitfieldFactory, componentMap });
+  const { queryMap, getQueryResult, getQueryEntered, getQueryExited } = createQueryManager({
+    bitfieldFactory,
+    componentMap,
+  });
 
   function refresh() {
     const archetypes = [...archetypeMap.values()];
-    const refreshQueries = (instance: QueryInstance) => instance.refresh(archetypes);
-    queryMap.forEach(refreshQueries);
+    const refreshQuery = (instance: QueryInstance) => instance.refresh(archetypes);
+    queryMap.forEach(refreshQuery);
+    const refreshArchetype = (archetype: Archetype) => archetype.refresh();
+    archetypes.forEach(refreshArchetype);
   }
   refresh();
 
@@ -95,6 +102,8 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
       destroyEntity,
       entityHasComponent,
       getEntityArchetype,
+      getQueryEntered,
+      getQueryExited,
       getQueryResult,
       getVacancyCount,
       hasEntity,
