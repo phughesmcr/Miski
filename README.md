@@ -51,6 +51,7 @@ Because Miski is designed to be used inside other projects, we'll let those devs
 * Fast, cache-friendly ArrayBuffer-based component data storage
 * Define components and queries once, reuse them across multiple worlds
 * `AND`,`OR`,`NOT` operators in Queries
+* `world.getQueryEntered` & `world.getQueryExited` methods
 
 ## Install
 The javascript module `miski.min.js` is found in the `./dist` folder, along with a sourcemap file and typescript definitions `.d.ts` file.
@@ -134,11 +135,10 @@ npm run build
 2. Consistent code style throughout
 ### Future
 1. Allow for "changed" in queries
-2. Serialisation
-3. Multithreading support / playing nicely with WebWorkers / SharedArrayBuffers
-4. Proper Deno support
-5. Resizable/dynamic component data storage
-6. Object pooling where necessary
+2. Multithreading support / playing nicely with WebWorkers / SharedArrayBuffers
+3. Proper Deno support
+4. Resizable/dynamic component data storage
+5. Object pooling where necessary
 
 ## Contributing
 Contributions are also welcome and invited. See `CONTRIBUTING.md` for details.
