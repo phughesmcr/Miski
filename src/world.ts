@@ -2,24 +2,23 @@
 
 import { Archetype } from "./archetype/archetype.js";
 import { createArchetypeManager } from "./archetype/manager.js";
+import { bitfield, bitfieldCloner } from "./bitfield.js";
 import { Component, ComponentRecord } from "./component/component.js";
 import { createComponentManager } from "./component/manager.js";
-import { DEFAULT_MAX_ENTITIES, VERSION } from "./constants.js";
-import { Entity } from "./entity.js";
-import { createEntityManager } from "./entity.js";
-import { bitfield, bitfieldCloner } from "./bitfield.js";
-import { QueryInstance } from "./query/instance.js";
-import { Query } from "./query/query.js";
-import { isUint32 } from "./utils.js";
 import { SchemaProps } from "./component/schema.js";
+import { DEFAULT_MAX_ENTITIES, VERSION } from "./constants.js";
+import { createEntityManager, Entity } from "./entity.js";
+import { QueryInstance } from "./query/instance.js";
 import { createQueryManager } from "./query/manager.js";
+import { Query } from "./query/query.js";
 import { createSerializationManager, MiskiData } from "./serialize.js";
+import { isUint32 } from "./utils.js";
 
 export interface WorldSpec {
-  /** Components to instantiate in the world  */
-  components: Component<unknown>[];
   /** The maximum number of entities allowed in the world */
   capacity: number;
+  /** Components to instantiate in the world  */
+  components: Component<unknown>[];
 }
 
 export interface WorldProto {
@@ -28,19 +27,19 @@ export interface WorldProto {
 
 export interface World extends WorldProto {
   readonly capacity: number;
+  addComponentToEntity: <T>(component: Component<T>, entity: number, props?: SchemaProps<T> | undefined) => boolean;
   createEntity: () => number | undefined;
   destroyEntity: (entity: Entity) => boolean;
+  entityHasComponent: <T>(component: Component<T>, entity: number) => boolean;
   getEntityArchetype: (entity: number) => Archetype | undefined;
-  getQueryResult: (query: Query) => [Entity[], ComponentRecord];
   getQueryEntered: (query: Query) => [Entity[], ComponentRecord];
   getQueryExited: (query: Query) => [Entity[], ComponentRecord];
+  getQueryResult: (query: Query) => [Entity[], ComponentRecord];
   getVacancyCount: () => number;
   hasEntity: (entity: number) => boolean;
   load: (data: MiskiData) => boolean;
-  addComponentToEntity: <T>(component: Component<T>, entity: number, props?: SchemaProps<T> | undefined) => boolean;
-  entityHasComponent: <T>(component: Component<T>, entity: number) => boolean;
-  removeComponentFromEntity: <T>(component: Component<T>, entity: number) => boolean;
   refresh: () => void;
+  removeComponentFromEntity: <T>(component: Component<T>, entity: number) => boolean;
   save: () => Readonly<MiskiData>;
 }
 
@@ -51,10 +50,10 @@ export const WORLD_PROTO: WorldProto = Object.freeze({
 
 function validateWorldSpec(spec: WorldSpec): Required<WorldSpec> {
   if (!spec) throw new SyntaxError("World creation requires a specification object.");
-  const { components, capacity = DEFAULT_MAX_ENTITIES } = spec;
+  const { capacity = DEFAULT_MAX_ENTITIES, components } = spec;
   if (!isUint32(capacity)) throw new SyntaxError("World creation: spec.capacity invalid.");
   if (!components.length) throw new SyntaxError("World creation: spec.components invalid.");
-  return { components, capacity };
+  return { capacity, components };
 }
 
 function createBitfieldFactory(capacity: number) {
@@ -64,7 +63,7 @@ function createBitfieldFactory(capacity: number) {
 }
 
 export function createWorld(spec: WorldSpec): Readonly<World> {
-  const { components, capacity } = validateWorldSpec(spec);
+  const { capacity, components } = validateWorldSpec(spec);
   const bitfieldFactory = createBitfieldFactory(components.length);
 
   const { createEntity, destroyEntity, getEntityArchetype, getVacancyCount, hasEntity, setEntityArchetype } =
@@ -78,18 +77,21 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
 
   const { componentMap, addComponentToEntity, entityHasComponent, getBuffer, removeComponentFromEntity, setBuffer } =
     createComponentManager({
-      components,
       capacity,
+      components,
       getEntityArchetype,
       updateArchetype,
     });
 
-  const { queryMap, getQueryResult, getQueryEntered, getQueryExited } = createQueryManager({
+  const { queryMap, getQueryEntered, getQueryExited, getQueryResult } = createQueryManager({
     bitfieldFactory,
     componentMap,
   });
 
   const { load, save } = createSerializationManager({ getBuffer, setBuffer });
+
+  function purgeCaches() {}
+  purgeCaches();
 
   function refresh() {
     const archetypes = [...archetypeMap.values()];
