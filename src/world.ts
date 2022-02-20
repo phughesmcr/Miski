@@ -13,6 +13,7 @@ import { Query } from "./query/query.js";
 import { isUint32 } from "./utils.js";
 import { SchemaProps } from "./component/schema.js";
 import { createQueryManager } from "./query/manager.js";
+import { createSerializationManager, MiskiData } from "./serialize.js";
 
 export interface WorldSpec {
   /** Components to instantiate in the world  */
@@ -35,10 +36,12 @@ export interface World extends WorldProto {
   getQueryExited: (query: Query) => [Entity[], ComponentRecord];
   getVacancyCount: () => number;
   hasEntity: (entity: number) => boolean;
+  load: (data: MiskiData) => boolean;
   addComponentToEntity: <T>(component: Component<T>, entity: number, props?: SchemaProps<T> | undefined) => boolean;
   entityHasComponent: <T>(component: Component<T>, entity: number) => boolean;
   removeComponentFromEntity: <T>(component: Component<T>, entity: number) => boolean;
   refresh: () => void;
+  save: () => Readonly<MiskiData>;
 }
 
 /** World.prototype - Miski version data etc. */
@@ -73,17 +76,20 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
     setEntityArchetype,
   });
 
-  const { componentMap, addComponentToEntity, entityHasComponent, removeComponentFromEntity } = createComponentManager({
-    components,
-    capacity,
-    getEntityArchetype,
-    updateArchetype,
-  });
+  const { componentMap, addComponentToEntity, entityHasComponent, getBuffer, removeComponentFromEntity, setBuffer } =
+    createComponentManager({
+      components,
+      capacity,
+      getEntityArchetype,
+      updateArchetype,
+    });
 
   const { queryMap, getQueryResult, getQueryEntered, getQueryExited } = createQueryManager({
     bitfieldFactory,
     componentMap,
   });
+
+  const { load, save } = createSerializationManager({ getBuffer, setBuffer });
 
   function refresh() {
     const archetypes = [...archetypeMap.values()];
@@ -107,8 +113,10 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
       getQueryResult,
       getVacancyCount,
       hasEntity,
+      load,
       refresh,
       removeComponentFromEntity,
+      save,
     }) as World,
   );
 }

@@ -47,6 +47,7 @@ Because Miski is designed to be used inside other projects, we'll let those devs
 * No dependencies
 * Memory-friendly archetype-based ECS model
 * Ability to use more than 32 components in one world using Uint32Array bitfields
+* Basic serialization methods (`world.load` & `world.save`)
 * Fast, cache-friendly ArrayBuffer-based component data storage
 * Define components and queries once, reuse them across multiple worlds
 * `AND`,`OR`,`NOT` operators in Queries
@@ -98,6 +99,10 @@ createWorld: (spec: WorldSpec) => World;
   world.getQueryResult: (query: Query) => [Entity[], ComponentRecord];
   world.getQueryEntered: (query: Query) => [Entity[], ComponentRecord];
   world.getQueryExited: (query: Query) => [Entity[], ComponentRecord];
+
+  💾 World serialization methods
+  world.load: (data: MiskiData) => boolean;
+  world.save: () => Readonly<MiskiData>;
 
   🔧 World maintenance methods
   world.refresh: () => void;

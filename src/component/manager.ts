@@ -11,7 +11,9 @@ export interface ComponentManager {
   componentMap: Map<Component<unknown>, ComponentInstance<unknown>>;
   addComponentToEntity: <T>(component: Component<T>, entity: Entity, props?: SchemaProps<T>) => boolean;
   entityHasComponent: <T>(entity: Entity, component: Component<T>) => boolean;
+  getBuffer: () => ArrayBuffer;
   removeComponentFromEntity: <T>(component: Component<T>, entity: Entity) => boolean;
+  setBuffer: (source: ArrayBuffer) => ArrayBuffer;
 }
 
 export interface ComponentManagerSpec {
@@ -64,6 +66,18 @@ export function createComponentManager(spec: ComponentManagerSpec): Readonly<Com
     componentMap.set(Object.getPrototypeOf(instance) as Component<T>, instance);
   });
 
+  const getBuffer = (): ArrayBuffer => buffer.slice(0);
+
+  const setBuffer = (source: ArrayBuffer): ArrayBuffer => {
+    if (source.byteLength !== buffer.byteLength) {
+      throw new Error("setBuffer - byteLength mismatch!");
+    }
+    const view = new Uint8Array(source);
+    const target = new Uint8Array(buffer);
+    target.set(view);
+    return buffer.slice(0);
+  };
+
   return Object.freeze({
     componentMap,
 
@@ -103,11 +117,15 @@ export function createComponentManager(spec: ComponentManagerSpec): Readonly<Com
       return bitfield.isOn(inst.id);
     },
 
+    getBuffer,
+
     removeComponentFromEntity<T>(component: Component<T>, entity: Entity): boolean {
       const inst = componentMap.get(component);
       if (!inst) return false;
       updateArchetype(entity, inst);
       return true;
     },
+
+    setBuffer,
   });
 }

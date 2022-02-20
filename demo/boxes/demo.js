@@ -64,6 +64,8 @@ const {
   entityHasComponent,
   getEntityArchetype,
   getQueryResult,
+  getQueryEntered,
+  getQueryExited,
   getVacancyCount,
   hasEntity,
   refresh,
