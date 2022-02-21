@@ -37,7 +37,8 @@ function instantiateComponents(spec: {
   const { components, partitioner } = spec;
   const reducer = <T>(obj: ComponentRecord, component: Component<T>, id: number) => {
     const { name } = component;
-    if (name in obj) throw new Error(`ComponentInstance with name "${name}" already exists.`);
+    if (Object.prototype.hasOwnProperty.call(obj, name))
+      throw new Error(`ComponentInstance with name "${name}" already exists.`);
     const storage = partitioner(component);
     obj[name] = createComponentInstance({ component, id, storage });
     return obj;
