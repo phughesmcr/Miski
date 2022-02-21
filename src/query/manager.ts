@@ -15,9 +15,9 @@ export interface QueryManagerSpec {
 export interface QueryManager {
   queryMap: Map<Query, QueryInstance>;
   /** Entities which have entered this query since last refresh */
-  getQueryEntered: (query: Query) => [Entity[], ComponentRecord];
+  getQueryEntered: (query: Query) => Entity[];
   /** Entities which have exited this query since last refresh */
-  getQueryExited: (query: Query) => [Entity[], ComponentRecord];
+  getQueryExited: (query: Query) => Entity[];
   /** @returns a tuple of Entities and Components which match the Query criteria */
   getQueryResult: (query: Query) => [Entity[], ComponentRecord];
 }
@@ -40,15 +40,15 @@ export function createQueryManager(spec: QueryManagerSpec): QueryManager {
   }
 
   /** Entities which have entered this query since last refresh */
-  function getQueryEntered(query: Query): [Entity[], ComponentRecord] {
+  function getQueryEntered(query: Query): Entity[] {
     const instance = queryMap.get(query) ?? register(query);
-    return [instance.getEntered(), instance.getComponents()];
+    return instance.getEntered();
   }
 
   /** Entities which have exited this query since last refresh */
-  function getQueryExited(query: Query): [Entity[], ComponentRecord] {
+  function getQueryExited(query: Query): Entity[] {
     const instance = queryMap.get(query) ?? register(query);
-    return [instance.getExited(), instance.getComponents()];
+    return instance.getExited();
   }
 
   return {

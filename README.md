@@ -98,8 +98,8 @@ createWorld: (spec: WorldSpec) => World;
 
   🔎 World Query methods
   world.getQueryResult: (query: Query) => [Entity[], ComponentRecord];
-  world.getQueryEntered: (query: Query) => [Entity[], ComponentRecord];
-  world.getQueryExited: (query: Query) => [Entity[], ComponentRecord];
+  world.getQueryEntered: (query: Query) => Entity[];
+  world.getQueryExited: (query: Query) => Entity[];
 
   💾 World serialization methods
   world.load: (data: MiskiData) => boolean;

@@ -32,8 +32,10 @@ export interface World extends WorldProto {
   destroyEntity: (entity: Entity) => boolean;
   entityHasComponent: <T>(component: Component<T>, entity: Entity) => boolean;
   getEntityArchetype: (entity: Entity) => Archetype | undefined;
-  getQueryEntered: (query: Query) => [Entity[], ComponentRecord];
-  getQueryExited: (query: Query) => [Entity[], ComponentRecord];
+  /** @returns an array of entities which have entered a query's archetypes since last world.refresh() */
+  getQueryEntered: (query: Query) => Entity[];
+  /** @returns an array of entities which have left a query's archetypes since last world.refresh() */
+  getQueryExited: (query: Query) => Entity[];
   getQueryResult: (query: Query) => [Entity[], ComponentRecord];
   getVacancyCount: () => number;
   hasEntity: (entity: Entity) => boolean;
