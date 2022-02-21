@@ -1,6 +1,6 @@
 {
   "name": "miski",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "An ECS architecture in Typescript",
   "main": "dist/miski.min.js",
   "module": "dist/miski.min.js",
