@@ -16,6 +16,7 @@ export interface EntityManager {
   getEntityArchetype: (entity: Entity) => Archetype | undefined;
   getVacancyCount: () => number;
   hasEntity: (entity: Entity) => boolean;
+  isValidEntity: (entity: Entity) => entity is Entity;
   setEntityArchetype: (entity: Entity, archetype: Archetype) => boolean;
 }
 
@@ -64,8 +65,9 @@ export function createEntityManager(spec: EntityManagerSpec): Readonly<EntityMan
      * @returns `true` if there was an archetype change
      */
     destroyEntity(entity: Entity): boolean {
+      if (!isValidEntity(entity)) return false;
       const archetype = entityArchetypes[entity];
-      if (isValidEntity(entity) && archetype !== undefined) {
+      if (archetype !== undefined) {
         archetype.removeEntity(entity);
         delete entityArchetypes[entity];
         availableEntities.push(entity);
@@ -88,6 +90,8 @@ export function createEntityManager(spec: EntityManagerSpec): Readonly<EntityMan
     hasEntity(entity: Entity): boolean {
       return isValidEntity(entity) && entityArchetypes[entity] !== undefined;
     },
+
+    isValidEntity,
 
     /** @returns `true` if the Archetype was changed successfully */
     setEntityArchetype(entity: Entity, archetype: Archetype): boolean {

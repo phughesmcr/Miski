@@ -20,6 +20,7 @@ export interface ComponentManagerSpec {
   capacity: number;
   components: Component<unknown>[];
   getEntityArchetype: (entity: Entity) => Archetype | undefined;
+  isValidEntity: (entity: Entity) => entity is Entity;
   updateArchetype: <T>(entity: Entity, component: ComponentInstance<T>) => Archetype;
 }
 
@@ -47,7 +48,7 @@ function instantiateComponents(spec: {
 }
 
 export function createComponentManager(spec: ComponentManagerSpec): Readonly<ComponentManager> {
-  const { capacity, components, getEntityArchetype, updateArchetype } = spec;
+  const { capacity, components, getEntityArchetype, isValidEntity, updateArchetype } = spec;
 
   const buffer = createComponentBuffer({ capacity, components });
   const partitioner = createComponentBufferPartitioner({ buffer, capacity });
@@ -77,6 +78,7 @@ export function createComponentManager(spec: ComponentManagerSpec): Readonly<Com
     componentMap,
 
     addComponentToEntity<T>(component: Component<T>, entity: Entity, props?: SchemaProps<T>): boolean {
+      if (!isValidEntity(entity)) return false;
       const inst = componentMap.get(component);
       if (!inst) return false;
       updateArchetype(entity, inst);
@@ -115,6 +117,7 @@ export function createComponentManager(spec: ComponentManagerSpec): Readonly<Com
     getBuffer,
 
     removeComponentFromEntity<T>(component: Component<T>, entity: Entity): boolean {
+      if (!isValidEntity(entity)) return false;
       const inst = componentMap.get(component);
       if (!inst) return false;
       updateArchetype(entity, inst);

@@ -69,8 +69,15 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
   const { capacity, components } = validateWorldSpec(spec);
   const bitfieldFactory = createBitfieldFactory(components.length);
 
-  const { createEntity, destroyEntity, getEntityArchetype, getVacancyCount, hasEntity, setEntityArchetype } =
-    createEntityManager({ capacity });
+  const {
+    createEntity,
+    destroyEntity,
+    getEntityArchetype,
+    getVacancyCount,
+    hasEntity,
+    isValidEntity,
+    setEntityArchetype,
+  } = createEntityManager({ capacity });
 
   const { archetypeMap, updateArchetype } = createArchetypeManager({
     bitfieldFactory,
@@ -83,6 +90,7 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
       capacity,
       components,
       getEntityArchetype,
+      isValidEntity,
       updateArchetype,
     });
 
