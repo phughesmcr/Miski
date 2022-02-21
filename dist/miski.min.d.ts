@@ -2,6 +2,17 @@
 declare type TypedArrayConstructor = Int8ArrayConstructor | Uint8ArrayConstructor | Uint8ClampedArrayConstructor | Int16ArrayConstructor | Uint16ArrayConstructor | Int32ArrayConstructor | Uint32ArrayConstructor | Float32ArrayConstructor | Float64ArrayConstructor | BigInt64ArrayConstructor | BigUint64ArrayConstructor;
 /** @author https://stackoverflow.com/a/67605309 */
 declare type ParametersExceptFirst<F> = F extends (arg0: any, ...rest: infer R) => any ? R : never;
+/**
+ * Opaque typing allows for nominal types
+ * @example
+ * type Entity = number;
+ * const a: Entity = 1; // a = number;
+ * type Entity = Opaque<number, "Entity">;
+ * const b: Entity = 1 // b = Entity;
+ */
+declare type Opaque<T, K> = T & {
+    _TYPE: K;
+};
 
 /** The interface available to end users */
 declare type SchemaProps<T> = Record<keyof T, number>;
@@ -67,14 +78,12 @@ interface Query {
 /**
  * Create a new Query
  * @param spec The Query's specification object
- * @param spec.all
- * @param spec.any
- * @param spec.none
+ * @param spec.all AND - Gather entities as long as they have all these components
+ * @param spec.any OR - Gather entities as long as they have 0...* of these components
+ * @param spec.none NOT - Gather entities as long as they don't have these components
+ * @returns a valid Query object
  */
 declare function createQuery(spec: QuerySpec): Readonly<Query>;
-
-/** Entities are indexes of an EntityArray */
-declare type Entity = number;
 
 interface Bitfield {
     /** The size of the bitfield */
@@ -109,9 +118,16 @@ interface Bitfield {
     toString: () => string;
 }
 
+/** Entities are indexes of an EntityArray. An Entity is just an integer. */
+declare type Entity = Opaque<number, "Entity">;
+
 interface QueryInstance extends Query {
     getComponents: () => ComponentRecord;
+    /** Entities which have entered this query since last refresh */
+    getEntered: () => Entity[];
     getEntities: () => Entity[];
+    /** Entities which have exited this query since last refresh */
+    getExited: () => Entity[];
     refresh: (archetypes: Archetype[]) => void;
 }
 interface QueryData {
@@ -133,49 +149,119 @@ interface QueryData {
  */
 
 interface Archetype {
-    /** Set of Entities which inhabit this Archetype */
-    entities: Set<Entity>;
-    /** The Archetype's unique ID */
-    id: string;
     /** The Archetype's Component Bitfield */
     bitfield: Bitfield;
+    /** Entities which have entered this archetype since last refresh */
+    entered: Set<Entity>;
+    /** Set of Entities which inhabit this Archetype */
+    entities: Set<Entity>;
+    /** Entities which have exited this archetype since last refresh */
+    exited: Set<Entity>;
+    /** The Archetype's unique ID */
+    id: string;
     /** Add an entity to the inhabitants list */
     addEntity: (entity: Entity) => Archetype;
+    /** Get the ID of an archetype based on this with a toggled component */
+    cloneInStep: <T>(component: ComponentInstance<T>) => [string, () => Archetype];
+    /** @returns a clone on this archetype */
+    cloneWithToggle: <T>(component: ComponentInstance<T>) => Archetype;
     /** @returns an iterator of Entities which inhabit this Archetype */
     getEntities: () => IterableIterator<Entity>;
     /** @returns `true` if the Entity inhabits this Archetype */
     hasEntity: (entity: Entity) => boolean;
-    /** Remove an entity from the inhabitants list */
-    removeEntity: (entity: Entity) => Archetype;
-    /** @returns a clone on this archetype */
-    cloneWithToggle: <T>(component: ComponentInstance<T>) => Archetype;
-    /** Get the ID of an archetype based on this with a toggled component */
-    cloneInStep: <T>(component: ComponentInstance<T>) => [string, () => Archetype];
     /** @returns `true` if the query criteria match this archetype */
     isCandidate: (query: QueryData) => boolean;
+    /** Purge various archetype related caches */
+    purge: () => void;
+    /** Remove an entity from the inhabitants list */
+    removeEntity: (entity: Entity) => Archetype;
+    /** Run archetype maintenance functions */
+    refresh: () => void;
+}
+
+interface MiskiData {
+    componentBuffer: ArrayBuffer;
 }
 
 interface WorldSpec {
-    /** Components to instantiate in the world  */
-    components: Component<unknown>[];
     /** The maximum number of entities allowed in the world */
     capacity: number;
+    /** Components to instantiate in the world  */
+    components: Component<unknown>[];
 }
 interface WorldProto {
+    /** The Miski version used to create this World */
     readonly version: string;
 }
 interface World extends WorldProto {
+    /** The maximum number of entities allowed in the world */
     readonly capacity: number;
-    createEntity: () => number | undefined;
+    /**
+     * Add a component to an entity.
+     * @param component the component to add.
+     * @param entity the entity to add the component to.
+     * @param props optional initial component values to set for the entity.
+     * @returns `true` if the component was added successfully.
+     */
+    addComponentToEntity: <T>(component: Component<T>, entity: Entity, props?: SchemaProps<T> | undefined) => boolean;
+    /**
+     * Create a new entity for use in the world.
+     * @returns the entity or `undefined` if no entities were available.
+     */
+    createEntity: () => Entity | undefined;
+    /**
+     * Destroy a given entity.
+     * @returns `true` if the entity was successfully destroyed.
+     */
     destroyEntity: (entity: Entity) => boolean;
-    getEntityArchetype: (entity: number) => Archetype | undefined;
+    /**
+     * Check if an entity has a given component.
+     * @param entity the entity to check.
+     * @param component the component to check for.
+     * @returns `true` if the entity has the component.
+     */
+    entityHasComponent: <T>(entity: Entity, component: Component<T>) => boolean;
+    /**
+     * Get a given entity's archetype.
+     * @param entity the entity to expose.
+     * @returns the Archetype object or `undefined` if no archetype found.
+     */
+    getEntityArchetype: (entity: Entity) => Archetype | undefined;
+    /** @returns an array of entities which have entered a query's archetypes since last world.refresh() */
+    getQueryEntered: (query: Query) => Entity[];
+    /** @returns an array of entities which have left a query's archetypes since last world.refresh() */
+    getQueryExited: (query: Query) => Entity[];
+    /** @returns a tuple of entities and components which match the query's criteria */
     getQueryResult: (query: Query) => [Entity[], ComponentRecord];
+    /** @returns the number of available entities in the world. */
     getVacancyCount: () => number;
-    hasEntity: (entity: number) => boolean;
-    addComponentToEntity: <T>(component: Component<T>, entity: number, props?: SchemaProps<T> | undefined) => boolean;
-    entityHasComponent: <T>(component: Component<T>, entity: number) => boolean;
-    removeComponentFromEntity: <T>(component: Component<T>, entity: number) => boolean;
+    /** @returns `true` if the entity is valid and !== undefined */
+    hasEntity: (entity: Entity) => boolean;
+    /**
+     * Load data into the world.
+     * @param data the MiskiData object to load
+     * @returns `true` if all the data was successfully loaded into the world.
+     */
+    load: (data: MiskiData) => boolean;
+    /**
+     * Purge various caches throughout the world.
+     * Should not be necessary but useful if memory footprint is creeping.
+     */
+    purgeCaches: () => void;
+    /**
+     * Run various maintenance functions in the world.
+     * Recommended once per frame.
+     */
     refresh: () => void;
+    /**
+     * Remove a component from an entity.
+     * @param component the component to remove.
+     * @param entity the entity to remove the component from.
+     * @returns `true` if the component was removed successfully.
+     */
+    removeComponentFromEntity: <T>(component: Component<T>, entity: Entity) => boolean;
+    /** Serialize various aspects of the world's data */
+    save: () => Readonly<MiskiData>;
 }
 declare function createWorld(spec: WorldSpec): Readonly<World>;
 
@@ -195,4 +281,4 @@ declare type System<T extends (world: World, ...args: any[]) => ReturnType<T>, U
  */
 declare function createSystem<T extends (world: World, ...args: any[]) => ReturnType<T>, U extends ParametersExceptFirst<T>>(callback: System<T, U>): (world: World) => (...args: U) => ReturnType<T>;
 
-export { Archetype, Bitfield, Component, ComponentInstance, ComponentRecord, ComponentSpec, ParametersExceptFirst, Query, QueryData, QueryInstance, QuerySpec, Schema, SchemaProps, System, TypedArrayConstructor, World, WorldSpec, createComponent, createQuery, createSystem, createWorld };
+export { Archetype, Bitfield, Component, ComponentInstance, ComponentRecord, ComponentSpec, Entity, MiskiData, Opaque, ParametersExceptFirst, Query, QueryData, QueryInstance, QuerySpec, Schema, SchemaProps, System, TypedArrayConstructor, World, WorldSpec, createComponent, createQuery, createSystem, createWorld };

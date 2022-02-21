@@ -68,6 +68,7 @@ const {
   getQueryExited,
   getVacancyCount,
   hasEntity,
+  purgeCaches,
   refresh,
   removeComponentFromEntity,
 } = world;
