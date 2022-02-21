@@ -38,9 +38,10 @@ export function isValidQuery(object: unknown): object is Query {
 /**
  * Create a new Query
  * @param spec The Query's specification object
- * @param spec.all
- * @param spec.any
- * @param spec.none
+ * @param spec.all AND - Gather entities as long as they have all these components
+ * @param spec.any OR - Gather entities as long as they have 0...* of these components
+ * @param spec.none NOT - Gather entities as long as they don't have these components
+ * @returns a valid Query object
  */
 export function createQuery(spec: QuerySpec): Readonly<Query> {
   if (!spec) throw new SyntaxError("createQuery: specification object is required.");
