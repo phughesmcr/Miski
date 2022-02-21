@@ -7,8 +7,8 @@ import { Archetype, createArchetype } from "./archetype.js";
 
 export interface ArchetypeManagerSpec {
   bitfieldFactory: (components?: ComponentInstance<unknown>[] | undefined) => Bitfield;
-  getEntityArchetype: (entity: number) => Archetype | undefined;
-  setEntityArchetype: (entity: number, archetype: Archetype) => boolean;
+  getEntityArchetype: (entity: Entity) => Archetype | undefined;
+  setEntityArchetype: (entity: Entity, archetype: Archetype) => boolean;
 }
 
 export interface ArchetypeManager {

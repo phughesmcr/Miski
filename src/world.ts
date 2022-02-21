@@ -27,20 +27,20 @@ export interface WorldProto {
 
 export interface World extends WorldProto {
   readonly capacity: number;
-  addComponentToEntity: <T>(component: Component<T>, entity: number, props?: SchemaProps<T> | undefined) => boolean;
-  createEntity: () => number | undefined;
+  addComponentToEntity: <T>(component: Component<T>, entity: Entity, props?: SchemaProps<T> | undefined) => boolean;
+  createEntity: () => Entity | undefined;
   destroyEntity: (entity: Entity) => boolean;
-  entityHasComponent: <T>(component: Component<T>, entity: number) => boolean;
-  getEntityArchetype: (entity: number) => Archetype | undefined;
+  entityHasComponent: <T>(component: Component<T>, entity: Entity) => boolean;
+  getEntityArchetype: (entity: Entity) => Archetype | undefined;
   getQueryEntered: (query: Query) => [Entity[], ComponentRecord];
   getQueryExited: (query: Query) => [Entity[], ComponentRecord];
   getQueryResult: (query: Query) => [Entity[], ComponentRecord];
   getVacancyCount: () => number;
-  hasEntity: (entity: number) => boolean;
+  hasEntity: (entity: Entity) => boolean;
   load: (data: MiskiData) => boolean;
   purgeCaches: () => void;
   refresh: () => void;
-  removeComponentFromEntity: <T>(component: Component<T>, entity: number) => boolean;
+  removeComponentFromEntity: <T>(component: Component<T>, entity: Entity) => boolean;
   save: () => Readonly<MiskiData>;
 }
 

@@ -60,3 +60,13 @@ export function noop(): void {
 
 /** @author https://stackoverflow.com/a/67605309 */
 export type ParametersExceptFirst<F> = F extends (arg0: any, ...rest: infer R) => any ? R : never;
+
+/**
+ * Opaque typing allows for nominal types
+ * @example
+ * type Entity = number;
+ * const a: Entity = 1; // a = number;
+ * type Entity = Opaque<number, "Entity">;
+ * const b: Entity = 1 // b = Entity;
+ */
+export type Opaque<T, K> = T & { _TYPE: K };

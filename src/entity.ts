@@ -1,10 +1,10 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
 import { Archetype } from "./archetype/archetype.js";
-import { isUint32 } from "./utils.js";
+import { isUint32, Opaque } from "./utils.js";
 
-/** Entities are indexes of an EntityArray */
-export type Entity = number;
+/** Entities are indexes of an EntityArray. An Entity is just an integer. */
+export type Entity = Opaque<number, "Entity">;
 
 export interface EntityManagerSpec {
   capacity: number;
@@ -28,7 +28,7 @@ function createEntityArchetypeArray(capacity: number) {
 function createAvailableEntityArray(capacity: number): Entity[] {
   // @todo would this be better as a generator?
   const total = capacity - 1;
-  return Array.from({ length: capacity }, (_, i) => total - i);
+  return Array.from({ length: capacity }, (_, i) => total - i) as Entity[];
 }
 
 /**
@@ -38,7 +38,7 @@ function createAvailableEntityArray(capacity: number): Entity[] {
  */
 function entityValidator(capacity: number): (entity: Entity) => entity is Entity {
   /** @return `true` if the given entity is valid for the given capacity */
-  return function isValidEntity(entity: number): entity is Entity {
+  return function isValidEntity(entity: Entity): entity is Entity {
     if (!isUint32(entity) || entity > capacity) return false;
     return true;
   };
