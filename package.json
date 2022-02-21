@@ -12,8 +12,10 @@
     "test": "test"
   },
   "exports": {
-    "import": "./dist/miski.min.js",
-    "types": "./dist/esm/miski.min.d.ts"
+    ".": {
+      "import": "./dist/miski.min.js",
+      "types": "./dist/miski.min.d.ts"
+    }
   },
   "devDependencies": {
     "@rollup/plugin-commonjs": "^21.0.1",
