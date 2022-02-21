@@ -14,8 +14,6 @@ export interface ComponentInstanceSpec<T> {
 }
 
 export interface ComponentInstance<T> extends Component<T> {
-  /** The instance's parent component */
-  component: Component<T>;
   /** The instance's identifier */
   id: number;
 }
@@ -36,12 +34,6 @@ export function createComponentInstance<T>(
   if (!isUint32(id)) throw new SyntaxError("Component ID is invalid.");
   if (storage && !isObject(storage)) throw new TypeError("Component storage is malformed.");
   const instance = Object.create(component, {
-    component: {
-      value: component,
-      configurable: false,
-      enumerable: true,
-      writable: false,
-    },
     id: {
       value: id,
       configurable: false,

@@ -10,14 +10,17 @@ import { SchemaProps } from "./schema.js";
 export interface ComponentManager {
   componentMap: Map<Component<unknown>, ComponentInstance<unknown>>;
   addComponentToEntity: <T>(component: Component<T>, entity: Entity, props?: SchemaProps<T>) => boolean;
-  entityHasComponent: <T>(component: Component<T>, entity: Entity) => boolean;
+  entityHasComponent: <T>(entity: Entity, component: Component<T>) => boolean;
+  getBuffer: () => ArrayBuffer;
   removeComponentFromEntity: <T>(component: Component<T>, entity: Entity) => boolean;
+  setBuffer: (source: ArrayBuffer) => ArrayBuffer;
 }
 
 export interface ComponentManagerSpec {
+  capacity: number;
   components: Component<unknown>[];
-  entityCapacity: number;
   getEntityArchetype: (entity: Entity) => Archetype | undefined;
+  isValidEntity: (entity: Entity) => entity is Entity;
   updateArchetype: <T>(entity: Entity, component: ComponentInstance<T>) => Archetype;
 }
 
@@ -35,7 +38,8 @@ function instantiateComponents(spec: {
   const { components, partitioner } = spec;
   const reducer = <T>(obj: ComponentRecord, component: Component<T>, id: number) => {
     const { name } = component;
-    if (name in obj) throw new Error(`ComponentInstance with name "${name}" already exists.`);
+    if (Object.prototype.hasOwnProperty.call(obj, name))
+      throw new Error(`ComponentInstance with name "${name}" already exists.`);
     const storage = partitioner(component);
     obj[name] = createComponentInstance({ component, id, storage });
     return obj;
@@ -43,43 +47,53 @@ function instantiateComponents(spec: {
   return [...new Set(components)].reduce(reducer, {});
 }
 
-/**
- * Create a new ComponentManager object
- * @param spec
- * @param spec.capacity
- * @param spec.components
- */
 export function createComponentManager(spec: ComponentManagerSpec): Readonly<ComponentManager> {
-  const { components, entityCapacity, getEntityArchetype, updateArchetype } = spec;
+  const { capacity, components, getEntityArchetype, isValidEntity, updateArchetype } = spec;
+
+  const buffer = createComponentBuffer({ capacity, components });
+  const partitioner = createComponentBufferPartitioner({ buffer, capacity });
 
   /** { component_name: ComponentInstance } */
-  const instances = (() => {
-    const buffer = createComponentBuffer({ entityCapacity, components });
-    const partitioner = createComponentBufferPartitioner({ buffer, entityCapacity });
-    return instantiateComponents({ components, partitioner });
-  })();
+  const instances = instantiateComponents({ components, partitioner });
 
   /** <Component, ComponentInstance> */
   const componentMap: Map<Component<unknown>, ComponentInstance<unknown>> = new Map();
   Object.values(instances).forEach(<T>(instance: ComponentInstance<T>) => {
-    componentMap.set(instance.component, instance);
+    componentMap.set(Object.getPrototypeOf(instance) as Component<T>, instance);
   });
 
-  function getComponentInstance<T>(component: Component<T> | string): ComponentInstance<T> | undefined {
-    if (typeof component === "string") {
-      return instances[component] as ComponentInstance<T> | undefined;
-    } else {
-      return componentMap.get(component) as ComponentInstance<T> | undefined;
+  const getBuffer = (): ArrayBuffer => buffer.slice(0);
+
+  const setBuffer = (source: ArrayBuffer): ArrayBuffer => {
+    if (source.byteLength !== buffer.byteLength) {
+      throw new Error("setBuffer - byteLength mismatch!");
     }
-  }
+    const view = new Uint8Array(source);
+    const target = new Uint8Array(buffer);
+    target.set(view);
+    return buffer.slice(0);
+  };
 
   return Object.freeze({
     componentMap,
 
     addComponentToEntity<T>(component: Component<T>, entity: Entity, props?: SchemaProps<T>): boolean {
-      const inst = getComponentInstance(component);
+      if (!isValidEntity(entity)) return false;
+      const inst = componentMap.get(component);
       if (!inst) return false;
       updateArchetype(entity, inst);
+      // set any default initial properties
+      if (component.schema) {
+        Object.entries(component.schema).forEach(([key, value]) => {
+          if (Array.isArray(value)) {
+            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+            // @ts-ignore
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment
+            inst[key][entity] = value[1] ?? 0;
+          }
+        });
+      }
+      // set any custom initial properties
       if (props) {
         Object.entries(props).forEach(([key, value]) => {
           // eslint-disable-next-line @typescript-eslint/ban-ts-comment
@@ -91,8 +105,8 @@ export function createComponentManager(spec: ComponentManagerSpec): Readonly<Com
       return true;
     },
 
-    entityHasComponent<T>(component: Component<T>, entity: Entity): boolean {
-      const inst = getComponentInstance(component);
+    entityHasComponent<T>(entity: Entity, component: Component<T>): boolean {
+      const inst = componentMap.get(component);
       if (!inst) return false;
       const arch = getEntityArchetype(entity);
       if (!arch) return false;
@@ -100,11 +114,16 @@ export function createComponentManager(spec: ComponentManagerSpec): Readonly<Com
       return bitfield.isOn(inst.id);
     },
 
+    getBuffer,
+
     removeComponentFromEntity<T>(component: Component<T>, entity: Entity): boolean {
-      const inst = getComponentInstance(component);
+      if (!isValidEntity(entity)) return false;
+      const inst = componentMap.get(component);
       if (!inst) return false;
       updateArchetype(entity, inst);
       return true;
     },
+
+    setBuffer,
   });
 }

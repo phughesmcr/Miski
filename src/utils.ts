@@ -8,8 +8,13 @@ export function isUint32(n: number): n is number {
 }
 
 /** Test if an object is a typed array and not a dataview */
-export function isTypedArray(object: unknown): object is TypedArrayConstructor {
+export function isTypedArray(object: unknown): object is TypedArray {
   return Boolean(ArrayBuffer.isView(object) && !(object instanceof DataView));
+}
+
+/** Test if an object is a typed array constructor (e.g., `Uint8Array`) */
+export function isTypedArrayConstructor(object: unknown): object is TypedArrayConstructor {
+  return Boolean(typeof object === "function" && Object.prototype.hasOwnProperty.call(object, "BYTES_PER_ELEMENT"));
 }
 
 /** All the various kinds of typed arrays */
@@ -58,8 +63,15 @@ export function noop(): void {
   return void 0;
 }
 
-/** */
-export const pipe =
-  <T, U>(...fns: ((arg: T) => T)[]) =>
-  (value: T) =>
-    fns.reduce((acc, fn) => fn(acc), value) as unknown as U;
+/** @author https://stackoverflow.com/a/67605309 */
+export type ParametersExceptFirst<F> = F extends (arg0: any, ...rest: infer R) => any ? R : never;
+
+/**
+ * Opaque typing allows for nominal types
+ * @example
+ * type Entity = number;
+ * const a: Entity = 1; // a = number;
+ * type Entity = Opaque<number, "Entity">;
+ * const b: Entity = 1 // b = Entity;
+ */
+export type Opaque<T, K> = T & { _TYPE: K };

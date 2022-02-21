@@ -9,39 +9,48 @@
  *  - A way of checking if a QueryInstance matches the Archetype's Components
  */
 
-import { ComponentInstance } from "../component/instance.js";
-import { Entity } from "../entity.js";
 import { Bitfield } from "../bitfield.js";
-import { QueryInstance } from "../query/instance.js";
+import { ComponentInstance } from "../component/instance.js";
+import { EMPTY_ARRAY } from "../constants.js";
+import { Entity } from "../entity.js";
+import { QueryData } from "../query/instance.js";
 
 export interface ArchetypeSpec {
-  /** Optional */
-  id?: string;
   /** The Bitfield */
   bitfield: Bitfield;
+  /** Optional */
+  id?: string;
 }
 
 export interface Archetype {
-  /** Set of Entities which inhabit this Archetype */
-  entities: Set<Entity>;
-  /** The Archetype's unique ID */
-  id: string;
   /** The Archetype's Component Bitfield */
   bitfield: Bitfield;
+  /** Entities which have entered this archetype since last refresh */
+  entered: Set<Entity>;
+  /** Set of Entities which inhabit this Archetype */
+  entities: Set<Entity>;
+  /** Entities which have exited this archetype since last refresh */
+  exited: Set<Entity>;
+  /** The Archetype's unique ID */
+  id: string;
   /** Add an entity to the inhabitants list */
   addEntity: (entity: Entity) => Archetype;
-  /** @returns an array of Entities which inhabit this Archetype */
-  getEntities: () => Entity[];
-  /** @returns `true` if the Entity inhabits this Archetype */
-  hasEntity: (entity: Entity) => boolean;
-  /** Remove an entity from the inhabitants list */
-  removeEntity: (entity: Entity) => Archetype;
-  /** @returns a clone on this archetype */
-  cloneWithToggle: <T>(component: ComponentInstance<T>) => Archetype;
   /** Get the ID of an archetype based on this with a toggled component */
   cloneInStep: <T>(component: ComponentInstance<T>) => [string, () => Archetype];
+  /** @returns a clone on this archetype */
+  cloneWithToggle: <T>(component: ComponentInstance<T>) => Archetype;
+  /** @returns an iterator of Entities which inhabit this Archetype */
+  getEntities: () => IterableIterator<Entity>;
+  /** @returns `true` if the Entity inhabits this Archetype */
+  hasEntity: (entity: Entity) => boolean;
   /** @returns `true` if the query criteria match this archetype */
-  isCandidate: (spec: QueryInstance) => boolean;
+  isCandidate: (query: QueryData) => boolean;
+  /** Purge various archetype related caches */
+  purge: () => void;
+  /** Remove an entity from the inhabitants list */
+  removeEntity: (entity: Entity) => Archetype;
+  /** Run archetype maintenance functions */
+  refresh: () => void;
 }
 
 function validateSpec(spec: ArchetypeSpec): Required<ArchetypeSpec> {
@@ -52,16 +61,17 @@ function validateSpec(spec: ArchetypeSpec): Required<ArchetypeSpec> {
 }
 
 function entityFns(state: Archetype) {
-  const { entities } = state;
+  const { entities, entered, exited } = state;
   return {
     /** Add an entity to the inhabitants list */
     addEntity: function (entity: Entity): Archetype {
       entities.add(entity);
+      entered.add(entity);
       return state;
     },
     /** @returns an array of Entities which inhabit this Archetype */
-    getEntities: function (): Entity[] {
-      return [...entities];
+    getEntities: function (): IterableIterator<Entity> {
+      return entities.values();
     },
     /** @returns `true` if the Entity inhabits this Archetype */
     hasEntity: function (entity: Entity): boolean {
@@ -70,6 +80,7 @@ function entityFns(state: Archetype) {
     /** Remove an entity from the inhabitants list */
     removeEntity: function (entity: Entity): Archetype {
       entities.delete(entity);
+      exited.add(entity);
       return state;
     },
   };
@@ -79,15 +90,6 @@ function cloner(state: Archetype) {
   const { bitfield } = state;
   const cache: Map<ComponentInstance<unknown>, Archetype> = new Map();
   return {
-    /** @returns a clone on this archetype */
-    cloneWithToggle: function <T>(component: ComponentInstance<T>): Archetype {
-      if (cache.has(component)) return cache.get(component)!;
-      const { id } = component;
-      const bitfieldCopy = bitfield.copy().toggle(id);
-      const clone = createArchetype({ bitfield: bitfieldCopy, id: bitfieldCopy.toString() });
-      cache.set(component, clone);
-      return clone;
-    },
     cloneInStep: function <T>(component: ComponentInstance<T>): [string, () => Archetype] {
       if (cache.has(component)) {
         const cached = cache.get(component)!;
@@ -95,15 +97,28 @@ function cloner(state: Archetype) {
       } else {
         const { id } = component;
         const bitfieldCopy = bitfield.copy().toggle(id);
+        const bitfieldId = bitfieldCopy.toString();
         return [
-          bitfieldCopy.toString(),
+          bitfieldId,
           function () {
-            const clone = createArchetype({ bitfield: bitfieldCopy, id: bitfieldCopy.toString() });
+            const clone = createArchetype({ bitfield: bitfieldCopy, id: bitfieldId });
             cache.set(component, clone);
             return clone;
           },
         ];
       }
+    },
+    /** @returns a clone on this archetype */
+    cloneWithToggle: function <T>(component: ComponentInstance<T>): Archetype {
+      if (cache.has(component)) return cache.get(component)!;
+      const { id } = component;
+      const bitfieldCopy = bitfield.copy().toggle(id);
+      const clone = createArchetype({ bitfield: bitfieldCopy });
+      cache.set(component, clone);
+      return clone;
+    },
+    purgeCloneCache: function () {
+      return cache.clear();
     },
   };
 }
@@ -111,16 +126,15 @@ function cloner(state: Archetype) {
 function candidateChecker(state: Archetype) {
   const { bitfield } = state;
   const _bitfield = bitfield.array;
-  const _empty: number[] = [];
-  const cache: Map<QueryInstance, boolean> = new Map();
+  const cache: Map<QueryData, boolean> = new Map();
   return {
     /** @returns `true` if the query criteria match this archetype */
-    isCandidate: function (query: QueryInstance): boolean {
+    isCandidate: function (query: QueryData): boolean {
       if (cache.has(query)) return cache.get(query) || false;
       const { and, or, not } = query;
-      const _not = not?.array ?? _empty;
-      const _and = and?.array ?? _empty;
-      const _or = or?.array ?? _empty;
+      const _not = not?.array ?? EMPTY_ARRAY;
+      const _and = and?.array ?? EMPTY_ARRAY;
+      const _or = or?.array ?? EMPTY_ARRAY;
       function checkStatus(target: number, i: number): boolean {
         // is ?? 0 right here??
         const _n = _not[i] ?? 0;
@@ -135,24 +149,40 @@ function candidateChecker(state: Archetype) {
       cache.set(query, status);
       return status;
     },
+    purgeCandidateCache: function () {
+      return cache.clear();
+    },
   };
 }
 
 /** Archetypes are unique groupings of entities by components */
 export function createArchetype(spec: ArchetypeSpec): Archetype {
-  const { id, bitfield } = validateSpec(spec);
+  const { bitfield, id } = validateSpec(spec);
+  const entered: Set<Entity> = new Set();
   const entities: Set<Entity> = new Set();
-  const data = { entities, id, bitfield } as Archetype;
+  const exited: Set<Entity> = new Set();
+  const data = { bitfield, entered, entities, exited, id } as Archetype;
   const { addEntity, getEntities, removeEntity } = entityFns(data);
-  const { cloneWithToggle, cloneInStep } = cloner(data);
-  const { isCandidate } = candidateChecker(data);
-  const result = Object.assign(data, {
-    addEntity,
-    getEntities,
-    removeEntity,
-    cloneInStep,
-    cloneWithToggle,
-    isCandidate,
-  });
-  return Object.freeze(result);
+  const { cloneInStep, cloneWithToggle, purgeCloneCache } = cloner(data);
+  const { isCandidate, purgeCandidateCache } = candidateChecker(data);
+  const refresh = () => {
+    entered.clear();
+    exited.clear();
+  };
+  const purge = () => {
+    purgeCandidateCache();
+    purgeCloneCache();
+  };
+  return Object.freeze(
+    Object.assign(data, {
+      addEntity,
+      cloneInStep,
+      cloneWithToggle,
+      getEntities,
+      isCandidate,
+      purge,
+      refresh,
+      removeEntity,
+    }),
+  );
 }

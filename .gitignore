@@ -4,21 +4,16 @@ types/
 
 # API keys and secrets
 .env
+.env.*
 
 # Node/NPM directories
+.npm
 node_modules/
 npm-debug.log
 package-lock.json
 
-# OS metadata
-.DS_Store
-Thumbs.db
-
 # TypeScript cache
 *.tsbuildinfo
-
-# Optional npm cache directory
-.npm
 
 # Optional eslint cache
 .eslintcache
@@ -32,5 +27,26 @@ pids
 # Stores VSCode versions used for testing VSCode extensions
 .vscode-test
 
-# SvelteKit build / generate output
-.svelte-kit
+# Windows thumbnail cache files
+Thumbs.db
+ehthumbs.db
+ehthumbs_vista.db
+
+# Folder config file
+.DS_Store
+Desktop.ini
+
+# Recycle Bin used on file shares
+$RECYCLE.BIN/
+
+# Thumbnails
+._*
+
+# Files that might appear in the root of a volume
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent

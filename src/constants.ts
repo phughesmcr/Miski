@@ -41,3 +41,6 @@ export const VALID_NAME_PATTERN = /^(?![0-9])[a-zA-Z0-9$_]+$/;
 
 /** The number 8 - to avoid magic numbers */
 export const ONE_BYTE = 8;
+
+/** A frozen empty array to avoid multiple object creation at certain points */
+export const EMPTY_ARRAY = Object.freeze([]);

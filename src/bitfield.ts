@@ -65,7 +65,6 @@ export function bitfield(spec: BitfieldSpec): Bitfield {
   const { capacity, array } = validateSpec(spec);
   const state = { capacity, array } as Bitfield;
   const bitToIdx = getBitIndex(capacity);
-  // @todo parallelize?
   const { clear } = clearer(state);
   const { copy } = copier(state);
   const { isOn } = onChecker(state, bitToIdx);

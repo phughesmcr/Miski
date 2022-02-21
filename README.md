@@ -1,6 +1,5 @@
 # 🍬 Miski ECS
 
-
 __Miski__: Quechuan adjective meaning "sweet".
 
 __ECS__: Entity-Component-System; A software architecture pattern.
@@ -9,10 +8,11 @@ __Miski ECS__: A sweet ECS architecture written in Typescript.
 
 ⚠️ Miski is currently in alpha. Expect breaking changes every version until beta.
 
-<a href="https://github.com/phughesmcr/miski/blob/master/LICENSE">
-  <img src="https://badgen.net/badge/license/MIT/blue" alt="MIT License" />
-</a>
-<img src="https://badgen.net/badge/icon/typescript?icon=typescript&label">
+<p align="left">
+  <img src="https://badgen.net/badge/icon/typescript?icon=typescript&label" alt="" />
+  <img src="https://badgen.net/badge/license/MIT/blue" alt="" />
+  <img src="https://img.shields.io/npm/v/miski.svg" alt="" />
+</p>
 
 ## Contents
   * [Purpose](#purpose)
@@ -33,7 +33,7 @@ Miski's purpose is to provide a stable, user-friendly ECS architecture for moder
 
 ### Goals
 * To provide good and predictable performance
-* To provide a user-friendly API
+* To provide a developer-friendly and user-friendly API
 * To provide a clean, readable, self-documenting, open-source codebase
 
 ### Not Goals
@@ -47,52 +47,71 @@ Because Miski is designed to be used inside other projects, we'll let those devs
 * No dependencies
 * Memory-friendly archetype-based ECS model
 * Ability to use more than 32 components in one world using Uint32Array bitfields
+* Basic serialization methods (`world.load` & `world.save`)
 * Fast, cache-friendly ArrayBuffer-based component data storage
 * Define components and queries once, reuse them across multiple worlds
 * `AND`,`OR`,`NOT` operators in Queries
+* `world.getQueryEntered` & `world.getQueryExited` methods
 
 ## Install
 The javascript module `miski.min.js` is found in the `./dist` folder, along with a sourcemap file and typescript definitions `.d.ts` file.
 
 ```javascript
-import { createComponent, createQuery, createWorld } from './miski.min.js';
+import { createComponent, createQuery, createSystem, createWorld } from './miski.min.js';
 ```
 
 See [API Reference](#api-reference) below for a complete list of named exports.
+
+Various type definitions are also exported - see index.ts for a complete list.
 
 ## API Reference
 This is the complete API:
 
 ```typescript
-🧩 Components // (T: schema)
+🧩 Components // Schema = Record<string, TypedArrayConstructor>. E.g., { r: Uint8ClampedArray, g: Uint8ClampedArray, b: Uint8ClampedArray };
 createComponent: <T extends Schema<T>>(spec: ComponentSpec<T>) => Component<T>;
-  component.getInstance: (world: World) => ComponentInstance<T> | undefined;
 
 🔎 Queries
 createQuery: (spec: QuerySpec) => Query;
-  query.getResult: (world: World) => [Entity[], ComponentRecord];
+
+🔃 Systems // optional but helps with type safety - A system is a function of any arity where the first parameter is the World
+createSystem: <T, U>(system: System<T, U>) => (world: World) => (...args: U) => ReturnType<T>;
 
 🌍 World
 createWorld: (spec: WorldSpec) => World;
 
+  ❓ World info
+  world.capacity: number; // Maximum number of Entities
+  world.getVacancyCount: () => number; // Number of available (i.e., unused) Entities
+  world.version: string; // Miski build version
+
   👾 World Entity methods // ('Entity' is just a type alias for 'number')
-  world.createEntity: () => number | undefined;
+  world.createEntity: () => Entity | undefined;
   world.destroyEntity: (entity: Entity) => boolean;
-  world.hasEntity: (entity: number) => boolean;
-  world.getEntityArchetype: (entity: number) => Archetype | undefined;
+  world.hasEntity: (entity: Entity) => boolean;
+  world.getEntityArchetype: (entity: Entity) => Archetype | undefined;
+  world.entityHasComponent: <T>(entity: Entity, component: Component<T>) => boolean;
 
   🧩 World Component methods
-  world.addComponentToEntity: <T>(component: Component<T>, entity: number, props?: SchemaProps<T> | undefined) => boolean;
-  world.removeComponentFromEntity: <T>(component: Component<T>, entity: number) => boolean;
-  world.entityHasComponent: <T>(component: Component<T>, entity: number) => boolean;
+  world.addComponentToEntity: <T>(component: Component<T>, entity: Entity, props?: SchemaProps<T>) => boolean;
+  world.removeComponentFromEntity: <T>(component: Component<T>, entity: Entity) => boolean;
+
+  🔎 World Query methods
+  world.getQueryResult: (query: Query) => [Entity[], ComponentRecord];
+  world.getQueryEntered: (query: Query) => Entity[];
+  world.getQueryExited: (query: Query) => Entity[];
+
+  💾 World serialization methods
+  world.load: (data: MiskiData) => boolean;
+  world.save: () => Readonly<MiskiData>;
 
   🔧 World maintenance methods
-  world.refreshWorld: () => void;
-  world.version: string; // Miski build version
+  world.refresh: () => void;
+  world.purgeCaches: () => void;
 ```
 
 ## Demos
-See `./demo` for working examples.
+See `./demo` for demo code or <a href="https://phughesmcr.github.io/Miski/">the demo page</a> for live examples.
 
 ## Benchmarks
 Soon™️
@@ -108,18 +127,16 @@ npm run build
 ### Before Beta
 1. Finalise API
 2. Write comprehensive tests
-3. Ensure high-quality Typescript definitions throughout
 4. Write consistent code documentation throughout
-5. Validation for any user supplied arguments
 ### Before 1.0.0
 1. Optimise performance
 2. Consistent code style throughout
 ### Future
 1. Allow for "changed" in queries
-2. Allow for `onEnter` & `onLeave` events in archetypes
-3. Serialisation
-4. Multithreading support / playing nicely with WebWorkers / SharedArrayBuffers
-5. Proper Deno support
+2. Multithreading support / playing nicely with WebWorkers / SharedArrayBuffers
+3. Proper Deno support
+4. Resizable/dynamic component data storage
+5. Object pooling where necessary
 
 ## Contributing
 Contributions are also welcome and invited. See `CONTRIBUTING.md` for details.

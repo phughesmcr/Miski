@@ -7,8 +7,8 @@ import { Archetype, createArchetype } from "./archetype.js";
 
 export interface ArchetypeManagerSpec {
   bitfieldFactory: (components?: ComponentInstance<unknown>[] | undefined) => Bitfield;
-  getEntityArchetype: (entity: number) => Archetype | undefined;
-  setEntityArchetype: (entity: number, archetype: Archetype) => boolean;
+  getEntityArchetype: (entity: Entity) => Archetype | undefined;
+  setEntityArchetype: (entity: Entity, archetype: Archetype) => boolean;
 }
 
 export interface ArchetypeManager {
@@ -18,7 +18,6 @@ export interface ArchetypeManager {
 
 export function createArchetypeManager(spec: ArchetypeManagerSpec): ArchetypeManager {
   const { bitfieldFactory, getEntityArchetype, setEntityArchetype } = spec;
-  const componentCache: Map<ComponentInstance<unknown>, Archetype> = new Map(); // wrong!!
   const archetypeMap: Map<string, Archetype> = new Map();
 
   return {
@@ -43,13 +42,8 @@ export function createArchetypeManager(spec: ArchetypeManagerSpec): ArchetypeMan
           archetypeMap.set(id, nextArchetype);
         }
       } else {
-        if (componentCache.has(component)) {
-          nextArchetype = componentCache.get(component) as Archetype;
-        } else {
-          nextArchetype = createArchetype({ bitfield: bitfieldFactory([component]) });
-          componentCache.set(component, nextArchetype);
-          archetypeMap.set(nextArchetype.id, nextArchetype);
-        }
+        nextArchetype = createArchetype({ bitfield: bitfieldFactory([component]) });
+        archetypeMap.set(nextArchetype.id, nextArchetype);
       }
       nextArchetype.addEntity(entity);
       setEntityArchetype(entity, nextArchetype);
