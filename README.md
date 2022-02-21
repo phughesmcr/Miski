@@ -33,7 +33,7 @@ Miski's purpose is to provide a stable, user-friendly ECS architecture for moder
 
 ### Goals
 * To provide good and predictable performance
-* To provide a user-friendly API
+* To provide a developer-friendly and user-friendly API
 * To provide a clean, readable, self-documenting, open-source codebase
 
 ### Not Goals
@@ -111,7 +111,7 @@ createWorld: (spec: WorldSpec) => World;
 ```
 
 ## Demos
-See `./demo` for working examples.
+See `./demo` for demo code or <a href="https://phughesmcr.github.io/Miski/">the demo page</a> for live examples.
 
 ## Benchmarks
 Soon™️
@@ -127,9 +127,7 @@ npm run build
 ### Before Beta
 1. Finalise API
 2. Write comprehensive tests
-3. Ensure high-quality Typescript definitions throughout
 4. Write consistent code documentation throughout
-5. Validation for any user supplied arguments
 ### Before 1.0.0
 1. Optimise performance
 2. Consistent code style throughout
