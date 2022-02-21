@@ -1,8 +1,11 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
-import { Bitfield, Component, ComponentInstance, ComponentRecord, Query, QueryInstance } from "..";
-import { Entity } from "../entity";
-import { createQueryInstance } from "./instance";
+import { Bitfield } from "../bitfield.js";
+import { Component, ComponentRecord } from "../component/component.js";
+import { ComponentInstance } from "../component/instance.js";
+import { Entity } from "../entity.js";
+import { createQueryInstance, QueryInstance } from "./instance.js";
+import { Query } from "./query.js";
 
 export interface QueryManagerSpec {
   bitfieldFactory: () => Bitfield;
@@ -11,12 +14,12 @@ export interface QueryManagerSpec {
 
 export interface QueryManager {
   queryMap: Map<Query, QueryInstance>;
-  /** @returns a tuple of Entities and Components which match the Query criteria */
-  getQueryResult: (query: Query) => [Entity[], ComponentRecord];
   /** Entities which have entered this query since last refresh */
   getQueryEntered: (query: Query) => [Entity[], ComponentRecord];
   /** Entities which have exited this query since last refresh */
   getQueryExited: (query: Query) => [Entity[], ComponentRecord];
+  /** @returns a tuple of Entities and Components which match the Query criteria */
+  getQueryResult: (query: Query) => [Entity[], ComponentRecord];
 }
 
 export function createQueryManager(spec: QueryManagerSpec): QueryManager {
@@ -50,8 +53,8 @@ export function createQueryManager(spec: QueryManagerSpec): QueryManager {
 
   return {
     queryMap,
-    getQueryResult,
     getQueryEntered,
     getQueryExited,
+    getQueryResult,
   };
 }

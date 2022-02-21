@@ -6,8 +6,8 @@ import { Component } from "./component.js";
 import { SchemaStorage } from "./schema.js";
 
 export interface ComponentBufferSpec {
-  components: Component<unknown>[];
   capacity: number;
+  components: Component<unknown>[];
 }
 
 export interface ComponentBufferPartitionerSpec {

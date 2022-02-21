@@ -1,10 +1,10 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
 import { Archetype } from "../archetype/archetype.js";
+import { Bitfield } from "../bitfield.js";
 import { Component, ComponentRecord } from "../component/component.js";
 import { ComponentInstance } from "../component/instance.js";
 import { Entity } from "../entity.js";
-import { Bitfield } from "../bitfield.js";
 import { Query } from "./query.js";
 
 export interface QueryInstanceSpec {
@@ -15,9 +15,9 @@ export interface QueryInstanceSpec {
 
 export interface QueryInstance extends Query {
   getComponents: () => ComponentRecord;
-  getEntities: () => Entity[];
   /** Entities which have entered this query since last refresh */
   getEntered: () => Entity[];
+  getEntities: () => Entity[];
   /** Entities which have exited this query since last refresh */
   getExited: () => Entity[];
   refresh: (archetypes: Archetype[]) => void;
@@ -33,7 +33,7 @@ export interface QueryData {
 }
 
 export function createQueryInstance(spec: QueryInstanceSpec): Readonly<QueryInstance> {
-  const { componentMap, bitfieldFactory, query } = spec;
+  const { componentMap, query, bitfieldFactory } = spec;
 
   const archetypes: Set<Archetype> = new Set();
 
@@ -93,8 +93,8 @@ export function createQueryInstance(spec: QueryInstanceSpec): Readonly<QueryInst
   return Object.freeze(
     Object.assign(Object.create(query), {
       getComponents,
-      getEntities,
       getEntered,
+      getEntities,
       getExited,
       refresh,
     }) as QueryInstance,

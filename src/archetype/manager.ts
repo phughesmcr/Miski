@@ -42,8 +42,8 @@ export function createArchetypeManager(spec: ArchetypeManagerSpec): ArchetypeMan
           archetypeMap.set(id, nextArchetype);
         }
       } else {
-          nextArchetype = createArchetype({ bitfield: bitfieldFactory([component]) });
-          archetypeMap.set(nextArchetype.id, nextArchetype);
+        nextArchetype = createArchetype({ bitfield: bitfieldFactory([component]) });
+        archetypeMap.set(nextArchetype.id, nextArchetype);
       }
       nextArchetype.addEntity(entity);
       setEntityArchetype(entity, nextArchetype);

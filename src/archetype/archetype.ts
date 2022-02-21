@@ -9,46 +9,46 @@
  *  - A way of checking if a QueryInstance matches the Archetype's Components
  */
 
-import { ComponentInstance } from "../component/instance.js";
-import { Entity } from "../entity.js";
 import { Bitfield } from "../bitfield.js";
-import { QueryData } from "../query/instance.js";
+import { ComponentInstance } from "../component/instance.js";
 import { EMPTY_ARRAY } from "../constants.js";
+import { Entity } from "../entity.js";
+import { QueryData } from "../query/instance.js";
 
 export interface ArchetypeSpec {
-  /** Optional */
-  id?: string;
   /** The Bitfield */
   bitfield: Bitfield;
+  /** Optional */
+  id?: string;
 }
 
 export interface Archetype {
-  /** Entities which have entered this archetype since last refresh */
-  entered: Set<Entity>;
-  /** Entities which have exited this archetype since last refresh */
-  exited: Set<Entity>;
-  /** Set of Entities which inhabit this Archetype */
-  entities: Set<Entity>;
-  /** The Archetype's unique ID */
-  id: string;
   /** The Archetype's Component Bitfield */
   bitfield: Bitfield;
+  /** Entities which have entered this archetype since last refresh */
+  entered: Set<Entity>;
+  /** Set of Entities which inhabit this Archetype */
+  entities: Set<Entity>;
+  /** Entities which have exited this archetype since last refresh */
+  exited: Set<Entity>;
+  /** The Archetype's unique ID */
+  id: string;
   /** Add an entity to the inhabitants list */
   addEntity: (entity: Entity) => Archetype;
+  /** Get the ID of an archetype based on this with a toggled component */
+  cloneInStep: <T>(component: ComponentInstance<T>) => [string, () => Archetype];
+  /** @returns a clone on this archetype */
+  cloneWithToggle: <T>(component: ComponentInstance<T>) => Archetype;
   /** @returns an iterator of Entities which inhabit this Archetype */
   getEntities: () => IterableIterator<Entity>;
   /** @returns `true` if the Entity inhabits this Archetype */
   hasEntity: (entity: Entity) => boolean;
-  /** Remove an entity from the inhabitants list */
-  removeEntity: (entity: Entity) => Archetype;
-  /** @returns a clone on this archetype */
-  cloneWithToggle: <T>(component: ComponentInstance<T>) => Archetype;
-  /** Get the ID of an archetype based on this with a toggled component */
-  cloneInStep: <T>(component: ComponentInstance<T>) => [string, () => Archetype];
   /** @returns `true` if the query criteria match this archetype */
   isCandidate: (query: QueryData) => boolean;
   /** Purge various archetype related caches */
   purge: () => void;
+  /** Remove an entity from the inhabitants list */
+  removeEntity: (entity: Entity) => Archetype;
   /** Run archetype maintenance functions */
   refresh: () => void;
 }
@@ -90,15 +90,6 @@ function cloner(state: Archetype) {
   const { bitfield } = state;
   const cache: Map<ComponentInstance<unknown>, Archetype> = new Map();
   return {
-    /** @returns a clone on this archetype */
-    cloneWithToggle: function <T>(component: ComponentInstance<T>): Archetype {
-      if (cache.has(component)) return cache.get(component)!;
-      const { id } = component;
-      const bitfieldCopy = bitfield.copy().toggle(id);
-      const clone = createArchetype({ bitfield: bitfieldCopy });
-      cache.set(component, clone);
-      return clone;
-    },
     cloneInStep: function <T>(component: ComponentInstance<T>): [string, () => Archetype] {
       if (cache.has(component)) {
         const cached = cache.get(component)!;
@@ -116,6 +107,15 @@ function cloner(state: Archetype) {
           },
         ];
       }
+    },
+    /** @returns a clone on this archetype */
+    cloneWithToggle: function <T>(component: ComponentInstance<T>): Archetype {
+      if (cache.has(component)) return cache.get(component)!;
+      const { id } = component;
+      const bitfieldCopy = bitfield.copy().toggle(id);
+      const clone = createArchetype({ bitfield: bitfieldCopy });
+      cache.set(component, clone);
+      return clone;
     },
     purgeCloneCache: function () {
       return cache.clear();
@@ -157,13 +157,13 @@ function candidateChecker(state: Archetype) {
 
 /** Archetypes are unique groupings of entities by components */
 export function createArchetype(spec: ArchetypeSpec): Archetype {
-  const { id, bitfield } = validateSpec(spec);
-  const entities: Set<Entity> = new Set();
+  const { bitfield, id } = validateSpec(spec);
   const entered: Set<Entity> = new Set();
+  const entities: Set<Entity> = new Set();
   const exited: Set<Entity> = new Set();
-  const data = { entities, entered, exited, id, bitfield } as Archetype;
+  const data = { bitfield, entered, entities, exited, id } as Archetype;
   const { addEntity, getEntities, removeEntity } = entityFns(data);
-  const { cloneWithToggle, cloneInStep, purgeCloneCache } = cloner(data);
+  const { cloneInStep, cloneWithToggle, purgeCloneCache } = cloner(data);
   const { isCandidate, purgeCandidateCache } = candidateChecker(data);
   const refresh = () => {
     entered.clear();
@@ -173,15 +173,16 @@ export function createArchetype(spec: ArchetypeSpec): Archetype {
     purgeCandidateCache();
     purgeCloneCache();
   };
-  const result = Object.assign(data, {
-    addEntity,
-    getEntities,
-    removeEntity,
-    cloneInStep,
-    cloneWithToggle,
-    isCandidate,
-    purge,
-    refresh,
-  });
-  return Object.freeze(result);
+  return Object.freeze(
+    Object.assign(data, {
+      addEntity,
+      cloneInStep,
+      cloneWithToggle,
+      getEntities,
+      isCandidate,
+      purge,
+      refresh,
+      removeEntity,
+    }),
+  );
 }
