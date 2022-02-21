@@ -1,6 +1,6 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
-import { isObject, isValidName, TypedArray, TypedArrayConstructor } from "../utils.js";
+import { isObject, isTypedArrayConstructor, isValidName, TypedArray, TypedArrayConstructor } from "../utils.js";
 
 /** The interface available to end users */
 export type SchemaProps<T> = Record<keyof T, number>;
@@ -20,7 +20,19 @@ export type Schema<T> = Record<keyof T, TypedArrayConstructor | [TypedArrayConst
 
 /** Schema type guard */
 export function isValidSchema<T>(schema: unknown): schema is Schema<T> {
-  return isObject(schema) && Object.keys(schema).every((name) => isValidName(name));
+  const _validateProps = (value: TypedArrayConstructor | [TypedArrayConstructor, number]) => {
+    if (Array.isArray(value)) {
+      const [a, b] = value;
+      if (!isNaN(b) && isTypedArrayConstructor(a)) return true;
+    } else {
+      return isTypedArrayConstructor(value);
+    }
+    return false;
+  };
+  const _validate = ([name, value]: [string, unknown]) => {
+    return isValidName(name) && _validateProps(value as TypedArrayConstructor | [TypedArrayConstructor, number]);
+  };
+  return isObject(schema) && Object.entries(schema).every(_validate);
 }
 
 /**

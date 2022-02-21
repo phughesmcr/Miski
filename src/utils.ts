@@ -8,8 +8,13 @@ export function isUint32(n: number): n is number {
 }
 
 /** Test if an object is a typed array and not a dataview */
-export function isTypedArray(object: unknown): object is TypedArrayConstructor {
+export function isTypedArray(object: unknown): object is TypedArray {
   return Boolean(ArrayBuffer.isView(object) && !(object instanceof DataView));
+}
+
+/** Test if an object is a typed array constructor (e.g., `Uint8Array`) */
+export function isTypedArrayConstructor(object: unknown): object is TypedArrayConstructor {
+  return Boolean(typeof object === "function" && Object.prototype.hasOwnProperty.call(object, "BYTES_PER_ELEMENT"));
 }
 
 /** All the various kinds of typed arrays */
