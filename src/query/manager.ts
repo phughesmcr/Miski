@@ -5,7 +5,7 @@ import { Component, ComponentRecord } from "../component/component.js";
 import { ComponentInstance } from "../component/instance.js";
 import { Entity } from "../entity.js";
 import { createQueryInstance, QueryInstance } from "./instance.js";
-import { Query } from "./query.js";
+import { isValidQuery, Query } from "./query.js";
 
 export interface QueryManagerSpec {
   bitfieldFactory: () => Bitfield;
@@ -28,6 +28,7 @@ export function createQueryManager(spec: QueryManagerSpec): QueryManager {
   const queryMap: Map<Query, QueryInstance> = new Map();
 
   const register = (query: Query) => {
+    if (!isValidQuery(query)) throw new Error("Object is not a valid query.");
     const instance = createQueryInstance({ bitfieldFactory, componentMap, query });
     queryMap.set(query, instance);
     return instance;

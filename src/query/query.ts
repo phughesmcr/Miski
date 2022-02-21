@@ -22,6 +22,19 @@ export interface Query {
   none: Readonly<Component<unknown>[]>;
 }
 
+export function isValidQuery(object: unknown): object is Query {
+  if (
+    !Array.isArray((object as Query).all) ||
+    !Array.isArray((object as Query).any) ||
+    !Array.isArray((object as Query).none)
+  ) {
+    return false;
+  }
+  const { any, all, none } = object as Query;
+  const _validateComponent = <T>(component: Component<T>) => Object.prototype.hasOwnProperty.call(component, "name");
+  return [...all, ...any, ...none].every(_validateComponent);
+}
+
 /**
  * Create a new Query
  * @param spec The Query's specification object
