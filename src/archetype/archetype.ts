@@ -36,9 +36,7 @@ export interface Archetype {
   /** Add an entity to the inhabitants list */
   addEntity: (entity: Entity) => Archetype;
   /** Get the ID of an archetype based on this with a toggled component */
-  cloneInStep: <T>(component: ComponentInstance<T>) => [string, () => Archetype];
-  /** @returns a clone on this archetype */
-  cloneWithToggle: <T>(component: ComponentInstance<T>) => Archetype;
+  cloneWithToggle: <T>(component: ComponentInstance<T>) => [string, () => Archetype];
   /** @returns an iterator of Entities which inhabit this Archetype */
   getEntities: () => IterableIterator<Entity>;
   /** @returns `true` if the Entity inhabits this Archetype */
@@ -90,7 +88,7 @@ function cloner(state: Archetype) {
   const { bitfield } = state;
   const cache: Map<ComponentInstance<unknown>, Archetype> = new Map();
   return {
-    cloneInStep: function <T>(component: ComponentInstance<T>): [string, () => Archetype] {
+    cloneWithToggle: function <T>(component: ComponentInstance<T>): [string, () => Archetype] {
       if (cache.has(component)) {
         const cached = cache.get(component)!;
         return [cached.id, () => cached];
@@ -107,15 +105,6 @@ function cloner(state: Archetype) {
           },
         ];
       }
-    },
-    /** @returns a clone on this archetype */
-    cloneWithToggle: function <T>(component: ComponentInstance<T>): Archetype {
-      if (cache.has(component)) return cache.get(component)!;
-      const { id } = component;
-      const bitfieldCopy = bitfield.copy().toggle(id);
-      const clone = createArchetype({ bitfield: bitfieldCopy });
-      cache.set(component, clone);
-      return clone;
     },
     purgeCloneCache: function () {
       return cache.clear();
@@ -163,7 +152,7 @@ export function createArchetype(spec: ArchetypeSpec): Archetype {
   const exited: Set<Entity> = new Set();
   const data = { bitfield, entered, entities, exited, id } as Archetype;
   const { addEntity, getEntities, removeEntity } = entityFns(data);
-  const { cloneInStep, cloneWithToggle, purgeCloneCache } = cloner(data);
+  const { cloneWithToggle, purgeCloneCache } = cloner(data);
   const { isCandidate, purgeCandidateCache } = candidateChecker(data);
   const refresh = () => {
     entered.clear();
@@ -176,7 +165,6 @@ export function createArchetype(spec: ArchetypeSpec): Archetype {
   return Object.freeze(
     Object.assign(data, {
       addEntity,
-      cloneInStep,
       cloneWithToggle,
       getEntities,
       isCandidate,
