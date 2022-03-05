@@ -6,11 +6,11 @@ import { isUint32, Opaque } from "./utils.js";
 /** Entities are indexes of an EntityArray. An Entity is just an integer. */
 export type Entity = Opaque<number, "Entity">;
 
-export interface EntityManagerSpec {
+interface EntityManagerSpec {
   capacity: number;
 }
 
-export interface EntityManager {
+interface EntityManager {
   createEntity: () => Entity | undefined;
   destroyEntity: (entity: Entity) => boolean;
   getEntityArchetype: (entity: Entity) => Archetype | undefined;
@@ -32,11 +32,6 @@ function createAvailableEntityArray(capacity: number): Entity[] {
   return Array.from({ length: capacity }, (_, i) => total - i) as Entity[];
 }
 
-/**
- *
- * @param capacity
- * @returns
- */
 function entityValidator(capacity: number): (entity: Entity) => entity is Entity {
   /** @return `true` if the given entity is valid for the given capacity */
   return function isValidEntity(entity: Entity): entity is Entity {
@@ -46,15 +41,14 @@ function entityValidator(capacity: number): (entity: Entity) => entity is Entity
 }
 
 /** Manages the creation, destruction and recycling of entities */
-export function createEntityManager(spec: EntityManagerSpec): Readonly<EntityManager> {
-  if (!spec) throw new SyntaxError("EntityManager creation requires a spec object.");
+export function createEntityManager(spec: EntityManagerSpec): EntityManager {
   const { capacity } = spec;
 
   const entityArchetypes = createEntityArchetypeArray(capacity);
   const availableEntities = createAvailableEntityArray(capacity);
   const isValidEntity = entityValidator(capacity);
 
-  return Object.freeze({
+  return {
     /** @returns the next available Entity or `undefined` if no Entity is available */
     createEntity(): Entity | undefined {
       return availableEntities.pop();
@@ -101,5 +95,5 @@ export function createEntityManager(spec: EntityManagerSpec): Readonly<EntityMan
       }
       return false;
     },
-  });
+  };
 }

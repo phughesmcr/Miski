@@ -5,12 +5,12 @@ import { TypedArrayConstructor } from "../utils.js";
 import { Component } from "./component.js";
 import { SchemaStorage } from "./schema.js";
 
-export interface ComponentBufferSpec {
+interface ComponentBufferSpec {
   capacity: number;
   components: Component<unknown>[];
 }
 
-export interface ComponentBufferPartitionerSpec {
+interface ComponentBufferPartitionerSpec {
   buffer: ArrayBuffer;
   capacity: number;
 }

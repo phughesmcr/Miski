@@ -14,7 +14,7 @@ import {
 } from "./instance.js";
 import { isValidQuery, Query } from "./query.js";
 
-export interface QueryManagerSpec {
+interface QueryManagerSpec {
   componentMap: Map<Component<unknown>, ComponentInstance<unknown>>;
   createBitfieldFromIds: (components: ComponentInstance<unknown>[]) => Bitfield;
   isArchetypeCandidate: (query: QueryInstance) => (archetype: Archetype) => boolean;

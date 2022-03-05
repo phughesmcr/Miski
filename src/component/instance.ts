@@ -4,7 +4,7 @@ import { isObject, isUint32, TypedArray } from "../utils.js";
 import { Component } from "./component.js";
 import { SchemaStorage } from "./schema.js";
 
-export interface ComponentInstanceSpec<T> {
+interface ComponentInstanceSpec<T> {
   /** The component to instantiate */
   component: Component<T>;
   /** The component instance's identifier */

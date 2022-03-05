@@ -20,7 +20,7 @@ export interface WorldSpec {
   components: Component<unknown>[];
 }
 
-export interface WorldProto {
+interface WorldProto {
   /** The Miski version used to create this World */
   readonly version: string;
 }
@@ -97,7 +97,7 @@ export interface World extends WorldProto {
 }
 
 /** World.prototype - Miski version data etc. */
-export const WORLD_PROTO: Readonly<WorldProto> = Object.freeze({
+const WORLD_PROTO: Readonly<WorldProto> = Object.freeze({
   version: VERSION,
 });
 

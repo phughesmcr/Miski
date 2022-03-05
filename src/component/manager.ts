@@ -17,7 +17,7 @@ export interface ComponentManager {
   setBuffer: (source: ArrayBuffer) => ArrayBuffer;
 }
 
-export interface ComponentManagerSpec {
+interface ComponentManagerSpec {
   capacity: number;
   components: Component<unknown>[];
   getEntityArchetype: (entity: Entity) => Archetype | undefined;
@@ -49,6 +49,7 @@ function instantiateComponents(spec: {
   return [...new Set(components)].reduce(reducer, {});
 }
 
+export function createComponentManager(spec: ComponentManagerSpec): ComponentManager {
   const { capacity, components, getEntityArchetype, isBitOn, isValidEntity, updateArchetype } = spec;
 
   const buffer = createComponentBuffer({ capacity, components });
@@ -75,7 +76,7 @@ function instantiateComponents(spec: {
     return buffer.slice(0);
   };
 
-  return Object.freeze({
+  return {
     componentMap,
 
     addComponentToEntity<T>(component: Component<T>, entity: Entity, props?: SchemaProps<T>): boolean {
@@ -127,5 +128,5 @@ function instantiateComponents(spec: {
     },
 
     setBuffer,
-  });
+  };
 }

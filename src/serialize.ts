@@ -1,6 +1,6 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
-export interface SerializationManagerSpec {
+interface SerializationManagerSpec {
   getBuffer: () => ArrayBuffer;
   setBuffer: (source: ArrayBuffer) => ArrayBuffer;
 }
