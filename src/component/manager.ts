@@ -1,6 +1,7 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
 import { Archetype } from "../archetype/archetype.js";
+import { Bitfield } from "../bitfield.js";
 import { Entity } from "../entity.js";
 import { ComponentBufferPartitioner, createComponentBuffer, createComponentBufferPartitioner } from "./buffer.js";
 import { Component, ComponentRecord } from "./component.js";
@@ -20,6 +21,7 @@ export interface ComponentManagerSpec {
   capacity: number;
   components: Component<unknown>[];
   getEntityArchetype: (entity: Entity) => Archetype | undefined;
+  isBitOn: (bit: number) => (bitfield: Bitfield) => boolean;
   isValidEntity: (entity: Entity) => entity is Entity;
   updateArchetype: <T>(entity: Entity, component: ComponentInstance<T>) => Archetype;
 }
@@ -47,8 +49,7 @@ function instantiateComponents(spec: {
   return [...new Set(components)].reduce(reducer, {});
 }
 
-export function createComponentManager(spec: ComponentManagerSpec): Readonly<ComponentManager> {
-  const { capacity, components, getEntityArchetype, isValidEntity, updateArchetype } = spec;
+  const { capacity, components, getEntityArchetype, isBitOn, isValidEntity, updateArchetype } = spec;
 
   const buffer = createComponentBuffer({ capacity, components });
   const partitioner = createComponentBufferPartitioner({ buffer, capacity });
@@ -111,7 +112,8 @@ export function createComponentManager(spec: ComponentManagerSpec): Readonly<Com
       const arch = getEntityArchetype(entity);
       if (!arch) return false;
       const { bitfield } = arch;
-      return bitfield.isOn(inst.id);
+      const { id } = inst;
+      return isBitOn(id)(bitfield);
     },
 
     getBuffer,

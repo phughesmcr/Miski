@@ -2,7 +2,7 @@
 
 import { Archetype } from "./archetype/archetype.js";
 import { createArchetypeManager } from "./archetype/manager.js";
-import { bitfield, bitfieldCloner } from "./bitfield.js";
+import { bitfieldFactory } from "./bitfield.js";
 import { Component, ComponentRecord } from "./component/component.js";
 import { createComponentManager } from "./component/manager.js";
 import { SchemaProps } from "./component/schema.js";
@@ -118,7 +118,10 @@ function createBitfieldFactory(capacity: number) {
 
 export function createWorld(spec: WorldSpec): Readonly<World> {
   const { capacity, components } = validateWorldSpec(spec);
-  const bitfieldFactory = createBitfieldFactory(components.length);
+
+  const { createBitfieldFromIds, isBitOn, toggleBit } = bitfieldFactory({
+    capacity: components.length,
+  });
 
   const {
     createEntity,
@@ -141,6 +144,7 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
       capacity,
       components,
       getEntityArchetype,
+      isBitOn,
       isValidEntity,
       updateArchetype,
     });

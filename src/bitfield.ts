@@ -6,187 +6,94 @@
  * `(bit - (bit >>> 5) * 32)` is used in place of `bit % 32`.
  */
 
-import { isTypedArray, isUint32 } from "./utils.js";
+import { isUint32, Opaque } from "./utils.js";
 
-export interface BitfieldSpec {
-  /** The number of bits/flags required */
-  capacity: number;
-  /** Optional pre-created bitfield array (avoids new array generation) */
-  array?: Uint32Array;
-}
+export type Bitfield = Opaque<Uint32Array, "Bitfield">;
 
-export interface Bitfield {
-  /** The size of the bitfield */
-  capacity: number;
-  /** The underlying bit array */
-  array: Uint32Array;
-  /**
-   * Set all bits to 0
-   * @returns `true` if the bitfield array was cleared successfully
-   */
-  clear: () => Bitfield;
-  /** @returns a new Bitfield based on this Bitfield */
-  copy: () => Bitfield;
-  /** @returns `true` if a given bit is 'on' (e.g., truthy) in the Bitfield */
-  isOn: (bit: number) => boolean;
-  /**
-   * Set a bit 'off' (e.g., falsy) in the Bitfield
-   * @returns `true` if the bit was manipulated successfully
-   */
-  off: (bit: number) => Bitfield;
-  /**
-   * Set a bit 'on' (e.g., truthy) in the Bitfield
-   * @returns `true` if the bit was manipulated successfully
-   */
-  on: (bit: number) => Bitfield;
-  /**
-   * Toggle a bit in the Bitfield
-   * @returns `true` if the bit was manipulated successfully
-   */
-  toggle: (bit: number) => Bitfield;
-  /** @returns the bitfield array as a string */
-  toString: () => string;
-}
+/** @param capacity The required number of bits in the bitfield */
+export function bitfieldFactory({ capacity }: { capacity: number }) {
+  if (!isUint32(capacity)) throw new SyntaxError("Bitfield capacity is invalid.");
 
-/** Curried bitfield factory function */
-export function bitfieldCloner(bitfield: Bitfield) {
-  return function () {
-    return bitfield.copy().clear();
-  };
-}
-
-/**
- * Create a new Bitfield
- * @param spec The Bitfield's specification object
- * @param spec.capacity The number of bits/flags
- * @param spec.array Optional pre-created bitfield array (avoids new array generation)
- */
-export function bitfield(spec: BitfieldSpec): Bitfield {
-  const { capacity, array } = validateSpec(spec);
-  const state = { capacity, array } as Bitfield;
-  const bitToIdx = getBitIndex(capacity);
-  const { clear } = clearer(state);
-  const { copy } = copier(state);
-  const { isOn } = onChecker(state, bitToIdx);
-  const { off } = offer(state, bitToIdx);
-  const { on } = onner(state, bitToIdx);
-  const { toggle } = toggler(state, bitToIdx);
-  const { toString } = stringifier(state);
-  return Object.freeze(Object.assign(state, { clear, copy, isOn, off, on, toggle, toString }));
-}
-
-/** Validates and returns a BitfieldSpec object */
-function validateSpec(spec: BitfieldSpec): Required<BitfieldSpec> {
-  if (!spec) throw new SyntaxError("Bitfield: a specification object is required.");
-  const { capacity, array } = spec;
-  if (!isUint32(capacity)) throw new SyntaxError("Bitfield: spec.capacity is invalid.");
-  if (array) {
-    if (!isTypedArray(array)) throw new TypeError("Bitfield: spec.array is invalid.");
-    if (array.length !== (capacity + 31) >>> 5) throw new SyntaxError("Bitfield: spec.array is wrong size.");
-  }
-  return { capacity, array: array || new Uint32Array((capacity + 31) >>> 5) };
-}
-
-/** Check if bit is valid and convert to array index */
-function getBitIndex(capacity: number): (bit: number) => number {
-  return function bitToIdx(bit: number): number {
-    if (bit == undefined || isNaN(bit) || bit < 0 || bit > capacity) return -1;
+  /** Check if bit is valid and convert to array index */
+  const getIndex = (bit: number): number => {
+    if (isNaN(bit) || bit < 0 || bit > capacity) return -1;
     return bit >>> 5;
   };
-}
 
-function clearer(state: Bitfield) {
-  const { array } = state;
+  /** The array length to accommodate the required capacity */
+  const size = (capacity + 31) >>> 5;
+
   return {
     /**
-     * Set all bits to 0
-     * @returns `true` if the bitfield array was cleared successfully
+     * Create a new bitfield
+     * @param existing optional existing Bitfield to clone
      */
-    clear: function (): Bitfield {
-      array.fill(0);
-      return state;
+    createBitfield: function (existing?: Bitfield): Bitfield {
+      if (existing) {
+        if (!(existing instanceof Uint32Array)) throw new TypeError("Existing bitfield must be a Uint32Array.");
+        if (existing.length !== size) throw new SyntaxError("Existing bitfield is wrong size.");
+        return existing.slice() as Bitfield;
+      }
+      return new Uint32Array(size) as Bitfield;
     },
-  };
-}
 
-function copier(state: Bitfield) {
-  const { capacity, array } = state;
-  return {
-    /** @returns a new Bitfield based on this Bitfield */
-    copy: function (): Bitfield {
-      return bitfield({ capacity, array: array.slice() });
-    },
-  };
-}
-
-function offer(state: Bitfield, bitToIdx: (bit: number) => number) {
-  const { array } = state;
-  return {
     /**
-     * Set a bit 'off' (e.g., falsy) in the Bitfield
-     * @returns `true` if the bit was manipulated successfully
+     * Create a new bitfield
+     * @param objs array of { id: number } type objects to prepopulate the bitfield with
      */
-    off: function (bit: number): Bitfield {
-      const i = bitToIdx(bit);
-      if (i === -1) return state;
-      array[i] &= ~(1 << (bit - i * 32));
-      return state;
+    createBitfieldFromIds: function <T extends { id: number }>(objs: T[]): Bitfield {
+      return objs.reduce((bitfield, { id }) => {
+        const i = getIndex(id);
+        if (i === -1) throw new SyntaxError(`Bitfield: bit ${id} does not exist in this world.`);
+        bitfield[i] &= ~(1 << (id - i * 32));
+        return bitfield;
+      }, new Uint32Array(size) as Bitfield);
     },
-  };
-}
 
-function onner(state: Bitfield, bitToIdx: (bit: number) => number) {
-  const { array } = state;
-  return {
-    /**
-     * Set a bit 'on' (e.g., truthy) in the Bitfield
-     * @returns `true` if the bit was manipulated successfully
-     */
-    on: function (bit: number): Bitfield {
-      const i = bitToIdx(bit);
-      if (i === -1) return state;
-      array[i] |= 1 << (bit - i * 32);
-      return state;
-    },
-  };
-}
-
-function onChecker(state: Bitfield, bitToIdx: (bit: number) => number) {
-  const { array } = state;
-  return {
     /** @returns `true` if a given bit is 'on' (e.g., truthy) in the Bitfield */
-    isOn: function (bit: number): boolean {
-      const i = bitToIdx(bit);
-      if (i === -1) return false;
-      const cell = array[i];
-      if (!cell) return false;
-      return Boolean(cell & (1 << (bit - i * 32)));
+    isBitOn: function (bit: number): (bitfield: Bitfield) => boolean {
+      const i = getIndex(bit);
+      if (i === -1) throw new SyntaxError(`Bitfield: bit ${bit} does not exist in this world.`);
+      return function (bitfield: Bitfield): boolean {
+        const cell = bitfield[i];
+        if (cell === undefined) throw new SyntaxError(`Bitfield: bit ${bit} does not exist in this bitfield.`);
+        return Boolean(cell & (1 << (bit - i * 32)));
+      };
     },
-  };
-}
 
-function stringifier(state: Bitfield) {
-  const { array } = state;
-  return {
-    /** @returns the bitfield array as a string */
-    toString: function (): string {
-      return array.toString();
+    /** Set a bit 'off' (e.g., falsy) in the Bitfield */
+    setBitOff: function (bit: number) {
+      const i = getIndex(bit);
+      if (i === -1) throw new SyntaxError(`Bitfield: bit ${bit} does not exist in this world.`);
+      return function (bitfield: Bitfield) {
+        bitfield[i] |= 1 << (bit - i * 32);
+        return bitfield;
+      };
     },
-  };
-}
 
-function toggler(state: Bitfield, bitToIdx: (bit: number) => number) {
-  const { array } = state;
-  return {
+    /** Set a bit 'on' (e.g., truthy) in the Bitfield */
+    setBitOn: function (bit: number) {
+      const i = getIndex(bit);
+      if (i === -1) throw new SyntaxError(`Bitfield: bit ${bit} does not exist in this world.`);
+      return function (bitfield: Bitfield) {
+        bitfield[i] &= ~(1 << (bit - i * 32));
+        return bitfield;
+      };
+    },
+
     /**
      * Toggle a bit in the Bitfield
-     * @returns `true` if the bit was manipulated successfully
+     * @return the resulting state of the bit
      */
-    toggle: function (bit: number): Bitfield {
-      const i = bitToIdx(bit);
-      if (i === -1) return state;
-      array[i] ^= 1 << (bit - i * 32);
-      return state;
+    toggleBit: function (bit: number): (bitfield: Bitfield) => boolean {
+      const i = getIndex(bit);
+      if (i === -1) throw new SyntaxError(`Bitfield: bit ${bit} does not exist in this world.`);
+      return function (bitfield: Bitfield): boolean {
+        if (bitfield[i] === undefined) throw new SyntaxError(`Bitfield: bit ${bit} does not exist in this bitfield.`);
+        bitfield[i] ^= 1 << (bit - i * 32);
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        return Boolean(bitfield[i]! & (1 << (bit - i * 32)));
+      };
     },
   };
 }
