@@ -8,7 +8,6 @@ import { createComponentManager } from "./component/manager.js";
 import { SchemaProps } from "./component/schema.js";
 import { DEFAULT_MAX_ENTITIES, VERSION } from "./constants.js";
 import { createEntityManager, Entity } from "./entity.js";
-import { QueryInstance } from "./query/instance.js";
 import { createQueryManager } from "./query/manager.js";
 import { Query } from "./query/query.js";
 import { createSerializationManager, MiskiData } from "./serialize.js";
@@ -110,12 +109,6 @@ function validateWorldSpec(spec: WorldSpec): Required<WorldSpec> {
   return { capacity, components };
 }
 
-function createBitfieldFactory(capacity: number) {
-  const emptyBitfield = bitfield({ capacity });
-  const bitfieldFactory = bitfieldCloner(emptyBitfield);
-  return bitfieldFactory;
-}
-
 export function createWorld(spec: WorldSpec): Readonly<World> {
   const { capacity, components } = validateWorldSpec(spec);
 
@@ -133,11 +126,13 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
     setEntityArchetype,
   } = createEntityManager({ capacity });
 
-  const { archetypeMap, updateArchetype } = createArchetypeManager({
-    bitfieldFactory,
-    getEntityArchetype,
-    setEntityArchetype,
-  });
+  const { archetypeMap, isArchetypeCandidate, purgeArchetypeCaches, refreshArchetype, updateArchetype } =
+    createArchetypeManager({
+      createBitfieldFromIds,
+      getEntityArchetype,
+      setEntityArchetype,
+      toggleBit,
+    });
 
   const { componentMap, addComponentToEntity, entityHasComponent, getBuffer, removeComponentFromEntity, setBuffer } =
     createComponentManager({
@@ -149,25 +144,23 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
       updateArchetype,
     });
 
-  const { queryMap, getQueryEntered, getQueryExited, getQueryResult } = createQueryManager({
-    bitfieldFactory,
+  const { queryMap, getQueryEntered, getQueryExited, getQueryResult, refreshQuery } = createQueryManager({
+    createBitfieldFromIds,
     componentMap,
+    isArchetypeCandidate,
   });
 
   const { load, save } = createSerializationManager({ getBuffer, setBuffer });
 
   function purgeCaches() {
-    const archetypes = [...archetypeMap.values()];
-    const purgeArchetypes = (archetype: Archetype) => archetype.purge();
-    archetypes.forEach(purgeArchetypes);
+    [...archetypeMap.values()].forEach(purgeArchetypeCaches);
   }
   purgeCaches();
 
   function refresh() {
     const archetypes = [...archetypeMap.values()];
-    const refreshQuery = (instance: QueryInstance) => instance.refresh(archetypes);
-    queryMap.forEach(refreshQuery);
-    const refreshArchetype = (archetype: Archetype) => archetype.refresh();
+    const queryRefresher = refreshQuery(archetypes);
+    queryMap.forEach(queryRefresher);
     archetypes.forEach(refreshArchetype);
   }
   refresh();

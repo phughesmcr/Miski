@@ -2,26 +2,99 @@
 
 import { Bitfield } from "../bitfield.js";
 import { ComponentInstance } from "../component/instance.js";
+import { EMPTY_ARRAY } from "../constants.js";
 import { Entity } from "../entity.js";
-import { Archetype, createArchetype } from "./archetype.js";
+import { QueryInstance } from "../query/instance.js";
+import { addEntityToArchetype, Archetype, createArchetype, removeEntityFromArchetype } from "./archetype.js";
 
-export interface ArchetypeManagerSpec {
-  bitfieldFactory: (components?: ComponentInstance<unknown>[] | undefined) => Bitfield;
+interface ArchetypeManagerSpec {
+  createBitfieldFromIds: (components: ComponentInstance<unknown>[]) => Bitfield;
   getEntityArchetype: (entity: Entity) => Archetype | undefined;
   setEntityArchetype: (entity: Entity, archetype: Archetype) => boolean;
+  toggleBit: (bit: number) => (bitfield: Bitfield) => boolean;
 }
 
-export interface ArchetypeManager {
+interface ArchetypeManager {
   archetypeMap: Map<string, Archetype>;
+  isArchetypeCandidate: (query: QueryInstance) => (archetype: Archetype) => boolean;
+  refreshArchetype: (archetype: Archetype) => Archetype;
+  purgeArchetypeCaches: (archetype: Archetype) => Archetype;
   updateArchetype: <T>(entity: Entity, component: ComponentInstance<T>) => Archetype;
 }
 
 export function createArchetypeManager(spec: ArchetypeManagerSpec): ArchetypeManager {
-  const { bitfieldFactory, getEntityArchetype, setEntityArchetype } = spec;
+  const { createBitfieldFromIds, getEntityArchetype, setEntityArchetype, toggleBit } = spec;
+
+  /** */
   const archetypeMap: Map<string, Archetype> = new Map();
+
+  function cloneArchetypeWithToggle<T>(
+    archetype: Archetype,
+    component: ComponentInstance<T>,
+  ): [string, () => Archetype] {
+    const { bitfield, cloneCache } = archetype;
+    const cached = cloneCache.get(component);
+    if (cached) {
+      return [cached.id, () => cached];
+    } else {
+      const { id } = component;
+      const bitfieldCopy = bitfield.slice() as Bitfield;
+      toggleBit(id)(bitfieldCopy);
+      const bitfieldId = bitfieldCopy.toString();
+      return [
+        bitfieldId,
+        function () {
+          const clone = createArchetype({ bitfield: bitfieldCopy, id: bitfieldId });
+          cloneCache.set(component, clone);
+          return clone;
+        },
+      ];
+    }
+  }
 
   return {
     archetypeMap,
+
+    /** @returns `true` if the query criteria match this archetype */
+    isArchetypeCandidate(query: QueryInstance): (archetype: Archetype) => boolean {
+      return function (archetype: Archetype): boolean {
+        const { bitfield, candidateCache } = archetype;
+        if (candidateCache.has(query)) return candidateCache.get(query) || false;
+        const { and, or, not } = query;
+        const _not = not ?? EMPTY_ARRAY;
+        const _and = and ?? EMPTY_ARRAY;
+        const _or = or ?? EMPTY_ARRAY;
+        function checkStatus(target: number, i: number): boolean {
+          // is ?? 0 right here??
+          const _n = _not[i] ?? 0;
+          const _a = _and[i] ?? 0;
+          const _o = _or[i] ?? 0;
+          if ((_n & target) !== 0) return false;
+          if ((_a & target) !== _a) return false;
+          if ((_o & target) > 0) return false;
+          return true;
+        }
+        const status = bitfield.every(checkStatus);
+        candidateCache.set(query, status);
+        return status;
+      };
+    },
+
+    /** */
+    refreshArchetype(archetype: Archetype): Archetype {
+      const { entered, exited } = archetype;
+      entered.clear();
+      exited.clear();
+      return archetype;
+    },
+
+    /** */
+    purgeArchetypeCaches(archetype: Archetype): Archetype {
+      const { candidateCache, cloneCache } = archetype;
+      candidateCache.clear();
+      cloneCache.clear();
+      return archetype;
+    },
 
     /**
      * Update an entity's archetype
@@ -33,8 +106,8 @@ export function createArchetypeManager(spec: ArchetypeManagerSpec): ArchetypeMan
       const previousArchetype = getEntityArchetype(entity);
       let nextArchetype: Archetype | undefined;
       if (previousArchetype) {
-        previousArchetype.removeEntity(entity);
-        const [id, factory] = previousArchetype.cloneInStep(component);
+        removeEntityFromArchetype(entity)(previousArchetype);
+        const [id, factory] = cloneArchetypeWithToggle(previousArchetype, component);
         if (archetypeMap.has(id)) {
           nextArchetype = archetypeMap.get(id)!;
         } else {
@@ -42,10 +115,10 @@ export function createArchetypeManager(spec: ArchetypeManagerSpec): ArchetypeMan
           archetypeMap.set(id, nextArchetype);
         }
       } else {
-        nextArchetype = createArchetype({ bitfield: bitfieldFactory([component]) });
+        nextArchetype = createArchetype({ bitfield: createBitfieldFromIds([component]) });
         archetypeMap.set(nextArchetype.id, nextArchetype);
       }
-      nextArchetype.addEntity(entity);
+      addEntityToArchetype(entity)(nextArchetype);
       setEntityArchetype(entity, nextArchetype);
       return nextArchetype;
     },
