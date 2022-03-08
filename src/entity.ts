@@ -35,8 +35,7 @@ function createAvailableEntityArray(capacity: number): Entity[] {
 function entityValidator(capacity: number): (entity: Entity) => entity is Entity {
   /** @return `true` if the given entity is valid for the given capacity */
   return function isValidEntity(entity: Entity): entity is Entity {
-    if (!isUint32(entity) || entity > capacity) return false;
-    return true;
+    return isUint32(entity) && entity <= capacity;
   };
 }
 

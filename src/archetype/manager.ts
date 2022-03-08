@@ -2,7 +2,6 @@
 
 import { Bitfield } from "../bitfield.js";
 import { ComponentInstance } from "../component/instance.js";
-import { EMPTY_ARRAY } from "../constants.js";
 import { Entity } from "../entity.js";
 import { QueryInstance } from "../query/instance.js";
 import { addEntityToArchetype, Archetype, createArchetype, removeEntityFromArchetype } from "./archetype.js";
@@ -60,19 +59,10 @@ export function createArchetypeManager(spec: ArchetypeManagerSpec): ArchetypeMan
       return function (archetype: Archetype): boolean {
         const { bitfield, candidateCache } = archetype;
         if (candidateCache.has(query)) return candidateCache.get(query) || false;
-        const { and, or, not } = query;
-        const _not = not ?? EMPTY_ARRAY;
-        const _and = and ?? EMPTY_ARRAY;
-        const _or = or ?? EMPTY_ARRAY;
+        const { and = EMPTY_BITFIELD, or = EMPTY_BITFIELD, not = EMPTY_BITFIELD } = query;
         function checkStatus(target: number, i: number): boolean {
-          // is ?? 0 right here??
-          const _n = _not[i] ?? 0;
-          const _a = _and[i] ?? 0;
-          const _o = _or[i] ?? 0;
-          if ((_n & target) !== 0) return false;
-          if ((_a & target) !== _a) return false;
-          if ((_o & target) > 0) return false;
-          return true;
+          const _and = and[i]!;
+          return (not[i]! & target) === 0 && (_and & target) === _and && (or[i]! & target) <= 0;
         }
         const status = bitfield.every(checkStatus);
         candidateCache.set(query, status);
