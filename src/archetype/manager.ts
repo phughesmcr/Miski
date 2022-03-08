@@ -37,22 +37,19 @@ export function createArchetypeManager(spec: ArchetypeManagerSpec): ArchetypeMan
   ): [string, () => Archetype] {
     const { bitfield, cloneCache } = archetype;
     const cached = cloneCache.get(component);
-    if (cached) {
-      return [cached.id, () => cached];
-    } else {
-      const { id } = component;
-      const bitfieldCopy = bitfield.slice() as Bitfield;
-      toggleBit(id, bitfieldCopy);
-      const bitfieldId = bitfieldCopy.toString();
-      return [
-        bitfieldId,
-        function () {
-          const clone = createArchetype({ bitfield: bitfieldCopy, id: bitfieldId });
-          cloneCache.set(component, clone);
-          return clone;
-        },
-      ];
-    }
+    if (cached) return [cached.id, () => cached];
+    const { id } = component;
+    const bitfieldCopy = bitfield.slice() as Bitfield;
+    toggleBit(id, bitfieldCopy);
+    const bitfieldId = bitfieldCopy.toString();
+    return [
+      bitfieldId,
+      function () {
+        const clone = createArchetype({ bitfield: bitfieldCopy, id: bitfieldId });
+        cloneCache.set(component, clone);
+        return clone;
+      },
+    ];
   }
 
   return {

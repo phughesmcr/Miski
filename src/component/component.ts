@@ -38,7 +38,7 @@ export function createComponent<T extends Schema<T>>(spec: ComponentSpec<T>): Co
   if (!isValidName(name)) throw new SyntaxError("Component name is invalid.");
   if (schema && !isValidSchema(schema)) throw new SyntaxError("Component schema is invalid.");
   return Object.freeze({
-    isTag: schema ? false : true,
+    isTag: Boolean(schema),
     name,
     schema: schema ? Object.freeze({ ...schema }) : null,
     size: schema ? calculateSchemaSize(schema) : 0,
