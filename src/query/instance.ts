@@ -26,6 +26,10 @@ export interface QueryInstance extends Query {
   not: Readonly<Bitfield>;
 }
 
+function flattenEntities(this: Entity[], { entities }: Archetype) {
+  this.push(...entities);
+}
+
 /**
  *
  * @param query
@@ -33,7 +37,9 @@ export interface QueryInstance extends Query {
  * @todo cache entities per archetype and add a dirty flag to archetypes - only update entities from dirty archetypes
  */
 export function getEntitiesFromQuery(query: QueryInstance): Entity[] {
-  return [...query.archetypes].flatMap((archetype) => [...archetype.entities]);
+  const res: Entity[] = [];
+  query.archetypes.forEach(flattenEntities, res);
+  return res;
 }
 
 /**
