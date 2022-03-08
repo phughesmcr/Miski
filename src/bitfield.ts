@@ -23,19 +23,11 @@ export function bitfieldFactory(capacity: number) {
   /** The array length to accommodate the required capacity */
   const size = (capacity + 31) >>> 5;
 
+  /** An empty bitfield for use in cloning etc. */
+  const EMPTY_BITFIELD = new Uint32Array(size) as Bitfield;
+
   return {
-    /**
-     * Create a new bitfield
-     * @param existing optional existing Bitfield to clone
-     */
-    createBitfield: function (existing?: Bitfield): Bitfield {
-      if (existing) {
-        if (!(existing instanceof Uint32Array)) throw new TypeError("Existing bitfield must be a Uint32Array.");
-        if (existing.length !== size) throw new SyntaxError("Existing bitfield is wrong size.");
-        return existing.slice() as Bitfield;
-      }
-      return new Uint32Array(size) as Bitfield;
-    },
+    EMPTY_BITFIELD,
 
     /**
      * Create a new bitfield

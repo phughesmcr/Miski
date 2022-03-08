@@ -112,7 +112,7 @@ function validateWorldSpec(spec: WorldSpec): Required<WorldSpec> {
 export function createWorld(spec: WorldSpec): Readonly<World> {
   const { capacity, components } = validateWorldSpec(spec);
 
-  const { createBitfieldFromIds, isBitOn, toggleBit } = bitfieldFactory(components.length);
+  const { EMPTY_BITFIELD, createBitfieldFromIds, isBitOn, toggleBit } = bitfieldFactory(components.length);
 
   const {
     createEntity,
@@ -126,7 +126,7 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
 
   const { archetypeMap, isArchetypeCandidate, purgeArchetypeCaches, refreshArchetype, updateArchetype } =
     createArchetypeManager({
-      createBitfieldFromIds,
+      EMPTY_BITFIELD,
       getEntityArchetype,
       setEntityArchetype,
       toggleBit,

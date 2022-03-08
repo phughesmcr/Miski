@@ -8,7 +8,7 @@ import { QueryInstance } from "../query/instance.js";
 import { addEntityToArchetype, Archetype, createArchetype, removeEntityFromArchetype } from "./archetype.js";
 
 interface ArchetypeManagerSpec {
-  createBitfieldFromIds: (components: ComponentInstance<unknown>[]) => Bitfield;
+  EMPTY_BITFIELD: Bitfield;
   getEntityArchetype: (entity: Entity) => Archetype | undefined;
   setEntityArchetype: (entity: Entity, archetype: Archetype) => boolean;
   toggleBit: (bit: number) => (bitfield: Bitfield) => boolean;
@@ -23,7 +23,10 @@ interface ArchetypeManager {
 }
 
 export function createArchetypeManager(spec: ArchetypeManagerSpec): ArchetypeManager {
-  const { createBitfieldFromIds, getEntityArchetype, setEntityArchetype, toggleBit } = spec;
+  const { EMPTY_BITFIELD, getEntityArchetype, setEntityArchetype, toggleBit } = spec;
+
+  /** An empty archetype for use in cloning etc. */
+  const EMPTY_ARCHETYPE = createArchetype({ bitfield: EMPTY_BITFIELD });
 
   /** */
   const archetypeMap: Map<string, Archetype> = new Map();
@@ -115,8 +118,13 @@ export function createArchetypeManager(spec: ArchetypeManagerSpec): ArchetypeMan
           archetypeMap.set(id, nextArchetype);
         }
       } else {
-        nextArchetype = createArchetype({ bitfield: createBitfieldFromIds([component]) });
-        archetypeMap.set(nextArchetype.id, nextArchetype);
+        const [id, factory] = cloneArchetypeWithToggle(EMPTY_ARCHETYPE, component);
+        if (archetypeMap.has(id)) {
+          nextArchetype = archetypeMap.get(id)!;
+        } else {
+          nextArchetype = factory();
+          archetypeMap.set(id, nextArchetype);
+        }
       }
       addEntityToArchetype(entity)(nextArchetype);
       setEntityArchetype(entity, nextArchetype);
