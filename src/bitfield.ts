@@ -8,6 +8,7 @@
 
 import { isUint32, Opaque } from "./utils.js";
 
+/** A Bitfield is just a Uint32Array */
 export type Bitfield = Opaque<Uint32Array, "Bitfield">;
 
 /** @param capacity The required number of bits in the bitfield */
@@ -31,7 +32,7 @@ export function bitfieldFactory(capacity: number) {
 
     /**
      * Create a new bitfield
-     * @param objs array of { id: number } type objects to prepopulate the bitfield with
+     * @param objs array of { id: number } type objects to pre-populate the bitfield with
      */
     createBitfieldFromIds: function <T extends { id: number }>(objs: T[]): Bitfield {
       return objs.reduce((bitfield, { id }) => {
@@ -42,50 +43,25 @@ export function bitfieldFactory(capacity: number) {
       }, new Uint32Array(size) as Bitfield);
     },
 
-    /** @returns `true` if a given bit is 'on' (e.g., truthy) in the Bitfield */
-    isBitOn: function (bit: number): (bitfield: Bitfield) => boolean {
+    /** @returns `true` if a given bit is 'on' (i.e., truthy) in the Bitfield */
+    isBitOn: function (bit: number, bitfield: Bitfield): boolean {
       const i = getIndex(bit);
       if (i === -1) throw new SyntaxError(`Bitfield: bit ${bit} does not exist in this world.`);
-      return function (bitfield: Bitfield): boolean {
-        const cell = bitfield[i];
-        if (cell === undefined) throw new SyntaxError(`Bitfield: bit ${bit} does not exist in this bitfield.`);
-        return Boolean(cell & (1 << (bit - i * 32)));
-      };
-    },
-
-    /** Set a bit 'off' (e.g., falsy) in the Bitfield */
-    setBitOff: function (bit: number) {
-      const i = getIndex(bit);
-      if (i === -1) throw new SyntaxError(`Bitfield: bit ${bit} does not exist in this world.`);
-      return function (bitfield: Bitfield) {
-        bitfield[i] |= 1 << (bit - i * 32);
-        return bitfield;
-      };
-    },
-
-    /** Set a bit 'on' (e.g., truthy) in the Bitfield */
-    setBitOn: function (bit: number) {
-      const i = getIndex(bit);
-      if (i === -1) throw new SyntaxError(`Bitfield: bit ${bit} does not exist in this world.`);
-      return function (bitfield: Bitfield) {
-        bitfield[i] &= ~(1 << (bit - i * 32));
-        return bitfield;
-      };
+      const cell = bitfield[i];
+      if (cell === undefined) throw new SyntaxError(`Bitfield: bit ${bit} does not exist in this bitfield.`);
+      return Boolean(cell & (1 << (bit - i * 32)));
     },
 
     /**
      * Toggle a bit in the Bitfield
      * @return the resulting state of the bit
      */
-    toggleBit: function (bit: number): (bitfield: Bitfield) => boolean {
+    toggleBit: function (bit: number, bitfield: Bitfield): Bitfield {
       const i = getIndex(bit);
       if (i === -1) throw new SyntaxError(`Bitfield: bit ${bit} does not exist in this world.`);
-      return function (bitfield: Bitfield): boolean {
-        if (bitfield[i] === undefined) throw new SyntaxError(`Bitfield: bit ${bit} does not exist in this bitfield.`);
-        bitfield[i] ^= 1 << (bit - i * 32);
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        return Boolean(bitfield[i]! & (1 << (bit - i * 32)));
-      };
+      if (bitfield[i] === undefined) throw new SyntaxError(`Bitfield: bit ${bit} does not exist in this bitfield.`);
+      bitfield[i] ^= 1 << (bit - i * 32);
+      return bitfield;
     },
   };
 }

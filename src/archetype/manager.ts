@@ -11,7 +11,7 @@ interface ArchetypeManagerSpec {
   EMPTY_BITFIELD: Bitfield;
   getEntityArchetype: (entity: Entity) => Archetype | undefined;
   setEntityArchetype: (entity: Entity, archetype: Archetype) => boolean;
-  toggleBit: (bit: number) => (bitfield: Bitfield) => boolean;
+  toggleBit: (bit: number, bitfield: Bitfield) => Bitfield;
 }
 
 interface ArchetypeManager {
@@ -42,7 +42,7 @@ export function createArchetypeManager(spec: ArchetypeManagerSpec): ArchetypeMan
     } else {
       const { id } = component;
       const bitfieldCopy = bitfield.slice() as Bitfield;
-      toggleBit(id)(bitfieldCopy);
+      toggleBit(id, bitfieldCopy);
       const bitfieldId = bitfieldCopy.toString();
       return [
         bitfieldId,

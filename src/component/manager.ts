@@ -21,7 +21,7 @@ interface ComponentManagerSpec {
   capacity: number;
   components: Component<unknown>[];
   getEntityArchetype: (entity: Entity) => Archetype | undefined;
-  isBitOn: (bit: number) => (bitfield: Bitfield) => boolean;
+  isBitOn: (bit: number, bitfield: Bitfield) => boolean;
   isValidEntity: (entity: Entity) => entity is Entity;
   updateArchetype: <T>(entity: Entity, component: ComponentInstance<T>) => Archetype;
 }
@@ -114,7 +114,7 @@ export function createComponentManager(spec: ComponentManagerSpec): ComponentMan
       if (!arch) return false;
       const { bitfield } = arch;
       const { id } = inst;
-      return isBitOn(id)(bitfield);
+      return isBitOn(id, bitfield);
     },
 
     getBuffer,
