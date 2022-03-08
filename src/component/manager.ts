@@ -76,57 +76,59 @@ export function createComponentManager(spec: ComponentManagerSpec): ComponentMan
     return buffer.slice(0);
   };
 
+  const addComponentToEntity = <T>(component: Component<T>, entity: Entity, props?: SchemaProps<T>): boolean => {
+    if (!isValidEntity(entity)) return false;
+    const inst = componentMap.get(component);
+    if (!inst) return false;
+    updateArchetype(entity, inst);
+    // set any default initial properties
+    if (component.schema) {
+      Object.entries(component.schema).forEach(([key, value]) => {
+        if (Array.isArray(value)) {
+          // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+          // @ts-ignore
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment
+          inst[key][entity] = value[1] ?? 0;
+        }
+      });
+    }
+    // set any custom initial properties
+    if (props) {
+      Object.entries(props).forEach(([key, value]) => {
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        inst[key][entity] = value;
+      });
+    }
+    return true;
+  };
+
+  const entityHasComponent = <T>(entity: Entity, component: Component<T>): boolean => {
+    const inst = componentMap.get(component);
+    if (!inst) return false;
+    const arch = getEntityArchetype(entity);
+    if (!arch) return false;
+    const { bitfield } = arch;
+    const { id } = inst;
+    return isBitOn(id, bitfield);
+  };
+
+  const removeComponentFromEntity = <T>(component: Component<T>, entity: Entity): boolean => {
+    if (!isValidEntity(entity)) return false;
+    const inst = componentMap.get(component);
+    if (!inst) return false;
+    updateArchetype(entity, inst);
+    return true;
+  };
+
   return {
     componentMap,
 
-    addComponentToEntity<T>(component: Component<T>, entity: Entity, props?: SchemaProps<T>): boolean {
-      if (!isValidEntity(entity)) return false;
-      const inst = componentMap.get(component);
-      if (!inst) return false;
-      updateArchetype(entity, inst);
-      // set any default initial properties
-      if (component.schema) {
-        Object.entries(component.schema).forEach(([key, value]) => {
-          if (Array.isArray(value)) {
-            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-            // @ts-ignore
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment
-            inst[key][entity] = value[1] ?? 0;
-          }
-        });
-      }
-      // set any custom initial properties
-      if (props) {
-        Object.entries(props).forEach(([key, value]) => {
-          // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-          // @ts-ignore
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-          inst[key][entity] = value;
-        });
-      }
-      return true;
-    },
-
-    entityHasComponent<T>(entity: Entity, component: Component<T>): boolean {
-      const inst = componentMap.get(component);
-      if (!inst) return false;
-      const arch = getEntityArchetype(entity);
-      if (!arch) return false;
-      const { bitfield } = arch;
-      const { id } = inst;
-      return isBitOn(id, bitfield);
-    },
-
+    addComponentToEntity,
+    entityHasComponent,
     getBuffer,
-
-    removeComponentFromEntity<T>(component: Component<T>, entity: Entity): boolean {
-      if (!isValidEntity(entity)) return false;
-      const inst = componentMap.get(component);
-      if (!inst) return false;
-      updateArchetype(entity, inst);
-      return true;
-    },
-
+    removeComponentFromEntity,
     setBuffer,
   };
 }
