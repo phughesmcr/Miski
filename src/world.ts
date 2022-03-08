@@ -112,9 +112,7 @@ function validateWorldSpec(spec: WorldSpec): Required<WorldSpec> {
 export function createWorld(spec: WorldSpec): Readonly<World> {
   const { capacity, components } = validateWorldSpec(spec);
 
-  const { createBitfieldFromIds, isBitOn, toggleBit } = bitfieldFactory({
-    capacity: components.length,
-  });
+  const { createBitfieldFromIds, isBitOn, toggleBit } = bitfieldFactory(components.length);
 
   const {
     createEntity,

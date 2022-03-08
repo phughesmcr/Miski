@@ -11,7 +11,7 @@ import { isUint32, Opaque } from "./utils.js";
 export type Bitfield = Opaque<Uint32Array, "Bitfield">;
 
 /** @param capacity The required number of bits in the bitfield */
-export function bitfieldFactory({ capacity }: { capacity: number }) {
+export function bitfieldFactory(capacity: number) {
   if (!isUint32(capacity)) throw new SyntaxError("Bitfield capacity is invalid.");
 
   /** Check if bit is valid and convert to array index */
