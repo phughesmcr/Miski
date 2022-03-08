@@ -75,6 +75,7 @@ export function createArchetypeManager(spec: ArchetypeManagerSpec): ArchetypeMan
       const { entered, exited } = archetype;
       entered.clear();
       exited.clear();
+    archetype.isDirty = false;
       return archetype;
     },
 

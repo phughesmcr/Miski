@@ -27,6 +27,8 @@ export interface Archetype {
   exited: Set<Entity>;
   /** The Archetype's unique ID */
   id: string;
+  /** `true` if an entity has entered or left since last refresh */
+  isDirty: boolean;
 }
 
 /** Add an entity to an archetype's inhabitants list */
@@ -35,6 +37,7 @@ export function addEntityToArchetype(entity: Entity): (archetype: Archetype) => 
     const { entities, entered } = archetype;
     entities.add(entity);
     entered.add(entity);
+    archetype.isDirty = true;
     return archetype;
   };
 }
@@ -59,6 +62,7 @@ export function removeEntityFromArchetype(entity: Entity): (archetype: Archetype
     const { entities, exited } = archetype;
     entities.delete(entity);
     exited.add(entity);
+    archetype.isDirty = true;
     return archetype;
   };
 }
@@ -81,6 +85,7 @@ export function createArchetype(spec: ArchetypeSpec): Archetype {
   const exited: Set<Entity> = new Set();
 
   return {
+    isDirty: true,
     bitfield,
     candidateCache,
     cloneCache,
