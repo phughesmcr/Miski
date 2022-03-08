@@ -18,9 +18,9 @@ export type System<
  * @returns a curried function (world) => (...args) => result;
  *
  * @example
- * const world = {} as World;
- * const log = (world: World, value: string) => console.log(value);
- * const logSystem = createSystem(log);
+ * const logQuery = createQuery({ all: [loggable]});
+ * const log = (components: Record<string, ComponentInstance>, entities: Entity[], value: string) => console.log(value);
+ * const logSystem = createSystem(log, logQuery);
  * const logSystemInstance = logSystem(world);
  * logSystemInstance("hello, world!"); // hello, world!
  */
