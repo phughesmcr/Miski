@@ -27,7 +27,7 @@ export interface QueryManager {
   /** Entities which have exited this query since last refresh */
   getQueryExited: (query: Query) => Entity[];
   /** @returns a tuple of Entities and Components which match the Query criteria */
-  getQueryResult: (query: Query) => [Entity[], ComponentRecord];
+  getQueryResult: (query: Query) => [() => Entity[], ComponentRecord];
   /** Run Query maintenance */
   refreshQuery: (archetypes: Archetype[]) => (query: QueryInstance) => QueryInstance;
 }
@@ -58,9 +58,9 @@ export function createQueryManager(spec: QueryManagerSpec): QueryManager {
   }
 
   /** @returns a tuple of Entities and Components which match the Query criteria */
-  function getQueryResult(query: Query): [Entity[], ComponentRecord] {
+  function getQueryResult(query: Query): [() => Entity[], ComponentRecord] {
     const instance = queryMap.get(query) ?? registerQuery(query);
-    return [getEntitiesFromQuery(instance), instance.components];
+    return [() => getEntitiesFromQuery(instance), instance.components];
   }
 
   /** Entities which have entered this query since last refresh */
