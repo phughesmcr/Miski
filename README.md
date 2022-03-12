@@ -79,7 +79,7 @@ createComponent: <T extends Schema<T>>(spec: ComponentSpec<T>) => Component<T>;
 createQuery: (spec: QuerySpec) => Query;
 
 🔃 Systems // optional but helps with type safety - A system is a function of any arity where the first parameter is the World
-createSystem: <T, U>(system: System<T, U>) => (world: World) => (...args: U) => ReturnType<T>;
+createSystem: <T extends (components: ComponentRecord, entities: Entity[], ...args: unknown[]) => ReturnType<T>, U extends ParametersExceptFirst<T>>(callback: System<T, U>, ...queries: Query[]): (world: World) => (...args: U) => ReturnType<T>;
 
 🌍 World
 createWorld: (spec: WorldSpec) => World;
