@@ -151,7 +151,7 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
       isArchetypeCandidate,
     });
 
-  const { load, save } = createSerializationManager({ getBuffer, setBuffer });
+  const { load, save } = createSerializationManager({ getBuffer, setBuffer, version: VERSION });
 
   function purgeCaches() {
     [...archetypeMap.values()].forEach(purgeArchetypeCaches);
