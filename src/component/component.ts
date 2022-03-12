@@ -1,6 +1,6 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
-import { isValidName } from "../utils.js";
+import { isUint32, isValidName } from "../utils/utils.js";
 import { ComponentInstance } from "./instance.js";
 import { calculateSchemaSize, isValidSchema, Schema } from "./schema.js";
 

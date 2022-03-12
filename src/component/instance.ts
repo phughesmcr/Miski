@@ -1,6 +1,6 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
-import { isObject, isUint32, TypedArray } from "../utils.js";
+import { isObject, isUint32, TypedArray } from "../utils/utils.js";
 import { Component } from "./component.js";
 import { SchemaStorage } from "./schema.js";
 

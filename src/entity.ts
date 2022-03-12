@@ -1,7 +1,7 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
 import { Archetype, removeEntityFromArchetype } from "./archetype/archetype.js";
-import { isUint32, Opaque } from "./utils.js";
+import { isUint32, Opaque } from "./utils/utils.js";
 
 /** Entities are indexes of an EntityArray. An Entity is just an integer. */
 export type Entity = Opaque<number, "Entity">;

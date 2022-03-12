@@ -1,6 +1,6 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
-import { FORBIDDEN_NAMES, MAX_UINT32, VALID_NAME_PATTERN } from "./constants.js";
+import { FORBIDDEN_NAMES, MAX_UINT32, VALID_NAME_PATTERN } from "../constants.js";
 
 /** @returns `true` if n is a number, >= 0, <= 2^32 - 1 */
 export function isUint32(n: number): n is number {
@@ -75,3 +75,41 @@ export type ParametersExceptFirst<F> = F extends (arg0: any, ...rest: infer R) =
  * const b: Entity = 1 // b = Entity;
  */
 export type Opaque<T, K> = T & { _TYPE: K };
+
+export function createAvailabilityArray(capacity: number): number[] {
+  const total = capacity - 1;
+  return Array.from({ length: capacity }, (_, i) => total - i);
+}
+
+export function sortAscending(a: number, b: number): number {
+  return b - a;
+}
+
+export function hasOwnProperty<K extends PropertyKey>(key: K) {
+  return function <U>(obj: U): obj is U & Record<K, unknown> {
+    return Object.prototype.hasOwnProperty.call(obj, key);
+  };
+}
+
+export function filterEntries<K extends PropertyKey>(keys: K[]) {
+  return function <T extends Record<K, unknown>>(obj: T) {
+    const reducer = (curr: Record<K, T[K]>, key: K): Record<K, T[K]> => {
+      if (hasOwnProperty(key)(obj)) curr[key] = obj[key];
+      return curr;
+    };
+    return keys.reduce(reducer, {} as Record<K, T[K]>);
+  };
+}
+
+export function getProperty<K extends PropertyKey>(key: K) {
+  return function <U extends Record<K, unknown>>(obj: U): U[K] {
+    return obj[key];
+  };
+}
+
+export function getOwnProperty<K extends PropertyKey>(key: K) {
+  const hasKey = hasOwnProperty(key);
+  return function <U extends Record<K, unknown>>(obj: U): U[K] | undefined {
+    return hasKey(obj) ? obj[key] : undefined;
+  };
+}

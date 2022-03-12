@@ -3,7 +3,7 @@
 import { ComponentRecord } from "./component/component.js";
 import { Entity } from "./entity.js";
 import { Query } from "./query/query.js";
-import { ParametersExceptFirst } from "./utils.js";
+import { ParametersExceptFirst } from "./utils/utils.js";
 import { World } from "./world.js";
 
 /** A multi-arity function where the first parameter is always the World object */

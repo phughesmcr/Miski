@@ -6,7 +6,7 @@
  * `(bit - (bit >>> 5) * 32)` is used in place of `bit % 32`.
  */
 
-import { isUint32, Opaque } from "./utils.js";
+import { isUint32, Opaque } from "./utils/utils.js";
 
 /** A Bitfield is just a Uint32Array */
 export type Bitfield = Opaque<Uint32Array, "Bitfield">;

@@ -24,7 +24,7 @@ export type { Component, ComponentRecord, ComponentSpec } from "./component/comp
 export type { ComponentInstance } from "./component/instance.js";
 export type { Entity } from "./entity.js";
 export type { MiskiData } from "./serialize.js";
-export type { Opaque, ParametersExceptFirst, TypedArrayConstructor } from "./utils.js";
+export type { Opaque, ParametersExceptFirst, TypedArrayConstructor } from "./utils/utils.js";
 export type { Query, QuerySpec } from "./query/query.js";
 export type { QueryInstance } from "./query/instance.js";
 export type { Schema, SchemaProps } from "./component/schema.js";

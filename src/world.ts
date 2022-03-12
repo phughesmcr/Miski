@@ -11,7 +11,7 @@ import { createEntityManager, Entity } from "./entity.js";
 import { createQueryManager } from "./query/manager.js";
 import { Query } from "./query/query.js";
 import { createSerializationManager, MiskiData } from "./serialize.js";
-import { isUint32 } from "./utils.js";
+import { isUint32 } from "./utils/utils.js";
 
 export interface WorldSpec {
   /** The maximum number of entities allowed in the world */

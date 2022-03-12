@@ -1,7 +1,7 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
 import { ONE_BYTE } from "../constants.js";
-import { TypedArrayConstructor } from "../utils.js";
+import { TypedArrayConstructor } from "../utils/utils.js";
 import { Component } from "./component.js";
 import { SchemaStorage } from "./schema.js";
 
