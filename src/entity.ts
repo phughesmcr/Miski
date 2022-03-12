@@ -1,7 +1,7 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
 import { Archetype, removeEntityFromArchetype } from "./archetype/archetype.js";
-import { isUint32, Opaque } from "./utils/utils.js";
+import { createAvailabilityArray, isUint32, Opaque } from "./utils/utils.js";
 
 /** Entities are indexes of an EntityArray. An Entity is just an integer. */
 export type Entity = Opaque<number, "Entity">;
@@ -26,12 +26,6 @@ function createEntityArchetypeArray(capacity: number) {
   return entityArchetypes;
 }
 
-function createAvailableEntityArray(capacity: number): Entity[] {
-  // @todo would this be better as a generator?
-  const total = capacity - 1;
-  return Array.from({ length: capacity }, (_, i) => total - i) as Entity[];
-}
-
 function entityValidator(capacity: number): (entity: Entity) => entity is Entity {
   /** @return `true` if the given entity is valid for the given capacity */
   return function isValidEntity(entity: Entity): entity is Entity {
@@ -44,13 +38,13 @@ export function createEntityManager(spec: EntityManagerSpec): EntityManager {
   const { capacity } = spec;
 
   const entityArchetypes = createEntityArchetypeArray(capacity);
-  const availableEntities = createAvailableEntityArray(capacity);
+  const availableEntities = createAvailabilityArray(capacity);
   const isValidEntity = entityValidator(capacity);
 
   return {
     /** @returns the next available Entity or `undefined` if no Entity is available */
     createEntity(): Entity | undefined {
-      return availableEntities.pop();
+      return availableEntities.pop() as Entity | undefined;
     },
 
     /**
