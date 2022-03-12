@@ -27,6 +27,8 @@ declare type SchemaProps<T> = Record<keyof T, number>;
 declare type Schema<T> = Record<keyof T, TypedArrayConstructor | [TypedArrayConstructor, number]>;
 
 interface ComponentInstance<T> extends Component<T> {
+    /** The number of entities which have this component instance */
+    count: number;
     /** The instance's identifier */
     id: number;
 }
@@ -34,12 +36,22 @@ interface ComponentInstance<T> extends Component<T> {
 /** { [component name]: component instance } */
 declare type ComponentRecord = Record<string, ComponentInstance<unknown>>;
 interface ComponentSpec<T> {
+    /**
+     * The maximum number of entities able to equip this component per world.
+     *
+     * Defaults to all entities.
+     *
+     * __Warning__: use this only where memory consumption is a concern, performance will be worse.
+     */
+    maxEntities?: number;
     /** The component's label */
     name: string;
     /** The component's property definitions. Omit to define a tag component. */
     schema?: Schema<T>;
 }
 interface Component<T> {
+    /** The maximum number of entities able to equip this component per world. */
+    maxEntities: number | null;
     /** `true` if the component has no schema */
     isTag: boolean;
     /** The component's label */
@@ -85,72 +97,35 @@ interface Query {
  */
 declare function createQuery(spec: QuerySpec): Readonly<Query>;
 
-interface Bitfield {
-    /** The size of the bitfield */
-    capacity: number;
-    /** The underlying bit array */
-    array: Uint32Array;
-    /**
-     * Set all bits to 0
-     * @returns `true` if the bitfield array was cleared successfully
-     */
-    clear: () => Bitfield;
-    /** @returns a new Bitfield based on this Bitfield */
-    copy: () => Bitfield;
-    /** @returns `true` if a given bit is 'on' (e.g., truthy) in the Bitfield */
-    isOn: (bit: number) => boolean;
-    /**
-     * Set a bit 'off' (e.g., falsy) in the Bitfield
-     * @returns `true` if the bit was manipulated successfully
-     */
-    off: (bit: number) => Bitfield;
-    /**
-     * Set a bit 'on' (e.g., truthy) in the Bitfield
-     * @returns `true` if the bit was manipulated successfully
-     */
-    on: (bit: number) => Bitfield;
-    /**
-     * Toggle a bit in the Bitfield
-     * @returns `true` if the bit was manipulated successfully
-     */
-    toggle: (bit: number) => Bitfield;
-    /** @returns the bitfield array as a string */
-    toString: () => string;
-}
+/**
+ * @note
+ * `bit >>> 5` is used in place of `Math.floor(bit / 32)`.
+ * `(bit - (bit >>> 5) * 32)` is used in place of `bit % 32`.
+ */
 
-/** Entities are indexes of an EntityArray. An Entity is just an integer. */
-declare type Entity = Opaque<number, "Entity">;
+/** A Bitfield is just a Uint32Array */
+declare type Bitfield = Opaque<Uint32Array, "Bitfield">;
 
 interface QueryInstance extends Query {
-    getComponents: () => ComponentRecord;
-    /** Entities which have entered this query since last refresh */
-    getEntered: () => Entity[];
-    getEntities: () => Entity[];
-    /** Entities which have exited this query since last refresh */
-    getExited: () => Entity[];
-    refresh: (archetypes: Archetype[]) => void;
-}
-interface QueryData {
     /** A bitfield for the AND match criteria */
-    and?: Readonly<Bitfield>;
+    and: Readonly<Bitfield>;
+    /** */
+    archetypes: Set<Archetype>;
+    /** */
+    components: Record<string, ComponentInstance<unknown>>;
     /** A bitfield for the OR match criteria */
-    or?: Readonly<Bitfield>;
+    or: Readonly<Bitfield>;
     /** A bitfield for the NOT match criteria */
-    not?: Readonly<Bitfield>;
+    not: Readonly<Bitfield>;
 }
-
-/**
- * Archetypes are unique groupings of Entities by Components
- * An archetype must have:
- *  - A unique ID
- *  - A Set of Entity inhabitants
- *  - A way of knowing which Components are represented (Bitfield)
- *  - A way of checking if a QueryInstance matches the Archetype's Components
- */
 
 interface Archetype {
     /** The Archetype's Component Bitfield */
     bitfield: Bitfield;
+    /** */
+    candidateCache: Map<QueryInstance, boolean>;
+    /** */
+    cloneCache: Map<ComponentInstance<unknown>, Archetype>;
     /** Entities which have entered this archetype since last refresh */
     entered: Set<Entity>;
     /** Set of Entities which inhabit this Archetype */
@@ -159,28 +134,16 @@ interface Archetype {
     exited: Set<Entity>;
     /** The Archetype's unique ID */
     id: string;
-    /** Add an entity to the inhabitants list */
-    addEntity: (entity: Entity) => Archetype;
-    /** Get the ID of an archetype based on this with a toggled component */
-    cloneInStep: <T>(component: ComponentInstance<T>) => [string, () => Archetype];
-    /** @returns a clone on this archetype */
-    cloneWithToggle: <T>(component: ComponentInstance<T>) => Archetype;
-    /** @returns an iterator of Entities which inhabit this Archetype */
-    getEntities: () => IterableIterator<Entity>;
-    /** @returns `true` if the Entity inhabits this Archetype */
-    hasEntity: (entity: Entity) => boolean;
-    /** @returns `true` if the query criteria match this archetype */
-    isCandidate: (query: QueryData) => boolean;
-    /** Purge various archetype related caches */
-    purge: () => void;
-    /** Remove an entity from the inhabitants list */
-    removeEntity: (entity: Entity) => Archetype;
-    /** Run archetype maintenance functions */
-    refresh: () => void;
+    /** `true` if an entity has entered or left since last refresh */
+    isDirty: boolean;
 }
+
+/** Entities are indexes of an EntityArray. An Entity is just an integer. */
+declare type Entity = Opaque<number, "Entity">;
 
 interface MiskiData {
     componentBuffer: ArrayBuffer;
+    version: string;
 }
 
 interface WorldSpec {
@@ -232,7 +195,9 @@ interface World extends WorldProto {
     /** @returns an array of entities which have left a query's archetypes since last world.refresh() */
     getQueryExited: (query: Query) => Entity[];
     /** @returns a tuple of entities and components which match the query's criteria */
-    getQueryResult: (query: Query) => [Entity[], ComponentRecord];
+    getQueryResult: (query: Query) => [() => Entity[], ComponentRecord];
+    /** @returns a tuple of entities and components which match the query's criteria */
+    getQueryResults: (...queries: Query[]) => [() => Entity[], ComponentRecord];
     /** @returns the number of available entities in the world. */
     getVacancyCount: () => number;
     /** @returns `true` if the entity is valid and !== undefined */
@@ -266,19 +231,19 @@ interface World extends WorldProto {
 declare function createWorld(spec: WorldSpec): Readonly<World>;
 
 /** A multi-arity function where the first parameter is always the World object */
-declare type System<T extends (world: World, ...args: any[]) => ReturnType<T>, U extends ParametersExceptFirst<T>> = (world: World, ...args: U) => ReturnType<T>;
+declare type System<T extends (components: ComponentRecord, entities: Entity[], ...args: unknown[]) => ReturnType<T>, U extends ParametersExceptFirst<T>> = (components: ComponentRecord, entities: Entity[], ...args: U) => ReturnType<T>;
 /**
  * Creates a new curried System function
  * @param callback the System function to be called
  * @returns a curried function (world) => (...args) => result;
  *
  * @example
- * const world = {} as World;
- * const log = (world: World, value: string) => console.log(value);
- * const logSystem = createSystem(log);
+ * const logQuery = createQuery({ all: [loggable]});
+ * const log = (components: Record<string, ComponentInstance>, entities: Entity[], value: string) => console.log(value);
+ * const logSystem = createSystem(log, logQuery);
  * const logSystemInstance = logSystem(world);
  * logSystemInstance("hello, world!"); // hello, world!
  */
-declare function createSystem<T extends (world: World, ...args: any[]) => ReturnType<T>, U extends ParametersExceptFirst<T>>(callback: System<T, U>): (world: World) => (...args: U) => ReturnType<T>;
+declare function createSystem<T extends (components: ComponentRecord, entities: Entity[], ...args: unknown[]) => ReturnType<T>, U extends ParametersExceptFirst<T>>(callback: System<T, U>, ...queries: Query[]): (world: World) => (...args: U) => ReturnType<T>;
 
-export { Archetype, Bitfield, Component, ComponentInstance, ComponentRecord, ComponentSpec, Entity, MiskiData, Opaque, ParametersExceptFirst, Query, QueryData, QueryInstance, QuerySpec, Schema, SchemaProps, System, TypedArrayConstructor, World, WorldSpec, createComponent, createQuery, createSystem, createWorld };
+export { Archetype, Bitfield, Component, ComponentInstance, ComponentRecord, ComponentSpec, Entity, MiskiData, Opaque, ParametersExceptFirst, Query, QueryInstance, QuerySpec, Schema, SchemaProps, System, TypedArrayConstructor, World, WorldSpec, createComponent, createQuery, createSystem, createWorld };

@@ -2,15 +2,18 @@
 
 import { createComponent, createQuery, createSystem, createWorld } from "../../dist/miski.min.js";
 
+// Utility functions
 function rnd(a, b) { return Math.random() * (b - a) + a; }
 
+// Simulation constants
 const ENTITIES = 64;
 let SPEED = 50;
 
+// Canvas setup
 const canvas = document.getElementsByTagName('canvas')[0];
-const ctx = canvas.getContext('2d');
-let halfX = Math.floor(window.innerWidth / 2);
-let halfY = Math.floor(window.innerHeight / 2);
+const ctx = canvas.getContext('2d', { alpha: false, willReadFrequently: false });
+let halfX = Math.floor(window.innerWidth / 4);
+let halfY = Math.floor(window.innerHeight / 4);
 ctx.strokeStyle = "#000";
 ctx.lineWidth = 5;
 
@@ -26,8 +29,8 @@ ctx.lineWidth = 5;
 const cColour = createComponent({ name: "colour", schema: { r: Uint8ClampedArray, g: Uint8ClampedArray, b: Uint8ClampedArray }});
 const cSize = createComponent({ name: "size", schema: { value: Uint32Array }});
 const cVelocity = createComponent({ name: "velocity", schema: { dx: Float32Array, dy: Float32Array }});
-// a tag component:
-const tBorder = createComponent({ name: "border" });
+// a tag component, with a maximum capacity:
+const tBorder = createComponent({ name: "border", maxEntities: ENTITIES / 2 });
 // you can set default values for your component properties like so:
 const cPosition = createComponent({ name: "position", schema: { x: [Float32Array, halfX], y: [Float32Array, halfY] }});
 
@@ -63,7 +66,7 @@ const {
   destroyEntity,
   entityHasComponent,
   getEntityArchetype,
-  getQueryResult,
+  getQueryResults,
   getQueryEntered,
   getQueryExited,
   getVacancyCount,
@@ -83,21 +86,22 @@ const {
  * `const [entities, components] = world.getQueryResult(query);`
  * Note: the entities array is essentially in a random order (by archetype id) so you may want to sort it yourself.
  */
-const qMove = createQuery({all: [ cSize, cPosition, cVelocity ]});
 const qColour = createQuery({all: [ cColour ]});
-const qRender = createQuery({all: [ cSize, cColour, cPosition ], any: [tBorder]});
+const qMove = createQuery({all: [ cSize, cPosition, cVelocity ]});
 const qPos = createQuery({all: [ cPosition ]});
+const qRender = createQuery({all: [ cSize, cPosition ], any: [tBorder]}); // @todo: option to merge queries in advance rather than supply multiple to systems
 
 /* 4. Define Systems
  *
- * Systems are functions of any arity where the first parameter is always the world.
- * For example: `function(world) {...}` or `function(world, data)`, etc.
+ * Systems are functions of any arity where the first two (2) parameters is always:
+ *  i: an object containing the components captured by the system's query/ies (Record<string, ComponentInstance>).
+ * ii: an array of entities currently captured by the system's query/ies (Entity[]).
+ * For example: `function(component, entities) {...}` or `function(component, entities, ...args)`, etc.
  * Defining systems using `createSystem` isn't necessary but doing so ensures type safety.
- * Systems created using `createSystem` will return whatever your function returns.
+ * Systems created using `createSystem` will return whatever your function returns (i.e., ReturnType<T>).
  */
-const sColour = createSystem((world, delta = 1) => {
+const sColour = createSystem((components, entities, delta = 1) => {
   // Note: the entities array is essentially in a random order (by archetype id) so you may want to sort it yourself.
-  const [entities, components] =  world.getQueryResult(qColour);
   const { colour } = components;
   const { r, g, b } = colour;
   function changeColour(entity) {
@@ -106,10 +110,9 @@ const sColour = createSystem((world, delta = 1) => {
     b[entity] = (b[entity] + 1 * delta) % 255;
   }
   entities.forEach(changeColour);
-})(world);
+}, qColour)(world);
 
-const sMove = createSystem((world, delta = 1) => {
-  const [entities, components] =  world.getQueryResult(qMove);
+const sMove = createSystem((components, entities, delta = 1) => {
   const { position, size, velocity } = components;
   const { x, y } = position;
   const { value } = size;
@@ -132,10 +135,10 @@ const sMove = createSystem((world, delta = 1) => {
     y[entity] += dy[entity] * delta * SPEED;
   }
   entities.forEach(changePosition);
-})(world);
+}, qMove)(world);
 
-const sRender = createSystem((world, alpha = 0) => {
-  const [entities, components] = world.getQueryResult(qRender);
+// Systems can take multiple queries too:
+const sRender = createSystem((components, entities, alpha = 0) => {
   entities.sort((a, b) => a - b);
   const { colour, position, size } = components;
   const { r, g, b } = colour;
@@ -154,7 +157,7 @@ const sRender = createSystem((world, alpha = 0) => {
     }
   }
   entities.forEach(renderShape);
-})(world);
+}, qColour, qRender)(world);
 
 /* 5. Create Entities and give them some components */
 for (let i = 0, max = ENTITIES; i < max; i++) {
@@ -173,14 +176,17 @@ for (let i = 0, max = ENTITIES; i < max; i++) {
    * adding tag components is the same, but the third parameter
    * should not be provided (it will be ignored)
    */
-  if (i % 2) addComponentToEntity(tBorder, box);
+  if (i % 3) {
+    // since `tBorder` has a maxEntities property, adding component may not be possible
+    const tagWasAdded = addComponentToEntity(tBorder, box);
+    if (!tagWasAdded) console.log(`Tag was not added to entity ${i} because component was at capacity.`);
+  }
 }
 
 ///////////////////////////
 // Demo specific code (not Miski specific)
 ///////////////////////////
 const sFPS = document.getElementById("sFPS");
-const sFrame = document.getElementById("sFrame");
 const sResX = document.getElementById("sResX");
 const sResY = document.getElementById("sResY");
 const rSpeed = document.getElementById("rSpeed");
@@ -202,11 +208,6 @@ rSpeed.addEventListener("input", () => {
   SPEED = rSpeed.value;
 }, { passive: true });
 
-let frame = 0;
-function updateFrame() {
-  sFrame.textContent = frame;
-}
-
 let f = 0
 let ld = 0;
 let lu = Number.NEGATIVE_INFINITY;
@@ -222,18 +223,18 @@ function updateFps(time) {
 }
 
 function handleResize() {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
+  canvas.width = window.innerWidth / 2;
+  canvas.height = window.innerHeight / 2;
   const { width, height } = canvas;
   halfX = Math.floor(width / 2);
   halfY = Math.floor(height / 2);
   sResX.textContent = width;
   sResY.textContent = height;
 
-  const [entities, components] = world.getQueryResult(qPos);
-  const { position } = components;
+  const [getResizeEntities, resizeComponents] = world.getQueryResult(qPos);
+  const { position } = resizeComponents;
   const { x, y } = position;
-  entities.forEach((entity) => {
+  getResizeEntities().forEach((entity) => {
     const _x = x[entity];
     const _y = y[entity];
     if (_x >= width - 125 || _x <= 0) {
@@ -247,8 +248,6 @@ function handleResize() {
 handleResize();
 window.addEventListener("resize", throttle(handleResize, 32), {passive: true});
 
-const tUpdateFrame =  throttle(updateFrame, 32);
-
 // 6. Define your game loop (not Miski specific)
 let stepLastTime = null;
 let stepAccumulator = 0;
@@ -259,7 +258,6 @@ const maxUpdates = 240;
 
 function step(time) {
   requestAnimationFrame(step);
-  frame++;
   if (stepLastTime !== null) {
     stepAccumulator += (time - (stepLastTime || 0)) * 0.001;
     stepLastUpdate = 0;
@@ -289,6 +287,5 @@ function step(time) {
   sRender(alpha);
 
   updateFps(time);
-  tUpdateFrame();
 }
 requestAnimationFrame(step);

@@ -17,7 +17,7 @@ __Miski ECS__: A sweet ECS architecture written in Typescript.
 ## Contents
   * [Purpose](#purpose)
   * [Features](#features)
-  * [Install](#install)
+  * [Importing](#importing)
   * [API Reference](#api-reference)
   * [Demos](#demos)
   * [Benchmarks](#benchmarks)
@@ -29,31 +29,35 @@ __Miski ECS__: A sweet ECS architecture written in Typescript.
   * [License](#license)
 
 ## Purpose
-Miski's purpose is to provide a stable, user-friendly ECS architecture for modern Javascript projects.
+Miski's purpose is to provide a stable, developer-friendly ECS architecture for modern Javascript projects.
 
 ### Goals
 * To provide good and predictable performance
-* To provide a developer-friendly and user-friendly API
+* To provide a developer-friendly API
 * To provide a clean, readable, self-documenting, open-source codebase
 
 ### Not Goals
-Because Miski is designed to be used inside other projects, we'll let those devs configure bundling and tune performance to suit their needs, therefore the following are not goals of this project:
+Because Miski is designed to be used inside your own projects, we let you configure bundling and performance tuning to suit your needs, therefore the following are not goals of this project:
 * To be the fastest or smallest ECS on the web
 * To provide polyfills, workarounds, or older browser support for modern ECMAScript features
 
 ## Features
-* Simple, human-friendly API
+* Simple, developer-friendly, human-readable API
 * Modern ES2020 data-oriented Typescript codebase
 * No dependencies
+* Sensible by default
 * Memory-friendly archetype-based ECS model
 * Ability to use more than 32 components in one world using Uint32Array bitfields
+* Ability to limit the number of entities a component can be added to
+* Ability to use multiple queries per system
 * Basic serialization methods (`world.load` & `world.save`)
 * Fast, cache-friendly ArrayBuffer-based component data storage
 * Define components and queries once, reuse them across multiple worlds
 * `AND`,`OR`,`NOT` operators in Queries
 * `world.getQueryEntered` & `world.getQueryExited` methods
+* MIT license
 
-## Install
+## Importing
 The javascript module `miski.min.js` is found in the `./dist` folder, along with a sourcemap file and typescript definitions `.d.ts` file.
 
 ```javascript
@@ -62,7 +66,7 @@ import { createComponent, createQuery, createSystem, createWorld } from './miski
 
 See [API Reference](#api-reference) below for a complete list of named exports.
 
-Various type definitions are also exported - see index.ts for a complete list.
+Various type definitions are also exported - see `index.ts` for a complete list.
 
 ## API Reference
 This is the complete API:
@@ -98,6 +102,7 @@ createWorld: (spec: WorldSpec) => World;
 
   🔎 World Query methods
   world.getQueryResult: (query: Query) => [Entity[], ComponentRecord];
+  world.getQueryResults: (...queries: Query[]) => [Entity[], ComponentRecord];
   world.getQueryEntered: (query: Query) => Entity[];
   world.getQueryExited: (query: Query) => Entity[];
 
@@ -135,7 +140,7 @@ npm run build
 1. Allow for "changed" in queries
 2. Multithreading support / playing nicely with WebWorkers / SharedArrayBuffers
 3. Proper Deno support
-4. Resizable/dynamic component data storage
+4. Dynamic component data storage
 5. Object pooling where necessary
 
 ## Contributing
