@@ -1,16 +1,17 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
 import { ONE_BYTE } from "../constants.js";
-import { TypedArrayConstructor } from "../utils.js";
+import { sparseFacade } from "../utils/sparse-facade.js";
+import { TypedArrayConstructor } from "../utils/utils.js";
 import { Component } from "./component.js";
 import { SchemaStorage } from "./schema.js";
 
-export interface ComponentBufferSpec {
+interface ComponentBufferSpec {
   capacity: number;
   components: Component<unknown>[];
 }
 
-export interface ComponentBufferPartitionerSpec {
+interface ComponentBufferPartitionerSpec {
   buffer: ArrayBuffer;
   capacity: number;
 }
@@ -54,9 +55,11 @@ export function createComponentBufferPartitioner(spec: ComponentBufferPartitione
 
   return function partitionComponentBuffer<T>(component: Component<T>): SchemaStorage<T> | undefined {
     if (full === true) throw new Error("ArrayBuffer is full!");
-    const { schema, size = 0 } = component;
+    const { maxEntities, schema, size = 0 } = component;
     if (!size || size <= 0) return; // bail early if component is a tag
-    if (bufferOffset + size * capacity > buffer.byteLength) {
+    const requiredSize = maxEntities ?? capacity;
+
+    if (bufferOffset + size * requiredSize > buffer.byteLength) {
       throw new Error("Component will not fit inside the buffer!");
     }
 
@@ -68,13 +71,12 @@ export function createComponentBufferPartitioner(spec: ComponentBufferPartitione
       let typedArray = value as TypedArrayConstructor;
       let initialValue = 0;
       if (Array.isArray(value)) {
-        const [arrayConstructor, defaultValue] = value;
-        typedArray = arrayConstructor;
-        initialValue = defaultValue;
+        [typedArray, initialValue] = value;
       }
-      res[key] = new typedArray(buffer, bufferOffset + componentOffset, capacity);
+      const dense = new typedArray(buffer, bufferOffset + componentOffset, requiredSize);
+      res[key] = maxEntities === null ? dense : sparseFacade(dense);
       if (initialValue !== 0) res[key].fill(initialValue as never);
-      componentOffset += typedArray.BYTES_PER_ELEMENT * capacity;
+      componentOffset += typedArray.BYTES_PER_ELEMENT * requiredSize;
       return res;
     }
 

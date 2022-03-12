@@ -1,16 +1,16 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
-import { Archetype } from "./archetype/archetype.js";
-import { isUint32, Opaque } from "./utils.js";
+import { Archetype, removeEntityFromArchetype } from "./archetype/archetype.js";
+import { createAvailabilityArray, isUint32, Opaque } from "./utils/utils.js";
 
 /** Entities are indexes of an EntityArray. An Entity is just an integer. */
 export type Entity = Opaque<number, "Entity">;
 
-export interface EntityManagerSpec {
+interface EntityManagerSpec {
   capacity: number;
 }
 
-export interface EntityManager {
+interface EntityManager {
   createEntity: () => Entity | undefined;
   destroyEntity: (entity: Entity) => boolean;
   getEntityArchetype: (entity: Entity) => Archetype | undefined;
@@ -26,38 +26,25 @@ function createEntityArchetypeArray(capacity: number) {
   return entityArchetypes;
 }
 
-function createAvailableEntityArray(capacity: number): Entity[] {
-  // @todo would this be better as a generator?
-  const total = capacity - 1;
-  return Array.from({ length: capacity }, (_, i) => total - i) as Entity[];
-}
-
-/**
- *
- * @param capacity
- * @returns
- */
 function entityValidator(capacity: number): (entity: Entity) => entity is Entity {
   /** @return `true` if the given entity is valid for the given capacity */
   return function isValidEntity(entity: Entity): entity is Entity {
-    if (!isUint32(entity) || entity > capacity) return false;
-    return true;
+    return isUint32(entity) && entity <= capacity;
   };
 }
 
 /** Manages the creation, destruction and recycling of entities */
-export function createEntityManager(spec: EntityManagerSpec): Readonly<EntityManager> {
-  if (!spec) throw new SyntaxError("EntityManager creation requires a spec object.");
+export function createEntityManager(spec: EntityManagerSpec): EntityManager {
   const { capacity } = spec;
 
   const entityArchetypes = createEntityArchetypeArray(capacity);
-  const availableEntities = createAvailableEntityArray(capacity);
+  const availableEntities = createAvailabilityArray(capacity);
   const isValidEntity = entityValidator(capacity);
 
-  return Object.freeze({
+  return {
     /** @returns the next available Entity or `undefined` if no Entity is available */
     createEntity(): Entity | undefined {
-      return availableEntities.pop();
+      return availableEntities.pop() as Entity | undefined;
     },
 
     /**
@@ -68,7 +55,7 @@ export function createEntityManager(spec: EntityManagerSpec): Readonly<EntityMan
       if (!isValidEntity(entity)) return false;
       const archetype = entityArchetypes[entity];
       if (archetype !== undefined) {
-        archetype.removeEntity(entity);
+        removeEntityFromArchetype(entity)(archetype);
         delete entityArchetypes[entity];
         availableEntities.push(entity);
         return true;
@@ -101,5 +88,5 @@ export function createEntityManager(spec: EntityManagerSpec): Readonly<EntityMan
       }
       return false;
     },
-  });
+  };
 }

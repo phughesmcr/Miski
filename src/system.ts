@@ -1,13 +1,16 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
-import { ParametersExceptFirst } from "./utils.js";
+import { ComponentRecord } from "./component/component.js";
+import { Entity } from "./entity.js";
+import { Query } from "./query/query.js";
+import { ParametersExceptFirst } from "./utils/utils.js";
 import { World } from "./world.js";
 
 /** A multi-arity function where the first parameter is always the World object */
-export type System<T extends (world: World, ...args: any[]) => ReturnType<T>, U extends ParametersExceptFirst<T>> = (
-  world: World,
-  ...args: U
-) => ReturnType<T>;
+export type System<
+  T extends (components: ComponentRecord, entities: Entity[], ...args: unknown[]) => ReturnType<T>,
+  U extends ParametersExceptFirst<T>,
+> = (components: ComponentRecord, entities: Entity[], ...args: U) => ReturnType<T>;
 
 /**
  * Creates a new curried System function
@@ -15,19 +18,22 @@ export type System<T extends (world: World, ...args: any[]) => ReturnType<T>, U 
  * @returns a curried function (world) => (...args) => result;
  *
  * @example
- * const world = {} as World;
- * const log = (world: World, value: string) => console.log(value);
- * const logSystem = createSystem(log);
+ * const logQuery = createQuery({ all: [loggable]});
+ * const log = (components: Record<string, ComponentInstance>, entities: Entity[], value: string) => console.log(value);
+ * const logSystem = createSystem(log, logQuery);
  * const logSystemInstance = logSystem(world);
  * logSystemInstance("hello, world!"); // hello, world!
  */
 export function createSystem<
-  T extends (world: World, ...args: any[]) => ReturnType<T>,
+  T extends (components: ComponentRecord, entities: Entity[], ...args: unknown[]) => ReturnType<T>,
   U extends ParametersExceptFirst<T>,
->(callback: System<T, U>) {
+>(callback: System<T, U>, ...queries: Query[]) {
   return function (world: World) {
+    // getQueryResult is much faster than getQueryResults for single query systems
+    const [getEntities, components] =
+      queries.length === 1 ? world.getQueryResult(queries[0]!) : world.getQueryResults(...queries);
     return function (...args: U): ReturnType<T> {
-      return callback(world, ...args);
+      return callback(components, getEntities(), ...args);
     };
   };
 }

@@ -1,10 +1,10 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
-import { isObject, isUint32, TypedArray } from "../utils.js";
+import { isObject, isUint32, TypedArray } from "../utils/utils.js";
 import { Component } from "./component.js";
 import { SchemaStorage } from "./schema.js";
 
-export interface ComponentInstanceSpec<T> {
+interface ComponentInstanceSpec<T> {
   /** The component to instantiate */
   component: Component<T>;
   /** The component instance's identifier */
@@ -14,6 +14,8 @@ export interface ComponentInstanceSpec<T> {
 }
 
 export interface ComponentInstance<T> extends Component<T> {
+  /** The number of entities which have this component instance */
+  count: number;
   /** The instance's identifier */
   id: number;
 }
@@ -33,7 +35,21 @@ export function createComponentInstance<T>(
   if (!component) throw new Error("Component instantiation requires as component!");
   if (!isUint32(id)) throw new SyntaxError("Component ID is invalid.");
   if (storage && !isObject(storage)) throw new TypeError("Component storage is malformed.");
+
+  /** number of entities which have this component instance */
+  let entityCount = 0;
+
   const instance = Object.create(component, {
+    count: {
+      get() {
+        return entityCount;
+      },
+      set(value: number) {
+        entityCount = value;
+      },
+      configurable: false,
+      enumerable: true,
+    },
     id: {
       value: id,
       configurable: false,

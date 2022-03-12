@@ -1,6 +1,7 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
 import { Archetype } from "../archetype/archetype.js";
+import { Bitfield } from "../bitfield.js";
 import { Entity } from "../entity.js";
 import { ComponentBufferPartitioner, createComponentBuffer, createComponentBufferPartitioner } from "./buffer.js";
 import { Component, ComponentRecord } from "./component.js";
@@ -16,10 +17,11 @@ export interface ComponentManager {
   setBuffer: (source: ArrayBuffer) => ArrayBuffer;
 }
 
-export interface ComponentManagerSpec {
+interface ComponentManagerSpec {
   capacity: number;
   components: Component<unknown>[];
   getEntityArchetype: (entity: Entity) => Archetype | undefined;
+  isBitOn: (bit: number, bitfield: Bitfield) => boolean;
   isValidEntity: (entity: Entity) => entity is Entity;
   updateArchetype: <T>(entity: Entity, component: ComponentInstance<T>) => Archetype;
 }
@@ -47,8 +49,8 @@ function instantiateComponents(spec: {
   return [...new Set(components)].reduce(reducer, {});
 }
 
-export function createComponentManager(spec: ComponentManagerSpec): Readonly<ComponentManager> {
-  const { capacity, components, getEntityArchetype, isValidEntity, updateArchetype } = spec;
+export function createComponentManager(spec: ComponentManagerSpec): ComponentManager {
+  const { capacity, components, getEntityArchetype, isBitOn, isValidEntity, updateArchetype } = spec;
 
   const buffer = createComponentBuffer({ capacity, components });
   const partitioner = createComponentBufferPartitioner({ buffer, capacity });
@@ -74,56 +76,83 @@ export function createComponentManager(spec: ComponentManagerSpec): Readonly<Com
     return buffer.slice(0);
   };
 
-  return Object.freeze({
-    componentMap,
+  const addComponentToEntity = <T>(component: Component<T>, entity: Entity, props?: SchemaProps<T>): boolean => {
+    if (!isValidEntity(entity)) return false;
+    const inst = componentMap.get(component);
+    if (!inst) return false;
 
-    addComponentToEntity<T>(component: Component<T>, entity: Entity, props?: SchemaProps<T>): boolean {
-      if (!isValidEntity(entity)) return false;
-      const inst = componentMap.get(component);
-      if (!inst) return false;
-      updateArchetype(entity, inst);
-      // set any default initial properties
-      if (component.schema) {
-        Object.entries(component.schema).forEach(([key, value]) => {
-          if (Array.isArray(value)) {
-            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-            // @ts-ignore
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment
-            inst[key][entity] = value[1] ?? 0;
-          }
-        });
-      }
-      // set any custom initial properties
-      if (props) {
-        Object.entries(props).forEach(([key, value]) => {
+    const archetype = getEntityArchetype(entity);
+    if (archetype && isBitOn(inst.id, archetype.bitfield)) return true;
+
+    const { maxEntities } = component;
+    if (maxEntities && inst.count >= maxEntities) return false;
+    inst.count = inst.count + 1;
+
+    updateArchetype(entity, inst);
+
+    // set any default initial properties
+    if (component.schema) {
+      Object.entries(component.schema).forEach(([key, value]) => {
+        if (Array.isArray(value)) {
           // eslint-disable-next-line @typescript-eslint/ban-ts-comment
           // @ts-ignore
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-          inst[key][entity] = value;
-        });
-      }
-      return true;
-    },
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment
+          inst[key][entity] = value[1] ?? 0;
+        }
+      });
+    }
 
-    entityHasComponent<T>(entity: Entity, component: Component<T>): boolean {
-      const inst = componentMap.get(component);
-      if (!inst) return false;
-      const arch = getEntityArchetype(entity);
-      if (!arch) return false;
-      const { bitfield } = arch;
-      return bitfield.isOn(inst.id);
-    },
+    // set any custom initial properties
+    if (props) {
+      Object.entries(props).forEach(([key, value]) => {
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        inst[key][entity] = value;
+      });
+    }
 
+    return true;
+  };
+
+  const entityHasComponent = <T>(entity: Entity, component: Component<T>): boolean => {
+    const inst = componentMap.get(component);
+    if (!inst) return false;
+    const arch = getEntityArchetype(entity);
+    if (!arch) return false;
+    const { bitfield } = arch;
+    const { id } = inst;
+    return isBitOn(id, bitfield);
+  };
+
+  const removeComponentFromEntity = <T>(component: Component<T>, entity: Entity): boolean => {
+    if (!isValidEntity(entity)) return false;
+    const inst = componentMap.get(component);
+    if (!inst) return false;
+
+    // make sure facade storage is freed for those that need it
+    const { maxEntities, schema } = component;
+    if (maxEntities && schema) {
+      Object.keys(schema).forEach((key) => {
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        delete inst[key][entity];
+      });
+    }
+
+    updateArchetype(entity, inst);
+    inst.count = inst.count - 1;
+    return true;
+  };
+
+  return {
+    componentMap,
+
+    addComponentToEntity,
+    entityHasComponent,
     getBuffer,
-
-    removeComponentFromEntity<T>(component: Component<T>, entity: Entity): boolean {
-      if (!isValidEntity(entity)) return false;
-      const inst = componentMap.get(component);
-      if (!inst) return false;
-      updateArchetype(entity, inst);
-      return true;
-    },
-
+    removeComponentFromEntity,
     setBuffer,
-  });
+  };
 }

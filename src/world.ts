@@ -2,17 +2,16 @@
 
 import { Archetype } from "./archetype/archetype.js";
 import { createArchetypeManager } from "./archetype/manager.js";
-import { bitfield, bitfieldCloner } from "./bitfield.js";
+import { bitfieldFactory } from "./bitfield.js";
 import { Component, ComponentRecord } from "./component/component.js";
 import { createComponentManager } from "./component/manager.js";
 import { SchemaProps } from "./component/schema.js";
 import { DEFAULT_MAX_ENTITIES, VERSION } from "./constants.js";
 import { createEntityManager, Entity } from "./entity.js";
-import { QueryInstance } from "./query/instance.js";
 import { createQueryManager } from "./query/manager.js";
 import { Query } from "./query/query.js";
 import { createSerializationManager, MiskiData } from "./serialize.js";
-import { isUint32 } from "./utils.js";
+import { isUint32 } from "./utils/utils.js";
 
 export interface WorldSpec {
   /** The maximum number of entities allowed in the world */
@@ -21,7 +20,7 @@ export interface WorldSpec {
   components: Component<unknown>[];
 }
 
-export interface WorldProto {
+interface WorldProto {
   /** The Miski version used to create this World */
   readonly version: string;
 }
@@ -65,7 +64,9 @@ export interface World extends WorldProto {
   /** @returns an array of entities which have left a query's archetypes since last world.refresh() */
   getQueryExited: (query: Query) => Entity[];
   /** @returns a tuple of entities and components which match the query's criteria */
-  getQueryResult: (query: Query) => [Entity[], ComponentRecord];
+  getQueryResult: (query: Query) => [() => Entity[], ComponentRecord];
+  /** @returns a tuple of entities and components which match the query's criteria */
+  getQueryResults: (...queries: Query[]) => [() => Entity[], ComponentRecord];
   /** @returns the number of available entities in the world. */
   getVacancyCount: () => number;
   /** @returns `true` if the entity is valid and !== undefined */
@@ -98,7 +99,7 @@ export interface World extends WorldProto {
 }
 
 /** World.prototype - Miski version data etc. */
-export const WORLD_PROTO: Readonly<WorldProto> = Object.freeze({
+const WORLD_PROTO: Readonly<WorldProto> = Object.freeze({
   version: VERSION,
 });
 
@@ -110,15 +111,10 @@ function validateWorldSpec(spec: WorldSpec): Required<WorldSpec> {
   return { capacity, components };
 }
 
-function createBitfieldFactory(capacity: number) {
-  const emptyBitfield = bitfield({ capacity });
-  const bitfieldFactory = bitfieldCloner(emptyBitfield);
-  return bitfieldFactory;
-}
-
 export function createWorld(spec: WorldSpec): Readonly<World> {
   const { capacity, components } = validateWorldSpec(spec);
-  const bitfieldFactory = createBitfieldFactory(components.length);
+
+  const { EMPTY_BITFIELD, createBitfieldFromIds, isBitOn, toggleBit } = bitfieldFactory(components.length);
 
   const {
     createEntity,
@@ -130,40 +126,42 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
     setEntityArchetype,
   } = createEntityManager({ capacity });
 
-  const { archetypeMap, updateArchetype } = createArchetypeManager({
-    bitfieldFactory,
-    getEntityArchetype,
-    setEntityArchetype,
-  });
+  const { archetypeMap, isArchetypeCandidate, purgeArchetypeCaches, refreshArchetype, updateArchetype } =
+    createArchetypeManager({
+      EMPTY_BITFIELD,
+      getEntityArchetype,
+      setEntityArchetype,
+      toggleBit,
+    });
 
   const { componentMap, addComponentToEntity, entityHasComponent, getBuffer, removeComponentFromEntity, setBuffer } =
     createComponentManager({
       capacity,
       components,
       getEntityArchetype,
+      isBitOn,
       isValidEntity,
       updateArchetype,
     });
 
-  const { queryMap, getQueryEntered, getQueryExited, getQueryResult } = createQueryManager({
-    bitfieldFactory,
-    componentMap,
-  });
+  const { queryMap, getQueryEntered, getQueryExited, getQueryResult, getQueryResults, refreshQuery } =
+    createQueryManager({
+      createBitfieldFromIds,
+      componentMap,
+      isArchetypeCandidate,
+    });
 
-  const { load, save } = createSerializationManager({ getBuffer, setBuffer });
+  const { load, save } = createSerializationManager({ getBuffer, setBuffer, version: VERSION });
 
   function purgeCaches() {
-    const archetypes = [...archetypeMap.values()];
-    const purgeArchetypes = (archetype: Archetype) => archetype.purge();
-    archetypes.forEach(purgeArchetypes);
+    [...archetypeMap.values()].forEach(purgeArchetypeCaches);
   }
   purgeCaches();
 
   function refresh() {
     const archetypes = [...archetypeMap.values()];
-    const refreshQuery = (instance: QueryInstance) => instance.refresh(archetypes);
-    queryMap.forEach(refreshQuery);
-    const refreshArchetype = (archetype: Archetype) => archetype.refresh();
+    const queryRefresher = refreshQuery(archetypes);
+    queryMap.forEach(queryRefresher);
     archetypes.forEach(refreshArchetype);
   }
   refresh();
@@ -179,6 +177,7 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
       getQueryEntered,
       getQueryExited,
       getQueryResult,
+      getQueryResults,
       getVacancyCount,
       hasEntity,
       load,
