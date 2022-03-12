@@ -8,6 +8,14 @@ import { calculateSchemaSize, isValidSchema, Schema } from "./schema.js";
 export type ComponentRecord = Record<string, ComponentInstance<unknown>>;
 
 export interface ComponentSpec<T> {
+  /**
+   * The maximum number of entities able to equip this component per world.
+   *
+   * Defaults to all entities.
+   *
+   * __Warning__: use this only where memory consumption is a concern, performance will be worse.
+   */
+  maxEntities?: number;
   /** The component's label */
   name: string;
   /** The component's property definitions. Omit to define a tag component. */
@@ -15,6 +23,8 @@ export interface ComponentSpec<T> {
 }
 
 export interface Component<T> {
+  /** The maximum number of entities able to equip this component per world. */
+  maxEntities: number | null;
   /** `true` if the component has no schema */
   isTag: boolean;
   /** The component's label */
@@ -34,10 +44,14 @@ export interface Component<T> {
  */
 export function createComponent<T extends Schema<T>>(spec: ComponentSpec<T>): Component<T> {
   if (!spec) throw new SyntaxError("Component creation requires a specification object.");
-  const { name, schema } = spec;
+  const { maxEntities, name, schema } = spec;
+  if (maxEntities && (!isUint32(maxEntities) || maxEntities === 0)) {
+    throw new SyntaxError("Component maxEntities must be a Uint32.");
+  }
   if (!isValidName(name)) throw new SyntaxError("Component name is invalid.");
   if (schema && !isValidSchema(schema)) throw new SyntaxError("Component schema is invalid.");
   return Object.freeze({
+    maxEntities: maxEntities ?? null,
     isTag: Boolean(schema),
     name,
     schema: schema ? Object.freeze({ ...schema }) : null,
