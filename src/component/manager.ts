@@ -80,7 +80,16 @@ export function createComponentManager(spec: ComponentManagerSpec): ComponentMan
     if (!isValidEntity(entity)) return false;
     const inst = componentMap.get(component);
     if (!inst) return false;
+
+    const archetype = getEntityArchetype(entity);
+    if (archetype && isBitOn(inst.id, archetype.bitfield)) return true;
+
+    const { maxEntities } = component;
+    if (maxEntities && inst.count >= maxEntities) return false;
+    inst.count = inst.count + 1;
+
     updateArchetype(entity, inst);
+
     // set any default initial properties
     if (component.schema) {
       Object.entries(component.schema).forEach(([key, value]) => {
@@ -92,6 +101,7 @@ export function createComponentManager(spec: ComponentManagerSpec): ComponentMan
         }
       });
     }
+
     // set any custom initial properties
     if (props) {
       Object.entries(props).forEach(([key, value]) => {
@@ -101,6 +111,7 @@ export function createComponentManager(spec: ComponentManagerSpec): ComponentMan
         inst[key][entity] = value;
       });
     }
+
     return true;
   };
 
@@ -118,7 +129,20 @@ export function createComponentManager(spec: ComponentManagerSpec): ComponentMan
     if (!isValidEntity(entity)) return false;
     const inst = componentMap.get(component);
     if (!inst) return false;
+
+    // make sure facade storage is freed for those that need it
+    const { maxEntities, schema } = component;
+    if (maxEntities && schema) {
+      Object.keys(schema).forEach((key) => {
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        delete inst[key][entity];
+      });
+    }
+
     updateArchetype(entity, inst);
+    inst.count = inst.count - 1;
     return true;
   };
 
