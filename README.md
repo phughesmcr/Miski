@@ -19,6 +19,7 @@ __Miski ECS__: A sweet ECS architecture written in Typescript.
   * [Features](#features)
   * [Importing](#importing)
   * [API Reference](#api-reference)
+  * [Docs](#docs)
   * [Demos](#demos)
   * [Benchmarks](#benchmarks)
   * [Building](#building)
@@ -115,6 +116,9 @@ createWorld: (spec: WorldSpec) => World;
   world.refresh: () => void;
   world.purgeCaches: () => void;
 ```
+
+## Docs
+See `./docs` or <a href="https://phughesmcr.github.io/Miski/docs/index.html">the live docs page on Github</a>.
 
 ## Demos
 See `./demo` for demo code or <a href="https://phughesmcr.github.io/Miski/">the demo page</a> for live examples.
