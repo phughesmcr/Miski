@@ -22,6 +22,7 @@ export type { Archetype } from "./archetype/archetype.js";
 export type { Bitfield } from "./bitfield.js";
 export type { Component, ComponentRecord, ComponentSpec } from "./component/component.js";
 export type { ComponentInstance } from "./component/instance.js";
+export type { StorageProxy } from "./component/proxy.js";
 export type { Entity } from "./entity.js";
 export type { MiskiData } from "./serialize.js";
 export type { Opaque, ParametersExceptFirstTwo, TypedArray, TypedArrayConstructor } from "./utils/utils.js";
