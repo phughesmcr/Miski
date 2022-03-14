@@ -8,6 +8,8 @@ import { Component } from "./component.js";
 import { ComponentInstance, createComponentInstance } from "./instance.js";
 import { SchemaProps } from "./schema.js";
 
+export const $_COUNT = Symbol("count");
+
 /** { [component name]: component instance } */
 export type ComponentRecord = Record<string, ComponentInstance<unknown>>;
 
@@ -97,7 +99,7 @@ export function createComponentManager(spec: ComponentManagerSpec): ComponentMan
 
         const { count, maxEntities } = instance;
         if (maxEntities && count >= maxEntities) return false;
-        instance.count = count + 1;
+        instance[$_COUNT] = count + 1;
 
         // set any default initial properties
         if (instance.schema) {
@@ -149,9 +151,9 @@ export function createComponentManager(spec: ComponentManagerSpec): ComponentMan
     const archetype = getEntityArchetype(entity);
     if (archetype && isBitOn(inst.id, archetype.bitfield)) return true;
 
-    const { maxEntities } = component;
-    if (maxEntities && inst.count >= maxEntities) return false;
-    inst.count = inst.count + 1;
+    const { count, maxEntities } = inst;
+    if (maxEntities && count >= maxEntities) return false;
+    inst[$_COUNT] = count + 1;
 
     updateArchetype(entity, inst.id);
 
@@ -245,7 +247,7 @@ export function createComponentManager(spec: ComponentManagerSpec): ComponentMan
 
     const archetype = getEntityArchetype(entity);
     if (archetype && !isBitOn(instance.id, archetype.bitfield)) return true;
-    instance.count = instance.count - 1;
+    instance[$_COUNT] = instance[$_COUNT] - 1;
 
     // make sure facade storage is freed for those that need it
     const { maxEntities, schema } = component;
@@ -268,7 +270,7 @@ export function createComponentManager(spec: ComponentManagerSpec): ComponentMan
 
       const status = instances.map((instance) => {
         if (archetype && !isBitOn(instance.id, archetype.bitfield)) return true;
-        instance.count = instance.count - 1;
+        instance[$_COUNT] = instance[$_COUNT] - 1;
 
         // make sure facade storage is freed for those that need it
         const { maxEntities, schema } = instance;

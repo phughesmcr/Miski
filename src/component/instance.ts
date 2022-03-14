@@ -2,6 +2,7 @@
 
 import { isObject, isUint32, TypedArray } from "../utils/utils.js";
 import { Component } from "./component.js";
+import { $_COUNT } from "./manager.js";
 import { StorageProxy, storageProxy } from "./proxy.js";
 import { SchemaStorage } from "./schema.js";
 
@@ -16,6 +17,7 @@ interface ComponentInstanceSpec<T> {
 
 export type ComponentInstance<T> = Component<T> &
   Record<keyof T, TypedArray> & {
+    [$_COUNT]: number;
     /** The number of entities which have this component instance */
     count: number;
     /** The instance's identifier */
@@ -42,12 +44,17 @@ export function createComponentInstance<T>(spec: ComponentInstanceSpec<T>): Read
   let entityCount = 0;
 
   const instance = Object.create(component, {
-    count: {
+    [$_COUNT]: {
       get() {
         return entityCount;
       },
       set(value: number) {
         entityCount = value;
+      },
+    },
+    count: {
+      get() {
+        return entityCount;
       },
       configurable: false,
       enumerable: true,
