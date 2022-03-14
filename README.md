@@ -52,6 +52,7 @@ Because Miski is designed to be used inside your own projects, we let you config
 * Ability to use multiple queries per system
 * Basic serialization methods (`world.load` & `world.save`)
 * Fast, cache-friendly ArrayBuffer-based component data storage
+* Use `component.changed` to get an iterator of entities whose properties were changed via `component.proxy`
 * Define components and queries once, reuse them across multiple worlds
 * `AND`,`OR`,`NOT` operators in Queries
 * `world.getQueryEntered` & `world.getQueryExited` methods
@@ -137,11 +138,10 @@ npm run build
 1. Optimise performance
 2. Consistent code style throughout
 ### Future
-1. Allow for "changed" in queries
-2. Multithreading support / playing nicely with WebWorkers / SharedArrayBuffers
-3. Proper Deno support
-4. Dynamic component data storage
-5. Object pooling where necessary
+1. Multithreading support / playing nicely with WebWorkers / SharedArrayBuffers
+2. Proper Deno support
+3. Dynamic component data storage
+4. Object pooling where necessary
 
 ## Contributing
 Contributions are also welcome and invited. See `CONTRIBUTING.md` for details.

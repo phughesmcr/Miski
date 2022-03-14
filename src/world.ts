@@ -4,6 +4,7 @@ import { Archetype } from "./archetype/archetype.js";
 import { createArchetypeManager } from "./archetype/manager.js";
 import { bitfieldFactory } from "./bitfield.js";
 import { Component } from "./component/component.js";
+import { refreshComponentInstance } from "./component/instance.js";
 import { createComponentManager, ComponentRecord } from "./component/manager.js";
 import { SchemaProps } from "./component/schema.js";
 import { DEFAULT_MAX_ENTITIES, VERSION } from "./constants.js";
@@ -193,6 +194,7 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
     const queryRefresher = refreshQuery(archetypes);
     queryMap.forEach(queryRefresher);
     archetypes.forEach(refreshArchetype);
+    componentMap.forEach(refreshComponentInstance);
   }
   refresh();
 
