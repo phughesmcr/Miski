@@ -3,13 +3,13 @@
 import { ComponentRecord } from "./component/component.js";
 import { Entity } from "./entity.js";
 import { Query } from "./query/query.js";
-import { ParametersExceptFirst } from "./utils/utils.js";
+import { ParametersExceptFirstTwo } from "./utils/utils.js";
 import { World } from "./world.js";
 
 /** A multi-arity function where the first parameter is always the World object */
 export type System<
   T extends (components: ComponentRecord, entities: Entity[], ...args: unknown[]) => ReturnType<T>,
-  U extends ParametersExceptFirst<T>,
+  U extends ParametersExceptFirstTwo<T>,
 > = (components: ComponentRecord, entities: Entity[], ...args: U) => ReturnType<T>;
 
 /**
@@ -26,12 +26,12 @@ export type System<
  */
 export function createSystem<
   T extends (components: ComponentRecord, entities: Entity[], ...args: unknown[]) => ReturnType<T>,
-  U extends ParametersExceptFirst<T>,
+  U extends ParametersExceptFirstTwo<T>,
 >(callback: System<T, U>, ...queries: Query[]) {
   return function (world: World) {
     // getQueryResult is much faster than getQueryResults for single query systems
     const [getEntities, components] =
-      queries.length === 1 ? world.getQueryResult(queries[0]!) : world.getQueryResults(...queries);
+      queries.length === 1 ? world.getQueryResult(queries[0]!) : world.getQueryResults(queries);
     return function (...args: U): ReturnType<T> {
       return callback(components, getEntities(), ...args);
     };
