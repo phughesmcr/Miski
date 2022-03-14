@@ -2,13 +2,12 @@
 
 import { Archetype } from "../archetype/archetype.js";
 import { Bitfield } from "../bitfield.js";
+import { $_COUNT } from "../constants.js";
 import { Entity } from "../entity.js";
 import { ComponentBufferPartitioner, createComponentBuffer, createComponentBufferPartitioner } from "./buffer.js";
 import { Component } from "./component.js";
 import { ComponentInstance, createComponentInstance } from "./instance.js";
 import { SchemaProps } from "./schema.js";
-
-export const $_COUNT = Symbol("count");
 
 /** { [component name]: component instance } */
 export type ComponentRecord = Record<string, ComponentInstance<unknown>>;

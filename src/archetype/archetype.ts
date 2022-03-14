@@ -1,11 +1,9 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
 import type { Bitfield } from "../bitfield.js";
+import { $_DIRTY } from "../constants.js";
 import type { Entity } from "../entity.js";
 import type { QueryInstance } from "../query/instance.js";
-
-/** Symbol for use as a key for the `isDirty` flag getter and setter */
-const $_DIRTY = Symbol("isDirty");
 
 interface ArchetypeSpec {
   /** The Archetype's Components as an id Bitfield */
