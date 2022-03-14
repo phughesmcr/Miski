@@ -3,7 +3,14 @@
 import { Bitfield } from "../bitfield.js";
 import { Entity } from "../entity.js";
 import { QueryInstance } from "../query/instance.js";
-import { addEntityToArchetype, Archetype, createArchetype, removeEntityFromArchetype } from "./archetype.js";
+import {
+  addEntityToArchetype,
+  Archetype,
+  createArchetype,
+  removeEntityFromArchetype,
+  purgeArchetypeCaches,
+  refreshArchetype,
+} from "./archetype.js";
 
 interface ArchetypeManagerSpec {
   EMPTY_BITFIELD: Bitfield;
@@ -66,23 +73,6 @@ export function createArchetypeManager(spec: ArchetypeManagerSpec): ArchetypeMan
       candidateCache.set(query, status);
       return status;
     };
-  };
-
-  /** */
-  const refreshArchetype = (archetype: Archetype): Archetype => {
-    const { entered, exited } = archetype;
-    entered.clear();
-    exited.clear();
-    archetype.isDirty = false;
-    return archetype;
-  };
-
-  /** */
-  const purgeArchetypeCaches = (archetype: Archetype): Archetype => {
-    const { candidateCache, cloneCache } = archetype;
-    candidateCache.clear();
-    cloneCache.clear();
-    return archetype;
   };
 
   /**
