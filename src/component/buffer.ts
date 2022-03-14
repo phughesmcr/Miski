@@ -21,11 +21,11 @@ export type ComponentBufferPartitioner = <T>(component: Component<T>) => SchemaS
 
 /** Calculate the total required storage space for all component schemas */
 function getComponentSize(capacity: number, components: Component<unknown>[]) {
-  function componentSum<T>(total: number, component: Component<T>): number {
+  const componentSum = <T>(total: number, component: Component<T>): number => {
     const { size = 0 } = component;
     if (!size || size <= 0) return total;
     return total + size * capacity;
-  }
+  };
   return components.reduce(componentSum, 0);
 }
 
@@ -53,7 +53,7 @@ export function createComponentBufferPartitioner(spec: ComponentBufferPartitione
   let bufferOffset = 0;
   let full = false;
 
-  return function partitionComponentBuffer<T>(component: Component<T>): SchemaStorage<T> | undefined {
+  return <T>(component: Component<T>): SchemaStorage<T> | undefined => {
     if (full === true) throw new Error("ArrayBuffer is full!");
     const { maxEntities, schema, size = 0 } = component;
     if (!size || size <= 0) return; // bail early if component is a tag
