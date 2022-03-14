@@ -49,12 +49,28 @@ export interface World extends WorldProto {
    */
   destroyEntity: (entity: Entity) => boolean;
   /**
-   * Check if an entity has a given component.
-   * @param entity the entity to check.
-   * @param component the component to check for.
-   * @returns `true` if the entity has the component.
+   * returns a 2d array, first indexed by entity, then by component id.
+   * @returns [entity: [component.id: boolean]]
+   * @example
+   *  const hasRenderables = hasComponents({ id: 21 }, { id: 99 });
+   *  const state = hasRenderables(10, 33, 75);
+   *  // state[10][21] = whether entity 10 has component 21;
+   *  // state[33][99] = whether entity 33 has component 99;
+   *  // state[0][99] = will throw because state[0] is undefined;
    */
-  entityHasComponent: <T>(entity: Entity, component: Component<T>) => boolean;
+  hasComponents: (...components: Component<unknown>[]) => (...entities: Entity[]) => boolean[][];
+  /**
+   * returns an array, indexed by entity,
+   * containing `true` if the entity has all the desired components.
+   * @returns [entity: boolean]
+   * @example
+   *  const hasRenderables = hasComponents({ id: 21 }, { id: 99 });
+   *  const state = hasRenderables(10, 33, 75);
+   *  // state[10] = whether entity 10 has both components 21 & 99;
+   *  // state[33] = whether entity 33 has both components 21 & 99;
+   *  // state[0] = will be undefined;
+   */
+  hasAllComponents: (...components: Component<unknown>[]) => (...entities: Entity[]) => boolean[];
   /**
    * Get a given entity's archetype.
    * @param entity the entity to expose.
@@ -139,15 +155,24 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
       toggleBit,
     });
 
-  const { componentMap, addComponentToEntity, entityHasComponent, getBuffer, removeComponentFromEntity, setBuffer } =
-    createComponentManager({
-      capacity,
-      components,
-      getEntityArchetype,
-      isBitOn,
-      isValidEntity,
-      updateArchetype,
-    });
+  const {
+    componentMap,
+    addComponentToEntity,
+    addComponentsToEntity,
+    hasAllComponents,
+    hasComponents,
+    removeComponentsFromEntity,
+    getBuffer,
+    removeComponentFromEntity,
+    setBuffer,
+  } = createComponentManager({
+    capacity,
+    components,
+    getEntityArchetype,
+    isBitOn,
+    isValidEntity,
+    updateArchetype,
+  });
 
   const { queryMap, getQueryEntered, getQueryExited, getQueryResult, getQueryResults, refreshQuery } =
     createQueryManager({
@@ -174,21 +199,24 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
   return Object.freeze(
     Object.assign(Object.create(WORLD_PROTO), {
       capacity,
+      addComponentsToEntity,
       addComponentToEntity,
       createEntity,
       destroyEntity,
-      entityHasComponent,
       getEntityArchetype,
       getQueryEntered,
       getQueryExited,
       getQueryResult,
       getQueryResults,
       getVacancyCount,
+      hasAllComponents,
+      hasComponents,
       hasEntity,
       load,
       purgeCaches,
       refresh,
       removeComponentFromEntity,
+      removeComponentsFromEntity,
       save,
     }) as World,
   );
