@@ -4,9 +4,12 @@ import { Archetype } from "../archetype/archetype.js";
 import { Bitfield } from "../bitfield.js";
 import { Entity } from "../entity.js";
 import { ComponentBufferPartitioner, createComponentBuffer, createComponentBufferPartitioner } from "./buffer.js";
-import { Component, ComponentRecord } from "./component.js";
+import { Component } from "./component.js";
 import { ComponentInstance, createComponentInstance } from "./instance.js";
 import { SchemaProps } from "./schema.js";
+
+/** { [component name]: component instance } */
+export type ComponentRecord = Record<string, ComponentInstance<unknown>>;
 
 export interface ComponentManager {
   componentMap: Map<Component<unknown>, ComponentInstance<unknown>>;

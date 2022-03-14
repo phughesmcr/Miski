@@ -2,7 +2,8 @@
 
 import { Archetype } from "../archetype/archetype.js";
 import { Bitfield } from "../bitfield.js";
-import { Component, ComponentRecord } from "../component/component.js";
+import { Component } from "../component/component.js";
+import { ComponentRecord } from "../component/manager.js";
 import { ComponentInstance } from "../component/instance.js";
 import { Entity } from "../entity.js";
 import {

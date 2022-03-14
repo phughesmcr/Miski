@@ -3,8 +3,8 @@
 import { Archetype } from "./archetype/archetype.js";
 import { createArchetypeManager } from "./archetype/manager.js";
 import { bitfieldFactory } from "./bitfield.js";
-import { Component, ComponentRecord } from "./component/component.js";
-import { createComponentManager } from "./component/manager.js";
+import { Component } from "./component/component.js";
+import { createComponentManager, ComponentRecord } from "./component/manager.js";
 import { SchemaProps } from "./component/schema.js";
 import { DEFAULT_MAX_ENTITIES, VERSION } from "./constants.js";
 import { createEntityManager, Entity } from "./entity.js";

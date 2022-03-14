@@ -1,6 +1,6 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
-import { ComponentRecord } from "./component/component.js";
+import { ComponentRecord } from "./component/manager.js";
 import { Entity } from "./entity.js";
 import { Query } from "./query/query.js";
 import { ParametersExceptFirstTwo } from "./utils/utils.js";
