@@ -2,6 +2,7 @@
 
 import { isObject, isUint32, TypedArray } from "../utils/utils.js";
 import { Component } from "./component.js";
+import { StorageProxy, storageProxy } from "./proxy.js";
 import { SchemaStorage } from "./schema.js";
 
 interface ComponentInstanceSpec<T> {
@@ -13,12 +14,15 @@ interface ComponentInstanceSpec<T> {
   storage?: SchemaStorage<T> | undefined;
 }
 
-export interface ComponentInstance<T> extends Component<T> {
-  /** The number of entities which have this component instance */
-  count: number;
-  /** The instance's identifier */
-  id: number;
-}
+export type ComponentInstance<T> = Component<T> &
+  Record<keyof T, TypedArray> & {
+    /** The number of entities which have this component instance */
+    count: number;
+    /** The instance's identifier */
+    id: number;
+    /** */
+    proxy: StorageProxy<T>;
+  };
 
 /**
  * Create a new ComponentInstance.
@@ -28,9 +32,7 @@ export interface ComponentInstance<T> extends Component<T> {
  * @param spec.id The component instance's identifier
  * @param spec.storage The component's TypedArray storage object
  */
-export function createComponentInstance<T>(
-  spec: ComponentInstanceSpec<T>,
-): Readonly<ComponentInstance<T> & Record<keyof T, TypedArray>> {
+export function createComponentInstance<T>(spec: ComponentInstanceSpec<T>): Readonly<ComponentInstance<T>> {
   const { component, id, storage } = spec;
   if (!component) throw new Error("Component instantiation requires as component!");
   if (!isUint32(id)) throw new SyntaxError("Component ID is invalid.");
@@ -57,5 +59,18 @@ export function createComponentInstance<T>(
       writable: false,
     },
   }) as ComponentInstance<T>;
-  return Object.freeze(Object.assign(instance, storage));
+
+  if (storage) {
+    // create instance.proxy
+    Object.defineProperty(instance, "proxy", {
+      value: storageProxy(storage),
+      configurable: false,
+      enumerable: true,
+      writable: false,
+    });
+    // assign raw storage
+    Object.assign(instance, storage);
+  }
+
+  return Object.freeze(instance);
 }
