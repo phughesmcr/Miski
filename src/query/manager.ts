@@ -29,7 +29,7 @@ export interface QueryManager {
   /** @returns a tuple of Entities and Components which match the Query criteria */
   getQueryResult: (query: Query) => [() => Entity[], ComponentRecord];
   /** @returns a tuple of Entities and Components which match the Query criteria */
-  getQueryResults: (...queries: Query[]) => [() => Entity[], ComponentRecord];
+  getQueryResults: (queries: Query[]) => [() => Entity[], ComponentRecord];
   /** Run Query maintenance */
   refreshQuery: (archetypes: Archetype[]) => (query: QueryInstance) => QueryInstance;
 }
@@ -66,7 +66,7 @@ export function createQueryManager(spec: QueryManagerSpec): QueryManager {
   }
 
   /** @returns a tuple of Entities and Components which match the Query criteria */
-  function getQueryResults(...queries: Query[]): [() => Entity[], ComponentRecord] {
+  function getQueryResults(queries: Query[]): [() => Entity[], ComponentRecord] {
     const components = {};
 
     const instances = queries.reduce((res, query) => {

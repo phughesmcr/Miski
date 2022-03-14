@@ -66,7 +66,7 @@ export interface World extends WorldProto {
   /** @returns a tuple of entities and components which match the query's criteria */
   getQueryResult: (query: Query) => [() => Entity[], ComponentRecord];
   /** @returns a tuple of entities and components which match the query's criteria */
-  getQueryResults: (...queries: Query[]) => [() => Entity[], ComponentRecord];
+  getQueryResults: (queries: Query[]) => [() => Entity[], ComponentRecord];
   /** @returns the number of available entities in the world. */
   getVacancyCount: () => number;
   /** @returns `true` if the entity is valid and !== undefined */
