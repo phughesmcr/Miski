@@ -1,21 +1,22 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
-import { Bitfield } from "../bitfield.js";
-import { Entity } from "../entity.js";
-import { QueryInstance } from "../query/instance.js";
+import type { Bitfield } from "../bitfield.js";
+import type { Entity } from "../entity.js";
+import type { QueryInstance } from "../query/instance.js";
 
-/** Symbol for use as a key for the `isDirty` flag getter and setter. */
+/** Symbol for use as a key for the `isDirty` flag getter and setter */
 const $_DIRTY = Symbol("isDirty");
 
 interface ArchetypeSpec {
   /** The Archetype's Components as an id Bitfield */
   bitfield: Bitfield;
-  /** Optional ID string. Will be generated if omitted. */
+  /** Optional ID string. Will be generated if omitted */
   id?: string;
 }
 
+/** Archetypes are unique groupings of entities by components */
 export interface Archetype {
-  /** @private Provides a getter and setter for the `isDirty` flag. */
+  /** @private Provides a getter and setter for the `isDirty` flag */
   [$_DIRTY]: boolean;
   /** The Archetype's Component Bitfield */
   bitfield: Bitfield;
@@ -31,7 +32,7 @@ export interface Archetype {
   exited: Set<Entity>;
   /** The Archetype's unique ID */
   id: string;
-  /** `true` if the object is in a dirty state. */
+  /** `true` if the object is in a dirty state */
   isDirty: boolean;
 }
 
@@ -44,17 +45,24 @@ export function addEntityToArchetype(entity: Entity, archetype: Archetype): Arch
   return archetype;
 }
 
-/** @returns an iterator of Entities which inhabit this Archetype */
-export function getEntitiesFromArchetype(archetype: Archetype): IterableIterator<Entity> {
-  return archetype.entities.values();
+/** Purge the `candidate` and `clone` caches in an Archetype */
+export function purgeArchetypeCaches(archetype: Archetype): Archetype {
+  const { candidateCache, cloneCache } = archetype;
+  candidateCache.clear();
+  cloneCache.clear();
+  return archetype;
 }
 
-/** @returns `true` if the Entity inhabits the given Archetype */
-export function isEntityInArchetype(entity: Entity, archetype: Archetype): boolean {
-  return archetype.entities.has(entity);
+/** Clear the entered/exited list and set `isDirty` to `false` */
+export function refreshArchetype(archetype: Archetype): Archetype {
+  const { entered, exited } = archetype;
+  entered.clear();
+  exited.clear();
+  archetype[$_DIRTY] = false;
+  return archetype;
 }
 
-/** Remove an Entity from the Archetype's inhabitants list */
+/** Remove an Entity from an Archetype's inhabitants list */
 export function removeEntityFromArchetype(entity: Entity, archetype: Archetype): Archetype {
   const { entities, exited } = archetype;
   entities.delete(entity);
@@ -70,7 +78,6 @@ function validateSpec(spec: ArchetypeSpec): Required<ArchetypeSpec> {
   return { bitfield, id: id || bitfield.toString() };
 }
 
-/** Archetypes are unique groupings of entities by components */
 export function createArchetype(spec: ArchetypeSpec): Archetype {
   const { bitfield, id } = validateSpec(spec);
 
@@ -83,13 +90,13 @@ export function createArchetype(spec: ArchetypeSpec): Archetype {
   let isDirty = true;
 
   return {
-    get [$_DIRTY]() {
+    get [$_DIRTY](): boolean {
       return isDirty;
     },
     set [$_DIRTY](dirty: boolean) {
       isDirty = !!dirty;
     },
-    get isDirty() {
+    get isDirty(): boolean {
       return isDirty;
     },
     bitfield,
