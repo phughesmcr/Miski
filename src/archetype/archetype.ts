@@ -1,24 +1,28 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
 import { Bitfield } from "../bitfield.js";
-import { ComponentInstance } from "../component/instance.js";
 import { Entity } from "../entity.js";
 import { QueryInstance } from "../query/instance.js";
 
+/** Symbol for use as a key for the `isDirty` flag getter and setter. */
+const $_DIRTY = Symbol("isDirty");
+
 interface ArchetypeSpec {
-  /** The Bitfield */
+  /** The Archetype's Components as an id Bitfield */
   bitfield: Bitfield;
-  /** Optional */
+  /** Optional ID string. Will be generated if omitted. */
   id?: string;
 }
 
 export interface Archetype {
+  /** @private Provides a getter and setter for the `isDirty` flag. */
+  [$_DIRTY]: boolean;
   /** The Archetype's Component Bitfield */
   bitfield: Bitfield;
   /** */
   candidateCache: Map<QueryInstance, boolean>;
   /** */
-  cloneCache: Map<ComponentInstance<unknown>, Archetype>;
+  cloneCache: Map<number, Archetype>;
   /** Entities which have entered this archetype since last refresh */
   entered: Set<Entity>;
   /** Set of Entities which inhabit this Archetype */
@@ -27,44 +31,36 @@ export interface Archetype {
   exited: Set<Entity>;
   /** The Archetype's unique ID */
   id: string;
-  /** `true` if an entity has entered or left since last refresh */
+  /** `true` if the object is in a dirty state. */
   isDirty: boolean;
 }
 
-/** Add an entity to an archetype's inhabitants list */
-export function addEntityToArchetype(entity: Entity): (archetype: Archetype) => Archetype {
-  return function (archetype: Archetype): Archetype {
-    const { entities, entered } = archetype;
-    entities.add(entity);
-    entered.add(entity);
-    archetype.isDirty = true;
-    return archetype;
-  };
+/** Add an Entity to an Archetype's inhabitants list */
+export function addEntityToArchetype(entity: Entity, archetype: Archetype): Archetype {
+  const { entities, entered } = archetype;
+  entities.add(entity);
+  entered.add(entity);
+  archetype[$_DIRTY] = true;
+  return archetype;
 }
 
-/** @returns an array of Entities which inhabit this Archetype */
+/** @returns an iterator of Entities which inhabit this Archetype */
 export function getEntitiesFromArchetype(archetype: Archetype): IterableIterator<Entity> {
-  const { entities } = archetype;
-  return entities.values();
+  return archetype.entities.values();
 }
 
-/** @returns `true` if the Entity inhabits this Archetype */
-export function isEntityInArchetype(entity: Entity): (archetype: Archetype) => boolean {
-  return function (archetype: Archetype): boolean {
-    const { entities } = archetype;
-    return entities.has(entity);
-  };
+/** @returns `true` if the Entity inhabits the given Archetype */
+export function isEntityInArchetype(entity: Entity, archetype: Archetype): boolean {
+  return archetype.entities.has(entity);
 }
 
-/** Remove an entity from the inhabitants list */
-export function removeEntityFromArchetype(entity: Entity): (archetype: Archetype) => Archetype {
-  return function (archetype: Archetype): Archetype {
-    const { entities, exited } = archetype;
-    entities.delete(entity);
-    exited.add(entity);
-    archetype.isDirty = true;
-    return archetype;
-  };
+/** Remove an Entity from the Archetype's inhabitants list */
+export function removeEntityFromArchetype(entity: Entity, archetype: Archetype): Archetype {
+  const { entities, exited } = archetype;
+  entities.delete(entity);
+  exited.add(entity);
+  archetype[$_DIRTY] = true;
+  return archetype;
 }
 
 function validateSpec(spec: ArchetypeSpec): Required<ArchetypeSpec> {
@@ -79,13 +75,23 @@ export function createArchetype(spec: ArchetypeSpec): Archetype {
   const { bitfield, id } = validateSpec(spec);
 
   const candidateCache: Map<QueryInstance, boolean> = new Map();
-  const cloneCache: Map<ComponentInstance<unknown>, Archetype> = new Map();
+  const cloneCache: Map<number, Archetype> = new Map();
   const entered: Set<Entity> = new Set();
   const entities: Set<Entity> = new Set();
   const exited: Set<Entity> = new Set();
 
+  let isDirty = true;
+
   return {
-    isDirty: true,
+    get [$_DIRTY]() {
+      return isDirty;
+    },
+    set [$_DIRTY](dirty: boolean) {
+      isDirty = !!dirty;
+    },
+    get isDirty() {
+      return isDirty;
+    },
     bitfield,
     candidateCache,
     cloneCache,

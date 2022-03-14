@@ -36,6 +36,8 @@ export interface World extends WorldProto {
    * @returns `true` if the component was added successfully.
    */
   addComponentToEntity: <T>(component: Component<T>, entity: Entity, props?: SchemaProps<T> | undefined) => boolean;
+  /** Add multiple components to an entity at once by defining a prefab. */
+  addComponentsToEntity: (components: Component<unknown>[]) => (entity: Entity) => boolean[];
   /**
    * Create a new entity for use in the world.
    * @returns the entity or `undefined` if no entities were available.
@@ -94,6 +96,9 @@ export interface World extends WorldProto {
    * @returns `true` if the component was removed successfully.
    */
   removeComponentFromEntity: <T>(component: Component<T>, entity: Entity) => boolean;
+  /** Remove multiple components from an entity at once. */
+  removeComponentsFromEntity: (components: Component<unknown>[]) => (entity: Entity) => boolean[];
+
   /** Serialize various aspects of the world's data */
   save: () => Readonly<MiskiData>;
 }

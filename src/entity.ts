@@ -55,7 +55,7 @@ export function createEntityManager(spec: EntityManagerSpec): EntityManager {
       if (!isValidEntity(entity)) return false;
       const archetype = entityArchetypes[entity];
       if (archetype !== undefined) {
-        removeEntityFromArchetype(entity)(archetype);
+        removeEntityFromArchetype(entity, archetype);
         delete entityArchetypes[entity];
         availableEntities.push(entity);
         return true;
