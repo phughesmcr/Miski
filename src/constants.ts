@@ -18,6 +18,7 @@ export const FORBIDDEN_NAMES = Object.freeze([
   "id",
   "isTag",
   "name",
+  "proxy",
   "schema",
   "size",
   // object properties
