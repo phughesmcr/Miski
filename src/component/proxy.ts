@@ -10,7 +10,7 @@ export function storageProxy<T>(storage: SchemaStorage<T>): StorageProxy<T> {
 
   let entityId: Entity = 0 as Entity;
 
-  const proxy = Object.keys(storage).reduce(
+  return Object.keys(storage).reduce(
     (res, key) => {
       Object.defineProperty(res, key, {
         get() {
@@ -36,6 +36,4 @@ export function storageProxy<T>(storage: SchemaStorage<T>): StorageProxy<T> {
       },
     ) as StorageProxy<T>,
   );
-
-  return Object.freeze(proxy);
 }
