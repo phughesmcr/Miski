@@ -17,6 +17,7 @@ export interface ComponentManager {
   addComponentToEntity: <T>(component: Component<T>, entity: Entity, props?: SchemaProps<T>) => boolean;
   addComponentsToEntity: (components: Component<unknown>[]) => (entity: Entity) => boolean[];
   hasAllComponents: (...components: Component<unknown>[]) => (...entities: Entity[]) => boolean[];
+  hasComponent: <T>(component: Component<T>) => (entity: Entity) => boolean;
   hasComponents: (...components: Component<unknown>[]) => (...entities: Entity[]) => boolean[][];
   getBuffer: () => ArrayBuffer;
   removeComponentFromEntity: <T>(component: Component<T>, entity: Entity) => boolean;
@@ -239,6 +240,17 @@ export function createComponentManager(spec: ComponentManagerSpec): ComponentMan
     };
   };
 
+  /** Test a single component against a single entity */
+  const hasComponent = <T>(component: Component<T>): ((entity: Entity) => boolean) => {
+    const instance = componentMap.get(component);
+    return (entity: Entity): boolean => {
+      if (!instance) return false;
+      const archetype = getEntityArchetype(entity);
+      if (!archetype) return false;
+      return isBitOn(instance.id, archetype.bitfield);
+    };
+  };
+
   const removeComponentFromEntity = <T>(component: Component<T>, entity: Entity): boolean => {
     if (!isValidEntity(entity)) return false;
     const instance = componentMap.get(component);
@@ -308,6 +320,7 @@ export function createComponentManager(spec: ComponentManagerSpec): ComponentMan
     addComponentToEntity,
     addComponentsToEntity,
     hasAllComponents,
+    hasComponent,
     hasComponents,
     getBuffer,
     removeComponentFromEntity,

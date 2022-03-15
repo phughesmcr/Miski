@@ -49,6 +49,8 @@ export interface World extends WorldProto {
    * @returns `true` if the entity was successfully destroyed.
    */
   destroyEntity: (entity: Entity) => boolean;
+  /** Test a single component against a single entity */
+  hasComponent: <T>(components: Component<T>) => (entity: Entity) => boolean;
   /**
    * returns a 2d array, first indexed by entity, then by component id.
    * @returns [entity: [component.id: boolean]]
@@ -115,7 +117,6 @@ export interface World extends WorldProto {
   removeComponentFromEntity: <T>(component: Component<T>, entity: Entity) => boolean;
   /** Remove multiple components from an entity at once. */
   removeComponentsFromEntity: (components: Component<unknown>[]) => (entity: Entity) => boolean[];
-
   /** Serialize various aspects of the world's data */
   save: () => Readonly<MiskiData>;
 }
@@ -161,6 +162,7 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
     addComponentToEntity,
     addComponentsToEntity,
     hasAllComponents,
+    hasComponent,
     hasComponents,
     removeComponentsFromEntity,
     getBuffer,
@@ -212,6 +214,7 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
       getQueryResults,
       getVacancyCount,
       hasAllComponents,
+      hasComponent,
       hasComponents,
       hasEntity,
       load,
