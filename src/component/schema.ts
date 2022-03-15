@@ -3,7 +3,7 @@
 import { isObject, isTypedArrayConstructor, isValidName, TypedArray, TypedArrayConstructor } from "../utils/utils.js";
 
 /** The interface available to end users */
-export type SchemaProps<T> = Record<keyof T, number>;
+export type SchemaProps<T> = Record<keyof T, number | bigint | undefined>;
 
 /** Component data storage */
 export type SchemaStorage<T> = Record<keyof T, TypedArray>;

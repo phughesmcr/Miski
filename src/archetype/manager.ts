@@ -1,6 +1,7 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
 import { Bitfield } from "../bitfield.js";
+import { ComponentInstance } from "../component/instance.js";
 import { Entity } from "../entity.js";
 import { QueryInstance } from "../query/instance.js";
 import {
@@ -16,7 +17,7 @@ interface ArchetypeManagerSpec {
   EMPTY_BITFIELD: Bitfield;
   getEntityArchetype: (entity: Entity) => Archetype | undefined;
   setEntityArchetype: (entity: Entity, archetype: Archetype) => boolean;
-  toggleBit: (bit: number, bitfield: Bitfield) => Bitfield;
+  toggleBit: (bit: number, bitfield: Bitfield) => boolean;
 }
 
 interface ArchetypeManager {
@@ -24,7 +25,7 @@ interface ArchetypeManager {
   isArchetypeCandidate: (query: QueryInstance) => (archetype: Archetype) => boolean;
   refreshArchetype: (archetype: Archetype) => Archetype;
   purgeArchetypeCaches: (archetype: Archetype) => Archetype;
-  updateArchetype: (entity: Entity, component: number | number[]) => Archetype;
+  updateArchetype: (entity: Entity, component: ComponentInstance<unknown> | ComponentInstance<unknown>[]) => Archetype;
 }
 
 export function createArchetypeManager(spec: ArchetypeManagerSpec): ArchetypeManager {
@@ -36,7 +37,10 @@ export function createArchetypeManager(spec: ArchetypeManagerSpec): ArchetypeMan
   /** Map<Archetype ID, Archetype> */
   const archetypeMap: Map<string, Archetype> = new Map();
 
-  const cloneArchetypeWithToggle = (archetype: Archetype, component: number | number[]): [string, () => Archetype] => {
+  const cloneArchetypeWithToggle = (
+    archetype: Archetype,
+    component: ComponentInstance<unknown> | ComponentInstance<unknown>[],
+  ): [string, () => Archetype] => {
     const { bitfield, cloneCache } = archetype;
 
     if (!Array.isArray(component)) {
@@ -46,13 +50,19 @@ export function createArchetypeManager(spec: ArchetypeManagerSpec): ArchetypeMan
     }
 
     const bitfieldCopy = bitfield.slice() as Bitfield;
-    component.forEach((id) => toggleBit(id, bitfieldCopy));
+    const components = component.reduce((res, instance) => {
+      const isOn = toggleBit(instance.id, bitfieldCopy); // this is also modifying bitfieldCopy
+      if (isOn) res.push(instance);
+      return res;
+    }, [] as ComponentInstance<unknown>[]);
     const bitfieldId = bitfieldCopy.toString();
 
     return [
       bitfieldId,
       () => {
         const clone = createArchetype({ bitfield: bitfieldCopy, id: bitfieldId });
+        archetype.components.forEach((c) => clone.components.add(c));
+        components.forEach((c) => clone.components.add(c));
         if (!Array.isArray(component)) cloneCache.set(component, clone);
         return clone;
       },
@@ -81,7 +91,10 @@ export function createArchetypeManager(spec: ArchetypeManagerSpec): ArchetypeMan
    * @param component the component to toggle
    * @returns the entity's new archetype
    */
-  const updateArchetype = (entity: Entity, component: number | number[]): Archetype => {
+  const updateArchetype = (
+    entity: Entity,
+    component: ComponentInstance<unknown> | ComponentInstance<unknown>[],
+  ): Archetype => {
     const previousArchetype = getEntityArchetype(entity);
     let nextArchetype: Archetype | undefined;
     if (previousArchetype) {

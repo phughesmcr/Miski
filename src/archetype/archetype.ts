@@ -1,6 +1,7 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
 import type { Bitfield } from "../bitfield.js";
+import { ComponentInstance } from "../component/instance.js";
 import { $_DIRTY } from "../constants.js";
 import type { Entity } from "../entity.js";
 import type { QueryInstance } from "../query/instance.js";
@@ -21,7 +22,9 @@ export interface Archetype {
   /** */
   candidateCache: Map<QueryInstance, boolean>;
   /** */
-  cloneCache: Map<number, Archetype>;
+  cloneCache: Map<ComponentInstance<unknown>, Archetype>;
+  /** The components associated with this archetype */
+  components: Set<ComponentInstance<unknown>>;
   /** Entities which have entered this archetype since last refresh */
   entered: Set<Entity>;
   /** Set of Entities which inhabit this Archetype */
@@ -80,7 +83,8 @@ export function createArchetype(spec: ArchetypeSpec): Archetype {
   const { bitfield, id } = validateSpec(spec);
 
   const candidateCache: Map<QueryInstance, boolean> = new Map();
-  const cloneCache: Map<number, Archetype> = new Map();
+  const cloneCache: Map<ComponentInstance<unknown>, Archetype> = new Map();
+  const components: Set<ComponentInstance<unknown>> = new Set();
   const entered: Set<Entity> = new Set();
   const entities: Set<Entity> = new Set();
   const exited: Set<Entity> = new Set();
@@ -100,6 +104,7 @@ export function createArchetype(spec: ArchetypeSpec): Archetype {
     bitfield,
     candidateCache,
     cloneCache,
+    components,
     entered,
     entities,
     exited,

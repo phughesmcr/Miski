@@ -80,6 +80,8 @@ export interface World extends WorldProto {
    * @returns the Archetype object or `undefined` if no archetype found.
    */
   getEntityArchetype: (entity: Entity) => Archetype | undefined;
+  /** Get all component properties for a given entity */
+  getEntityProperties: (entity: Entity) => { [key: string]: SchemaProps<unknown> };
   /** @returns an array of entities which have entered a query's archetypes since last world.refresh() */
   getQueryEntered: (query: Query) => Entity[];
   /** @returns an array of entities which have left a query's archetypes since last world.refresh() */
@@ -165,6 +167,7 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
     hasComponent,
     hasComponents,
     removeComponentsFromEntity,
+    getEntityProperties,
     getBuffer,
     removeComponentFromEntity,
     setBuffer,
@@ -208,6 +211,7 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
       createEntity,
       destroyEntity,
       getEntityArchetype,
+      getEntityProperties,
       getQueryEntered,
       getQueryExited,
       getQueryResult,

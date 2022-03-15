@@ -53,12 +53,12 @@ export function bitfieldFactory(capacity: number) {
    * Toggle a bit in the Bitfield
    * @return the resulting state of the bit
    */
-  const toggleBit = (bit: number, bitfield: Bitfield): Bitfield => {
+  const toggleBit = (bit: number, bitfield: Bitfield): boolean => {
     const i = getIndex(bit);
     if (i === -1) throw new SyntaxError(`Bitfield: bit ${bit} does not exist in this world.`);
     if (bitfield[i] === undefined) throw new SyntaxError(`Bitfield: bit ${bit} does not exist in this bitfield.`);
     bitfield[i] ^= 1 << (bit - i * 32);
-    return bitfield;
+    return Boolean(bitfield[i]! & (1 << (bit - i * 32)));
   };
 
   return {

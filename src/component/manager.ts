@@ -20,6 +20,7 @@ export interface ComponentManager {
   hasComponent: <T>(component: Component<T>) => (entity: Entity) => boolean;
   hasComponents: (...components: Component<unknown>[]) => (...entities: Entity[]) => boolean[][];
   getBuffer: () => ArrayBuffer;
+  getEntityProperties: (entity: Entity) => { [key: string]: SchemaProps<unknown> };
   removeComponentFromEntity: <T>(component: Component<T>, entity: Entity) => boolean;
   removeComponentsFromEntity: (components: Component<unknown>[]) => (entity: Entity) => boolean[];
   setBuffer: (source: ArrayBuffer) => ArrayBuffer;
@@ -31,7 +32,7 @@ interface ComponentManagerSpec {
   getEntityArchetype: (entity: Entity) => Archetype | undefined;
   isBitOn: (bit: number, bitfield: Bitfield) => boolean;
   isValidEntity: (entity: Entity) => entity is Entity;
-  updateArchetype: (entity: Entity, component: number | number[]) => Archetype;
+  updateArchetype: (entity: Entity, component: ComponentInstance<unknown> | ComponentInstance<unknown>[]) => Archetype;
 }
 
 /**
@@ -126,12 +127,11 @@ export function createComponentManager(spec: ComponentManagerSpec): ComponentMan
         return true;
       });
 
-      const ids = status.reduce((res, value, idx) => {
-        if (value) res.push(instances[idx]!.id);
-        return res;
-      }, [] as number[]);
+      const added = status
+        .map((value, idx) => (value ? instances[idx] : undefined))
+        .filter((x) => x) as ComponentInstance<unknown>[];
 
-      updateArchetype(entity, ids);
+      updateArchetype(entity, added);
 
       return status;
     };
@@ -155,7 +155,7 @@ export function createComponentManager(spec: ComponentManagerSpec): ComponentMan
     if (maxEntities && count >= maxEntities) return false;
     inst[$_COUNT] = count + 1;
 
-    updateArchetype(entity, inst.id);
+    updateArchetype(entity, inst);
 
     // set any default initial properties
     if (component.schema) {
@@ -180,6 +180,28 @@ export function createComponentManager(spec: ComponentManagerSpec): ComponentMan
     }
 
     return true;
+  };
+
+  const getEntityProperties = (entity: Entity): { [key: string]: SchemaProps<unknown> } => {
+    const archetype = getEntityArchetype(entity);
+    if (!archetype) return {};
+    const { components } = archetype;
+    return [...components].reduce(
+      <T>(res: { [key: string]: SchemaProps<unknown> }, component: ComponentInstance<T>) => {
+        const { name, schema } = component;
+        res[name] = {};
+        if (schema === null) {
+          res[name] = true;
+        } else {
+          res[name] = Object.keys(schema).reduce((prev, key) => {
+            prev[key as keyof T] = component[key as keyof T][entity];
+            return prev;
+          }, {} as SchemaProps<T>);
+        }
+        return res;
+      },
+      {},
+    );
   };
 
   /**
@@ -271,7 +293,7 @@ export function createComponentManager(spec: ComponentManagerSpec): ComponentMan
       });
     }
 
-    updateArchetype(entity, instance.id);
+    updateArchetype(entity, instance);
     return true;
   };
 
@@ -280,7 +302,7 @@ export function createComponentManager(spec: ComponentManagerSpec): ComponentMan
       const archetype = getEntityArchetype(entity);
 
       const status = instances.map((instance) => {
-        if (archetype && !isBitOn(instance.id, archetype.bitfield)) return true;
+        if (archetype && !isBitOn(instance.id, archetype.bitfield)) return false;
         instance[$_COUNT] = instance[$_COUNT] - 1;
 
         // make sure facade storage is freed for those that need it
@@ -297,12 +319,11 @@ export function createComponentManager(spec: ComponentManagerSpec): ComponentMan
         return true;
       });
 
-      const ids = status.reduce((res, value, idx) => {
-        if (value) res.push(instances[idx]!.id);
-        return res;
-      }, [] as number[]);
+      const removed = status
+        .map((value, idx) => (value ? instances[idx] : undefined))
+        .filter((x) => x) as ComponentInstance<unknown>[];
 
-      updateArchetype(entity, ids);
+      updateArchetype(entity, removed);
 
       return status;
     };
@@ -319,6 +340,7 @@ export function createComponentManager(spec: ComponentManagerSpec): ComponentMan
 
     addComponentToEntity,
     addComponentsToEntity,
+    getEntityProperties,
     hasAllComponents,
     hasComponent,
     hasComponents,
