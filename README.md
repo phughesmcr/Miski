@@ -80,7 +80,7 @@ createComponent: <T extends Schema<T>>(spec: ComponentSpec<T>) => Component<T>;
 🔎 Queries
 createQuery: (spec: QuerySpec) => Query;
 
-🔃 Systems // optional but helps with type safety - A system is a function of any arity where the first parameter is the World
+🔃 Systems // optional but helps with type safety - A system is a function of any arity where the first two parameters are a component record and entity array
 createSystem: <T extends (components: ComponentRecord, entities: Entity[], ...args: unknown[]) => ReturnType<T>, U extends ParametersExceptFirst<T>>(callback: System<T, U>, ...queries: Query[]): (world: World) => (...args: U) => ReturnType<T>;
 
 🌍 World
@@ -96,11 +96,18 @@ createWorld: (spec: WorldSpec) => World;
   world.destroyEntity: (entity: Entity) => boolean;
   world.hasEntity: (entity: Entity) => boolean;
   world.getEntityArchetype: (entity: Entity) => Archetype | undefined;
-  world.entityHasComponent: <T>(entity: Entity, component: Component<T>) => boolean;
+  world.getEntityProperties: (entity: Entity) => SchemaProps<unknown>;
+
+  👁️ Testing entities for components
+  world.hasComponent: <T>(component: Component<T>) => (entity: Entity) => boolean;
+  world.hasComponents: (...components: Component<unknown>[]) => (...entities: Entity[]) => boolean[][];
+  world.hasAllComponents: (...components: Component<unknown>[]) => (...entities: Entity[]) => boolean[];
 
   🧩 World Component methods
   world.addComponentToEntity: <T>(component: Component<T>, entity: Entity, props?: SchemaProps<T>) => boolean;
+  world.addComponentsToEntity: (components: Component<unknown>[]) => (entity: Entity) => boolean[];
   world.removeComponentFromEntity: <T>(component: Component<T>, entity: Entity) => boolean;
+  world.removeComponentsFromEntity: (components: Component<unknown>[]) => (entity: Entity) => boolean[];
 
   🔎 World Query methods
   world.getQueryResult: (query: Query) => [Entity[], ComponentRecord];
@@ -137,18 +144,18 @@ npm run build
 ### Before Beta
 1. Finalise API
 2. Write comprehensive tests
-4. Write consistent code documentation throughout
+3. Write consistent code documentation throughout
 ### Before 1.0.0
 1. Optimise performance
 2. Consistent code style throughout
+3. Object pooling where necessary
 ### Future
 1. Multithreading support / playing nicely with WebWorkers / SharedArrayBuffers
 2. Proper Deno support
 3. Dynamic component data storage
-4. Object pooling where necessary
 
 ## Contributing
-Contributions are also welcome and invited. See `CONTRIBUTING.md` for details.
+Contributions are welcome and invited. See `CONTRIBUTING.md` for details.
 
 ## Feature Requests
 Feature requests are welcome and invited. Please open an issue on Github to make a request.
