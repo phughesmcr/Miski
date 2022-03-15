@@ -50,30 +50,7 @@ export interface World extends WorldProto {
    */
   destroyEntity: (entity: Entity) => boolean;
   /** Test a single component against a single entity */
-  hasComponent: <T>(components: Component<T>) => (entity: Entity) => boolean;
-  /**
-   * returns a 2d array, first indexed by entity, then by component id.
-   * @returns [entity: [component.id: boolean]]
-   * @example
-   *  const hasRenderables = hasComponents({ id: 21 }, { id: 99 });
-   *  const state = hasRenderables(10, 33, 75);
-   *  // state[10][21] = whether entity 10 has component 21;
-   *  // state[33][99] = whether entity 33 has component 99;
-   *  // state[0][99] = will throw because state[0] is undefined;
-   */
-  hasComponents: (...components: Component<unknown>[]) => (...entities: Entity[]) => boolean[][];
-  /**
-   * returns an array, indexed by entity,
-   * containing `true` if the entity has all the desired components.
-   * @returns [entity: boolean]
-   * @example
-   *  const hasRenderables = hasComponents({ id: 21 }, { id: 99 });
-   *  const state = hasRenderables(10, 33, 75);
-   *  // state[10] = whether entity 10 has both components 21 & 99;
-   *  // state[33] = whether entity 33 has both components 21 & 99;
-   *  // state[0] = will be undefined;
-   */
-  hasAllComponents: (...components: Component<unknown>[]) => (...entities: Entity[]) => boolean[];
+  hasComponent: <T>(component: Component<T>) => (entity: Entity) => boolean;
   /**
    * Get a given entity's archetype.
    * @param entity the entity to expose.
@@ -121,6 +98,8 @@ export interface World extends WorldProto {
   removeComponentsFromEntity: (components: Component<unknown>[]) => (entity: Entity) => boolean[];
   /** Serialize various aspects of the world's data */
   save: () => Readonly<MiskiData>;
+  /** Reduces an array of entities to just those who have all the desired components */
+  withComponents: (...components: Component<unknown>[]) => (...entities: Entity[]) => Entity[];
 }
 
 /** World.prototype - Miski version data etc. */
@@ -163,14 +142,13 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
     componentMap,
     addComponentToEntity,
     addComponentsToEntity,
-    hasAllComponents,
     hasComponent,
-    hasComponents,
     removeComponentsFromEntity,
     getEntityProperties,
     getBuffer,
     removeComponentFromEntity,
     setBuffer,
+    withComponents,
   } = createComponentManager({
     capacity,
     components,
@@ -217,9 +195,7 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
       getQueryResult,
       getQueryResults,
       getVacancyCount,
-      hasAllComponents,
       hasComponent,
-      hasComponents,
       hasEntity,
       load,
       purgeCaches,
@@ -227,6 +203,7 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
       removeComponentFromEntity,
       removeComponentsFromEntity,
       save,
+      withComponents,
     }) as World,
   );
 }

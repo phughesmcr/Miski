@@ -16,14 +16,13 @@ export interface ComponentManager {
   componentMap: Map<Component<unknown>, ComponentInstance<unknown>>;
   addComponentToEntity: <T>(component: Component<T>, entity: Entity, props?: SchemaProps<T>) => boolean;
   addComponentsToEntity: (components: Component<unknown>[]) => (entity: Entity) => boolean[];
-  hasAllComponents: (...components: Component<unknown>[]) => (...entities: Entity[]) => boolean[];
-  hasComponent: <T>(component: Component<T>) => (entity: Entity) => boolean;
-  hasComponents: (...components: Component<unknown>[]) => (...entities: Entity[]) => boolean[][];
   getBuffer: () => ArrayBuffer;
   getEntityProperties: (entity: Entity) => { [key: string]: SchemaProps<unknown> };
+  hasComponent: <T>(component: Component<T>) => (entity: Entity) => boolean;
   removeComponentFromEntity: <T>(component: Component<T>, entity: Entity) => boolean;
   removeComponentsFromEntity: (components: Component<unknown>[]) => (entity: Entity) => boolean[];
   setBuffer: (source: ArrayBuffer) => ArrayBuffer;
+  withComponents: (...components: Component<unknown>[]) => (...entities: Entity[]) => Entity[];
 }
 
 interface ComponentManagerSpec {
@@ -204,64 +203,6 @@ export function createComponentManager(spec: ComponentManagerSpec): ComponentMan
     );
   };
 
-  /**
-   * returns a 2d array, first indexed by entity, then by component id.
-   * @returns [entity: [component.id: boolean]]
-   * @example
-   *  const hasRenderables = hasComponents({ id: 21 }, { id: 99 });
-   *  const state = hasRenderables(10, 33, 75);
-   *  // state[10][21] = whether entity 10 has component 21;
-   *  // state[33][99] = whether entity 33 has component 99;
-   *  // state[0][99] = will throw because state[0] is undefined;
-   */
-  const hasComponents = (...components: Component<unknown>[]): ((...entities: Entity[]) => boolean[][]) => {
-    const instances = components.map((component) => componentMap.get(component)) as ComponentInstance<unknown>[];
-    const resFalse = instances.reduce((res, { id }) => {
-      res[id] = false;
-      return res;
-    }, [] as boolean[]);
-    return (...entities: Entity[]): boolean[][] => {
-      return entities.reduce((res, entity) => {
-        const archetype = getEntityArchetype(entity);
-        if (!archetype) {
-          res[entity] = resFalse;
-        } else {
-          res[entity] = instances.reduce((delta, { id }) => {
-            delta[id] = isBitOn(id, archetype.bitfield);
-            return delta;
-          }, [] as boolean[]);
-        }
-        return res;
-      }, [] as boolean[][]);
-    };
-  };
-
-  /**
-   * returns an array, indexed by entity,
-   * containing `true` if the entity has all the desired components.
-   * @returns [entity: boolean]
-   * @example
-   *  const hasRenderables = hasComponents({ id: 21 }, { id: 99 });
-   *  const state = hasRenderables(10, 33, 75);
-   *  // state[10] = whether entity 10 has both components 21 & 99;
-   *  // state[33] = whether entity 33 has both components 21 & 99;
-   *  // state[0] = will be undefined;
-   */
-  const hasAllComponents = (...components: Component<unknown>[]): ((...entities: Entity[]) => boolean[]) => {
-    const instances = components.map((component) => componentMap.get(component)) as ComponentInstance<unknown>[];
-    return (...entities: Entity[]): boolean[] => {
-      return entities.reduce((res, entity) => {
-        const archetype = getEntityArchetype(entity);
-        if (!archetype) {
-          res[entity] = false;
-        } else {
-          res[entity] = instances.every(({ id }) => isBitOn(id, archetype.bitfield));
-        }
-        return res;
-      }, [] as boolean[]);
-    };
-  };
-
   /** Test a single component against a single entity */
   const hasComponent = <T>(component: Component<T>): ((entity: Entity) => boolean) => {
     const instance = componentMap.get(component);
@@ -335,18 +276,30 @@ export function createComponentManager(spec: ComponentManagerSpec): ComponentMan
     return _removeMultiple(instances);
   };
 
+  const withComponents = (...components: Component<unknown>[]) => {
+    const instances = components.map((component) => componentMap.get(component)) as ComponentInstance<unknown>[];
+    return (...entities: Entity[]) => {
+      return entities.reduce((res, entity) => {
+        const archetype = getEntityArchetype(entity);
+        if (archetype && instances.every(({ id }) => isBitOn(id, archetype.bitfield))) {
+          res.push(entity);
+        }
+        return res;
+      }, [] as Entity[]);
+    };
+  };
+
   return {
     componentMap,
 
     addComponentToEntity,
     addComponentsToEntity,
     getEntityProperties,
-    hasAllComponents,
     hasComponent,
-    hasComponents,
     getBuffer,
     removeComponentFromEntity,
     removeComponentsFromEntity,
     setBuffer,
+    withComponents,
   };
 }
