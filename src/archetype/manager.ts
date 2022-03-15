@@ -2,6 +2,7 @@
 
 import { Bitfield } from "../bitfield.js";
 import { ComponentInstance } from "../component/instance.js";
+import { EMPTY_ARRAY } from "../constants.js";
 import { Entity } from "../entity.js";
 import { QueryInstance } from "../query/instance.js";
 import {
@@ -26,6 +27,21 @@ interface ArchetypeManager {
   refreshArchetype: (archetype: Archetype) => Archetype;
   purgeArchetypeCaches: (archetype: Archetype) => Archetype;
   updateArchetype: (entity: Entity, component: ComponentInstance<unknown> | ComponentInstance<unknown>[]) => Archetype;
+}
+
+/** @returns `true` if the query criteria match this archetype */
+function isArchetypeCandidate(query: QueryInstance): (archetype: Archetype) => boolean {
+  const { and = EMPTY_ARRAY, or = EMPTY_ARRAY, not = EMPTY_ARRAY } = query;
+  const _checkStatus = (target: number, i: number): boolean => {
+    return (not[i]! & target) === 0 && (and[i]! & target) === and[i]! && (or[i]! & target) <= 0;
+  };
+  return function (archetype: Archetype): boolean {
+    const { bitfield, candidateCache } = archetype;
+    if (candidateCache.has(query)) return candidateCache.get(query) ?? false;
+    const status = bitfield.every(_checkStatus);
+    candidateCache.set(query, status);
+    return status;
+  };
 }
 
 export function createArchetypeManager(spec: ArchetypeManagerSpec): ArchetypeManager {
@@ -67,22 +83,6 @@ export function createArchetypeManager(spec: ArchetypeManagerSpec): ArchetypeMan
         return clone;
       },
     ];
-  };
-
-  /** @returns `true` if the query criteria match this archetype */
-  const isArchetypeCandidate = (query: QueryInstance): ((archetype: Archetype) => boolean) => {
-    return function (archetype: Archetype): boolean {
-      const { bitfield, candidateCache } = archetype;
-      if (candidateCache.has(query)) return candidateCache.get(query) || false;
-      const { and = EMPTY_BITFIELD, or = EMPTY_BITFIELD, not = EMPTY_BITFIELD } = query;
-      const checkStatus = (target: number, i: number): boolean => {
-        const _and = and[i]!;
-        return (not[i]! & target) === 0 && (_and & target) === _and && (or[i]! & target) <= 0;
-      };
-      const status = bitfield.every(checkStatus);
-      candidateCache.set(query, status);
-      return status;
-    };
   };
 
   /**
