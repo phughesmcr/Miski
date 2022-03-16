@@ -98,16 +98,13 @@ createWorld: (spec: WorldSpec) => World;
   world.getEntityArchetype: (entity: Entity) => Archetype | undefined;
   world.getEntityProperties: (entity: Entity) => SchemaProps<unknown>;
 
-  👁️ Testing entities for components
-  world.hasComponent: <T>(component: Component<T>) => (entity: Entity) => boolean;
-  world.hasComponents: (...components: Component<unknown>[]) => (...entities: Entity[]) => boolean[][];
-  world.hasAllComponents: (...components: Component<unknown>[]) => (...entities: Entity[]) => boolean[];
-
   🧩 World Component methods
   world.addComponentToEntity: <T>(component: Component<T>, entity: Entity, props?: SchemaProps<T>) => boolean;
   world.addComponentsToEntity: (components: Component<unknown>[]) => (entity: Entity) => boolean[];
   world.removeComponentFromEntity: <T>(component: Component<T>, entity: Entity) => boolean;
   world.removeComponentsFromEntity: (components: Component<unknown>[]) => (entity: Entity) => boolean[];
+  world.hasComponent: <T>(component: Component<T>) => (entity: Entity) => boolean;
+  world.withComponents: (...components: Component<unknown>[]) => (...entities: Entity) => Entity[];
 
   🔎 World Query methods
   world.getQueryResult: (query: Query) => [Entity[], ComponentRecord];
