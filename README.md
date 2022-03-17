@@ -99,10 +99,10 @@ createWorld: (spec: WorldSpec) => World;
   world.getEntityProperties: (entity: Entity) => SchemaProps<unknown>;
 
   🧩 World Component methods
-  world.addComponentToEntity: <T>(component: Component<T>, entity: Entity, props?: SchemaProps<T>) => boolean;
-  world.addComponentsToEntity: (components: Component<unknown>[]) => (entity: Entity) => boolean[];
-  world.removeComponentFromEntity: <T>(component: Component<T>, entity: Entity) => boolean;
-  world.removeComponentsFromEntity: (components: Component<unknown>[]) => (entity: Entity) => boolean[];
+  world.addComponentToEntity: <T>(component: Component<T>) => (entity: Entity, props?: SchemaProps<T>) => boolean;
+  world.addComponentsToEntity: (...components: Component<unknown>) => (entity: Entity) => boolean[];
+  world.removeComponentFromEntity: <T>(component: Component<T>) => (entity: Entity) => boolean;
+  world.removeComponentsFromEntity: (...components: Component<unknown>) => (entity: Entity) => boolean[];
   world.hasComponent: <T>(component: Component<T>) => (entity: Entity) => boolean;
   world.withComponents: (...components: Component<unknown>[]) => (...entities: Entity) => Entity[];
 
