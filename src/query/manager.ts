@@ -29,72 +29,73 @@ export interface QueryManager {
   getQueryExited: (query: Query) => Entity[];
   /** @returns a tuple of Entities and Components which match the Query criteria */
   getQueryResult: (query: Query) => [() => Entity[], ComponentRecord];
-  /** @returns a tuple of Entities and Components which match the Query criteria */
+  /** @returns a tuple of Entities and Components which match the Queries criteria */
   getQueryResults: (queries: Query[]) => [() => Entity[], ComponentRecord];
-  /** Run Query maintenance */
-  refreshQuery: (archetypes: Archetype[]) => (query: QueryInstance) => QueryInstance;
+  /**
+   * Refresh the Query's Archetype candidate registry
+   * @returns the Query's archetype candidates post-refresh
+   */
+  refreshQuery: (archetypes: Map<string, Archetype>) => (query: QueryInstance) => QueryInstance;
 }
 
 export function createQueryManager(spec: QueryManagerSpec): QueryManager {
   const { createBitfieldFromIds, componentMap, isArchetypeCandidate } = spec;
 
-  /** */
+  /** Map of registered Queries and their instances */
   const queryMap: Map<Query, QueryInstance> = new Map();
 
-  /** */
-  function refreshQuery(archetypes: Archetype[]): (query: QueryInstance) => QueryInstance {
-    return function (query: QueryInstance): QueryInstance {
+  /**
+   * Refresh the Query's Archetype candidate registry
+   * @returns the Query's archetype candidates post-refresh
+   */
+  const refreshQuery = (archetypes: Map<string, Archetype>): ((query: QueryInstance) => QueryInstance) => {
+    return (query: QueryInstance): QueryInstance => {
       const isCandidate = isArchetypeCandidate(query);
-      const candidates = archetypes.filter(isCandidate);
-      const add = query.archetypes.add.bind(query.archetypes);
-      [...candidates].forEach(add);
+      archetypes.forEach((archetype) => {
+        if (isCandidate(archetype)) query.archetypes.add(archetype);
+      });
       return query;
     };
-  }
+  };
 
-  /** */
-  function registerQuery(query: Query): QueryInstance {
+  /** Register a Query in the world, producing a QueryInstance */
+  const registerQuery = (query: Query): QueryInstance => {
     if (!isValidQuery(query)) throw new Error("Object is not a valid query.");
     const instance = createQueryInstance({ createBitfieldFromIds, componentMap, query });
     queryMap.set(query, instance);
     return instance;
-  }
+  };
+
+  /** @private utility function to get QueryInstance from Query in the world */
+  const _getQueryInstance = (query: Query): QueryInstance => queryMap.get(query) ?? registerQuery(query);
 
   /** @returns a tuple of Entities and Components which match the Query criteria */
-  function getQueryResult(query: Query): [() => Entity[], ComponentRecord] {
-    const instance = queryMap.get(query) ?? registerQuery(query);
+  const getQueryResult = (query: Query): [() => Entity[], ComponentRecord] => {
+    const instance = _getQueryInstance(query);
     return [() => getEntitiesFromQuery(instance), instance.components];
-  }
+  };
 
   /** @returns a tuple of Entities and Components which match the Query criteria */
-  function getQueryResults(queries: Query[]): [() => Entity[], ComponentRecord] {
+  const getQueryResults = (queries: Query[]): [() => Entity[], ComponentRecord] => {
     const components = {};
 
     const instances = queries.reduce((res, query) => {
-      const instance = queryMap.get(query) ?? registerQuery(query);
+      const instance = _getQueryInstance(query);
       Object.assign(components, instance.components);
       res.push(instance);
       return res;
     }, [] as QueryInstance[]);
 
-    const getEntities = () => {
-      return instances.flatMap(getEntitiesFromQuery);
-    };
+    const getEntities = () => [...new Set(instances.flatMap(getEntitiesFromQuery))];
 
     return [getEntities, Object.freeze(components)];
-  }
+  };
 
   /** Entities which have entered this query since last refresh */
-  function getQueryEntered(query: Query): Entity[] {
-    const instance = queryMap.get(query) ?? registerQuery(query);
-    return getEnteredFromQuery(instance);
-  }
+  const getQueryEntered = (query: Query): Entity[] => getEnteredFromQuery(_getQueryInstance(query));
 
   /** Entities which have exited this query since last refresh */
-  function getQueryExited(query: Query): Entity[] {
-    const instance = queryMap.get(query) ?? registerQuery(query);
-    return getExitedFromQuery(instance);
-  }
+  const getQueryExited = (query: Query): Entity[] => getExitedFromQuery(_getQueryInstance(query));
 
   return {
     queryMap,

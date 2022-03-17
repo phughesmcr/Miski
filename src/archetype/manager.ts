@@ -15,7 +15,7 @@ import {
 } from "./archetype.js";
 
 interface ArchetypeManagerSpec {
-  EMPTY_BITFIELD: Bitfield;
+  EMPTY_ARCHETYPE: Archetype;
   getEntityArchetype: (entity: Entity) => Archetype | undefined;
   setEntityArchetype: (entity: Entity, archetype: Archetype) => boolean;
   toggleBit: (bit: number, bitfield: Bitfield) => boolean;
@@ -45,10 +45,7 @@ function isArchetypeCandidate(query: QueryInstance): (archetype: Archetype) => b
 }
 
 export function createArchetypeManager(spec: ArchetypeManagerSpec): ArchetypeManager {
-  const { EMPTY_BITFIELD, getEntityArchetype, setEntityArchetype, toggleBit } = spec;
-
-  /** An empty archetype for use in cloning etc. */
-  const EMPTY_ARCHETYPE = createArchetype({ bitfield: EMPTY_BITFIELD });
+  const { EMPTY_ARCHETYPE, getEntityArchetype, setEntityArchetype, toggleBit } = spec;
 
   /** Map<Archetype ID, Archetype> */
   const archetypeMap: Map<string, Archetype> = new Map();

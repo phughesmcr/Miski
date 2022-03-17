@@ -8,6 +8,7 @@ export type Entity = Opaque<number, "Entity">;
 
 interface EntityManagerSpec {
   capacity: number;
+  EMPTY_ARCHETYPE: Archetype;
 }
 
 interface EntityManager {
@@ -35,16 +36,18 @@ function entityValidator(capacity: number): (entity: Entity) => entity is Entity
 
 /** Manages the creation, destruction and recycling of entities */
 export function createEntityManager(spec: EntityManagerSpec): EntityManager {
-  const { capacity } = spec;
+  const { capacity, EMPTY_ARCHETYPE } = spec;
 
   const entityArchetypes = createEntityArchetypeArray(capacity);
-  const availableEntities = createAvailabilityArray(capacity);
+  const availableEntities = createAvailabilityArray(capacity) as Entity[];
   const isValidEntity = entityValidator(capacity);
 
   return {
     /** @returns the next available Entity or `undefined` if no Entity is available */
     createEntity(): Entity | undefined {
-      return availableEntities.pop() as Entity | undefined;
+      const entity = availableEntities.pop();
+      if (entity !== undefined) entityArchetypes[entity] = EMPTY_ARCHETYPE;
+      return entity;
     },
 
     /**

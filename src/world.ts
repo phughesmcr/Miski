@@ -1,10 +1,10 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
-import { Archetype } from "./archetype/archetype.js";
+import { Archetype, createArchetype } from "./archetype/archetype.js";
 import { createArchetypeManager } from "./archetype/manager.js";
 import { bitfieldFactory } from "./bitfield.js";
 import { Component } from "./component/component.js";
-import { refreshComponentInstance } from "./component/instance.js";
+import { ComponentInstance, refreshComponentInstance } from "./component/instance.js";
 import { createComponentManager, ComponentRecord } from "./component/manager.js";
 import { SchemaProps } from "./component/schema.js";
 import { DEFAULT_MAX_ENTITIES, VERSION } from "./constants.js";
@@ -36,9 +36,11 @@ export interface World extends WorldProto {
    * @param props optional initial component values to set for the entity.
    * @returns `true` if the component was added successfully.
    */
-  addComponentToEntity: <T>(component: Component<T>, entity: Entity, props?: SchemaProps<T> | undefined) => boolean;
+  addComponentToEntity: <T>(component: Component<T>) => (entity: Entity, properties?: SchemaProps<unknown>) => boolean;
   /** Add multiple components to an entity at once by defining a prefab. */
-  addComponentsToEntity: (components: Component<unknown>[]) => (entity: Entity) => boolean[];
+  addComponentsToEntity: (
+    ...components: Component<unknown>[]
+  ) => (entity: Entity, properties?: { [key: string]: SchemaProps<unknown> }) => ComponentInstance<unknown>[];
   /**
    * Create a new entity for use in the world.
    * @returns the entity or `undefined` if no entities were available.
@@ -93,9 +95,9 @@ export interface World extends WorldProto {
    * @param entity the entity to remove the component from.
    * @returns `true` if the component was removed successfully.
    */
-  removeComponentFromEntity: <T>(component: Component<T>, entity: Entity) => boolean;
+  removeComponentFromEntity: <T>(component: Component<T>) => (entity: Entity) => boolean;
   /** Remove multiple components from an entity at once. */
-  removeComponentsFromEntity: (components: Component<unknown>[]) => (entity: Entity) => boolean[];
+  removeComponentsFromEntity: (...components: Component<unknown>[]) => (entity: Entity) => ComponentInstance<unknown>[];
   /** Serialize various aspects of the world's data */
   save: () => Readonly<MiskiData>;
   /** Reduces an array of entities to just those who have all the desired components */
@@ -120,6 +122,8 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
 
   const { EMPTY_BITFIELD, createBitfieldFromIds, isBitOn, toggleBit } = bitfieldFactory(components.length);
 
+  const EMPTY_ARCHETYPE = createArchetype({ bitfield: EMPTY_BITFIELD });
+
   const {
     createEntity,
     destroyEntity,
@@ -128,11 +132,11 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
     hasEntity,
     isValidEntity,
     setEntityArchetype,
-  } = createEntityManager({ capacity });
+  } = createEntityManager({ capacity, EMPTY_ARCHETYPE });
 
   const { archetypeMap, isArchetypeCandidate, purgeArchetypeCaches, refreshArchetype, updateArchetype } =
     createArchetypeManager({
-      EMPTY_BITFIELD,
+      EMPTY_ARCHETYPE,
       getEntityArchetype,
       setEntityArchetype,
       toggleBit,
@@ -167,16 +171,13 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
 
   const { load, save } = createSerializationManager({ getBuffer, setBuffer, version: VERSION });
 
-  function purgeCaches() {
-    [...archetypeMap.values()].forEach(purgeArchetypeCaches);
-  }
+  const purgeCaches = () => archetypeMap.forEach(purgeArchetypeCaches);
   purgeCaches();
 
+  const queryRefresher = refreshQuery(archetypeMap);
   function refresh() {
-    const archetypes = [...archetypeMap.values()];
-    const queryRefresher = refreshQuery(archetypes);
     queryMap.forEach(queryRefresher);
-    archetypes.forEach(refreshArchetype);
+    archetypeMap.forEach(refreshArchetype);
     componentMap.forEach(refreshComponentInstance);
   }
   refresh();
