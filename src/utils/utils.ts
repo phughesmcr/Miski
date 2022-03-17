@@ -65,7 +65,10 @@ export function noop(): void {
 
 /** @author https://stackoverflow.com/a/67605309 */
 export type ParametersExceptFirst<F> = F extends (arg0: any, ...rest: infer R) => any ? R : never;
+
+/** The parameters of a function omitting the first two parameters */
 export type ParametersExceptFirstTwo<F> = F extends (arg0: any, arg1: any, ...rest: infer R) => any ? R : never;
+
 /**
  * Opaque typing allows for nominal types
  * @example
