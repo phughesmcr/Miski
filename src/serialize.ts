@@ -29,9 +29,6 @@ export function createSerializationManager(spec: SerializationManagerSpec): Seri
   function load(data: MiskiData): boolean {
     const { componentBuffer } = data;
     /** @todo validate! */
-    if (!version.match(data.version)) {
-      console.warn(`Miski version mismatch: Expected ${version}, found ${data.version}.`);
-    }
     setBuffer(componentBuffer);
     return true;
   }
