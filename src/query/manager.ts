@@ -29,8 +29,6 @@ export interface QueryManager {
   getQueryExited: (query: Query) => Entity[];
   /** @returns a tuple of Entities and Components which match the Query criteria */
   getQueryResult: (query: Query) => [() => Entity[], ComponentRecord];
-  /** @returns a tuple of Entities and Components which match the Queries criteria */
-  getQueryResults: (queries: Query[]) => [() => Entity[], ComponentRecord];
   /**
    * Refresh the Query's Archetype candidate registry
    * @returns the Query's archetype candidates post-refresh
@@ -75,22 +73,6 @@ export function createQueryManager(spec: QueryManagerSpec): QueryManager {
     return [() => getEntitiesFromQuery(instance), instance.components];
   };
 
-  /** @returns a tuple of Entities and Components which match the Query criteria */
-  const getQueryResults = (queries: Query[]): [() => Entity[], ComponentRecord] => {
-    const components = {};
-
-    const instances = queries.reduce((res, query) => {
-      const instance = _getQueryInstance(query);
-      Object.assign(components, instance.components);
-      res.push(instance);
-      return res;
-    }, [] as QueryInstance[]);
-
-    const getEntities = () => [...new Set(instances.flatMap(getEntitiesFromQuery))];
-
-    return [getEntities, Object.freeze(components)];
-  };
-
   /** Entities which have entered this query since last refresh */
   const getQueryEntered = (query: Query): Entity[] => getEnteredFromQuery(_getQueryInstance(query));
 
@@ -102,7 +84,6 @@ export function createQueryManager(spec: QueryManagerSpec): QueryManager {
     getQueryEntered,
     getQueryExited,
     getQueryResult,
-    getQueryResults,
     refreshQuery,
   };
 }

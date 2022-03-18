@@ -67,8 +67,6 @@ export interface World extends WorldProto {
   getQueryExited: (query: Query) => Entity[];
   /** @returns a tuple of entities and components which match the query's criteria */
   getQueryResult: (query: Query) => [() => Entity[], ComponentRecord];
-  /** @returns a tuple of entities and components which match the query's criteria */
-  getQueryResults: (queries: Query[]) => [() => Entity[], ComponentRecord];
   /** @returns the number of available entities in the world. */
   getVacancyCount: () => number;
   /** @returns `true` if the entity is valid and !== undefined */
@@ -162,10 +160,7 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
     updateArchetype,
   });
 
-  const { queryMap, getQueryEntered, getQueryExited, getQueryResult, getQueryResults, refreshQuery } =
-    createQueryManager({
-      createBitfieldFromIds,
-      componentMap,
+  const { queryMap, getQueryEntered, getQueryExited, getQueryResult, refreshQuery } = createQueryManager({
       isArchetypeCandidate,
     });
 
@@ -194,7 +189,6 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
       getQueryEntered,
       getQueryExited,
       getQueryResult,
-      getQueryResults,
       getVacancyCount,
       hasComponent,
       hasEntity,

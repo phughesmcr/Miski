@@ -109,7 +109,6 @@ createWorld: (spec: WorldSpec) => World;
 
   🔎 World Query methods
   world.getQueryResult: (query: Query) => [Entity[], ComponentRecord];
-  world.getQueryResults: (...queries: Query[]) => [Entity[], ComponentRecord];
   world.getQueryEntered: (query: Query) => Entity[];
   world.getQueryExited: (query: Query) => Entity[];
 
