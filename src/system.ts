@@ -14,7 +14,7 @@ export type System<
 
 /**
  * Creates a new curried System function
- * @param callback the System function to be called
+ * @param system the System function to be called
  * @returns a curried function (world) => (...args) => result;
  *
  * @example
@@ -27,13 +27,9 @@ export type System<
 export function createSystem<
   T extends (components: ComponentRecord, entities: Entity[], ...args: unknown[]) => ReturnType<T>,
   U extends ParametersExceptFirstTwo<T>,
->(callback: System<T, U>, ...queries: Query[]) {
-  return function (world: World) {
-    // getQueryResult is much faster than getQueryResults for single query systems
-    const [getEntities, components] =
-      queries.length === 1 ? world.getQueryResult(queries[0]!) : world.getQueryResults(queries);
-    return function (...args: U): ReturnType<T> {
-      return callback(components, getEntities(), ...args);
-    };
+>(system: System<T, U>, query: Query) {
+  return (world: World) => {
+    const [getEntities, components] = world.getQueryResult(query);
+    return (...args: U): ReturnType<T> => system(components, getEntities(), ...args);
   };
 }
