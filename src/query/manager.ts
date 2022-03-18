@@ -1,6 +1,7 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
 import { Archetype } from "../archetype/archetype.js";
+import { isArchetypeCandidate } from "../archetype/manager.js";
 import { Bitfield } from "../bitfield.js";
 import { Component } from "../component/component.js";
 import { ComponentRecord } from "../component/manager.js";
@@ -18,7 +19,6 @@ import { isValidQuery, Query } from "./query.js";
 interface QueryManagerSpec {
   componentMap: Map<Component<unknown>, ComponentInstance<unknown>>;
   createBitfieldFromIds: (components: ComponentInstance<unknown>[]) => Bitfield;
-  isArchetypeCandidate: (query: QueryInstance) => (archetype: Archetype) => boolean;
 }
 
 export interface QueryManager {
@@ -37,7 +37,7 @@ export interface QueryManager {
 }
 
 export function createQueryManager(spec: QueryManagerSpec): QueryManager {
-  const { createBitfieldFromIds, componentMap, isArchetypeCandidate } = spec;
+  const { createBitfieldFromIds, componentMap } = spec;
 
   /** Map of registered Queries and their instances */
   const queryMap: Map<Query, QueryInstance> = new Map();

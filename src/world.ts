@@ -1,6 +1,6 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
-import { Archetype, createArchetype } from "./archetype/archetype.js";
+import { Archetype, createArchetype, purgeArchetypeCaches, refreshArchetype } from "./archetype/archetype.js";
 import { createArchetypeManager } from "./archetype/manager.js";
 import { bitfieldFactory } from "./bitfield.js";
 import { Component } from "./component/component.js";
@@ -132,13 +132,12 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
     setEntityArchetype,
   } = createEntityManager({ capacity, EMPTY_ARCHETYPE });
 
-  const { archetypeMap, isArchetypeCandidate, purgeArchetypeCaches, refreshArchetype, updateArchetype } =
-    createArchetypeManager({
-      EMPTY_ARCHETYPE,
-      getEntityArchetype,
-      setEntityArchetype,
-      toggleBit,
-    });
+  const { archetypeMap, updateArchetype } = createArchetypeManager({
+    EMPTY_ARCHETYPE,
+    getEntityArchetype,
+    setEntityArchetype,
+    toggleBit,
+  });
 
   const {
     componentMap,
@@ -161,8 +160,9 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
   });
 
   const { queryMap, getQueryEntered, getQueryExited, getQueryResult, refreshQuery } = createQueryManager({
-      isArchetypeCandidate,
-    });
+    createBitfieldFromIds,
+    componentMap,
+  });
 
   const { load, save } = createSerializationManager({ getBuffer, setBuffer, version: VERSION });
 
@@ -170,11 +170,11 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
   purgeCaches();
 
   const queryRefresher = refreshQuery(archetypeMap);
-  function refresh() {
+  const refresh = () => {
     queryMap.forEach(queryRefresher);
     archetypeMap.forEach(refreshArchetype);
     componentMap.forEach(refreshComponentInstance);
-  }
+  };
   refresh();
 
   return Object.freeze(

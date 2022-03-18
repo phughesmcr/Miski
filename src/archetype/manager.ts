@@ -4,14 +4,7 @@ import { Bitfield } from "../bitfield.js";
 import { ComponentInstance } from "../component/instance.js";
 import { Entity } from "../entity.js";
 import { QueryInstance } from "../query/instance.js";
-import {
-  addEntityToArchetype,
-  Archetype,
-  createArchetype,
-  removeEntityFromArchetype,
-  purgeArchetypeCaches,
-  refreshArchetype,
-} from "./archetype.js";
+import { addEntityToArchetype, Archetype, createArchetype, removeEntityFromArchetype } from "./archetype.js";
 
 interface ArchetypeManagerSpec {
   EMPTY_ARCHETYPE: Archetype;
@@ -22,15 +15,13 @@ interface ArchetypeManagerSpec {
 
 interface ArchetypeManager {
   archetypeMap: Map<string, Archetype>;
-  isArchetypeCandidate: (query: QueryInstance) => (archetype: Archetype) => boolean;
-  refreshArchetype: (archetype: Archetype) => Archetype;
-  purgeArchetypeCaches: (archetype: Archetype) => Archetype;
   updateArchetype: (entity: Entity, component: ComponentInstance<unknown> | ComponentInstance<unknown>[]) => Archetype;
 }
 
-function getCandidateStatus(and: Bitfield, or: Bitfield, not: Bitfield) {
+function getCandidateStatus(query: QueryInstance) {
+  const { and, or, not } = query;
   return (target: number, idx: number): boolean => {
-    const AND = and ? (and[idx] ?? 0 & target) === and[idx] ?? 0 : true;
+    const AND = and ? (and[idx] ?? 0 & target) === and[idx] : true;
     const OR = or ? (or[idx] ?? 0 & target) <= 0 : true;
     const NOT = not ? (not[idx] ?? 0 & target) === 0 : true;
     return NOT && AND && OR;
@@ -38,9 +29,8 @@ function getCandidateStatus(and: Bitfield, or: Bitfield, not: Bitfield) {
 }
 
 /** @returns `true` if the query criteria match this archetype */
-function isArchetypeCandidate(query: QueryInstance): (archetype: Archetype) => boolean {
-  const { and, or, not } = query;
-  const checkStatus = getCandidateStatus(and, or, not);
+export function isArchetypeCandidate(query: QueryInstance): (archetype: Archetype) => boolean {
+  const checkStatus = getCandidateStatus(query);
   return function (archetype: Archetype): boolean {
     const { bitfield, candidateCache } = archetype;
     if (candidateCache.has(query)) return candidateCache.get(query) ?? false;
@@ -125,9 +115,6 @@ export function createArchetypeManager(spec: ArchetypeManagerSpec): ArchetypeMan
 
   return {
     archetypeMap,
-    isArchetypeCandidate,
-    purgeArchetypeCaches,
-    refreshArchetype,
     updateArchetype,
   };
 }
