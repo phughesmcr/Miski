@@ -2,7 +2,6 @@
 
 import { Bitfield } from "../bitfield.js";
 import { ComponentInstance } from "../component/instance.js";
-import { EMPTY_ARRAY } from "../constants.js";
 import { Entity } from "../entity.js";
 import { QueryInstance } from "../query/instance.js";
 import {
@@ -29,16 +28,23 @@ interface ArchetypeManager {
   updateArchetype: (entity: Entity, component: ComponentInstance<unknown> | ComponentInstance<unknown>[]) => Archetype;
 }
 
+function getCandidateStatus(and: Bitfield, or: Bitfield, not: Bitfield) {
+  return (target: number, idx: number): boolean => {
+    const AND = and ? (and[idx] ?? 0 & target) === and[idx] ?? 0 : true;
+    const OR = or ? (or[idx] ?? 0 & target) <= 0 : true;
+    const NOT = not ? (not[idx] ?? 0 & target) === 0 : true;
+    return NOT && AND && OR;
+  };
+}
+
 /** @returns `true` if the query criteria match this archetype */
 function isArchetypeCandidate(query: QueryInstance): (archetype: Archetype) => boolean {
-  const { and = EMPTY_ARRAY, or = EMPTY_ARRAY, not = EMPTY_ARRAY } = query;
-  const _checkStatus = (target: number, i: number): boolean => {
-    return (not[i]! & target) === 0 && (and[i]! & target) === and[i]! && (or[i]! & target) <= 0;
-  };
+  const { and, or, not } = query;
+  const checkStatus = getCandidateStatus(and, or, not);
   return function (archetype: Archetype): boolean {
     const { bitfield, candidateCache } = archetype;
     if (candidateCache.has(query)) return candidateCache.get(query) ?? false;
-    const status = bitfield.every(_checkStatus);
+    const status = bitfield.every(checkStatus);
     candidateCache.set(query, status);
     return status;
   };
