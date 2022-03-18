@@ -63,8 +63,8 @@ export function createQuery(spec: QuerySpec): Query {
     throw new SyntaxError("createQuery: Query specification object is invalid.");
   }
   return Object.freeze({
-    all: Object.freeze([...all]),
-    any: Object.freeze([...any]),
-    none: Object.freeze([...none]),
+    all: Object.freeze([...new Set(all)]),
+    any: Object.freeze([...new Set(any)]),
+    none: Object.freeze([...new Set(none)]),
   });
 }
