@@ -14,7 +14,7 @@
  */
 
 export { createComponent } from "./component/component.js";
-export { createQuery } from "./query/query.js";
+export { createQuery, mergeQueries } from "./query/query.js";
 export { createSystem } from "./system.js";
 export { createWorld } from "./world.js";
 

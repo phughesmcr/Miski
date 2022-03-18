@@ -22,6 +22,24 @@ export type Query = Readonly<{
   none: Readonly<Component<unknown>[]>;
 }>;
 
+/** Merge multiple Queries into one new Query */
+export function mergeQueries(...queries: Query[]): Query {
+  const _all: Component<unknown>[] = [];
+  const _any: Component<unknown>[] = [];
+  const _none: Component<unknown>[] = [];
+  queries.forEach((query) => {
+    const { all, any, none } = query;
+    _all.push(...all);
+    _any.push(...any);
+    _none.push(...none);
+  });
+  return createQuery({
+    all: _all,
+    any: _any,
+    none: _none,
+  });
+}
+
 function _validateQueryArrays<T>(component: Component<T>) {
   return Object.prototype.hasOwnProperty.call(component, "name");
 }
