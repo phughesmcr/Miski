@@ -120,3 +120,7 @@ export function getOwnProperty<K extends PropertyKey>(key: K) {
 export function intersectBits(a = 0, b = 0): number {
   return a & b;
 }
+
+export function roundUpToMultipleOf(f: number): (n: number) => number {
+  return (n: number) => Math.ceil(n / f) * f;
+}

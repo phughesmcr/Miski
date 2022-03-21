@@ -2,7 +2,7 @@
 
 import { ONE_BYTE } from "../constants.js";
 import { sparseFacade } from "../utils/sparse-facade.js";
-import type { TypedArrayConstructor } from "../utils/utils.js";
+import { roundUpToMultipleOf, TypedArrayConstructor } from "../utils/utils.js";
 import type { Component } from "./component.js";
 import type { SchemaStorage } from "./schema.js";
 
@@ -41,6 +41,9 @@ export function createComponentBuffer(spec: ComponentBufferSpec): ArrayBuffer {
   return new ArrayBuffer(ONE_BYTE * Math.ceil(totalSize / ONE_BYTE));
 }
 
+// Float32 array's offset must be aligned to a multiple of 4
+const alignBytes = roundUpToMultipleOf(4);
+
 /**
  * Creates a function which allows for the creation of component storage partitions.
  * @param spec the partitioner's specification object
@@ -56,7 +59,7 @@ export function createComponentBufferPartitioner(spec: ComponentBufferPartitione
   return <T>(component: Component<T>): SchemaStorage<T> | undefined => {
     if (full === true) throw new Error("ArrayBuffer is full!");
     const { maxEntities, schema, size = 0 } = component;
-    if (!size || size <= 0) return; // bail early if component is a tag
+    if (!schema || size <= 0) return; // bail early if component is a tag
     const requiredSize = maxEntities ?? capacity;
 
     if (bufferOffset + size * requiredSize > buffer.byteLength) {
@@ -64,10 +67,10 @@ export function createComponentBufferPartitioner(spec: ComponentBufferPartitione
     }
 
     let componentOffset = 0;
-    function partition(
+    const partition = (
       res: SchemaStorage<T>,
       [key, value]: [keyof T, TypedArrayConstructor | [TypedArrayConstructor, number]],
-    ) {
+    ) => {
       let typedArray = value as TypedArrayConstructor;
       let initialValue = 0;
       if (Array.isArray(value)) {
@@ -76,12 +79,11 @@ export function createComponentBufferPartitioner(spec: ComponentBufferPartitione
       const dense = new typedArray(buffer, bufferOffset + componentOffset, requiredSize);
       res[key] = maxEntities === null ? dense : sparseFacade(dense);
       if (initialValue !== 0) res[key].fill(initialValue as never);
-      componentOffset += typedArray.BYTES_PER_ELEMENT * requiredSize;
+      componentOffset = alignBytes(componentOffset + typedArray.BYTES_PER_ELEMENT * requiredSize);
       return res;
-    }
+    };
 
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    const data = Object.entries(schema!) as [keyof T, TypedArrayConstructor][];
+    const data = Object.entries(schema) as [keyof T, TypedArrayConstructor][];
     const storage = data.reduce(partition, {} as SchemaStorage<T>);
 
     bufferOffset += componentOffset;
