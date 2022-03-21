@@ -1,16 +1,16 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
-import { Archetype } from "./archetype/archetype.js";
+import type { Archetype } from "./archetype/archetype.js";
 import { createArchetypeManager } from "./archetype/manager.js";
 import { bitfieldFactory } from "./bitfield.js";
-import { Component } from "./component/component.js";
+import type { Component } from "./component/component.js";
 import { ComponentInstance, refreshComponentInstance } from "./component/instance.js";
 import { ComponentRecord, createComponentManager } from "./component/manager.js";
-import { SchemaProps } from "./component/schema.js";
+import type { SchemaProps } from "./component/schema.js";
 import { DEFAULT_MAX_ENTITIES, VERSION } from "./constants.js";
 import { createEntityManager, Entity } from "./entity.js";
 import { createQueryManager } from "./query/manager.js";
-import { Query } from "./query/query.js";
+import type { Query } from "./query/query.js";
 import { createSerializationManager, MiskiData } from "./serialize.js";
 import { isUint32 } from "./utils/utils.js";
 
@@ -29,6 +29,10 @@ interface WorldProto {
 export interface World extends WorldProto {
   /** The maximum number of entities allowed in the world */
   readonly capacity: number;
+  /** Add multiple components to an entity at once by defining a prefab. */
+  addComponentsToEntity: (
+    ...components: Component<unknown>[]
+  ) => (entity: Entity, properties?: { [key: string]: SchemaProps<unknown> }) => ComponentInstance<unknown>[];
   /**
    * Add a component to an entity.
    * @param component the component to add.
@@ -36,11 +40,7 @@ export interface World extends WorldProto {
    * @param props optional initial component values to set for the entity.
    * @returns `true` if the component was added successfully.
    */
-  addComponentToEntity: <T>(component: Component<T>) => (entity: Entity, properties?: SchemaProps<unknown>) => boolean;
-  /** Add multiple components to an entity at once by defining a prefab. */
-  addComponentsToEntity: (
-    ...components: Component<unknown>[]
-  ) => (entity: Entity, properties?: { [key: string]: SchemaProps<unknown> }) => ComponentInstance<unknown>[];
+  addComponentToEntity: <T>(component: Component<T>) => (entity: Entity, properties?: SchemaProps<T>) => boolean;
   /**
    * Create a new entity for use in the world.
    * @returns the entity or `undefined` if no entities were available.
@@ -51,8 +51,6 @@ export interface World extends WorldProto {
    * @returns `true` if the entity was successfully destroyed.
    */
   destroyEntity: (entity: Entity) => boolean;
-  /** Test a single component against a single entity */
-  hasComponent: <T>(component: Component<T>) => (entity: Entity) => boolean;
   /**
    * Get a given entity's archetype.
    * @param entity the entity to expose.
@@ -69,6 +67,8 @@ export interface World extends WorldProto {
   getQueryResult: (query: Query) => [ComponentRecord, () => Entity[]];
   /** @returns the number of available entities in the world. */
   getVacancyCount: () => number;
+  /** Test a single component against a single entity */
+  hasComponent: <T>(component: Component<T>) => (entity: Entity) => boolean;
   /** @returns `true` if the entity is valid and !== undefined */
   hasEntity: (entity: Entity) => boolean;
   /**
@@ -120,7 +120,6 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
 
   const { EMPTY_BITFIELD, createBitfieldFromIds, isBitOn, toggleBit } = bitfieldFactory(components.length);
 
-  // eslint-disable-next-line @typescript-eslint/unbound-method
   const {
     EMPTY_ARCHETYPE,
     getEntityArchetype,
@@ -184,6 +183,7 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
   return Object.freeze(
     Object.assign(Object.create(WORLD_PROTO), {
       capacity,
+
       addComponentsToEntity,
       addComponentToEntity,
       createEntity,

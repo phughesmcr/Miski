@@ -1,16 +1,16 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
-import { Bitfield } from "../bitfield.js";
-import { Component } from "../component/component.js";
-import { ComponentRecord } from "../component/manager.js";
-import { ComponentInstance } from "../component/instance.js";
-import { Entity } from "../entity.js";
+import type { Bitfield } from "../bitfield.js";
+import type { Component } from "../component/component.js";
+import type { ComponentInstance } from "../component/instance.js";
+import type { ComponentRecord } from "../component/manager.js";
+import type { Entity } from "../entity.js";
 import {
   createQueryInstance,
-  QueryInstance,
   getEnteredFromQuery,
   getEntitiesFromQuery,
   getExitedFromQuery,
+  QueryInstance,
 } from "./instance.js";
 import { isValidQuery, Query } from "./query.js";
 
@@ -49,6 +49,7 @@ export function createQueryManager(spec: QueryManagerSpec): QueryManager {
   /** @returns a tuple of Entities and Components which match the Query criteria */
   const getQueryResult = (query: Query): [ComponentRecord, () => Entity[]] => {
     const instance = _getQueryInstance(query);
+    // @todo some sort of entity caching based on dirty archetypes
     return [instance.components, () => getEntitiesFromQuery(instance)];
   };
 

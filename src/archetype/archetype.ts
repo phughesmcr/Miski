@@ -47,13 +47,6 @@ function validateSpec(spec: ArchetypeSpec): Required<ArchetypeSpec> {
 export function createArchetype(spec: ArchetypeSpec): Archetype {
   const { bitfield, id } = validateSpec(spec);
 
-  const candidateCache: Map<QueryInstance, boolean> = new Map();
-  const cloneCache: Map<ComponentInstance<unknown>, Archetype> = new Map();
-  const components: Set<ComponentInstance<unknown>> = new Set();
-  const entered: Set<Entity> = new Set();
-  const entities: Set<Entity> = new Set();
-  const exited: Set<Entity> = new Set();
-
   let isDirty = true;
 
   return {
@@ -67,12 +60,12 @@ export function createArchetype(spec: ArchetypeSpec): Archetype {
       return isDirty;
     },
     bitfield,
-    candidateCache,
-    cloneCache,
-    components,
-    entered,
-    entities,
-    exited,
+    candidateCache: new Map() as Map<QueryInstance, boolean>,
+    cloneCache: new Map() as Map<ComponentInstance<unknown>, Archetype>,
+    components: new Set(),
+    entered: new Set(),
+    entities: new Set(),
+    exited: new Set(),
     id,
   };
 }

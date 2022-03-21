@@ -1,11 +1,11 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
 import { $_CHANGED, $_COUNT } from "../constants.js";
-import { Entity } from "../entity.js";
+import type { Entity } from "../entity.js";
 import { isObject, isUint32, TypedArray } from "../utils/utils.js";
-import { Component } from "./component.js";
+import type { Component } from "./component.js";
 import { StorageProxy, storageProxy } from "./proxy.js";
-import { SchemaStorage } from "./schema.js";
+import type { SchemaStorage } from "./schema.js";
 
 interface ComponentInstanceSpec<T> {
   /** The component to instantiate */

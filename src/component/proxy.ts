@@ -1,7 +1,7 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
-import { Entity } from "../entity.js";
-import { SchemaStorage } from "./schema.js";
+import type { Entity } from "../entity.js";
+import type { SchemaStorage } from "./schema.js";
 
 export type StorageProxy<T> = Record<keyof T, number> & { eid: Entity };
 
@@ -23,18 +23,13 @@ export function storageProxy<T>(storage: SchemaStorage<T>, changed: Set<Entity>)
       });
       return res;
     },
-    Object.create(
-      {},
-      {
-        eid: {
-          get(): Entity {
-            return entityId;
-          },
-          set(entity: Entity) {
-            entityId = entity;
-          },
-        },
+    {
+      get eid(): Entity {
+        return entityId;
       },
-    ) as StorageProxy<T>,
+      set eid(entity: Entity) {
+        entityId = entity;
+      },
+    } as StorageProxy<T>,
   );
 }

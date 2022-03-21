@@ -1,11 +1,11 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
-import { Archetype } from "../archetype/archetype.js";
-import { Bitfield } from "../bitfield.js";
-import { Component } from "../component/component.js";
-import { ComponentInstance } from "../component/instance.js";
-import { Entity } from "../entity.js";
-import { Query } from "./query.js";
+import type { Archetype } from "../archetype/archetype.js";
+import type { Bitfield } from "../bitfield.js";
+import type { Component } from "../component/component.js";
+import type { ComponentInstance } from "../component/instance.js";
+import type { Entity } from "../entity.js";
+import type { Query } from "./query.js";
 
 interface QueryInstanceSpec {
   componentMap: Map<Component<unknown>, ComponentInstance<unknown>>;

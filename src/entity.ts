@@ -1,6 +1,6 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
-import { Archetype } from "./archetype/archetype.js";
+import type { Archetype } from "./archetype/archetype.js";
 import { createAvailabilityArray, isUint32, Opaque } from "./utils/utils.js";
 
 /** Entities are indexes of an EntityArray. An Entity is just an integer. */

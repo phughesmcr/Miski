@@ -2,9 +2,9 @@
 
 import { ONE_BYTE } from "../constants.js";
 import { sparseFacade } from "../utils/sparse-facade.js";
-import { TypedArrayConstructor } from "../utils/utils.js";
-import { Component } from "./component.js";
-import { SchemaStorage } from "./schema.js";
+import type { TypedArrayConstructor } from "../utils/utils.js";
+import type { Component } from "./component.js";
+import type { SchemaStorage } from "./schema.js";
 
 interface ComponentBufferSpec {
   capacity: number;

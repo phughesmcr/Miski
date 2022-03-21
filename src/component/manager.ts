@@ -1,13 +1,13 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
-import { Archetype } from "../archetype/archetype.js";
-import { Bitfield } from "../bitfield.js";
+import type { Archetype } from "../archetype/archetype.js";
+import type { Bitfield } from "../bitfield.js";
 import { $_COUNT } from "../constants.js";
-import { Entity } from "../entity.js";
+import type { Entity } from "../entity.js";
 import { ComponentBufferPartitioner, createComponentBuffer, createComponentBufferPartitioner } from "./buffer.js";
-import { Component } from "./component.js";
+import type { Component } from "./component.js";
 import { ComponentInstance, createComponentInstance } from "./instance.js";
-import { SchemaProps } from "./schema.js";
+import type { SchemaProps } from "./schema.js";
 
 /** { [component name]: component instance } */
 export type ComponentRecord = Record<string, ComponentInstance<unknown>>;
@@ -16,10 +16,10 @@ export type ComponentMap = Map<Component<unknown>, ComponentInstance<unknown>>;
 
 export interface ComponentManager {
   componentMap: Map<Component<unknown>, ComponentInstance<unknown>>;
-  addComponentToEntity: <T>(component: Component<T>) => (entity: Entity, properties?: SchemaProps<unknown>) => boolean;
   addComponentsToEntity: (
     ...components: Component<unknown>[]
   ) => (entity: Entity, properties?: { [key: string]: SchemaProps<unknown> }) => ComponentInstance<unknown>[];
+  addComponentToEntity: <T>(component: Component<T>) => (entity: Entity, properties?: SchemaProps<T>) => boolean;
   getBuffer: () => ArrayBuffer;
   getEntityProperties: (entity: Entity) => { [key: string]: SchemaProps<unknown> };
   hasComponent: <T>(component: Component<T>) => (entity: Entity) => boolean;
@@ -354,32 +354,18 @@ export function createComponentManager(spec: ComponentManagerSpec): ComponentMan
     isMatch: _isMatch(isBitOn),
   };
 
-  const addComponentToEntity = _addComponentToEntity(spec, fns);
-
-  const addComponentsToEntity = _addComponentsToEntity(spec, fns);
-
-  const getEntityProperties = _getEntityProperties(spec);
-
-  const hasComponent = _hasComponent(spec, fns);
-
-  const removeComponentFromEntity = _removeComponentFromEntity(spec, fns);
-
-  const removeComponentsFromEntity = _removeComponentsFromEntity(spec, fns);
-
-  const withComponents = _withComponents(spec, fns);
-
   return {
     // properties
     componentMap,
     // methods
-    addComponentToEntity,
-    addComponentsToEntity,
-    getEntityProperties,
-    hasComponent,
+    addComponentToEntity: _addComponentToEntity(spec, fns),
+    addComponentsToEntity: _addComponentsToEntity(spec, fns),
+    getEntityProperties: _getEntityProperties(spec),
+    hasComponent: _hasComponent(spec, fns),
     getBuffer,
-    removeComponentFromEntity,
-    removeComponentsFromEntity,
+    removeComponentFromEntity: _removeComponentFromEntity(spec, fns),
+    removeComponentsFromEntity: _removeComponentsFromEntity(spec, fns),
     setBuffer,
-    withComponents,
+    withComponents: _withComponents(spec, fns),
   };
 }

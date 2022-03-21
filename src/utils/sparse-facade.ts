@@ -1,7 +1,7 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
 import { EMPTY_SYMBOL } from "../constants.js";
-import { Entity } from "../entity.js";
+import type { Entity } from "../entity.js";
 import { createAvailabilityArray, TypedArray } from "./utils.js";
 
 /**

@@ -1,10 +1,10 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
-import { ComponentRecord } from "./component/manager.js";
-import { Entity } from "./entity.js";
-import { Query } from "./query/query.js";
-import { ParametersExceptFirstTwo } from "./utils/utils.js";
-import { World } from "./world.js";
+import type { ComponentRecord } from "./component/manager.js";
+import type { Entity } from "./entity.js";
+import type { Query } from "./query/query.js";
+import type { ParametersExceptFirstTwo } from "./utils/utils.js";
+import type { World } from "./world.js";
 
 /** A multi-arity function where the first parameter is always the World object */
 export type System<

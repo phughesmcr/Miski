@@ -5,7 +5,7 @@ import type { ComponentInstance } from "../component/instance.js";
 import { $_DIRTY } from "../constants.js";
 import type { Entity } from "../entity.js";
 import type { QueryInstance } from "../query/instance.js";
-import { Query } from "../query/query.js";
+import type { Query } from "../query/query.js";
 import { Archetype, ArchetypeSpec, createArchetype as _createArchetype } from "./archetype.js";
 
 interface ArchetypeManagerSpec {
@@ -21,7 +21,7 @@ interface ArchetypeManager {
   isArchetypeCandidate: (archetype: Archetype) => (query: QueryInstance) => boolean;
   purgeArchetypesCaches: () => void;
   refreshArchetypes: (queries: Map<Query, QueryInstance>) => void;
-  removeEntityFromArchetype(entity: Entity, archetype: Archetype): Archetype;
+  removeEntityFromArchetype: (entity: Entity, archetype: Archetype) => Archetype;
   setEntityArchetype: (entity: Entity, archetype: Archetype) => Archetype;
   updateArchetype: (entity: Entity, component: ComponentInstance<unknown> | ComponentInstance<unknown>[]) => Archetype;
 }
