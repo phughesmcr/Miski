@@ -6,6 +6,7 @@ import { $_DIRTY } from "../constants.js";
 import type { Entity } from "../entity.js";
 import type { QueryInstance } from "../query/instance.js";
 import type { Query } from "../query/query.js";
+import { intersectBits } from "../utils/utils.js";
 import { Archetype, ArchetypeSpec, createArchetype as _createArchetype } from "./archetype.js";
 
 interface ArchetypeManagerSpec {
@@ -39,10 +40,11 @@ function addEntityToArchetype(entity: Entity, archetype: Archetype): Archetype {
 function getCandidateStatus(query: QueryInstance): (target: number, idx: number) => boolean {
   const { and, or, not } = query;
   return (target: number, idx: number): boolean => {
-    const AND = and ? (and[idx] ?? 0 & target) === and[idx] : true;
-    const OR = or ? (or[idx] ?? 0 & target) <= 0 : true;
-    const NOT = not ? (not[idx] ?? 0 & target) === 0 : true;
-    return NOT && AND && OR;
+    const OR = or[idx] === 0 || intersectBits(target, or[idx]) > 0;
+    if (!OR) return false;
+    const AND = intersectBits(target, and[idx]) === and[idx];
+    if (!AND) return false;
+    return intersectBits(target, not[idx]) === 0;
   };
 }
 

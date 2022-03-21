@@ -116,3 +116,7 @@ export function getOwnProperty<K extends PropertyKey>(key: K) {
     return hasKey(obj) ? obj[key] : undefined;
   };
 }
+
+export function intersectBits(a = 0, b = 0): number {
+  return a & b;
+}
