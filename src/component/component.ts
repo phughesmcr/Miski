@@ -43,11 +43,11 @@ export function createComponent<T extends Schema<T>>(spec: ComponentSpec<T>): Re
     throw new SyntaxError("createComponent: a specification object is required.");
   }
   const { maxEntities, name, schema } = spec;
-  if (!isValidName(name)) {
-    throw new SyntaxError("Component name is invalid.");
-  }
   if (maxEntities && (!isUint32(maxEntities) || maxEntities === 0)) {
     throw new SyntaxError("createComponent: maxEntities must be a Uint32 > 0.");
+  }
+  if (!isValidName(name)) {
+    throw new SyntaxError("Component name is invalid.");
   }
   if (schema && !isValidSchema(schema)) {
     throw new SyntaxError("createComponent: component schema is invalid.");
