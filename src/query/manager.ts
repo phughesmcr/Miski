@@ -1,7 +1,5 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
-import { Archetype } from "../archetype/archetype.js";
-import { isArchetypeCandidate } from "../archetype/manager.js";
 import { Bitfield } from "../bitfield.js";
 import { Component } from "../component/component.js";
 import { ComponentRecord } from "../component/manager.js";
@@ -27,13 +25,8 @@ export interface QueryManager {
   getQueryEntered: (query: Query) => Entity[];
   /** Entities which have exited this query since last refresh */
   getQueryExited: (query: Query) => Entity[];
-  /** @returns a tuple of Entities and Components which match the Query criteria */
-  getQueryResult: (query: Query) => [() => Entity[], ComponentRecord];
-  /**
-   * Refresh the Query's Archetype candidate registry
-   * @returns the Query's archetype candidates post-refresh
-   */
-  refreshQuery: (archetypes: Map<string, Archetype>) => (query: QueryInstance) => QueryInstance;
+  /** @returns a tuple of Components and Entities which match the Query criteria */
+  getQueryResult: (query: Query) => [ComponentRecord, () => Entity[]];
 }
 
 export function createQueryManager(spec: QueryManagerSpec): QueryManager {
@@ -41,20 +34,6 @@ export function createQueryManager(spec: QueryManagerSpec): QueryManager {
 
   /** Map of registered Queries and their instances */
   const queryMap: Map<Query, QueryInstance> = new Map();
-
-  /**
-   * Refresh the Query's Archetype candidate registry
-   * @returns the Query's archetype candidates post-refresh
-   */
-  const refreshQuery = (archetypes: Map<string, Archetype>): ((query: QueryInstance) => QueryInstance) => {
-    return (query: QueryInstance): QueryInstance => {
-      const isCandidate = isArchetypeCandidate(query);
-      archetypes.forEach((archetype) => {
-        if (isCandidate(archetype)) query.archetypes.add(archetype);
-      });
-      return query;
-    };
-  };
 
   /** Register a Query in the world, producing a QueryInstance */
   const registerQuery = (query: Query): QueryInstance => {
@@ -68,9 +47,9 @@ export function createQueryManager(spec: QueryManagerSpec): QueryManager {
   const _getQueryInstance = (query: Query): QueryInstance => queryMap.get(query) ?? registerQuery(query);
 
   /** @returns a tuple of Entities and Components which match the Query criteria */
-  const getQueryResult = (query: Query): [() => Entity[], ComponentRecord] => {
+  const getQueryResult = (query: Query): [ComponentRecord, () => Entity[]] => {
     const instance = _getQueryInstance(query);
-    return [() => getEntitiesFromQuery(instance), instance.components];
+    return [instance.components, () => getEntitiesFromQuery(instance)];
   };
 
   /** Entities which have entered this query since last refresh */
@@ -84,6 +63,5 @@ export function createQueryManager(spec: QueryManagerSpec): QueryManager {
     getQueryEntered,
     getQueryExited,
     getQueryResult,
-    refreshQuery,
   };
 }

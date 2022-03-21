@@ -29,7 +29,7 @@ export function createSystem<
   U extends ParametersExceptFirstTwo<T>,
 >(system: System<T, U>, query: Query) {
   return (world: World) => {
-    const [getEntities, components] = world.getQueryResult(query);
+    const [components, getEntities] = world.getQueryResult(query);
     return (...args: U): ReturnType<T> => system(components, getEntities(), ...args);
   };
 }

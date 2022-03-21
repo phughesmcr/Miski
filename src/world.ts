@@ -1,11 +1,11 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
-import { Archetype, createArchetype, purgeArchetypeCaches, refreshArchetype } from "./archetype/archetype.js";
+import { Archetype } from "./archetype/archetype.js";
 import { createArchetypeManager } from "./archetype/manager.js";
 import { bitfieldFactory } from "./bitfield.js";
 import { Component } from "./component/component.js";
 import { ComponentInstance, refreshComponentInstance } from "./component/instance.js";
-import { createComponentManager, ComponentRecord } from "./component/manager.js";
+import { ComponentRecord, createComponentManager } from "./component/manager.js";
 import { SchemaProps } from "./component/schema.js";
 import { DEFAULT_MAX_ENTITIES, VERSION } from "./constants.js";
 import { createEntityManager, Entity } from "./entity.js";
@@ -66,7 +66,7 @@ export interface World extends WorldProto {
   /** @returns an array of entities which have left a query's archetypes since last world.refresh() */
   getQueryExited: (query: Query) => Entity[];
   /** @returns a tuple of entities and components which match the query's criteria */
-  getQueryResult: (query: Query) => [() => Entity[], ComponentRecord];
+  getQueryResult: (query: Query) => [ComponentRecord, () => Entity[]];
   /** @returns the number of available entities in the world. */
   getVacancyCount: () => number;
   /** @returns `true` if the entity is valid and !== undefined */
@@ -120,23 +120,27 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
 
   const { EMPTY_BITFIELD, createBitfieldFromIds, isBitOn, toggleBit } = bitfieldFactory(components.length);
 
-  const EMPTY_ARCHETYPE = createArchetype({ bitfield: EMPTY_BITFIELD });
-
+  // eslint-disable-next-line @typescript-eslint/unbound-method
   const {
-    createEntity,
-    destroyEntity,
-    getEntityArchetype,
-    getVacancyCount,
-    hasEntity,
-    isValidEntity,
-    setEntityArchetype,
-  } = createEntityManager({ capacity, EMPTY_ARCHETYPE });
-
-  const { archetypeMap, updateArchetype } = createArchetypeManager({
     EMPTY_ARCHETYPE,
     getEntityArchetype,
+    purgeArchetypesCaches,
+    refreshArchetypes,
+    removeEntityFromArchetype,
     setEntityArchetype,
+    updateArchetype,
+  } = createArchetypeManager({
+    EMPTY_BITFIELD,
+    capacity,
     toggleBit,
+  });
+
+  const { createEntity, destroyEntity, getVacancyCount, hasEntity, isValidEntity } = createEntityManager({
+    capacity,
+    EMPTY_ARCHETYPE,
+    getEntityArchetype,
+    removeEntityFromArchetype,
+    setEntityArchetype,
   });
 
   const {
@@ -159,20 +163,20 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
     updateArchetype,
   });
 
-  const { queryMap, getQueryEntered, getQueryExited, getQueryResult, refreshQuery } = createQueryManager({
+  const { queryMap, getQueryEntered, getQueryExited, getQueryResult } = createQueryManager({
     createBitfieldFromIds,
     componentMap,
   });
 
   const { load, save } = createSerializationManager({ getBuffer, setBuffer, version: VERSION });
 
-  const purgeCaches = () => archetypeMap.forEach(purgeArchetypeCaches);
+  const purgeCaches = () => {
+    purgeArchetypesCaches();
+  };
   purgeCaches();
 
-  const queryRefresher = refreshQuery(archetypeMap);
   const refresh = () => {
-    queryMap.forEach(queryRefresher);
-    archetypeMap.forEach(refreshArchetype);
+    refreshArchetypes(queryMap);
     componentMap.forEach(refreshComponentInstance);
   };
   refresh();

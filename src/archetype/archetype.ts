@@ -1,12 +1,12 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
 import type { Bitfield } from "../bitfield.js";
-import { ComponentInstance } from "../component/instance.js";
+import type { ComponentInstance } from "../component/instance.js";
 import { $_DIRTY } from "../constants.js";
 import type { Entity } from "../entity.js";
 import type { QueryInstance } from "../query/instance.js";
 
-interface ArchetypeSpec {
+export interface ArchetypeSpec {
   /** The Archetype's Components as an id Bitfield */
   bitfield: Bitfield;
   /** Optional ID string. Will be generated if omitted */
@@ -35,41 +35,6 @@ export interface Archetype {
   id: string;
   /** `true` if the object is in a dirty state */
   isDirty: boolean;
-}
-
-/** Add an Entity to an Archetype's inhabitants list */
-export function addEntityToArchetype(entity: Entity, archetype: Archetype): Archetype {
-  const { entities, entered } = archetype;
-  entities.add(entity);
-  entered.add(entity);
-  archetype[$_DIRTY] = true;
-  return archetype;
-}
-
-/** Purge the `candidate` and `clone` caches in an Archetype */
-export function purgeArchetypeCaches(archetype: Archetype): Archetype {
-  const { candidateCache, cloneCache } = archetype;
-  candidateCache.clear();
-  cloneCache.clear();
-  return archetype;
-}
-
-/** Clear the entered/exited list and set `isDirty` to `false` */
-export function refreshArchetype(archetype: Archetype): Archetype {
-  const { entered, exited } = archetype;
-  entered.clear();
-  exited.clear();
-  archetype[$_DIRTY] = false;
-  return archetype;
-}
-
-/** Remove an Entity from an Archetype's inhabitants list */
-export function removeEntityFromArchetype(entity: Entity, archetype: Archetype): Archetype {
-  const { entities, exited } = archetype;
-  entities.delete(entity);
-  exited.add(entity);
-  archetype[$_DIRTY] = true;
-  return archetype;
 }
 
 function validateSpec(spec: ArchetypeSpec): Required<ArchetypeSpec> {
