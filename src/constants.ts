@@ -14,9 +14,13 @@ export const MAX_UINT32 = 4_294_967_295;
 /** An array of strings that cannot be used for component or schema property names */
 export const FORBIDDEN_NAMES = Object.freeze([
   // component properties
+  "changed",
   "component",
+  "count",
+  "eid",
   "id",
   "isTag",
+  "maxEntities",
   "name",
   "proxy",
   "schema",
