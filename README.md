@@ -97,7 +97,7 @@ createWorld: (spec: WorldSpec) => World;
   world.destroyEntity: (entity: Entity) => boolean;
   world.hasEntity: (entity: Entity) => boolean;
   world.getEntityArchetype: (entity: Entity) => Archetype | undefined;
-  world.getEntityProperties: (entity: Entity) => SchemaProps<unknown>;
+  world.getEntityProperties: (entity: Entity) => Record<string, SchemaProps<unknown>>;
 
   🧩 World Component methods
   world.addComponentToEntity: <T>(component: Component<T>) => (entity: Entity, props?: SchemaProps<T>) => boolean;
@@ -108,17 +108,17 @@ createWorld: (spec: WorldSpec) => World;
   world.withComponents: (...components: Component<unknown>[]) => (...entities: Entity) => Entity[];
 
   🔎 World Query methods
-  world.getQueryResult: (query: Query) => [Entity[], ComponentRecord];
   world.getQueryEntered: (query: Query) => Entity[];
   world.getQueryExited: (query: Query) => Entity[];
+  world.getQueryResult: (query: Query) => [ComponentRecord, () => Entity[]];
 
   💾 World serialization methods
   world.load: (data: MiskiData) => boolean;
   world.save: () => Readonly<MiskiData>;
 
   🔧 World maintenance methods
-  world.refresh: () => void;
   world.purgeCaches: () => void;
+  world.refresh: () => void;
 ```
 
 ## Docs

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  <title>Miski | Boxes Demo</title>
+  <title>Miski | Boxes and Circles Demo</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🍬</text></svg>">
   <style>
@@ -11,10 +11,6 @@
       border: none;
       margin: 0;
       padding: 0;
-      height: 100%;
-      width: 100%;
-      max-width: 100vw;
-      max-height: 100vh;
       background-color: black;
       overflow: hidden;
     }
@@ -22,9 +18,17 @@
       width: 100%;
       height: 100%;
       object-fit: contain;
+      image-rendering: -moz-crisp-edges;
+      image-rendering: -webkit-crisp-edges;
+      image-rendering: crisp-edges;
+      image-rendering: pixelated;
     }
     main {
       position: relative;
+      width: 100%;
+      height: 100%;
+      max-width: 100vw;
+      max-height: 100vh;
     }
     section {
       position: absolute;
@@ -53,14 +57,14 @@
   <main>
     <section>
       <div class="top-left">
-        <p>FPS: <span id="sFPS">??</span></p>
+        <p style="margin-top: 0;">FPS: <span id="sFPS">??</span></p>
+        <p>Entities: 600</p>
         <p>Resolution: <span id="sResX">1280</span> x <span id="sResY">720</span></p>
-        <label for="rSpeed">Sim Speed:</label>
-        <input type="range" min="0" max="100" value="50" id="rSpeed">
-        <p>The World object is <br>exposed through <br><em>window.world</em><br>in the console.</p>
+        <label for="rSpeed">Speed:</label>
+        <input type="range" min="0" max="200" value="30" step="10" id="rSpeed">
       </div>
     </section>
-    <canvas width="1280" height="720"></canvas>
+    <canvas width="640" height="480"></canvas>
   </main>
   <script src="demo.js" type="module"></script>
 </body>
