@@ -1,24 +1,30 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
-import { Bitfield } from "../bitfield.js";
-import { ComponentInstance } from "../component/instance.js";
-import { Entity } from "../entity.js";
-import { QueryInstance } from "../query/instance.js";
+import type { Bitfield } from "../bitfield.js";
+import type { ComponentInstance } from "../component/instance.js";
+import { $_DIRTY } from "../constants.js";
+import type { Entity } from "../entity.js";
+import type { QueryInstance } from "../query/instance.js";
 
-interface ArchetypeSpec {
-  /** The Bitfield */
+export interface ArchetypeSpec {
+  /** The Archetype's Components as an id Bitfield */
   bitfield: Bitfield;
-  /** Optional */
+  /** Optional ID string. Will be generated if omitted */
   id?: string;
 }
 
+/** Archetypes are unique groupings of entities by components */
 export interface Archetype {
+  /** @private Provides a getter and setter for the `isDirty` flag */
+  [$_DIRTY]: boolean;
   /** The Archetype's Component Bitfield */
   bitfield: Bitfield;
   /** */
   candidateCache: Map<QueryInstance, boolean>;
   /** */
   cloneCache: Map<ComponentInstance<unknown>, Archetype>;
+  /** The components associated with this archetype */
+  components: Set<ComponentInstance<unknown>>;
   /** Entities which have entered this archetype since last refresh */
   entered: Set<Entity>;
   /** Set of Entities which inhabit this Archetype */
@@ -27,44 +33,8 @@ export interface Archetype {
   exited: Set<Entity>;
   /** The Archetype's unique ID */
   id: string;
-  /** `true` if an entity has entered or left since last refresh */
+  /** `true` if the object is in a dirty state */
   isDirty: boolean;
-}
-
-/** Add an entity to an archetype's inhabitants list */
-export function addEntityToArchetype(entity: Entity): (archetype: Archetype) => Archetype {
-  return function (archetype: Archetype): Archetype {
-    const { entities, entered } = archetype;
-    entities.add(entity);
-    entered.add(entity);
-    archetype.isDirty = true;
-    return archetype;
-  };
-}
-
-/** @returns an array of Entities which inhabit this Archetype */
-export function getEntitiesFromArchetype(archetype: Archetype): IterableIterator<Entity> {
-  const { entities } = archetype;
-  return entities.values();
-}
-
-/** @returns `true` if the Entity inhabits this Archetype */
-export function isEntityInArchetype(entity: Entity): (archetype: Archetype) => boolean {
-  return function (archetype: Archetype): boolean {
-    const { entities } = archetype;
-    return entities.has(entity);
-  };
-}
-
-/** Remove an entity from the inhabitants list */
-export function removeEntityFromArchetype(entity: Entity): (archetype: Archetype) => Archetype {
-  return function (archetype: Archetype): Archetype {
-    const { entities, exited } = archetype;
-    entities.delete(entity);
-    exited.add(entity);
-    archetype.isDirty = true;
-    return archetype;
-  };
 }
 
 function validateSpec(spec: ArchetypeSpec): Required<ArchetypeSpec> {
@@ -74,24 +44,28 @@ function validateSpec(spec: ArchetypeSpec): Required<ArchetypeSpec> {
   return { bitfield, id: id || bitfield.toString() };
 }
 
-/** Archetypes are unique groupings of entities by components */
 export function createArchetype(spec: ArchetypeSpec): Archetype {
   const { bitfield, id } = validateSpec(spec);
 
-  const candidateCache: Map<QueryInstance, boolean> = new Map();
-  const cloneCache: Map<ComponentInstance<unknown>, Archetype> = new Map();
-  const entered: Set<Entity> = new Set();
-  const entities: Set<Entity> = new Set();
-  const exited: Set<Entity> = new Set();
+  let isDirty = true;
 
   return {
-    isDirty: true,
+    get [$_DIRTY](): boolean {
+      return isDirty;
+    },
+    set [$_DIRTY](dirty: boolean) {
+      isDirty = !!dirty;
+    },
+    get isDirty(): boolean {
+      return isDirty;
+    },
     bitfield,
-    candidateCache,
-    cloneCache,
-    entered,
-    entities,
-    exited,
+    candidateCache: new Map() as Map<QueryInstance, boolean>,
+    cloneCache: new Map() as Map<ComponentInstance<unknown>, Archetype>,
+    components: new Set(),
+    entered: new Set(),
+    entities: new Set(),
+    exited: new Set(),
     id,
   };
 }
