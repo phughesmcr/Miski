@@ -1,11 +1,7 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
 import { isUint32, isValidName } from "../utils/utils.js";
-import { ComponentInstance } from "./instance.js";
 import { calculateSchemaSize, isValidSchema, Schema } from "./schema.js";
-
-/** { [component name]: component instance } */
-export type ComponentRecord = Record<string, ComponentInstance<unknown>>;
 
 export interface ComponentSpec<T> {
   /**
@@ -23,10 +19,10 @@ export interface ComponentSpec<T> {
 }
 
 export interface Component<T> {
-  /** The maximum number of entities able to equip this component per world. */
-  maxEntities: number | null;
   /** `true` if the component has no schema */
   isTag: boolean;
+  /** The maximum number of entities able to equip this component per world. */
+  maxEntities: number | null;
   /** The component's label */
   name: string;
   /** The component's property definitions or `null` if component is a tag */
@@ -42,14 +38,20 @@ export interface Component<T> {
  * @param spec.schema the component's optional schema object.
  * @returns A valid Component object - a reusable definitions for the creation of ComponentInstances
  */
-export function createComponent<T extends Schema<T>>(spec: ComponentSpec<T>): Component<T> {
-  if (!spec) throw new SyntaxError("Component creation requires a specification object.");
+export function createComponent<T extends Schema<T>>(spec: ComponentSpec<T>): Readonly<Component<T>> {
+  if (!spec) {
+    throw new SyntaxError("createComponent: a specification object is required.");
+  }
   const { maxEntities, name, schema } = spec;
   if (maxEntities && (!isUint32(maxEntities) || maxEntities === 0)) {
-    throw new SyntaxError("Component maxEntities must be a Uint32.");
+    throw new SyntaxError("createComponent: maxEntities must be a Uint32 > 0.");
   }
-  if (!isValidName(name)) throw new SyntaxError("Component name is invalid.");
-  if (schema && !isValidSchema(schema)) throw new SyntaxError("Component schema is invalid.");
+  if (!isValidName(name)) {
+    throw new SyntaxError("Component name is invalid.");
+  }
+  if (schema && !isValidSchema(schema)) {
+    throw new SyntaxError("createComponent: component schema is invalid.");
+  }
   return Object.freeze({
     maxEntities: maxEntities ?? null,
     isTag: Boolean(schema),

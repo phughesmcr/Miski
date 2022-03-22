@@ -14,10 +14,15 @@ export const MAX_UINT32 = 4_294_967_295;
 /** An array of strings that cannot be used for component or schema property names */
 export const FORBIDDEN_NAMES = Object.freeze([
   // component properties
+  "changed",
   "component",
+  "count",
+  "eid",
   "id",
   "isTag",
+  "maxEntities",
   "name",
+  "proxy",
   "schema",
   "size",
   // object properties
@@ -47,3 +52,12 @@ export const EMPTY_ARRAY = Object.freeze([]);
 
 /** A symbol for use where returning undefined from an array etc. is desirable */
 export const EMPTY_SYMBOL = Symbol("EMPTY");
+
+/** Symbol for use as a key for the `changed` flag getter and setter */
+export const $_CHANGED = Symbol("changed");
+
+/** Symbol for use as a key for the `count` flag getter and setter */
+export const $_COUNT = Symbol("count");
+
+/** Symbol for use as a key for the `isDirty` flag getter and setter */
+export const $_DIRTY = Symbol("dirty");

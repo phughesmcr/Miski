@@ -2,9 +2,9 @@
 
 import { ONE_BYTE } from "../constants.js";
 import { sparseFacade } from "../utils/sparse-facade.js";
-import { TypedArrayConstructor } from "../utils/utils.js";
-import { Component } from "./component.js";
-import { SchemaStorage } from "./schema.js";
+import { multipleOf4, TypedArrayConstructor } from "../utils/utils.js";
+import type { Component } from "./component.js";
+import type { SchemaStorage } from "./schema.js";
 
 interface ComponentBufferSpec {
   capacity: number;
@@ -21,11 +21,11 @@ export type ComponentBufferPartitioner = <T>(component: Component<T>) => SchemaS
 
 /** Calculate the total required storage space for all component schemas */
 function getComponentSize(capacity: number, components: Component<unknown>[]) {
-  function componentSum<T>(total: number, component: Component<T>): number {
-    const { size = 0 } = component;
+  const componentSum = <T>(total: number, component: Component<T>): number => {
+    const { size } = component;
     if (!size || size <= 0) return total;
     return total + size * capacity;
-  }
+  };
   return components.reduce(componentSum, 0);
 }
 
@@ -53,10 +53,10 @@ export function createComponentBufferPartitioner(spec: ComponentBufferPartitione
   let bufferOffset = 0;
   let full = false;
 
-  return function partitionComponentBuffer<T>(component: Component<T>): SchemaStorage<T> | undefined {
+  return <T>(component: Component<T>): SchemaStorage<T> | undefined => {
     if (full === true) throw new Error("ArrayBuffer is full!");
     const { maxEntities, schema, size = 0 } = component;
-    if (!size || size <= 0) return; // bail early if component is a tag
+    if (!schema || size <= 0) return; // bail early if component is a tag
     const requiredSize = maxEntities ?? capacity;
 
     if (bufferOffset + size * requiredSize > buffer.byteLength) {
@@ -64,10 +64,10 @@ export function createComponentBufferPartitioner(spec: ComponentBufferPartitione
     }
 
     let componentOffset = 0;
-    function partition(
+    const partition = (
       res: SchemaStorage<T>,
       [key, value]: [keyof T, TypedArrayConstructor | [TypedArrayConstructor, number]],
-    ) {
+    ) => {
       let typedArray = value as TypedArrayConstructor;
       let initialValue = 0;
       if (Array.isArray(value)) {
@@ -76,12 +76,11 @@ export function createComponentBufferPartitioner(spec: ComponentBufferPartitione
       const dense = new typedArray(buffer, bufferOffset + componentOffset, requiredSize);
       res[key] = maxEntities === null ? dense : sparseFacade(dense);
       if (initialValue !== 0) res[key].fill(initialValue as never);
-      componentOffset += typedArray.BYTES_PER_ELEMENT * requiredSize;
+      componentOffset = multipleOf4(componentOffset + typedArray.BYTES_PER_ELEMENT * requiredSize);
       return res;
-    }
+    };
 
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    const data = Object.entries(schema!) as [keyof T, TypedArrayConstructor][];
+    const data = Object.entries(schema) as [keyof T, TypedArrayConstructor][];
     const storage = data.reduce(partition, {} as SchemaStorage<T>);
 
     bufferOffset += componentOffset;

@@ -19,6 +19,7 @@ __Miski ECS__: A sweet ECS architecture written in Typescript.
   * [Features](#features)
   * [Importing](#importing)
   * [API Reference](#api-reference)
+  * [Docs](#docs)
   * [Demos](#demos)
   * [Benchmarks](#benchmarks)
   * [Building](#building)
@@ -52,6 +53,7 @@ Because Miski is designed to be used inside your own projects, we let you config
 * Ability to use multiple queries per system
 * Basic serialization methods (`world.load` & `world.save`)
 * Fast, cache-friendly ArrayBuffer-based component data storage
+* Use `component.changed` to get an iterator of entities whose properties were changed via `component.proxy`
 * Define components and queries once, reuse them across multiple worlds
 * `AND`,`OR`,`NOT` operators in Queries
 * `world.getQueryEntered` & `world.getQueryExited` methods
@@ -77,9 +79,10 @@ createComponent: <T extends Schema<T>>(spec: ComponentSpec<T>) => Component<T>;
 
 🔎 Queries
 createQuery: (spec: QuerySpec) => Query;
+mergeQueries: (...queries: Query[]) => Query;
 
-🔃 Systems // optional but helps with type safety - A system is a function of any arity where the first parameter is the World
-createSystem: <T extends (components: ComponentRecord, entities: Entity[], ...args: unknown[]) => ReturnType<T>, U extends ParametersExceptFirst<T>>(callback: System<T, U>, ...queries: Query[]): (world: World) => (...args: U) => ReturnType<T>;
+🔃 Systems // optional but helps with type safety - A system is a function of any arity where the first two parameters are a component record and entity array
+createSystem: <T extends (components: ComponentRecord, entities: Entity[], ...args: unknown[]) => ReturnType<T>, U extends ParametersExceptFirst<T>>(system: System<T, U>, queries: Query): (world: World) => (...args: U) => ReturnType<T>;
 
 🌍 World
 createWorld: (spec: WorldSpec) => World;
@@ -94,26 +97,32 @@ createWorld: (spec: WorldSpec) => World;
   world.destroyEntity: (entity: Entity) => boolean;
   world.hasEntity: (entity: Entity) => boolean;
   world.getEntityArchetype: (entity: Entity) => Archetype | undefined;
-  world.entityHasComponent: <T>(entity: Entity, component: Component<T>) => boolean;
+  world.getEntityProperties: (entity: Entity) => Record<string, SchemaProps<unknown>>;
 
   🧩 World Component methods
-  world.addComponentToEntity: <T>(component: Component<T>, entity: Entity, props?: SchemaProps<T>) => boolean;
-  world.removeComponentFromEntity: <T>(component: Component<T>, entity: Entity) => boolean;
+  world.addComponentToEntity: <T>(component: Component<T>) => (entity: Entity, props?: SchemaProps<T>) => boolean;
+  world.addComponentsToEntity: (...components: Component<unknown>) => (entity: Entity, props?: Record<string, SchemaProps<unknown>>) => boolean;
+  world.removeComponentFromEntity: <T>(component: Component<T>) => (entity: Entity) => boolean;
+  world.removeComponentsFromEntity: (...components: Component<unknown>) => (entity: Entity) => boolean[];
+  world.hasComponent: <T>(component: Component<T>) => (entity: Entity) => boolean;
+  world.withComponents: (...components: Component<unknown>[]) => (...entities: Entity) => Entity[];
 
   🔎 World Query methods
-  world.getQueryResult: (query: Query) => [Entity[], ComponentRecord];
-  world.getQueryResults: (...queries: Query[]) => [Entity[], ComponentRecord];
   world.getQueryEntered: (query: Query) => Entity[];
   world.getQueryExited: (query: Query) => Entity[];
+  world.getQueryResult: (query: Query) => [ComponentRecord, () => Entity[]];
 
   💾 World serialization methods
   world.load: (data: MiskiData) => boolean;
   world.save: () => Readonly<MiskiData>;
 
   🔧 World maintenance methods
-  world.refresh: () => void;
   world.purgeCaches: () => void;
+  world.refresh: () => void;
 ```
+
+## Docs
+See `./docs` or <a href="https://phughesmcr.github.io/Miski/docs/index.html">the live docs page on Github</a>.
 
 ## Demos
 See `./demo` for demo code or <a href="https://phughesmcr.github.io/Miski/">the demo page</a> for live examples.
@@ -132,19 +141,18 @@ npm run build
 ### Before Beta
 1. Finalise API
 2. Write comprehensive tests
-4. Write consistent code documentation throughout
+3. Write consistent code documentation throughout
 ### Before 1.0.0
 1. Optimise performance
 2. Consistent code style throughout
+3. Object pooling where necessary
 ### Future
-1. Allow for "changed" in queries
-2. Multithreading support / playing nicely with WebWorkers / SharedArrayBuffers
-3. Proper Deno support
-4. Dynamic component data storage
-5. Object pooling where necessary
+1. Multithreading support / playing nicely with WebWorkers / SharedArrayBuffers
+2. Proper Deno support
+3. Dynamic component data storage
 
 ## Contributing
-Contributions are also welcome and invited. See `CONTRIBUTING.md` for details.
+Contributions are welcome and invited. See `CONTRIBUTING.md` for details.
 
 ## Feature Requests
 Feature requests are welcome and invited. Please open an issue on Github to make a request.
