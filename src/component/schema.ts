@@ -1,6 +1,13 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
-import { isObject, isTypedArrayConstructor, isValidName, TypedArray, TypedArrayConstructor } from "../utils/utils.js";
+import {
+  isObject,
+  isTypedArrayConstructor,
+  isValidName,
+  multipleOf4,
+  TypedArray,
+  TypedArrayConstructor,
+} from "../utils/utils.js";
 
 /** Object of single component properties */
 export type SchemaProps<T> = Record<keyof T, number | bigint | undefined>;
@@ -48,5 +55,5 @@ function byteSum(total: unknown, value: unknown): number {
 
 /** @returns the size in bytes that a component's storage requires for one entity */
 export function calculateSchemaSize<T>(schema: Schema<T>): number {
-  return Object.values(schema).reduce(byteSum, 0) as number;
+  return multipleOf4(Object.values(schema).reduce(byteSum, 0) as number);
 }
