@@ -5,7 +5,6 @@ import type { Bitfield } from "../bitfield.js";
 import { $_DIRTY } from "../constants.js";
 import type { Component } from "../component/component.js";
 import type { ComponentInstance } from "../component/instance.js";
-import type { Entity } from "../entity.js";
 import type { Query } from "./query.js";
 
 interface QueryInstanceSpec {
@@ -29,40 +28,6 @@ export interface QueryInstance extends Query {
   or: Readonly<Bitfield>;
   /** A bitfield for the NOT match criteria */
   not: Readonly<Bitfield>;
-}
-
-function flattenEntities(this: Entity[], { entities }: Archetype) {
-  this.push(...entities);
-}
-
-/**
- *
- * @param query
- * @returns
- * @todo cache entities per archetype and add a dirty flag to archetypes - only update entities from dirty archetypes
- */
-export function getEntitiesFromQuery(query: QueryInstance): Entity[] {
-  const res: Entity[] = [];
-  query.archetypes.forEach(flattenEntities, res);
-  return res;
-}
-
-/**
- *
- * @param query
- * @returns
- */
-export function getEnteredFromQuery(query: QueryInstance): Entity[] {
-  return [...query.archetypes].flatMap((archetype) => [...archetype.entered]);
-}
-
-/**
- *
- * @param query
- * @returns
- */
-export function getExitedFromQuery(query: QueryInstance): Entity[] {
-  return [...query.archetypes].flatMap((archetype) => [...archetype.exited]);
 }
 
 /**
