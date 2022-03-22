@@ -29,7 +29,7 @@ export interface World {
   /** Add multiple components to an entity at once by defining a prefab. */
   addComponentsToEntity: (
     ...components: Component<unknown>[]
-  ) => (entity: Entity, properties?: Record<string, SchemaProps<unknown>>) => ComponentInstance<unknown>[];
+  ) => (entity: Entity, properties?: Record<string, SchemaProps<unknown>>) => boolean;
   /**
    * Add a component to an entity.
    * @param component the component to add.

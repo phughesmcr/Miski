@@ -18,7 +18,7 @@ export interface ComponentManager {
   componentMap: Map<Component<unknown>, ComponentInstance<unknown>>;
   addComponentsToEntity: (
     ...components: Component<unknown>[]
-  ) => (entity: Entity, properties?: Record<string, SchemaProps<unknown>>) => ComponentInstance<unknown>[];
+  ) => (entity: Entity, properties?: Record<string, SchemaProps<unknown>>) => boolean;
   addComponentToEntity: <T>(component: Component<T>) => (entity: Entity, properties?: SchemaProps<T>) => boolean;
   getBuffer: () => ArrayBuffer;
   getEntityProperties: (entity: Entity) => Record<string, SchemaProps<unknown>>;
@@ -149,12 +149,12 @@ function _addMultiple(
   updateArchetype: (entity: Entity, component: ComponentInstance<unknown> | ComponentInstance<unknown>[]) => Archetype,
   instances: ComponentInstance<unknown>[],
 ) {
-  return (entity: Entity, properties: Record<string, SchemaProps<unknown>> = {}): ComponentInstance<unknown>[] => {
+  return (entity: Entity, properties: Record<string, SchemaProps<unknown>> = {}): boolean => {
     const add = adder(entity);
     const added = instances.map(add).filter((x) => x) as ComponentInstance<unknown>[];
     added.forEach((instance) => _setter(entity, instance, properties[instance.name]));
     updateArchetype(entity, added);
-    return added;
+    return added.length === instances.length;
   };
 }
 
