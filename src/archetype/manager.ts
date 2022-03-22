@@ -163,7 +163,11 @@ export function createArchetypeManager(spec: ArchetypeManagerSpec): ArchetypeMan
       const isCandidate = isArchetypeCandidate(archetype);
       // Refresh the Query's Archetype candidate registry
       queries.forEach((query) => {
-        if (isCandidate(query)) query.archetypes.add(archetype);
+        query[$_DIRTY] = false;
+        if (isCandidate(query)) {
+          query[$_DIRTY] = true;
+          query.archetypes.add(archetype);
+        }
       });
     });
   };
