@@ -21,18 +21,15 @@ export interface WorldSpec {
   components: Component<unknown>[];
 }
 
-interface WorldProto {
-  /** The Miski version used to create this World */
-  readonly version: string;
-}
-
-export interface World extends WorldProto {
+export interface World {
   /** The maximum number of entities allowed in the world */
   readonly capacity: number;
+  /** The Miski version used to create this World */
+  readonly version: string;
   /** Add multiple components to an entity at once by defining a prefab. */
   addComponentsToEntity: (
     ...components: Component<unknown>[]
-  ) => (entity: Entity, properties?: { [key: string]: SchemaProps<unknown> }) => ComponentInstance<unknown>[];
+  ) => (entity: Entity, properties?: Record<string, SchemaProps<unknown>>) => ComponentInstance<unknown>[];
   /**
    * Add a component to an entity.
    * @param component the component to add.
@@ -58,7 +55,7 @@ export interface World extends WorldProto {
    */
   getEntityArchetype: (entity: Entity) => Archetype | undefined;
   /** Get all component properties for a given entity */
-  getEntityProperties: (entity: Entity) => { [key: string]: SchemaProps<unknown> };
+  getEntityProperties: (entity: Entity) => Record<string, SchemaProps<unknown>>;
   /** @returns an array of entities which have entered a query's archetypes since last world.refresh() */
   getQueryEntered: (query: Query) => Entity[];
   /** @returns an array of entities which have left a query's archetypes since last world.refresh() */
@@ -102,11 +99,6 @@ export interface World extends WorldProto {
   withComponents: (...components: Component<unknown>[]) => (...entities: Entity[]) => Entity[];
 }
 
-/** World.prototype - Miski version data etc. */
-const WORLD_PROTO: Readonly<WorldProto> = Object.freeze({
-  version: VERSION,
-});
-
 function validateWorldSpec(spec: WorldSpec): Required<WorldSpec> {
   if (!spec) throw new SyntaxError("World creation requires a specification object.");
   const { capacity = DEFAULT_MAX_ENTITIES, components } = spec;
@@ -115,10 +107,23 @@ function validateWorldSpec(spec: WorldSpec): Required<WorldSpec> {
   return { capacity, components };
 }
 
+/**
+ * Create a new World object
+ * @param spec The world's specification object
+ * @param spec.capacity The maximum number of entities allowed in the world
+ * @param spec.components Components to instantiate in the world
+ * @returns a new, frozen World object
+ */
 export function createWorld(spec: WorldSpec): Readonly<World> {
   const { capacity, components } = validateWorldSpec(spec);
 
-  const { EMPTY_BITFIELD, createBitfieldFromIds, isBitOn, toggleBit } = bitfieldFactory(components.length);
+  // eslint-disable-next-line prettier/prettier
+  const {
+    EMPTY_BITFIELD,
+    createBitfieldFromIds,
+    isBitOn,
+    toggleBit,
+  } = bitfieldFactory(components.length);
 
   const {
     EMPTY_ARCHETYPE,
@@ -134,7 +139,14 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
     toggleBit,
   });
 
-  const { createEntity, destroyEntity, getVacancyCount, hasEntity, isValidEntity } = createEntityManager({
+  // eslint-disable-next-line prettier/prettier
+  const {
+    createEntity,
+    destroyEntity,
+    getVacancyCount,
+    hasEntity,
+    isValidEntity,
+  } = createEntityManager({
     capacity,
     EMPTY_ARCHETYPE,
     getEntityArchetype,
@@ -144,13 +156,13 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
 
   const {
     componentMap,
-    addComponentToEntity,
     addComponentsToEntity,
-    hasComponent,
-    removeComponentsFromEntity,
-    getEntityProperties,
+    addComponentToEntity,
     getBuffer,
+    getEntityProperties,
+    hasComponent,
     removeComponentFromEntity,
+    removeComponentsFromEntity,
     setBuffer,
     withComponents,
   } = createComponentManager({
@@ -162,12 +174,26 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
     updateArchetype,
   });
 
-  const { queryMap, getQueryEntered, getQueryExited, getQueryResult } = createQueryManager({
+  // eslint-disable-next-line prettier/prettier
+  const {
+    queryMap,
+    getQueryEntered,
+    getQueryExited,
+    getQueryResult,
+  } = createQueryManager({
     createBitfieldFromIds,
     componentMap,
   });
 
-  const { load, save } = createSerializationManager({ getBuffer, setBuffer, version: VERSION });
+  // eslint-disable-next-line prettier/prettier
+  const {
+    load,
+    save
+  } = createSerializationManager({
+    getBuffer,
+    setBuffer,
+    version: VERSION,
+  });
 
   const purgeCaches = () => {
     purgeArchetypesCaches();
@@ -180,29 +206,28 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
   };
   refresh();
 
-  return Object.freeze(
-    Object.assign(Object.create(WORLD_PROTO), {
-      capacity,
+  return Object.freeze({
+    capacity,
+    version: VERSION,
 
-      addComponentsToEntity,
-      addComponentToEntity,
-      createEntity,
-      destroyEntity,
-      getEntityArchetype,
-      getEntityProperties,
-      getQueryEntered,
-      getQueryExited,
-      getQueryResult,
-      getVacancyCount,
-      hasComponent,
-      hasEntity,
-      load,
-      purgeCaches,
-      refresh,
-      removeComponentFromEntity,
-      removeComponentsFromEntity,
-      save,
-      withComponents,
-    }) as World,
-  );
+    addComponentsToEntity,
+    addComponentToEntity,
+    createEntity,
+    destroyEntity,
+    getEntityArchetype,
+    getEntityProperties,
+    getQueryEntered,
+    getQueryExited,
+    getQueryResult,
+    getVacancyCount,
+    hasComponent,
+    hasEntity,
+    load,
+    purgeCaches,
+    refresh,
+    removeComponentFromEntity,
+    removeComponentsFromEntity,
+    save,
+    withComponents,
+  }) as World;
 }

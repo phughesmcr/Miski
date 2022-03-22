@@ -18,10 +18,10 @@ export interface ComponentManager {
   componentMap: Map<Component<unknown>, ComponentInstance<unknown>>;
   addComponentsToEntity: (
     ...components: Component<unknown>[]
-  ) => (entity: Entity, properties?: { [key: string]: SchemaProps<unknown> }) => ComponentInstance<unknown>[];
+  ) => (entity: Entity, properties?: Record<string, SchemaProps<unknown>>) => ComponentInstance<unknown>[];
   addComponentToEntity: <T>(component: Component<T>) => (entity: Entity, properties?: SchemaProps<T>) => boolean;
   getBuffer: () => ArrayBuffer;
-  getEntityProperties: (entity: Entity) => { [key: string]: SchemaProps<unknown> };
+  getEntityProperties: (entity: Entity) => Record<string, SchemaProps<unknown>>;
   hasComponent: <T>(component: Component<T>) => (entity: Entity) => boolean;
   removeComponentFromEntity: <T>(component: Component<T>) => (entity: Entity) => boolean;
   removeComponentsFromEntity: (...components: Component<unknown>[]) => (entity: Entity) => ComponentInstance<unknown>[];
@@ -149,7 +149,7 @@ function _addMultiple(
   updateArchetype: (entity: Entity, component: ComponentInstance<unknown> | ComponentInstance<unknown>[]) => Archetype,
   instances: ComponentInstance<unknown>[],
 ) {
-  return (entity: Entity, properties: { [key: string]: SchemaProps<unknown> } = {}): ComponentInstance<unknown>[] => {
+  return (entity: Entity, properties: Record<string, SchemaProps<unknown>> = {}): ComponentInstance<unknown>[] => {
     const add = adder(entity);
     const added = instances.map(add).filter((x) => x) as ComponentInstance<unknown>[];
     added.forEach((instance) => _setter(entity, instance, properties[instance.name]));
@@ -198,26 +198,23 @@ function _addComponentToEntity(spec: ComponentManagerSpec, fns: ComponentManager
 
 /** @private */
 function _getEntityProperties({ getEntityArchetype }: ComponentManagerSpec) {
-  return (entity: Entity): { [key: string]: SchemaProps<unknown> } => {
+  return (entity: Entity): Record<string, SchemaProps<unknown>> => {
     const archetype = getEntityArchetype(entity);
     if (!archetype) return {};
     const { components } = archetype;
-    return [...components].reduce(
-      <T>(res: { [key: string]: SchemaProps<unknown> }, component: ComponentInstance<T>) => {
-        const { name, schema } = component;
-        res[name] = {};
-        if (schema === null) {
-          res[name] = true;
-        } else {
-          res[name] = Object.keys(schema).reduce((prev, key) => {
-            prev[key as keyof T] = component[key as keyof T][entity];
-            return prev;
-          }, {} as SchemaProps<T>);
-        }
-        return res;
-      },
-      {},
-    );
+    return [...components].reduce(<T>(res: Record<string, SchemaProps<unknown>>, component: ComponentInstance<T>) => {
+      const { name, schema } = component;
+      res[name] = {};
+      if (schema === null) {
+        res[name] = true;
+      } else {
+        res[name] = Object.keys(schema).reduce((prev, key) => {
+          prev[key as keyof T] = component[key as keyof T][entity];
+          return prev;
+        }, {} as SchemaProps<T>);
+      }
+      return res;
+    }, {});
   };
 }
 

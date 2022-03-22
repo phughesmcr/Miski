@@ -22,7 +22,7 @@ export type ComponentBufferPartitioner = <T>(component: Component<T>) => SchemaS
 /** Calculate the total required storage space for all component schemas */
 function getComponentSize(capacity: number, components: Component<unknown>[]) {
   const componentSum = <T>(total: number, component: Component<T>): number => {
-    const { size = 0 } = component;
+    const { size } = component;
     if (!size || size <= 0) return total;
     return total + size * capacity;
   };
