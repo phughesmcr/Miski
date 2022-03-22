@@ -124,3 +124,5 @@ export function intersectBits(a = 0, b = 0): number {
 export function roundUpToMultipleOf(f: number): (n: number) => number {
   return (n: number) => Math.ceil(n / f) * f;
 }
+
+export const multipleOf4 = roundUpToMultipleOf(4);

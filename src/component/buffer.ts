@@ -2,7 +2,7 @@
 
 import { ONE_BYTE } from "../constants.js";
 import { sparseFacade } from "../utils/sparse-facade.js";
-import { roundUpToMultipleOf, TypedArrayConstructor } from "../utils/utils.js";
+import { multipleOf4, TypedArrayConstructor } from "../utils/utils.js";
 import type { Component } from "./component.js";
 import type { SchemaStorage } from "./schema.js";
 
@@ -40,9 +40,6 @@ export function createComponentBuffer(spec: ComponentBufferSpec): ArrayBuffer {
   const totalSize = getComponentSize(capacity, components);
   return new ArrayBuffer(ONE_BYTE * Math.ceil(totalSize / ONE_BYTE));
 }
-
-// Float32 array's offset must be aligned to a multiple of 4
-const alignBytes = roundUpToMultipleOf(4);
 
 /**
  * Creates a function which allows for the creation of component storage partitions.
