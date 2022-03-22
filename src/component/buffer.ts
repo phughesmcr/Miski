@@ -76,7 +76,7 @@ export function createComponentBufferPartitioner(spec: ComponentBufferPartitione
       const dense = new typedArray(buffer, bufferOffset + componentOffset, requiredSize);
       res[key] = maxEntities === null ? dense : sparseFacade(dense);
       if (initialValue !== 0) res[key].fill(initialValue as never);
-      componentOffset = alignBytes(componentOffset + typedArray.BYTES_PER_ELEMENT * requiredSize);
+      componentOffset = multipleOf4(componentOffset + typedArray.BYTES_PER_ELEMENT * requiredSize);
       return res;
     };
 
