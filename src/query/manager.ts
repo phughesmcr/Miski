@@ -24,8 +24,9 @@ export interface QueryManager {
   getQueryResult: (query: Query) => [ComponentRecord, () => Entity[]];
 }
 
-function flattenEntities(this: Entity[], { entities }: Archetype) {
-  this.push(...entities);
+function flattenEntities(this: Set<Entity>, { entities }: Archetype) {
+  // eslint-disable-next-line @typescript-eslint/unbound-method
+  entities.forEach(this.add, this);
 }
 
 /**
@@ -34,36 +35,37 @@ function flattenEntities(this: Entity[], { entities }: Archetype) {
  * @returns
  * @todo cache entities per archetype and add a dirty flag to archetypes - only update entities from dirty archetypes
  */
-export function getEntitiesFromQuery(query: QueryInstance, cache: Map<QueryInstance, Set<Entity>>): Entity[] {
+export function getEntitiesFromQuery(query: QueryInstance, cache: Map<QueryInstance, Set<Entity>>): Set<Entity> {
   const { archetypes } = query;
 
+  const cached = cache.get(query) as Set<Entity>;
+
   // if new query, do full sweep and create cache set
-  if (!cache.has(query)) {
-    const res: Entity[] = [];
+  if (!cached) {
+    const res: Set<Entity> = new Set();
     archetypes.forEach(flattenEntities, res);
-    cache.set(query, new Set(res));
+    cache.set(query, res);
     return res;
   }
 
-  const cached = cache.get(query) as Set<Entity>;
-  const adder = (e: Entity) => cached.add(e);
-  const remover = (e: Entity) => cached.delete(e);
-
   // if query has new Archetypes, do full sweep
-  if (query.isDirty) {
-    const res: Entity[] = [];
-    archetypes.forEach(flattenEntities, res);
-    res.forEach(adder);
-    return res;
+  if (query.isDirty === true) {
+    cached.clear();
+    archetypes.forEach(flattenEntities, cached);
+    return cached;
   }
 
   // else just update the dirty archetypes
   archetypes.forEach((archetype) => {
-    archetype.entered.forEach(adder);
-    archetype.exited.forEach(remover);
+    if (archetype.isDirty === true) {
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      archetype.entered.forEach(cached.add, cached);
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      archetype.exited.forEach(cached.delete, cached);
+    }
   });
 
-  return [...cached];
+  return cached;
 }
 
 /**
@@ -106,7 +108,7 @@ export function createQueryManager(spec: QueryManagerSpec): QueryManager {
   /** @returns a tuple of Entities and Components which match the Query criteria */
   const getQueryResult = (query: Query): [ComponentRecord, () => Entity[]] => {
     const instance = _getQueryInstance(query);
-    return [instance.components, () => getEntitiesFromQuery(instance, entityCache)];
+    return [instance.components, () => [...getEntitiesFromQuery(instance, entityCache)]];
   };
 
   /** Entities which have entered this query since last refresh */
