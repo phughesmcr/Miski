@@ -1,6 +1,5 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
-import type { Archetype } from "./archetype/archetype.js";
 import { createArchetypeManager } from "./archetype/manager.js";
 import { bitfieldFactory } from "./bitfield.js";
 import type { Component } from "./component/component.js";
@@ -48,12 +47,6 @@ export interface World {
    * @returns `true` if the entity was successfully destroyed.
    */
   destroyEntity: (entity: Entity) => boolean;
-  /**
-   * Get a given entity's archetype.
-   * @param entity the entity to expose.
-   * @returns the Archetype object or `undefined` if no archetype found.
-   */
-  getEntityArchetype: (entity: Entity) => Archetype | undefined;
   /** Get all component properties for a given entity */
   getEntityProperties: (entity: Entity) => Record<string, SchemaProps<unknown>>;
   /** @returns an array of entities which have entered a query's archetypes since last world.refresh() */
@@ -214,7 +207,6 @@ export function createWorld(spec: WorldSpec): Readonly<World> {
     addComponentToEntity,
     createEntity,
     destroyEntity,
-    getEntityArchetype,
     getEntityProperties,
     getQueryEntered,
     getQueryExited,

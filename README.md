@@ -96,7 +96,6 @@ createWorld: (spec: WorldSpec) => World;
   world.createEntity: () => Entity | undefined;
   world.destroyEntity: (entity: Entity) => boolean;
   world.hasEntity: (entity: Entity) => boolean;
-  world.getEntityArchetype: (entity: Entity) => Archetype | undefined;
   world.getEntityProperties: (entity: Entity) => Record<string, SchemaProps<unknown>>;
 
   🧩 World Component methods
