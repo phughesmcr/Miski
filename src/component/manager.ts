@@ -24,7 +24,7 @@ export interface ComponentManager {
   getEntityProperties: (entity: Entity) => Record<string, SchemaProps<unknown>>;
   hasComponent: <T>(component: Component<T>) => (entity: Entity) => boolean;
   removeComponentFromEntity: <T>(component: Component<T>) => (entity: Entity) => boolean;
-  removeComponentsFromEntity: (...components: Component<unknown>[]) => (entity: Entity) => ComponentInstance<unknown>[];
+  removeComponentsFromEntity: (...components: Component<unknown>[]) => (entity: Entity) => boolean;
   setBuffer: (source: ArrayBuffer) => ArrayBuffer;
   withComponents: (...components: Component<unknown>[]) => (...entities: Entity[]) => Entity[];
 }
@@ -269,7 +269,7 @@ function _removeComponentFromEntity(spec: ComponentManagerSpec, fns: ComponentMa
 function _removeMultiple(spec: ComponentManagerSpec) {
   const { getEntityArchetype, isBitOn, updateArchetype } = spec;
   return (instances: ComponentInstance<unknown>[]) => {
-    return (entity: Entity): ComponentInstance<unknown>[] => {
+    return (entity: Entity): boolean => {
       const archetype = getEntityArchetype(entity);
       const _getStatus = <T>(instance: ComponentInstance<T>): ComponentInstance<T> | undefined => {
         if (archetype && !isBitOn(instance.id, archetype.bitfield)) return;
@@ -279,7 +279,7 @@ function _removeMultiple(spec: ComponentManagerSpec) {
       };
       const removed = instances.map(_getStatus).filter((x) => x) as ComponentInstance<unknown>[];
       updateArchetype(entity, removed);
-      return removed;
+      return removed.length === instances.length;
     };
   };
 }

@@ -3,7 +3,7 @@
 import { createArchetypeManager } from "./archetype/manager.js";
 import { bitfieldFactory } from "./bitfield.js";
 import type { Component } from "./component/component.js";
-import { ComponentInstance, refreshComponentInstance } from "./component/instance.js";
+import { refreshComponentInstance } from "./component/instance.js";
 import { ComponentRecord, createComponentManager } from "./component/manager.js";
 import type { SchemaProps } from "./component/schema.js";
 import { DEFAULT_MAX_ENTITIES, VERSION } from "./constants.js";
@@ -85,7 +85,7 @@ export interface World {
    */
   removeComponentFromEntity: <T>(component: Component<T>) => (entity: Entity) => boolean;
   /** Remove multiple components from an entity at once. */
-  removeComponentsFromEntity: (...components: Component<unknown>[]) => (entity: Entity) => ComponentInstance<unknown>[];
+  removeComponentsFromEntity: (...components: Component<unknown>[]) => (entity: Entity) => boolean;
   /** Serialize various aspects of the world's data */
   save: () => Readonly<MiskiData>;
   /** Reduces an array of entities to just those who have all the desired components */
