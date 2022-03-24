@@ -2,7 +2,6 @@
 
 import type { Bitfield } from "../bitfield.js";
 import type { ComponentInstance } from "../component/instance.js";
-import { $_DIRTY } from "../constants.js";
 import type { Entity } from "../entity.js";
 import type { QueryInstance } from "../query/instance.js";
 
@@ -15,8 +14,6 @@ export interface ArchetypeSpec {
 
 /** Archetypes are unique groupings of entities by components */
 export interface Archetype {
-  /** @private Provides a getter and setter for the `isDirty` flag */
-  [$_DIRTY]: boolean;
   /** The Archetype's Component Bitfield */
   bitfield: Bitfield;
   /** */
@@ -47,18 +44,8 @@ function validateSpec(spec: ArchetypeSpec): Required<ArchetypeSpec> {
 export function createArchetype(spec: ArchetypeSpec): Archetype {
   const { bitfield, id } = validateSpec(spec);
 
-  let isDirty = true;
-
   return {
-    get [$_DIRTY](): boolean {
-      return isDirty;
-    },
-    set [$_DIRTY](dirty: boolean) {
-      isDirty = !!dirty;
-    },
-    get isDirty(): boolean {
-      return isDirty;
-    },
+    isDirty: true,
     bitfield,
     candidateCache: new Map() as Map<QueryInstance, boolean>,
     cloneCache: new Map() as Map<ComponentInstance<unknown>, Archetype>,

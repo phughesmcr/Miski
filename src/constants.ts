@@ -58,6 +58,3 @@ export const $_CHANGED = Symbol("changed");
 
 /** Symbol for use as a key for the `count` flag getter and setter */
 export const $_COUNT = Symbol("count");
-
-/** Symbol for use as a key for the `isDirty` flag getter and setter */
-export const $_DIRTY = Symbol("dirty");

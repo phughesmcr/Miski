@@ -2,7 +2,6 @@
 
 import type { Archetype } from "../archetype/archetype.js";
 import type { Bitfield } from "../bitfield.js";
-import { $_DIRTY } from "../constants.js";
 import type { Component } from "../component/component.js";
 import type { ComponentInstance } from "../component/instance.js";
 import type { Query } from "./query.js";
@@ -14,8 +13,6 @@ interface QueryInstanceSpec {
 }
 
 export interface QueryInstance extends Query {
-  /** @private Provides a getter and setter for the `isDirty` flag */
-  [$_DIRTY]: boolean;
   /** A bitfield for the AND match criteria */
   and: Readonly<Bitfield>;
   /** */
@@ -79,18 +76,8 @@ export function createQueryInstance(spec: QueryInstanceSpec): QueryInstance {
   /** */
   const archetypes: Set<Archetype> = new Set();
 
-  let isDirty = true;
-
   return Object.assign(Object.create(query), {
-    get [$_DIRTY](): boolean {
-      return isDirty;
-    },
-    set [$_DIRTY](dirty: boolean) {
-      isDirty = !!dirty;
-    },
-    get isDirty(): boolean {
-      return isDirty;
-    },
+    isDirty: true,
     archetypes,
     and,
     components,

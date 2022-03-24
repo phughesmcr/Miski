@@ -2,7 +2,6 @@
 
 import type { Bitfield } from "../bitfield.js";
 import type { ComponentInstance } from "../component/instance.js";
-import { $_DIRTY } from "../constants.js";
 import type { Entity } from "../entity.js";
 import type { QueryInstance } from "../query/instance.js";
 import type { Query } from "../query/query.js";
@@ -32,7 +31,7 @@ function addEntityToArchetype(entity: Entity, archetype: Archetype): Archetype {
   const { entities, entered } = archetype;
   entities.add(entity);
   entered.add(entity);
-  archetype[$_DIRTY] = true;
+  archetype.isDirty = true;
   return archetype;
 }
 
@@ -70,10 +69,11 @@ function purgeArchetypeCaches(archetype: Archetype): Archetype {
 
 /** Clear the entered/exited list and set `isDirty` to `false` */
 function refreshArchetype(archetype: Archetype): Archetype {
+  if (archetype.isDirty === false) return archetype;
   const { entered, exited } = archetype;
   entered.clear();
   exited.clear();
-  archetype[$_DIRTY] = false;
+  archetype.isDirty = false;
   return archetype;
 }
 
@@ -82,7 +82,7 @@ function _removeEntityFromArchetype(entity: Entity, archetype: Archetype): Arche
   const { entities, exited } = archetype;
   entities.delete(entity);
   exited.add(entity);
-  archetype[$_DIRTY] = true;
+  archetype.isDirty = true;
   return archetype;
 }
 
@@ -158,14 +158,15 @@ export function createArchetypeManager(spec: ArchetypeManagerSpec): ArchetypeMan
   const purgeArchetypesCaches = () => archetypeMap.forEach(purgeArchetypeCaches);
 
   const refreshArchetypes = (queries: Map<Query, QueryInstance>) => {
+    queries.forEach((query) => {
+      query.isDirty = false;
+    });
     archetypeMap.forEach((archetype) => {
       refreshArchetype(archetype);
       const isCandidate = isArchetypeCandidate(archetype);
-      // Refresh the Query's Archetype candidate registry
       queries.forEach((query) => {
-        query[$_DIRTY] = false;
-        if (isCandidate(query)) {
-          query[$_DIRTY] = true;
+        if (!query.archetypes.has(archetype) && isCandidate(query)) {
+          query.isDirty = true;
           query.archetypes.add(archetype);
         }
       });
