@@ -36,7 +36,7 @@
     "eslint-plugin-prettier": "^4.0.0",
     "eslint-plugin-sonarjs": "^0.12.0",
     "esm": "^3.2.25",
-    "gh-pages": "^3.2.3",
+    "gh-pages": "^4.0.0",
     "mocha": "^9.2.2",
     "prettier": "^2.6.0",
     "prettier-eslint": "^13.0.0",
