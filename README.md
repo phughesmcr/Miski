@@ -38,7 +38,7 @@ Miski's purpose is to provide a stable, developer-friendly ECS architecture for 
 * To provide a clean, readable, self-documenting, open-source codebase
 
 ### Not Goals
-Because Miski is designed to be used inside your own projects, we let you configure bundling and performance tuning to suit your needs, therefore the following are not goals of this project:
+Because Miski is designed to be used inside your own projects, we let you configure bundling and performance tuning to suit your needs, therefore the following are not priorities of this project:
 * To be the fastest or smallest ECS on the web
 * To provide polyfills, workarounds, or older browser support for modern ECMAScript features
 
@@ -99,12 +99,12 @@ createWorld: (spec: WorldSpec) => World;
   world.getEntityProperties: (entity: Entity) => Record<string, SchemaProps<unknown>>;
 
   🧩 World Component methods
-  world.addComponentToEntity: <T>(component: Component<T>) => (entity: Entity, props?: SchemaProps<T>) => boolean;
-  world.addComponentsToEntity: (...components: Component<unknown>) => (entity: Entity, props?: Record<string, SchemaProps<unknown>>) => boolean;
-  world.removeComponentFromEntity: <T>(component: Component<T>) => (entity: Entity) => boolean;
-  world.removeComponentsFromEntity: (...components: Component<unknown>) => (entity: Entity) => boolean[];
-  world.hasComponent: <T>(component: Component<T>) => (entity: Entity) => boolean;
-  world.withComponents: (...components: Component<unknown>[]) => (...entities: Entity) => Entity[];
+  world.addComponentToEntity: <T extends Schema<T>>(component: Component<T>) => (entity: Entity, props?: SchemaProps<T>) => boolean;
+  world.addComponentsToEntity: (...components: Component<any>) => (entity: Entity, props?: Record<string, SchemaProps<unknown>>) => boolean;
+  world.removeComponentFromEntity: <T extends Schema<T>>(component: Component<T>) => (entity: Entity) => boolean;
+  world.removeComponentsFromEntity: (...components: Component<any>) => (entity: Entity) => boolean[];
+  world.hasComponent: <T extends Schema<T>>(component: Component<T>) => (entity: Entity) => boolean;
+  world.withComponents: (...components: Component<any>[]) => (...entities: Entity) => Entity[];
 
   🔎 World Query methods
   world.getQueryEntered: (query: Query) => Entity[];
