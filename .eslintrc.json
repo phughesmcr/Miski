@@ -31,6 +31,8 @@
   "rules": {
     "no-explicit-type-exports/no-explicit-type-exports": 2,
     "prettier/prettier": "error",
-    "sonarjs/prefer-single-boolean-return": 0
+    "sonarjs/prefer-single-boolean-return": 0,
+    "no-use-before-define": "off",
+    "@typescript-eslint/no-use-before-define": ["error"]
   }
 }
