@@ -51,17 +51,69 @@
       border-radius: 0 0 3px 0;
       font-weight: 600;
     }
+    .buttons {
+      margin: 10px 0;
+      background-color: transparent !important;
+      backdrop-filter: none;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .buttons.row {
+      flex-direction: row;
+    }
+    .buttons label {
+      display: inline;
+    }
+    .buttons input {
+      display: inline;
+    }
+    .buttons p {
+      margin: 0 0 0.5em 0;
+    }
+    .buttons button {
+      height: 30px;
+      margin-bottom: 10px;
+      cursor: pointer;
+    }
+    .buttons .grid {
+      background-color: transparent !important;
+      backdrop-filter: none;
+      display: grid;
+      grid-template-columns: 50% 50%;
+      grid-row: auto auto;
+      grid-column-gap: 5px;
+      grid-row-gap: 5px;
+      margin: 0;
+      padding: 0;
+    }
+    .mt-0 {
+      margin-top: 0;
+    }
   </style>
 </head>
 <body>
   <main>
     <section>
       <div class="top-left">
-        <p style="margin-top: 0;">FPS: <span id="sFPS">??</span></p>
-        <p>Entities: 600</p>
-        <p>Resolution: <span id="sResX">1280</span> x <span id="sResY">720</span></p>
-        <label for="rSpeed">Speed:</label>
-        <input type="range" min="0" max="200" value="30" step="10" id="rSpeed">
+        <p class="mt-0">Resolution: <span id="sResX">??</span> x <span id="sResY">??</span></p>
+        <div class="buttons">
+          <p>Entities: <span id="sEnts">??</span></p>
+          <div class="grid">
+            <button id="add">+10</button>
+            <button id="addBig">+100</button>
+            <button id="subtract">-10</button>
+            <button id="subtractBig">-100</button>
+          </div>
+        </div>
+        <div class="buttons row">
+          <label for="rSpeed">Speed:</label>
+          <input type="range" min="0" max="2" value="1" step="0.1" id="rSpeed">
+        </div>
+        <div class="buttons row">
+          <label for="bRender">Enable renderer:</label>
+          <input type="checkbox" name="bRender" id="bRender" checked>
+        </div>
       </div>
     </section>
     <canvas width="640" height="480"></canvas>
