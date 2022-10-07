@@ -1,126 +1,140 @@
-/* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
+import { Archetype } from "../archetype/archetype";
+import { Component } from "../component/component";
+import { ComponentInstance } from "../component/instance";
+import { ComponentManager, ComponentRecord } from "../component/manager";
+import { Entity } from "../entity";
+import { createQueryInstance, QueryInstance } from "./instance";
+import { Query } from "./query";
 
-import { Archetype } from "../archetype/archetype.js";
-import type { Bitfield } from "../bitfield.js";
-import type { Component } from "../component/component.js";
-import type { ComponentInstance } from "../component/instance.js";
-import type { ComponentRecord } from "../component/manager.js";
-import type { Entity } from "../entity.js";
-import { createQueryInstance, QueryInstance } from "./instance.js";
-import { isValidQuery, Query } from "./query.js";
+/** @todo find a nicer way of doing this */
+// NOTE: The following functions are used to avoid flatmap which incurs a GC penalty
 
-interface QueryManagerSpec {
-  componentMap: Map<Component<unknown>, ComponentInstance<unknown>>;
-  createBitfieldFromIds: (components: ComponentInstance<unknown>[]) => Bitfield;
+function _flattenEntered(this: Set<Entity>, { entered }: Archetype) {
+  // eslint-disable-next-line @typescript-eslint/unbound-method
+  entered.forEach(this.add, this);
 }
 
-export interface QueryManager {
-  queryMap: Map<Query, QueryInstance>;
-  /** Entities which have entered this query since last refresh */
-  getQueryEntered: (query: Query) => Entity[];
-  /** Entities which have exited this query since last refresh */
-  getQueryExited: (query: Query) => Entity[];
-  /** @returns a tuple of Components and Entities which match the Query criteria */
-  getQueryResult: (query: Query) => [ComponentRecord, () => Entity[]];
-}
-
-function flattenEntities(this: Set<Entity>, { entities }: Archetype) {
+function _flattenEntities(this: Set<Entity>, { entities }: Archetype) {
   // eslint-disable-next-line @typescript-eslint/unbound-method
   entities.forEach(this.add, this);
 }
 
-/**
- *
- * @param query
- * @returns
- * @todo cache entities per archetype and add a dirty flag to archetypes - only update entities from dirty archetypes
- */
-export function getEntitiesFromQuery(query: QueryInstance, cache: Map<QueryInstance, Set<Entity>>): Set<Entity> {
-  const { archetypes } = query;
-
-  const cached = cache.get(query) as Set<Entity>;
-
-  // if new query, do full sweep and create cache set
-  if (!cached) {
-    const res: Set<Entity> = new Set();
-    archetypes.forEach(flattenEntities, res);
-    cache.set(query, res);
-    return res;
-  }
-
-  // if query has new Archetypes, do full sweep
-  if (query.isDirty === true) {
-    cached.clear();
-    archetypes.forEach(flattenEntities, cached);
-    return cached;
-  }
-
-  // else just update the dirty archetypes
-  archetypes.forEach((archetype) => {
-    if (archetype.isDirty === true) {
-      // eslint-disable-next-line @typescript-eslint/unbound-method
-      archetype.entered.forEach(cached.add, cached);
-      // eslint-disable-next-line @typescript-eslint/unbound-method
-      archetype.exited.forEach(cached.delete, cached);
-    }
-  });
-
-  return cached;
+function _flattenExited(this: Set<Entity>, { exited }: Archetype) {
+  // eslint-disable-next-line @typescript-eslint/unbound-method
+  exited.forEach(this.add, this);
 }
 
-/**
- *
- * @param query
- * @returns
- */
-export function getEnteredFromQuery(query: QueryInstance): Entity[] {
-  return [...query.archetypes].flatMap((archetype) => [...archetype.entered]);
+function refreshQuery(query: QueryInstance): QueryInstance {
+  query.isDirty = false;
+  return query;
 }
 
-/**
- *
- * @param query
- * @returns
- */
-export function getExitedFromQuery(query: QueryInstance): Entity[] {
-  return [...query.archetypes].flatMap((archetype) => [...archetype.exited]);
+export interface QueryManagerSpec {
+  componentManager: ComponentManager;
 }
 
-export function createQueryManager(spec: QueryManagerSpec): QueryManager {
-  const { createBitfieldFromIds, componentMap } = spec;
-
+export class QueryManager {
+  /** The components, and their instances, of a given world */
+  componentMap: Map<Component<any>, ComponentInstance<any>>;
+  /** Cache for Entities which match each QueryInstance */
+  entityCache: Map<QueryInstance, Set<Entity>>;
   /** Map of registered Queries and their instances */
-  const queryMap: Map<Query, QueryInstance> = new Map();
+  queryMap: Map<Query, QueryInstance>;
 
-  const entityCache: Map<QueryInstance, Set<Entity>> = new Map();
+  /**
+   * Creates a new QueryManager
+   *
+   * QueryManagers are responsible for:
+   *  - registering and instantiating queries
+   *  - getting components and entities from query instances
+   *
+   * @param spec the manager's specification object
+   */
+  constructor(spec: QueryManagerSpec) {
+    const { componentManager } = spec;
+    this.componentMap = componentManager.componentMap;
+    this.entityCache = new Map();
+    this.queryMap = new Map();
+  }
+
+  /** @returns the components associated with a query */
+  getComponentsFromQuery(query: Query): ComponentRecord {
+    return this.getQueryInstance(query).components;
+  }
+
+  /** @todo creates new array & set every time - wasteful */
+  /** @returns an array of Entities which have entered this query since last refresh */
+  getEnteredFromQuery(query: Query): Entity[] {
+    const instance = this.getQueryInstance(query);
+    const res: Set<Entity> = new Set();
+    instance.archetypes.forEach(_flattenEntered, res);
+    return [...res];
+  }
+
+  /** @returns an array of Entities which match the query */
+  getEntitiesFromQuery(query: Query, arr: Entity[] = []): Entity[] {
+    arr.length = 0;
+
+    const instance = this.getQueryInstance(query);
+
+    const { archetypes, isDirty } = instance;
+
+    const cached = this.entityCache.get(instance) as Set<Entity>;
+
+    // if new query, do full sweep and create cache set
+    if (!cached) {
+      const res: Set<Entity> = new Set();
+      archetypes.forEach(_flattenEntities, res);
+      this.entityCache.set(instance, res);
+      return arr.concat(...res);
+    }
+
+    // if query has new Archetypes, clear cache and do full sweep
+    if (isDirty === true) {
+      cached.clear();
+      archetypes.forEach(_flattenEntities, cached);
+      return arr.concat(...cached);
+    }
+
+    // else just update the dirty archetypes
+    archetypes.forEach((archetype) => {
+      if (archetype.isDirty === true) {
+        // eslint-disable-next-line @typescript-eslint/unbound-method
+        archetype.entered.forEach(cached.add, cached);
+        // eslint-disable-next-line @typescript-eslint/unbound-method
+        archetype.exited.forEach(cached.delete, cached);
+      }
+    });
+
+    return arr.concat(...cached);
+  }
+
+  /** @todo creates new array & set every time - wasteful */
+  /** @returns an array of Entities which have been removed from this query since last refresh */
+  getExitedFromQuery(query: Query): Entity[] {
+    const instance = this.getQueryInstance(query);
+    const res: Set<Entity> = new Set();
+    instance.archetypes.forEach(_flattenExited, res);
+    return [...res];
+  }
+
+  /** @returns an instantiated Query */
+  getQueryInstance(query: Query): QueryInstance {
+    return this.registerQuery(query);
+  }
 
   /** Register a Query in the world, producing a QueryInstance */
-  const registerQuery = (query: Query): QueryInstance => {
-    if (!isValidQuery(query)) throw new Error("Object is not a valid query.");
-    const instance = createQueryInstance({ createBitfieldFromIds, componentMap, query });
-    queryMap.set(query, instance);
+  registerQuery(query: Query): QueryInstance {
+    if (!(query instanceof Query)) throw new Error("Object is not a valid query.");
+    const cached = this.queryMap.get(query);
+    if (cached) return cached;
+    const instance = createQueryInstance({ componentMap: this.componentMap, query });
+    this.queryMap.set(query, instance);
     return instance;
-  };
+  }
 
-  /** @private utility function to get QueryInstance from Query in the world */
-  const _getQueryInstance = (query: Query): QueryInstance => queryMap.get(query) ?? registerQuery(query);
-
-  /** @returns a tuple of Entities and Components which match the Query criteria */
-  const getQueryResult = (query: Query): [ComponentRecord, () => Entity[]] => {
-    const instance = _getQueryInstance(query);
-    return [instance.components, () => [...getEntitiesFromQuery(instance, entityCache)]];
-  };
-
-  /** Entities which have entered this query since last refresh */
-  const getQueryEntered = (query: Query): Entity[] => getEnteredFromQuery(_getQueryInstance(query));
-
-  /** Entities which have exited this query since last refresh */
-  const getQueryExited = (query: Query): Entity[] => getExitedFromQuery(_getQueryInstance(query));
-
-  return {
-    queryMap,
-    getQueryEntered,
-    getQueryExited,
-    getQueryResult,
-  };
+  /** Perform routine maintenance on each registered query */
+  refreshQueries() {
+    this.queryMap.forEach(refreshQuery);
+  }
 }

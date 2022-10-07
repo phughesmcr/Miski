@@ -18,7 +18,10 @@ export interface ComponentSpec<T> {
   schema?: Schema<T>;
 }
 
-export interface Component<T> {
+/** @returns true if `n` is a Uint32 > 0 */
+const isPositiveInt = (n: number) => isUint32(n) && n > 0;
+
+export class Component<T extends Schema<T>> {
   /** `true` if the component has no schema */
   isTag: boolean;
   /** The maximum number of entities able to equip this component per world. */
@@ -29,34 +32,25 @@ export interface Component<T> {
   schema: Readonly<Schema<T>> | null;
   /** The storage requirements of the schema in bytes for a single entity */
   size: number;
-}
 
-/**
- * Define a new component.
- * @param spec the component's specification.
- * @param spec.name the component's string identifier.
- * @param spec.schema the component's optional schema object.
- * @returns A valid Component object - a reusable definitions for the creation of ComponentInstances
- */
-export function createComponent<T extends Schema<T>>(spec: ComponentSpec<T>): Readonly<Component<T>> {
-  if (!spec) {
-    throw new SyntaxError("createComponent: a specification object is required.");
+  /**
+   * Define a new component.
+   * @param spec the component's specification.
+   * @param spec.name the component's string identifier.
+   * @param spec.schema the component's optional schema object.
+   * @returns A valid Component object - a reusable definitions for the creation of ComponentInstances
+   */
+  constructor(spec: ComponentSpec<T>) {
+    if (!spec) throw new SyntaxError("A specification object is required.");
+    const { maxEntities, name, schema } = spec;
+    if (maxEntities && !isPositiveInt(maxEntities)) throw new SyntaxError("spec.maxEntities must be a Uint32 > 0.");
+    if (!isValidName(name)) throw new SyntaxError("spec.name is invalid.");
+    if (schema && !isValidSchema(schema)) throw new SyntaxError("spec.schema is invalid.");
+    this.isTag = Boolean(schema);
+    this.maxEntities = maxEntities ?? null;
+    this.name = name;
+    this.schema = schema ? Object.freeze({ ...schema }) : null;
+    this.size = schema ? calculateSchemaSize(schema) : 0;
+    Object.freeze(this);
   }
-  const { maxEntities, name, schema } = spec;
-  if (maxEntities && (!isUint32(maxEntities) || maxEntities === 0)) {
-    throw new SyntaxError("createComponent: maxEntities must be a Uint32 > 0.");
-  }
-  if (!isValidName(name)) {
-    throw new SyntaxError("Component name is invalid.");
-  }
-  if (schema && !isValidSchema(schema)) {
-    throw new SyntaxError("createComponent: component schema is invalid.");
-  }
-  return Object.freeze({
-    maxEntities: maxEntities ?? null,
-    isTag: Boolean(schema),
-    name,
-    schema: schema ? Object.freeze({ ...schema }) : null,
-    size: schema ? calculateSchemaSize(schema) : 0,
-  });
 }

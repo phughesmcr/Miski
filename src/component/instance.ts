@@ -5,9 +5,9 @@ import type { Entity } from "../entity.js";
 import { isObject, isUint32, TypedArray } from "../utils/utils.js";
 import type { Component } from "./component.js";
 import { StorageProxy, storageProxy } from "./proxy.js";
-import type { SchemaStorage } from "./schema.js";
+import type { Schema, SchemaStorage } from "./schema.js";
 
-interface ComponentInstanceSpec<T> {
+interface ComponentInstanceSpec<T extends Schema<T>> {
   /** The component to instantiate */
   component: Component<T>;
   /** The component instance's identifier */
@@ -16,11 +16,13 @@ interface ComponentInstanceSpec<T> {
   storage?: SchemaStorage<T> | undefined;
 }
 
-export type ComponentInstance<T> = Component<T> &
+export type ComponentInstance<T extends Schema<T>> = Component<T> &
   Record<keyof T, TypedArray> & {
+    /** @internal */
     [$_CHANGED]: Set<Entity>;
+    /** @internal */
     [$_COUNT]: number;
-    /** Entities who's properties have been changed via .proxy since last refresh */
+    /** Entities who's properties have been changed via this.proxy since last refresh */
     changed: IterableIterator<Entity>;
     /** The number of entities which have this component instance */
     count: number;
@@ -30,7 +32,7 @@ export type ComponentInstance<T> = Component<T> &
     proxy: StorageProxy<T>;
   };
 
-export function refreshComponentInstance<T>(instance: ComponentInstance<T>): ComponentInstance<T> {
+export function refreshComponentInstance<T extends Schema<T>>(instance: ComponentInstance<T>): ComponentInstance<T> {
   instance[$_CHANGED].clear();
   return instance;
 }
@@ -43,7 +45,9 @@ export function refreshComponentInstance<T>(instance: ComponentInstance<T>): Com
  * @param spec.id The component instance's identifier
  * @param spec.storage The component's TypedArray storage object
  */
-export function createComponentInstance<T>(spec: ComponentInstanceSpec<T>): Readonly<ComponentInstance<T>> {
+export function createComponentInstance<T extends Schema<T>>(
+  spec: ComponentInstanceSpec<T>,
+): Readonly<ComponentInstance<T>> {
   const { component, id, storage } = spec;
   if (!component) throw new Error("Component instantiation requires as component!");
   if (!isUint32(id)) throw new SyntaxError("Component ID is invalid.");
@@ -58,7 +62,7 @@ export function createComponentInstance<T>(spec: ComponentInstanceSpec<T>): Read
     [$_CHANGED]: {
       value: changed,
       configurable: false,
-      enumerable: true,
+      enumerable: false,
       writable: false,
     },
     [$_COUNT]: {
@@ -68,20 +72,18 @@ export function createComponentInstance<T>(spec: ComponentInstanceSpec<T>): Read
       set(value: number) {
         entityCount = value;
       },
+      enumerable: false,
     },
     changed: {
       get() {
         return changed.values();
       },
-      configurable: false,
-      enumerable: true,
     },
     count: {
-      get() {
-        return entityCount;
-      },
+      value: entityCount,
       configurable: false,
       enumerable: true,
+      writable: false,
     },
     id: {
       value: id,

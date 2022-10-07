@@ -1,8 +1,7 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
-import { EMPTY_SYMBOL } from "../constants.js";
-import type { Entity } from "../entity.js";
 import { createAvailabilityArray, TypedArray } from "./utils.js";
+import type { Entity } from "../entity.js";
 
 /**
  * @param dense the typed array to apply the facade to
@@ -16,10 +15,10 @@ export function sparseFacade<T extends TypedArray>(dense: T): T {
   const available = createAvailabilityArray(dense.length);
 
   /** @returns the entity's value from the dense array or undefined if non-existant */
-  const getter = (entity: Entity) => dense[sparse.get(entity) ?? (EMPTY_SYMBOL as unknown as number)];
+  const _get = (entity: Entity) => dense[sparse.get(entity) ?? -1];
 
   /** @returns `false` if dense array is full, `true` if value set successfully */
-  const set = (entity: Entity, value: T[0]): boolean => {
+  const _set = (entity: Entity, value: T[0]): boolean => {
     const idx = sparse.get(entity) ?? available.pop();
     if (idx === undefined) return false;
     dense[idx] = value;
@@ -28,7 +27,7 @@ export function sparseFacade<T extends TypedArray>(dense: T): T {
   };
 
   /** @returns `false` if the entity isn't already stored, `true` if deleted successfully */
-  const remove = (entity: Entity): boolean => {
+  const _deleteProperty = (entity: Entity): boolean => {
     const idx = sparse.get(entity);
     if (idx === undefined) return false;
     dense[idx] = 0;
@@ -38,8 +37,8 @@ export function sparseFacade<T extends TypedArray>(dense: T): T {
   };
 
   return new Proxy(dense, {
-    get: (_target: T, key: string | symbol) => getter(key as unknown as Entity),
-    set: (_target: T, key: string | symbol, value: T[0]) => set(key as unknown as Entity, value),
-    deleteProperty: (_target: T, key: string | symbol) => remove(key as unknown as Entity),
+    get: (_target: T, key: string | symbol) => _get(key as unknown as Entity),
+    set: (_target: T, key: string | symbol, value: T[0]) => _set(key as unknown as Entity, value),
+    deleteProperty: (_target: T, key: string | symbol) => _deleteProperty(key as unknown as Entity),
   });
 }

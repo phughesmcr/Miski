@@ -50,9 +50,6 @@ export const ONE_BYTE = 8;
 /** A frozen empty array to avoid multiple object creation at certain points */
 export const EMPTY_ARRAY = Object.freeze([]);
 
-/** A symbol for use where returning undefined from an array etc. is desirable */
-export const EMPTY_SYMBOL = Symbol("EMPTY");
-
 /** Symbol for use as a key for the `changed` flag getter and setter */
 export const $_CHANGED = Symbol("changed");
 
