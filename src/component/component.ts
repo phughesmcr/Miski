@@ -1,13 +1,11 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
-import { isUint32, isValidName } from "../utils/utils.js";
+import { isPositiveInt, isValidName } from "../utils/utils.js";
 import { calculateSchemaSize, isValidSchema, Schema } from "./schema.js";
 
 export interface ComponentSpec<T> {
   /**
    * The maximum number of entities able to equip this component per world.
-   *
-   * Defaults to all entities.
    *
    * __Warning__: use this only where memory consumption is a concern, performance will be worse.
    */
@@ -18,20 +16,17 @@ export interface ComponentSpec<T> {
   schema?: Schema<T>;
 }
 
-/** @returns true if `n` is a Uint32 > 0 */
-const isPositiveInt = (n: number) => isUint32(n) && n > 0;
-
 export class Component<T extends Schema<T>> {
   /** `true` if the component has no schema */
-  isTag: boolean;
+  readonly isTag: boolean;
   /** The maximum number of entities able to equip this component per world. */
-  maxEntities: number | null;
+  readonly maxEntities: number | null;
   /** The component's label */
-  name: string;
+  readonly name: string;
   /** The component's property definitions or `null` if component is a tag */
-  schema: Readonly<Schema<T>> | null;
+  readonly schema: Readonly<Schema<T>> | null;
   /** The storage requirements of the schema in bytes for a single entity */
-  size: number;
+  readonly size: number;
 
   /**
    * Define a new component.
@@ -42,11 +37,11 @@ export class Component<T extends Schema<T>> {
    */
   constructor(spec: ComponentSpec<T>) {
     if (!spec) throw new SyntaxError("A specification object is required.");
-    const { maxEntities, name, schema } = spec;
+    const { maxEntities = null, name, schema = null } = spec;
     if (maxEntities && !isPositiveInt(maxEntities)) throw new SyntaxError("spec.maxEntities must be a Uint32 > 0.");
     if (!isValidName(name)) throw new SyntaxError("spec.name is invalid.");
-    if (schema && !isValidSchema(schema)) throw new SyntaxError("spec.schema is invalid.");
-    this.isTag = Boolean(schema);
+    if (!isValidSchema(schema)) throw new SyntaxError("spec.schema is invalid.");
+    this.isTag = !schema;
     this.maxEntities = maxEntities ?? null;
     this.name = name;
     this.schema = schema ? Object.freeze({ ...schema }) : null;

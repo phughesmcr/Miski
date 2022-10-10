@@ -4,7 +4,7 @@
 export const VERSION: string = "__VERSION__"; // __VERSION__ is replaced by rollup
 
 /** Default maximum entities value */
-export const DEFAULT_MAX_ENTITIES = 1_000_000;
+export const DEFAULT_MAX_ENTITIES = 100_000;
 
 /** Maximum 32-bit integer (2^32 - 1) */
 export const MAX_UINT32 = 4_294_967_295;

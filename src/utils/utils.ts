@@ -7,6 +7,11 @@ export function isUint32(n: number): n is number {
   return !isNaN(n) && n >= 0 && n <= MAX_UINT32;
 }
 
+/** @returns true if `n` is a Uint32 > 0 */
+export function isPositiveInt(n: number) {
+  return isUint32(n) && n > 0;
+}
+
 /** All the various kinds of typed arrays */
 export type TypedArray =
   | Int8Array
