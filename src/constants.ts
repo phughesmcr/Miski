@@ -1,9 +1,7 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
-import * as pkg from "../package.json";
-
 /** Miski version */
-export const VERSION: string = pkg.version;
+export const VERSION: string = "__VERSION__"; // __VERSION__ is replaced by rollup
 
 /** Default maximum entities value */
 export const DEFAULT_MAX_ENTITIES = 1_000_000;

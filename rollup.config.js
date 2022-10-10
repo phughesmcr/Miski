@@ -7,6 +7,7 @@ import typescript from 'rollup-plugin-typescript2';
 import dts from "rollup-plugin-dts";
 import { terser } from "rollup-plugin-terser";
 import * as pkg from "./package.json";
+import replace from '@rollup/plugin-replace';
 
 const CURRENT_YEAR = new Date().getFullYear();
 const bannerText = `/*! Miski v${pkg.version}. MIT license. (C) 2021-${CURRENT_YEAR} P. Hughes<github@phugh.es>(https://www.phugh.es). All rights reserved. **/\n`;
@@ -22,6 +23,14 @@ export default [
     external,
 
     plugins: [
+      replace({
+        exclude: 'node_modules/**',
+        values: {
+          __VERSION__: pkg.version,
+        },
+        preventAssignment: true,
+      }),
+
       nodeResolve({
         extensions,
         mainFields: ["module", "jsnext:main", "main"],
@@ -33,6 +42,7 @@ export default [
       }),
 
       json({
+        exclude: 'node_modules/**',
         compact: true,
         preferConst: true,
       }),
@@ -69,7 +79,7 @@ export default [
     }],
   },
   {
-    input: "./types/src/index.d.ts",
+    input: "./types/index.d.ts",
     output: [
       {
         file: "./dist/miski.min.d.ts",
