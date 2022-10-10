@@ -4,7 +4,6 @@ import {
   isObject,
   isTypedArrayConstructor,
   isValidName,
-  multipleOf4,
   TypedArray,
   TypedArrayConstructor,
 } from "../utils/utils.js";
@@ -35,11 +34,9 @@ function _validateProps(value: TypedArrayConstructor | [TypedArrayConstructor, n
   if (Array.isArray(value)) {
     // if this is an array, the user wants to set an initial value
     const [TAC, n] = value;
-    if (!isNaN(n) && isTypedArrayConstructor(TAC)) return true;
-  } else {
-    return isTypedArrayConstructor(value);
+    return (!isNaN(n) && isTypedArrayConstructor(TAC));
   }
-  return false;
+  return isTypedArrayConstructor(value);
 }
 
 /** Validates the names and values of a schema's entries */
@@ -49,7 +46,16 @@ function _validateSchemaEntry([name, value]: [string, unknown]): boolean {
 
 /** Schema type guard */
 export function isValidSchema<T extends Schema<T>>(schema: unknown): schema is Schema<T> {
-  return isObject(schema) && Object.entries(schema).every(_validateSchemaEntry);
+  try {
+    if (schema === undefined) return false;
+    if (schema === null) return true;
+    if (!isObject(schema)) return false;
+    const entries = Object.entries(schema);
+    if (!entries.length) return false;
+    return entries.every(_validateSchemaEntry);
+  } catch (_) {
+    return false;
+  }
 }
 
 /**
@@ -60,11 +66,20 @@ function byteSum(total: unknown, value: unknown): number {
   const size = Array.isArray(value)
     ? (value[0] as TypedArray).BYTES_PER_ELEMENT
     : (value as TypedArray).BYTES_PER_ELEMENT;
-  return (total as number) + size;
+  return ((total as number) + size);
 }
 
-/** @returns the size in bytes that a component's storage requires for one entity */
+/**
+ * @returns the size in bytes that a component's storage requires for one entity
+ *          or NaN if the object is invalid;
+ */
 export function calculateSchemaSize<T extends Schema<T>>(schema: Schema<T>): number {
-  if (!schema) return 0;
-  return multipleOf4(Object.values(schema).reduce(byteSum, 0) as number);
+  try {
+    if (!isValidSchema(schema)) return Number.NaN;
+    if (schema === null) return 0;
+    /** @todo should this be to multipleOf4? */
+    return Object.values(schema).reduce(byteSum, 0) as number;
+  } catch (_) {
+    return Number.NaN;
+  }
 }
