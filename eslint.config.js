@@ -1,4 +1,4 @@
-{
+export default [{
   "root": true,
   "parser": "@typescript-eslint/parser",
   "parserOptions": {
@@ -34,5 +34,9 @@
     "sonarjs/prefer-single-boolean-return": 0,
     "no-use-before-define": "off",
     "@typescript-eslint/no-use-before-define": ["error"]
-  }
-}
+  },
+  "ignores": [
+    "/*",
+    "!/src"
+  ]
+}]
