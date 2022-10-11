@@ -51,6 +51,6 @@ export class EntityManager {
 
   /** @return `true` if the given entity is valid for the given capacity */
   isValidEntity(entity: Entity): entity is Entity {
-    return isUint32(entity) && entity <= this.capacity;
+    return isUint32(entity) && entity < this.capacity;
   }
 }
