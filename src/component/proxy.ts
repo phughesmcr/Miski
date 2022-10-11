@@ -10,7 +10,7 @@ import type { Schema, SchemaStorage } from "./schema.js";
  * flips the `changed` property on the entity
  * at the expense of performance.
  * */
-export type StorageProxy<T> = Record<keyof T, number> & { setEntity(entity?: Entity): Entity };
+export type StorageProxy<T extends Schema<T>> = Record<keyof T, number> & { getEntity(): Entity, setEntity(entity: Entity): Entity };
 
 export function storageProxy<T extends Schema<T>>(storage: SchemaStorage<T>, changed: Set<Entity>): StorageProxy<T> {
   if (!storage) throw new SyntaxError("Proxy can only be used on components, not tags.");
@@ -35,8 +35,11 @@ export function storageProxy<T extends Schema<T>>(storage: SchemaStorage<T>, cha
         return res;
       },
       {
-        setEntity(entity?: Entity): Entity {
-          if (entity === undefined) return entityId;
+        getEntity(): Entity {
+          return entityId;
+        },
+        setEntity(entity: Entity): Entity {
+          if (entity == undefined) return entityId;
           entityId = entity;
           return entityId;
         },
