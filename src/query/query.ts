@@ -18,24 +18,6 @@ function _validateQueryArrays<T extends Schema<T>>(component: Component<T>) {
 }
 
 export class Query {
-  /** Merge multiple Queries into one new Query */
-  static merge(...queries: Query[]): Query {
-    const _all: Component<any>[] = [];
-    const _any: Component<any>[] = [];
-    const _none: Component<any>[] = [];
-    queries.forEach((query) => {
-      const { all, any, none } = query;
-      _all.push(...all);
-      _any.push(...any);
-      _none.push(...none);
-    });
-    return new Query({
-      all: _all,
-      any: _any,
-      none: _none,
-    });
-  }
-
   /** AND - Gather entities as long as they have all these components */
   readonly all: Readonly<Component<any>[]>;
   /** OR - Gather entities as long as they have 0...* of these components */
