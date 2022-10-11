@@ -1,6 +1,7 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
 import { Bitfield } from "../utils/bitfield.js";
+import { EMPTY_ARRAY } from "../constants.js";
 import type { ComponentInstance } from "../component/instance.js";
 import type { Entity } from "../entity.js";
 import type { QueryInstance } from "../query/instance.js";
@@ -21,7 +22,7 @@ export class Archetype {
   /** `true` if the object is in a dirty state */
   isDirty: boolean;
 
-  constructor(length: number, components: ComponentInstance<any>[] = [], bitfield?: Bitfield) {
+  constructor(length: number, components: ComponentInstance<any>[] = EMPTY_ARRAY as unknown as ComponentInstance<any>[], bitfield?: Bitfield) {
     this.bitfield = bitfield ?? Bitfield.fromIds(length, components);
     this.candidateCache = new Map();
     this.components = [...components];
