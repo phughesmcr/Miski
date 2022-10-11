@@ -15,7 +15,7 @@ export class Bitfield extends Uint32Array {
   static fromIds<T extends { id: number }>(length: number, objs: T[]): Bitfield {
     return objs.reduce((bitfield, { id }) => {
       const i = Bitfield.indexOf(id);
-      if (i !== -1) bitfield[i] &= ~(1 << (id - i * 32));
+      if (i !== -1) bitfield[i] ^= 1 << (id - i * 32);
       return bitfield;
     }, new Bitfield(length));
   }
