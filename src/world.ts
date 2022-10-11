@@ -46,8 +46,9 @@ export class World {
 
   constructor(spec: WorldSpec) {
     const { capacity, components } = validateWorldSpec(spec);
-    this.#archetypeManager = new ArchetypeManager({ capacity, components });
-    this.#componentManager = new ComponentManager({ capacity, components });
+    const componentSet = [...new Set(components)];
+    this.#archetypeManager = new ArchetypeManager({ capacity, components: componentSet });
+    this.#componentManager = new ComponentManager({ capacity, components: componentSet });
     this.#entityManager = new EntityManager({ capacity });
     this.#queryManager = new QueryManager({ componentManager: this.#componentManager });
     this.refresh();
