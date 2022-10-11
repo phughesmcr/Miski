@@ -1,15 +1,15 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
-import { ArchetypeManager } from "./archetype/manager";
-import { Component } from "./component/component";
-import { ComponentInstance } from "./component/instance";
-import { ComponentManager, ComponentRecord } from "./component/manager";
-import { Schema, SchemaProps } from "./component/schema";
-import { DEFAULT_MAX_ENTITIES, VERSION } from "./constants";
-import { Entity, EntityManager } from "./entity";
-import { QueryManager } from "./query/manager";
-import { Query } from "./query/query";
-import { isUint32, multipleOf8 } from "./utils/utils";
+import { ArchetypeManager } from "./archetype/manager.js";
+import { Component } from "./component/component.js";
+import { ComponentInstance } from "./component/instance.js";
+import { ComponentManager, ComponentRecord } from "./component/manager.js";
+import { Schema, SchemaProps } from "./component/schema.js";
+import { DEFAULT_MAX_ENTITIES, VERSION } from "./constants.js";
+import { Entity, EntityManager } from "./entity.js";
+import { QueryManager } from "./query/manager.js";
+import { Query } from "./query/query.js";
+import { isUint32, multipleOf8 } from "./utils/utils.js";
 
 export interface WorldData {
   buffer: ArrayBuffer;

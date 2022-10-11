@@ -1,6 +1,7 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
-import { createAvailabilityArray, TypedArray } from "./utils.js";
+import { createAvailabilityArray } from "./utils.js";
+import type { TypedArray } from "./utils.js";
 import type { Entity } from "../entity.js";
 
 /**

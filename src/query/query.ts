@@ -1,8 +1,8 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
 import { Component } from "../component/component.js";
-import { Schema } from "../component/schema.js";
 import { EMPTY_ARRAY } from "../constants.js";
+import type { Schema } from "../component/schema.js";
 
 export interface QuerySpec {
   /** AND - Gather entities as long as they have all these components */

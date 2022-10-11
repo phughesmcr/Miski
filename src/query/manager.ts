@@ -1,10 +1,11 @@
-import { Archetype } from "../archetype/archetype";
-import { Component } from "../component/component";
-import { ComponentInstance } from "../component/instance";
-import { ComponentManager, ComponentRecord } from "../component/manager";
-import { Entity } from "../entity";
-import { createQueryInstance, QueryInstance } from "./instance";
-import { Query } from "./query";
+import { createQueryInstance,  } from "./instance.js";
+import { Query } from "./query.js";
+import type { Archetype } from "../archetype/archetype.js";
+import type { Component } from "../component/component.js";
+import type { ComponentInstance } from "../component/instance.js";
+import type { ComponentManager, ComponentRecord } from "../component/manager.js";
+import type { Entity } from "../entity.js";
+import type { QueryInstance } from "./instance.js";
 
 /** @todo find a nicer way of doing this */
 // NOTE: The following functions are used to avoid flatmap which incurs a GC penalty

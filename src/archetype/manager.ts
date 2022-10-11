@@ -1,8 +1,8 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
-import { QueryInstance } from "../query/instance.js";
-import { Query } from "../query/query.js";
 import { Archetype } from "./archetype.js";
+import type { Query } from "../query/query.js";
+import type { QueryInstance } from "../query/instance.js";
 import type { Component } from "../component/component.js";
 import type { ComponentInstance } from "../component/instance.js";
 import type { Entity } from "../entity.js";
