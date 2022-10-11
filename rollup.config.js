@@ -10,7 +10,7 @@ import * as pkg from "./package.json";
 import replace from '@rollup/plugin-replace';
 
 const CURRENT_YEAR = new Date().getFullYear();
-const bannerText = `/*! Miski v${pkg.version}. MIT license. (C) 2021-${CURRENT_YEAR} P. Hughes<github@phugh.es>(https://www.phugh.es). All rights reserved. **/\n`;
+const bannerText = `/*! Miski v${pkg.version}. MIT license. (C) 2021-${CURRENT_YEAR} the Miski authors. All rights reserved. **/\n/** @author P. Hughes<github@phugh.es>(https://www.phugh.es) */`;
 const extensions = [".js", ".jsx", ".es6", ".es", ".mjs", ".ts", ".tsx"];
 const external = [...Object.keys(pkg.dependencies || {}), ...Object.keys(pkg.peerDependencies || {})];
 const globals = {};
