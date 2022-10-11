@@ -7,7 +7,7 @@ import { Component } from "./component.js";
 import { ComponentInstance, createComponentInstance, refreshComponentInstance } from "./instance";
 import { Schema, SchemaProps } from "./schema";
 
-/** { [component name]: component instance } */
+/** [component name]: component instance */
 export type ComponentRecord = Record<string, ComponentInstance<any>>;
 
 export type ComponentMap = Map<Component<any>, ComponentInstance<any>>;
