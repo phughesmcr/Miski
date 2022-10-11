@@ -3,11 +3,13 @@
 import { QueryInstance } from "../query/instance.js";
 import { Query } from "../query/query.js";
 import { Archetype } from "./archetype.js";
+import type { Component } from "../component/component.js";
 import type { ComponentInstance } from "../component/instance.js";
 import type { Entity } from "../entity.js";
 
 export interface ArchetypeManagerSpec {
   capacity: number;
+  components: Component<any>[];
 }
 
 export class ArchetypeManager {
@@ -19,10 +21,10 @@ export class ArchetypeManager {
   rootArchetype: Archetype;
 
   constructor(spec: ArchetypeManagerSpec) {
-    const { capacity } = spec;
+    const { capacity, components } = spec;
     this.archetypeMap = new Map();
     this.entityArchetypes = new Array(capacity) as Archetype[];
-    this.rootArchetype = new Archetype();
+    this.rootArchetype = new Archetype(components.length);
   }
 
   export(): Record<string, Entity[]> {
@@ -78,7 +80,7 @@ export class ArchetypeManager {
       ? previousArchetype.bitfield.cloneWithToggle(components)
       : this.rootArchetype.bitfield.cloneWithToggle(components);
     const id = bitfield.toString();
-    const nextArchetype = this.archetypeMap.get(id) ?? new Archetype(components, bitfield);
+    const nextArchetype = this.archetypeMap.get(id) ?? new Archetype(this.rootArchetype.bitfield.length, components, bitfield);
     if (!this.archetypeMap.has(id)) this.archetypeMap.set(id, nextArchetype);
     this.entityArchetypes[entity] = nextArchetype.addEntity(entity);
     return nextArchetype;

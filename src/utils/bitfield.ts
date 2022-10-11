@@ -12,12 +12,12 @@ export class Bitfield extends Uint32Array {
    * Create a new Bitfield from an array of objects
    * @param objs an array of objects which have an id number property
    */
-  static override from<T extends { id: number }>(objs: T[]): Bitfield {
+  static fromIds<T extends { id: number }>(length: number, objs: T[]): Bitfield {
     return objs.reduce((bitfield, { id }) => {
       const i = Bitfield.indexOf(id);
       if (i !== -1) bitfield[i] &= ~(1 << (id - i * 32));
       return bitfield;
-    }, new Bitfield());
+    }, new Bitfield(length));
   }
 
   /** @returns the index of a bit in the bitfield */

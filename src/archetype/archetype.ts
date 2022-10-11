@@ -21,8 +21,8 @@ export class Archetype {
   /** `true` if the object is in a dirty state */
   isDirty: boolean;
 
-  constructor(components: ComponentInstance<any>[] = [], bitfield: Bitfield = Bitfield.from(components)) {
-    this.bitfield = bitfield;
+  constructor(length: number, components: ComponentInstance<any>[] = [], bitfield?: Bitfield) {
+    this.bitfield = bitfield ?? Bitfield.fromIds(length, components);
     this.candidateCache = new Map();
     this.components = [...components];
     this.entered = new Set();
@@ -51,7 +51,7 @@ export class Archetype {
 
   /** Create a new Archetype from this Archetype */
   clone(): Archetype {
-    return new Archetype(this.components, this.bitfield.clone());
+    return new Archetype(this.bitfield.length, this.components, this.bitfield.clone());
   }
 
   /**

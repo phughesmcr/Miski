@@ -48,14 +48,16 @@ export function createQueryInstance(spec: QueryInstanceSpec): QueryInstance {
     return arr;
   };
 
+  const length = componentMap.size;
+
   const _allInstances = all.reduce(getComponentInstances, new Array(all.length) as ComponentInstance<any>[]);
-  const and = Bitfield.from(_allInstances);
+  const and = Bitfield.fromIds(length, _allInstances);
 
   const _anyInstances = any.reduce(getComponentInstances, new Array(any.length) as ComponentInstance<any>[]);
-  const or = Bitfield.from(_anyInstances);
+  const or = Bitfield.fromIds(length, _anyInstances);
 
   const _noneInstances = none.reduce(getComponentInstances, new Array(none.length) as ComponentInstance<any>[]);
-  const not = Bitfield.from(_noneInstances);
+  const not = Bitfield.fromIds(length, _noneInstances);
 
   /** The components matched by the and/or bitfields */
   const components: Record<string, ComponentInstance<any>> = [..._allInstances, ..._anyInstances].reduce(
