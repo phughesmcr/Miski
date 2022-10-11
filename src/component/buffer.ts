@@ -1,10 +1,9 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
-import { ONE_BYTE } from "../constants.js";
 import { sparseFacade } from "../utils/sparse-facade.js";
-import { multipleOf4, TypedArrayConstructor } from "../utils/utils.js";
-import { Component } from "./component.js";
-import { Schema, SchemaStorage } from "./schema.js";
+import type { Component } from "./component.js";
+import type { Schema, SchemaStorage } from "./schema.js";
+import type { TypedArray, TypedArrayConstructor } from "../utils/utils.js";
 
 interface ComponentBufferSpec {
   capacity: number;
@@ -12,18 +11,45 @@ interface ComponentBufferSpec {
 }
 
 export class ComponentBuffer extends ArrayBuffer {
-  /** Calculate the total required storage space for all component schemas */
-  static calculateSize(capacity: number, components: Component<any>[]): number {
-    const componentSum = <T extends Schema<T>>(total: number, component: Component<T>): number => {
+  /**
+   * @private
+   * Calculate the total required storage space for all component schemas
+   */
+  private static calculateSize(capacity: number, components: Component<any>[]): number {
+    return components.reduce((total: number, component: Component<any>): number => {
       const { size } = component;
-      if (!size || size <= 0) return total;
-      return total + size * capacity;
-    };
-    return components.reduce(componentSum, 0);
+      if (!size || size < 0) return total;
+      return total + (size * capacity);
+    }, 0);
   }
 
-  bufferOffset: number;
-  capacity: number;
+  /**
+   * @private
+   * Partitions the ComponentBuffer into individual TypedArrays for each Component
+   */
+  private static partition(buffer: ComponentBuffer, capacity: number, components: Component<any>[]) {
+    let offset = 0;
+    components.forEach(<T extends Schema<T>>(component: Component<T>) => {
+      const { maxEntities, schema } = component;
+      if (!schema) return;
+      const storage = {} as Record<keyof T, TypedArray>;
+      const requiredSize = maxEntities ?? capacity;
+      Object.entries(schema).forEach(([key, value]) => {
+        let typedArrayConstructor = value as TypedArrayConstructor;
+        let initialValue = 0;
+        if (Array.isArray(value)) [typedArrayConstructor, initialValue] = value;
+        const dense = new typedArrayConstructor(buffer, offset, requiredSize);
+        storage[key as keyof T] = maxEntities === null ? dense : sparseFacade(dense);
+        storage[key as keyof T].fill(initialValue as never);
+        offset += (typedArrayConstructor.BYTES_PER_ELEMENT * requiredSize);
+      })
+      buffer.map.set(component, storage);
+    });
+    return buffer;
+  }
+
+  /** Components and their respective TypedArray storage */
+  readonly map: Map<Component<any>, SchemaStorage<any>> = new Map();
 
   /**
    * Create a properly sized ArrayBuffer to hold all a world's component's data.
@@ -33,48 +59,7 @@ export class ComponentBuffer extends ArrayBuffer {
    */
   constructor(spec: ComponentBufferSpec) {
     const { capacity, components } = spec;
-    const totalSize = ComponentBuffer.calculateSize(capacity, components);
-    super(ONE_BYTE * Math.ceil(totalSize / ONE_BYTE));
-    this.bufferOffset = 0;
-    this.capacity = capacity;
-  }
-
-  get isFull(): boolean {
-    return this.bufferOffset > this.byteLength;
-  }
-
-  partition<T extends Schema<T>>(component: Component<T>): SchemaStorage<T> | undefined {
-    if (this.isFull === true) throw new Error("ArrayBuffer is full!");
-    const { maxEntities, schema, size = 0 } = component;
-    if (!schema || size <= 0) return; // bail early if component is a tag
-    const requiredSize = maxEntities ?? this.capacity;
-
-    if (this.bufferOffset + size * requiredSize > this.byteLength) {
-      throw new Error("Component will not fit inside the buffer!");
-    }
-
-    let componentOffset = 0;
-    const partition = (
-      res: SchemaStorage<T>,
-      [key, value]: [keyof T, TypedArrayConstructor | [TypedArrayConstructor, number]],
-    ) => {
-      let typedArray = value as TypedArrayConstructor;
-      let initialValue = 0;
-      if (Array.isArray(value)) {
-        [typedArray, initialValue] = value;
-      }
-      const dense = new typedArray(this, this.bufferOffset + componentOffset, requiredSize);
-      res[key] = maxEntities === null ? dense : sparseFacade(dense);
-      if (initialValue !== 0) res[key].fill(initialValue as never);
-      componentOffset = multipleOf4(componentOffset + typedArray.BYTES_PER_ELEMENT * requiredSize);
-      return res;
-    };
-
-    const data = Object.entries(schema) as [keyof T, TypedArrayConstructor][];
-    const storage = data.reduce(partition, {} as SchemaStorage<T>);
-
-    this.bufferOffset += componentOffset;
-
-    return storage;
+    super(ComponentBuffer.calculateSize(capacity, components));
+    ComponentBuffer.partition(this, capacity, components);
   }
 }
