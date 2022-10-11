@@ -61,7 +61,7 @@ export class Archetype {
    */
   isCandidate(query: QueryInstance): boolean {
     const cached = this.candidateCache.get(query);
-    if (cached /*!== undefined*/) return cached;
+    if (cached !== undefined) return cached;
     const status = this.bitfield.every(query.checkCandidacy);
     this.candidateCache.set(query, status);
     return status;
