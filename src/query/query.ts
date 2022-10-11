@@ -6,11 +6,11 @@ import type { Schema } from "../component/schema.js";
 
 export interface QuerySpec {
   /** AND - Gather entities as long as they have all these components */
-  all?: Readonly<Component<any>[]>;
+  all?: Component<any>[];
   /** OR - Gather entities as long as they have 0...* of these components */
-  any?: Readonly<Component<any>[]>;
+  any?: Component<any>[];
   /** NOT - Gather entities as long as they don't have these components */
-  none?: Readonly<Component<any>[]>;
+  none?: Component<any>[];
 }
 
 function _validateQueryArrays<T extends Schema<T>>(component: Component<T>) {
