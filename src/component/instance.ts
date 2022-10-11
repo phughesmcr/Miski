@@ -1,10 +1,12 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
 import { $_CHANGED, $_COUNT } from "../constants.js";
+import { isObject, isUint32 } from "../utils/utils.js";
+import { storageProxy } from "./proxy.js";
+import type { TypedArray } from "../utils/utils.js";
+import type { StorageProxy } from "./proxy.js";
 import type { Entity } from "../entity.js";
-import { isObject, isUint32, TypedArray } from "../utils/utils.js";
 import type { Component } from "./component.js";
-import { StorageProxy, storageProxy } from "./proxy.js";
 import type { Schema, SchemaStorage } from "./schema.js";
 
 interface ComponentInstanceSpec<T extends Schema<T>> {
@@ -80,10 +82,9 @@ export function createComponentInstance<T extends Schema<T>>(
       },
     },
     count: {
-      value: entityCount,
-      configurable: false,
-      enumerable: true,
-      writable: false,
+      get() {
+        return entityCount;
+      },
     },
     id: {
       value: id,
