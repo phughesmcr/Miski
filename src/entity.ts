@@ -1,6 +1,7 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
-import { createAvailabilityArray, isUint32, Opaque } from "./utils/utils.js";
+import { createAvailabilityArray, isUint32 } from "./utils/utils.js";
+import type { Opaque } from "./utils/utils.js";
 
 /** Entities are indexes of an EntityArray. An Entity is just an integer. */
 export type Entity = Opaque<number, "Entity">;
@@ -22,7 +23,7 @@ export class EntityManager {
    *
    * EntityManagers manages the creation, destruction, and recycling of entities
    *
-   * @param capacity The maximum number of entities
+   * @param spec.capacity The maximum number of entities
    */
   constructor(spec: EntityManagerSpec) {
     const { capacity } = spec;
@@ -40,11 +41,20 @@ export class EntityManager {
    * @returns the inputted entity to aid chaining
    */
   destroyEntity(entity: Entity): Entity {
+    /**
+     * @todo
+     * no difference between returned values on failure
+     * consider letting the user know that the destruction
+     * failed?
+     */
+    if (!this.isValidEntity(entity)) return entity;
+    if (this.getVacancies() >= this.capacity) return entity;
+    if (this.entityPool.includes(entity)) return entity
     this.entityPool.push(entity);
     return entity;
   }
 
-  /** @returns the number of available entities */
+  /** @returns the number of available entities currently */
   getVacancies(): number {
     return this.entityPool.length;
   }
