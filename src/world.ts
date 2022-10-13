@@ -52,6 +52,7 @@ export class World {
     this.#entityManager = new EntityManager({ capacity });
     this.#queryManager = new QueryManager({ componentManager: this.#componentManager });
     this.refresh();
+    Object.freeze(this);
   }
 
   /** @returns the maximum number of entities the world can hold */
