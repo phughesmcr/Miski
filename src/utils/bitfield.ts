@@ -31,9 +31,15 @@ export class Bitfield extends Uint32Array {
     return a & b;
   }
 
+  constructor(length: number) {
+    super(Math.ceil(length / 32));
+  }
+
   /** @returns a new Bitfield with identical properties to this Bitfield */
   clone(): Bitfield {
-    return new Bitfield(this);
+    const result = new Bitfield(this.length);
+    result.set(this);
+    return result;
   }
 
   /** @returns a new Bitfield based on this one with toggled bits */
