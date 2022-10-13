@@ -1,15 +1,17 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
 import { ArchetypeManager } from "./archetype/manager.js";
-import { Component } from "./component/component.js";
-import { ComponentInstance } from "./component/instance.js";
-import { ComponentManager, ComponentRecord } from "./component/manager.js";
-import { Schema, SchemaProps } from "./component/schema.js";
-import { DEFAULT_MAX_ENTITIES, VERSION } from "./constants.js";
-import { Entity, EntityManager } from "./entity.js";
+import { ComponentManager } from "./component/manager.js";
+import { VERSION } from "./constants.js";
+import { EntityManager } from "./entity.js";
 import { QueryManager } from "./query/manager.js";
 import { Query } from "./query/query.js";
-import { isUint32, multipleOf8 } from "./utils/utils.js";
+import { isUint32 } from "./utils/utils.js";
+import type { Component } from "./component/component.js";
+import type { ComponentInstance } from "./component/instance.js";
+import type { ComponentRecord } from "./component/manager.js";
+import type { Entity } from "./entity.js";
+import type { Schema, SchemaProps } from "./component/schema.js";
 
 export interface WorldData {
   buffer: ArrayBuffer;
@@ -26,7 +28,7 @@ export interface WorldSpec {
 
 function validateWorldSpec(spec: WorldSpec): Required<WorldSpec> {
   if (!spec) throw new SyntaxError("World creation requires a specification object.");
-  const { capacity = DEFAULT_MAX_ENTITIES, components } = spec;
+  const { capacity, components } = spec;
   if (!isUint32(capacity)) throw new SyntaxError("World: spec.capacity invalid.");
   if (!components.length) throw new SyntaxError("World: spec.components invalid.");
   return { ...spec, components: [...new Set(components)] };
