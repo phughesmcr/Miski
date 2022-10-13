@@ -63,7 +63,7 @@ export class ArchetypeManager {
     if (this.entityArchetypes[entity] === archetype) return this;
     this.entityArchetypes[entity]?.removeEntity(entity);
     this.entityArchetypes[entity] = archetype.addEntity(entity);
-    if (!this.archetypeMap.has(archetype.id)) this.archetypeMap.set(archetype.id, archetype);
+    this.archetypeMap.set(archetype.id, archetype);
     return this;
   }
 
