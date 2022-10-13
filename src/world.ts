@@ -29,7 +29,7 @@ function validateWorldSpec(spec: WorldSpec): Required<WorldSpec> {
   const { capacity = DEFAULT_MAX_ENTITIES, components } = spec;
   if (!isUint32(capacity)) throw new SyntaxError("World: spec.capacity invalid.");
   if (!components.length) throw new SyntaxError("World: spec.components invalid.");
-  return { capacity: multipleOf8(capacity), components };
+  return { ...spec, components: [...new Set(components)] };
 }
 
 export class World {
@@ -46,9 +46,8 @@ export class World {
 
   constructor(spec: WorldSpec) {
     const { capacity, components } = validateWorldSpec(spec);
-    const componentSet = [...new Set(components)];
-    this.#archetypeManager = new ArchetypeManager({ capacity, components: componentSet });
-    this.#componentManager = new ComponentManager({ capacity, components: componentSet });
+    this.#archetypeManager = new ArchetypeManager({ capacity, components });
+    this.#componentManager = new ComponentManager({ capacity, components });
     this.#entityManager = new EntityManager({ capacity });
     this.#queryManager = new QueryManager({ componentManager: this.#componentManager });
     this.refresh();
