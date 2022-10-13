@@ -91,7 +91,6 @@ export class World {
   /** Remove and recycle an Entity */
   destroyEntity(entity: Entity): World {
     if (!this.#entityManager.isValidEntity(entity)) return this;
-    if (this.#archetypeManager.getEntityArchetype(entity) === this.#archetypeManager.rootArchetype) return this;
     this.#archetypeManager.removeEntityArchetype(entity);
     this.#entityManager.destroyEntity(entity);
     return this;
