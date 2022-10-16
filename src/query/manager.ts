@@ -1,4 +1,4 @@
-import { createQueryInstance,  } from "./instance.js";
+import { createQueryInstance } from "./instance.js";
 import { Query } from "./query.js";
 import type { Archetype } from "../archetype/archetype.js";
 import type { Component } from "../component/component.js";
@@ -87,14 +87,16 @@ export class QueryManager {
       const res: Set<Entity> = new Set();
       archetypes.forEach(_flattenEntities, res);
       this.entityCache.set(instance, res);
-      return arr.concat(...res);
+      arr.push(...res)
+      return arr;
     }
 
     // if query has new Archetypes, clear cache and do full sweep
     if (isDirty === true) {
       cached.clear();
       archetypes.forEach(_flattenEntities, cached);
-      return arr.concat(...cached);
+      arr.push(...cached)
+      return arr;
     }
 
     // else just update the dirty archetypes
@@ -107,7 +109,8 @@ export class QueryManager {
       }
     });
 
-    return arr.concat(...cached);
+    arr.push(...cached)
+    return arr;
   }
 
   /** @todo creates new array & set every time - wasteful */
