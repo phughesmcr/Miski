@@ -23,7 +23,7 @@ export class Archetype {
   isDirty: boolean;
 
   constructor(length: number, components: ComponentInstance<any>[] = EMPTY_ARRAY as unknown as ComponentInstance<any>[], bitfield?: Bitfield) {
-    this.bitfield = bitfield ?? Bitfield.fromIds(length, components);
+    this.bitfield = bitfield ?? Bitfield.fromObjects(length, "id", components);
     this.candidateCache = new Map();
     this.components = components;
     this.entered = new Set();
