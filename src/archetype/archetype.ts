@@ -25,7 +25,7 @@ export class Archetype {
   constructor(length: number, components: ComponentInstance<any>[] = EMPTY_ARRAY as unknown as ComponentInstance<any>[], bitfield?: Bitfield) {
     this.bitfield = bitfield ?? Bitfield.fromIds(length, components);
     this.candidateCache = new Map();
-    this.components = [...components];
+    this.components = components;
     this.entered = new Set();
     this.entities = new Set();
     this.exited = new Set();
