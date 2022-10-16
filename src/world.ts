@@ -100,13 +100,13 @@ export class World {
     const archetype = this.#archetypeManager.getEntityArchetype(entity);
     if (!archetype) return {};
     return archetype.components.reduce(
-      <T extends Schema<T>>(res: Record<string, SchemaProps<unknown>>, component: ComponentInstance<T>) => {
+      <T extends Schema<T>>(res: Record<keyof T, SchemaProps<unknown>>, component: ComponentInstance<T>) => {
         const { name, schema } = component;
-        res[name] = {};
+        res[name as keyof T] = {};
         if (schema === null) {
-          res[name] = true;
+          res[name as keyof T] = true;
         } else {
-          res[name] = Object.keys(schema).reduce((prev, key) => {
+          res[name as keyof T] = Object.keys(schema).reduce((prev, key) => {
             prev[key as keyof T] = component[key as keyof T][entity];
             return prev;
           }, {} as SchemaProps<T>);
