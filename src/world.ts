@@ -125,8 +125,8 @@ export class World {
     return this.#queryManager.getEnteredFromQuery(query);
   }
 
-  getQueryEntities(query: Query): Entity[] {
-    return this.#queryManager.getEntitiesFromQuery(query);
+  getQueryEntities(query: Query, arr: Entity[] = []): Entity[] {
+    return this.#queryManager.getEntitiesFromQuery(query, arr);
   }
 
   getQueryExited(query: Query): Entity[] {

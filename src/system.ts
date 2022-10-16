@@ -35,9 +35,6 @@ export class System<
   /** The query which will provide the components and entities to the system. */
   query: Query;
 
-  components: ComponentRecord;
-  entities: Entity[];
-
   /**
    * Creates a new system.
    *
@@ -47,22 +44,18 @@ export class System<
    */
   constructor(spec: SystemSpec<T, U>) {
     const { system, query } = spec;
-    this.components = {};
-    this.entities = [];
     this.system = system;
     this.query = query;
-    Object.freeze(this);
   }
 
   /**
-   * Execute (run / call) the system
    * @param world the world to execute the system in
    * @param args arguments to pass to the system's callback function
    * @returns the result of the system's callback function
    */
-  exec(world: World, ...args: U) {
+  init(world: World): (...args: U) => ReturnType<T> {
     const components = world.getQueryComponents(this.query);
-    const entities = world.getQueryEntities(this.query);
-    return this.system(components, entities, ...args);
+    const entities: Entity[] = [];
+    return (...args: U) => this.system(components, world.getQueryEntities(this.query, entities), ...args);
   }
 }
