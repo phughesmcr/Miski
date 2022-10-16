@@ -1,7 +1,8 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
-import { createAvailabilityArray, isUint32 } from "./utils/utils.js";
+import { isUint32 } from "./utils/utils.js";
 import type { Opaque } from "./utils/utils.js";
+import { BitPool } from "./utils/bitpool.js";
 
 /** Entities are indexes of an EntityArray. An Entity is just an integer. */
 export type Entity = Opaque<number, "Entity">;
@@ -15,8 +16,8 @@ export class EntityManager {
   /** The maximum number of entities */
   capacity: number;
 
-  /** Pool of currently available entities */
-  entityPool: Entity[];
+  /** Pool of Entity states */
+  entityPool: BitPool;
 
   /**
    * Create a new EntityManager.
@@ -28,12 +29,12 @@ export class EntityManager {
   constructor(spec: EntityManagerSpec) {
     const { capacity } = spec;
     this.capacity = capacity;
-    this.entityPool = createAvailabilityArray(capacity) as Entity[];
+    this.entityPool = new BitPool(capacity);
   }
 
   /** @returns the next available entity or `undefined` if no entity is available */
   createEntity(): Entity | undefined {
-    return this.entityPool.pop();
+    return this.entityPool.acquire() as Entity;
   }
 
   /**
@@ -47,16 +48,16 @@ export class EntityManager {
      * consider letting the user know that the destruction
      * failed?
      */
-    if (!this.isValidEntity(entity)) return entity;
-    if (this.getVacancies() >= this.capacity) return entity;
-    if (this.entityPool.includes(entity)) return entity
-    this.entityPool.push(entity);
+    if (!this.isValidEntity(entity)) {
+      throw new SyntaxError(`Could not destroy invalid entity "${entity}".`);
+    };
+    this.entityPool.release(entity);
     return entity;
   }
 
   /** @returns the number of available entities currently */
   getVacancies(): number {
-    return this.entityPool.length;
+    return this.entityPool.vacancies;
   }
 
   /** @return `true` if the given entity is valid for the given capacity */

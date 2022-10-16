@@ -81,12 +81,6 @@ export type ParametersExceptFirstTwo<F> = F extends (arg0: any, arg1: any, ...re
  */
 export type Opaque<T, K> = T & { _TYPE: K };
 
-/** Creates a reversed array of numbers from capacity-1 to 0 */
-export function createAvailabilityArray(capacity: number): number[] {
-  const total = capacity - 1;
-  return Array.from({ length: capacity }, (_, i) => total - i);
-}
-
 /** Creates a function that will round a number up to a given multiple */
 export function roundUpToMultipleOf(f: number): (n: number) => number {
   return (n: number) => Math.ceil(n / f) * f;

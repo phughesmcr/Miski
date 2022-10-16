@@ -1,6 +1,6 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
-import { createAvailabilityArray } from "./utils.js";
+import { BitPool } from "./bitpool.js";
 import type { TypedArray } from "./utils.js";
 import type { Entity } from "../entity.js";
 
@@ -13,14 +13,14 @@ export function sparseFacade<T extends TypedArray>(dense: T): T {
   const sparse: Map<Entity, number> = new Map();
 
   /** Array of available indexes in dense */
-  const available = createAvailabilityArray(dense.length);
+  const available = new BitPool(dense.length);
 
   /** @returns the entity's value from the dense array or undefined if non-existant */
   const _get = (entity: Entity) => dense[sparse.get(entity) ?? -1];
 
   /** @returns `false` if dense array is full, `true` if value set successfully */
   const _set = (entity: Entity, value: T[0]): boolean => {
-    const idx = sparse.get(entity) ?? available.pop();
+    const idx = sparse.get(entity) ?? available.acquire();
     if (idx === undefined) return false;
     dense[idx] = value;
     sparse.set(entity, idx);
@@ -33,7 +33,7 @@ export function sparseFacade<T extends TypedArray>(dense: T): T {
     if (idx === undefined) return false;
     dense[idx] = 0;
     sparse.delete(entity);
-    available.push(idx);
+    available.release(idx);
     return true;
   };
 
