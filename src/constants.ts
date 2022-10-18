@@ -8,7 +8,7 @@ export const MAX_UINT32 = 4_294_967_295;
 
 /** An array of strings that cannot be used for component or schema property names */
 export const FORBIDDEN_NAMES = Object.freeze([
-  // component properties
+  // component properties:
   "changed",
   "component",
   "count",
@@ -17,10 +17,11 @@ export const FORBIDDEN_NAMES = Object.freeze([
   "isTag",
   "maxEntities",
   "name",
+  "owners",
   "proxy",
   "schema",
   "size",
-  // object properties
+  // object properties:
   "constructor",
   "hasOwnProperty",
   "isPrototypeOf",
@@ -45,8 +46,8 @@ export const EMPTY_ARRAY = Object.freeze([]);
 /** Symbol for use as a key for the `changed` flag getter and setter */
 export const $_CHANGED = Symbol("changed");
 
-/** Symbol for use as a key for the `count` flag getter and setter */
-export const $_COUNT = Symbol("count");
+/** Symbol for use as a key for the `owners` flag getter and setter */
+export const $_OWNERS = Symbol("owners");
 
 /** Lookup table for powers of 2 */
 export const LOG_2: Record<number, number> = Object.freeze({

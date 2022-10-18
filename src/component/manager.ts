@@ -1,11 +1,13 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
-import { $_COUNT } from "../constants";
-import { Entity } from "../entity";
-import { ComponentBuffer } from "./buffer";
-import { Component } from "./component.js";
-import { ComponentInstance, createComponentInstance, refreshComponentInstance } from "./instance";
-import { Schema, SchemaProps } from "./schema";
+import { $_OWNERS } from "../constants.js";
+import { createComponentInstance, refreshComponentInstance } from "./instance.js";
+import { ComponentBuffer } from "./buffer.js";
+import type { Entity } from "../entity.js";
+import type { TypedArrayConstructor } from "../utils/utils.js";
+import type { Component } from "./component.js";
+import type { ComponentInstance } from "./instance.js";
+import type { Schema, SchemaProps } from "./schema.js";
 
 /** [component name]: component instance */
 export type ComponentRecord = Record<string, ComponentInstance<any>>;
@@ -17,11 +19,10 @@ export interface ComponentManagerSpec {
   components: Component<any>[];
 }
 
-function instantiate(buffer: ComponentBuffer, components: Component<any>[]) {
-  return [...new Set(components)].reduce(
+function instantiate(buffer: ComponentBuffer, capacity: number, components: Component<any>[]) {
+  return components.reduce(
     <T extends Schema<T>>(res: ComponentMap, component: Component<T>, id: number) => {
-      const storage = buffer.partition(component);
-      const instance = createComponentInstance({ component, id, storage });
+      const instance = createComponentInstance({ capacity, component, id, storage: buffer.map.get(component) });
       res.set(component, instance);
       return res;
     },
@@ -29,77 +30,69 @@ function instantiate(buffer: ComponentBuffer, components: Component<any>[]) {
   );
 }
 
+/** @todo better async? */
+function add<T extends Schema<T>>(instance: ComponentInstance<T>, entity: number, properties?: Record<string, SchemaProps<unknown>>) {
+  const { maxEntities, name, schema } = instance;
+  if (maxEntities && instance.count >= maxEntities) {
+    throw new Error(`Component "${name}".maxEntities reached.`);
+  }
+  if (instance[$_OWNERS].isOn(entity)) return null;
+  instance[$_OWNERS].toggle(entity);
+  // set properties
+  if (schema) {
+    /** @todo Object.entries creates an array. */
+    Object.entries(schema).forEach(([key, value]) => {
+      instance[key as keyof T][entity] = properties ? (properties[name] as SchemaProps<T>)[key as keyof T] ?? (value as [TypedArrayConstructor, number])[1] ?? 0 : (value as [TypedArrayConstructor, number])[1] ?? 0;
+    });
+  }
+  return instance;
+};
+
+/** @todo better async? */
+function remove(instance: ComponentInstance<any>, entity: Entity) {
+  const { maxEntities, schema } = instance;
+  if (!instance[$_OWNERS].isOn(entity)) return null;
+  instance[$_OWNERS].toggle(entity);
+  if (schema) {
+    /** @todo Object.entries creates an array. */
+    Object.entries(schema).forEach(([key, prop]) => {
+      const storage = instance[key];
+      if (storage) {
+        if (maxEntities) {
+          delete storage[entity];
+        } else {
+          storage[entity] = Array.isArray(prop) ? prop[1] : 0;
+        }
+      }
+    });
+  }
+  return instance;
+};
+
 export class ComponentManager {
-  buffer: ComponentBuffer;
-  componentMap: Map<Component<any>, ComponentInstance<any>>;
+  readonly buffer: ComponentBuffer;
+  readonly componentMap: Map<Component<any>, ComponentInstance<any>>;
 
   constructor(spec: ComponentManagerSpec) {
     const { capacity, components } = spec;
     this.buffer = new ComponentBuffer({ capacity, components });
-    this.componentMap = instantiate(this.buffer, components);
+    this.componentMap = instantiate(this.buffer, capacity, components);
   }
 
-  addComponentsToEntity(
-    components: Component<any>[],
-  ): (entity: Entity, properties?: Record<string, SchemaProps<unknown>>) => ComponentInstance<any>[] {
-    // eslint-disable-next-line @typescript-eslint/unbound-method
-    const instances = components.map(this.componentMap.get, this.componentMap) as ComponentInstance<any>[];
+  addComponentsToEntity(components: Component<any>[]): (entity: Entity, properties?: Record<string, SchemaProps<unknown>>) => ComponentInstance<any>[] {
+    const instances = this.getInstances(components).filter(Boolean) as ComponentInstance<any>[];
     if (instances.length !== components.length) throw new Error("Some components are not registered in this world!");
     return (entity: Entity, properties?: Record<string, SchemaProps<unknown>>) => {
-      // if (!isValidEntity(entity)) throw new SyntaxError(`Entity ${entity as number} is not valid!`);
-      return instances
-        .map((component) => {
-          const { count, maxEntities, schema } = component;
-          if (maxEntities && count >= maxEntities) return null;
-          component[$_COUNT] += 1;
-          // set properties
-          if (schema) {
-            Object.entries(schema).forEach(([key, value]) => {
-              // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-              // @ts-ignore
-              // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-              component[key][entity] = properties[component.name][key] ?? value[1] ?? 0;
-            });
-          }
-          return component;
-        })
-        .filter((x) => x) as ComponentInstance<any>[];
-    };
+      return instances.map((instance) => add(instance, entity, properties)).filter(Boolean) as ComponentInstance<any>[];
+    }
   }
 
   removeComponentsFromEntity(components: Component<any>[]) {
-    // eslint-disable-next-line @typescript-eslint/unbound-method
-    const instances = components.map(this.componentMap.get, this.componentMap) as ComponentInstance<any>[];
-
-    /** @todo this is convoluted and inefficient */
-    const remove = (instance: ComponentInstance<any>, entity: Entity) => {
-      const { maxEntities, schema } = instance;
-      if (schema) {
-        Object.entries(schema).forEach(([key, prop]) => {
-          const storage = instance[key];
-          if (!storage) return false;
-          if (maxEntities) {
-            delete storage[entity];
-          } else {
-            const initialValue = Array.isArray(prop) ? prop[1] : 0;
-            storage[entity] = initialValue;
-          }
-          return true;
-        });
-      }
-      return false;
-    };
-
+    const instances = this.getInstances(components).filter(Boolean) as ComponentInstance<any>[];
+    if (instances.length !== components.length) throw new Error("Some components are not registered in this world!");
     return (entity: Entity) => {
-      return instances
-        .map((instance) => {
-          instance[$_COUNT] = instance[$_COUNT] - 1;
-          const removed = remove(instance, entity);
-          if (removed) return instance;
-          return null;
-        })
-        .filter((x) => x) as ComponentInstance<any>[];
-    };
+      return instances.map((instance) => remove(instance, entity)).filter(Boolean) as ComponentInstance<any>[];
+    }
   }
 
   getBuffer(): ArrayBuffer {
@@ -108,6 +101,10 @@ export class ComponentManager {
 
   getInstance<T extends Schema<T>>(component: Component<T>): ComponentInstance<T> | undefined {
     return this.componentMap.get(component);
+  }
+
+  getInstances(components: Component<any>[]): (ComponentInstance<any> | undefined)[] {
+    return components.map(this.getInstance, this);
   }
 
   setBuffer(source: ArrayBuffer): ComponentManager {

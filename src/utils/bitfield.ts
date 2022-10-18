@@ -27,6 +27,14 @@ export class Bitfield extends Uint32Array {
     return (((b + (b >> 4)) & 0xf0f0f0f) * 0x1010101) >> 24;
   }
 
+  /** @returns the number of set bits in a given bitfield */
+  static getSetBitCountInBitfield(bitfield: Bitfield): number {
+    return bitfield.reduce((res, val) => {
+      if (val === 0) return res;
+      return res + Bitfield.getSetBitCount(val);
+    }, 0);
+  }
+
   /**
    * Create a new Bitfield from an array of objects
    * @param length the number of bits in the bitfield

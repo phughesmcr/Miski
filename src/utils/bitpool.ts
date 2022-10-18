@@ -12,6 +12,10 @@ export class BitPool extends Bitfield {
     this.capacity = size;
   }
 
+  get reservations() {
+    return Bitfield.getSetBitCount(this[this.nextAvailable] as number);
+  }
+
   get vacancies() {
     return this.capacity - this.nextAvailable;
   }

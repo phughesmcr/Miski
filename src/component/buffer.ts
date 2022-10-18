@@ -48,6 +48,9 @@ export class ComponentBuffer extends ArrayBuffer {
     return buffer;
   }
 
+  /** Maximum number of in the world */
+  readonly capacity: number;
+
   /** Components and their respective TypedArray storage */
   readonly map: Map<Component<any>, SchemaStorage<any>> = new Map();
 
@@ -61,5 +64,6 @@ export class ComponentBuffer extends ArrayBuffer {
     const { capacity, components } = spec;
     super(ComponentBuffer.calculateSize(capacity, components));
     ComponentBuffer.partition(this, capacity, components);
+    this.capacity = capacity;
   }
 }

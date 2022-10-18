@@ -2,7 +2,7 @@
 
 import { ArchetypeManager } from "./archetype/manager.js";
 import { ComponentManager } from "./component/manager.js";
-import { VERSION } from "./constants.js";
+import { $_OWNERS, VERSION } from "./constants.js";
 import { EntityManager } from "./entity.js";
 import { QueryManager } from "./query/manager.js";
 import { Query } from "./query/query.js";
@@ -92,6 +92,9 @@ export class World {
     return this;
   }
 
+  getComponentInstance<T extends Schema<T>>(component: Component<T>): ComponentInstance<T> | undefined {
+    return this.componentManager.componentMap.get(component);
+  }
   getEntityProperties(entity: Entity): Record<string, SchemaProps<unknown>> {
     const archetype = this.archetypeManager.getEntityArchetype(entity);
     if (!archetype) return {};
@@ -129,15 +132,17 @@ export class World {
     return this.queryManager.getExitedFromQuery(query);
   }
 
-  hasComponents(...components: Component<any>[]) {
-    const instances = components
-      .map((component) => this.componentManager.getInstance(component))
-      .filter((x) => x) as ComponentInstance<any>[];
+  hasComponent<T extends Schema<T>>(component: Component<T>): (entity: Entity) => Boolean {
+    const instance = this.componentManager.getInstance(component);
+    if (!instance) throw new Error("Component is not registered.");
+    return (entity: Entity) => instance[$_OWNERS].isOn(entity);
+  }
+
+  hasComponents(...components: Component<any>[]): (entity: Entity) => Boolean[] {
+    const instances = this.componentManager.getInstances(components).filter((x) => x) as ComponentInstance<any>[];
     if (instances.length !== components.length) throw new Error("Not all components registered!");
-    return (entity: Entity) => {
-      const archetype = this.archetypeManager.getEntityArchetype(entity);
-      if (!archetype) return false;
-      return instances.every((instance) => archetype.components.includes(instance));
+    return (entity: Entity): Boolean[] => {
+      return instances.map((component) => component[$_OWNERS].isOn(entity));
     };
   }
 
@@ -172,8 +177,7 @@ export class World {
     const self = this;
     return (entity: Entity) => {
       if (!this.entityManager.isValidEntity(entity)) throw new SyntaxError(`Entity ${entity as number} is not valid!`);
-      const removed = remover(entity);
-      this.archetypeManager.updateArchetype(entity, removed); /** @todo probably don't want to do this each loop */
+      this.archetypeManager.updateArchetype(entity, remover(entity)); /** @todo probably don't want to do this each loop */
       return self;
     };
   }
