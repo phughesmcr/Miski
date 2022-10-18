@@ -74,14 +74,18 @@ export class ArchetypeManager {
    * @returns The entity's resulting archetype
    */
   updateArchetype(entity: Entity, components: ComponentInstance<any>[]): Archetype {
+    /** @todo replace this with a graph */
     const previousArchetype = this.entityArchetypes[entity];
     previousArchetype?.removeEntity(entity);
     const bitfield = previousArchetype
       ? previousArchetype.bitfield.cloneWithToggle<ComponentInstance<any>>("id", components)
       : this.rootArchetype.bitfield.cloneWithToggle<ComponentInstance<any>>("id", components);
     const id = bitfield.toString();
-    const nextArchetype = this.archetypeMap.get(id) ?? new Archetype(this.rootArchetype.bitfield.length, components, bitfield);
-    if (!this.archetypeMap.has(id)) this.archetypeMap.set(id, nextArchetype);
+    let nextArchetype = this.archetypeMap.get(id)
+    if (!nextArchetype) {
+      nextArchetype = new Archetype(this.rootArchetype.bitfield.length, components, bitfield);
+      this.archetypeMap.set(id, nextArchetype);
+    }
     this.entityArchetypes[entity] = nextArchetype.addEntity(entity);
     return nextArchetype;
   }
