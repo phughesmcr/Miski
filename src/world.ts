@@ -22,7 +22,7 @@ export interface WorldData {
 export interface WorldSpec {
   /** The maximum number of entities allowed in the world */
   capacity: number;
-  /** Components to instantiate in the world  */
+  /** Components to instantiate in the world */
   components: Component<any>[];
 }
 
@@ -51,13 +51,19 @@ export class World {
 
   readonly version = VERSION;
 
+  /**
+   * Create a new World object
+   * @param spec An WorldSpec object
+   * @param spec.capacity The maximum number of entities allowed in the world
+   * @param spec.components An array of components to instantiate in the world
+   */
   constructor(spec: WorldSpec) {
     const { capacity, components } = validateWorldSpec(spec);
     this.archetypeManager = new ArchetypeManager({ capacity, components });
     this.componentManager = new ComponentManager({ capacity, components });
     this.entityManager = new EntityManager({ capacity });
     this.queryManager = new QueryManager({ componentManager: this.componentManager });
-    this.refresh();
+    this.refresh(); /** @todo is this necessary? */
     Object.freeze(this);
   }
 
@@ -71,16 +77,13 @@ export class World {
     return this.entityManager.getVacancies();
   }
 
-  addComponentsToEntity(
-    ...components: Component<any>[]
-  ): (entity: Entity, properties?: Record<string, SchemaProps<unknown>>) => World {
+  addComponentsToEntity(...components: Component<any>[]) {
     const adder = this.componentManager.addComponentsToEntity(components);
     // eslint-disable-next-line @typescript-eslint/no-this-alias
     const self = this;
-    return (entity: Entity, properties?: Record<string, SchemaProps<unknown>>) => {
+    return (entity: Entity, properties?: Record<string, SchemaProps<unknown>>): World => {
       if (!this.entityManager.isValidEntity(entity)) throw new SyntaxError(`Entity ${entity as number} is not valid!`);
-      const added = adder(entity, properties);
-      this.archetypeManager.updateArchetype(entity, added); /** @todo probably don't want to do this each loop */
+      this.archetypeManager.updateArchetype(entity, adder(entity, properties)); /** @todo probably don't want to do this each loop */
       return self;
     };
   }
@@ -95,7 +98,7 @@ export class World {
 
   /** Remove and recycle an Entity */
   destroyEntity(entity: Entity): World {
-    if (!this.entityManager.isValidEntity(entity)) return this;
+    if (!this.entityManager.isValidEntity(entity)) throw new SyntaxError(`Entity ${entity as number} is not valid!`);
     this.archetypeManager.removeEntityArchetype(entity);
     this.entityManager.destroyEntity(entity);
     return this;
@@ -104,6 +107,7 @@ export class World {
   getComponentInstance<T extends Schema<T>>(component: Component<T>): ComponentInstance<T> | undefined {
     return this.componentManager.componentMap.get(component);
   }
+
   getEntityProperties(entity: Entity): Record<string, SchemaProps<unknown>> {
     const archetype = this.archetypeManager.getEntityArchetype(entity);
     if (!archetype) return {};
@@ -155,11 +159,12 @@ export class World {
     };
   }
 
-  /** @return `true` if the Entity !== undefined */
+  /** @return `true` if the Entity is valid and exists in the world */
   hasEntity(entity: Entity): boolean {
-    return this.entityManager.isValidEntity(entity) && this.archetypeManager.getEntityArchetype(entity) !== undefined;
+    return this.entityManager.entityPool.isOn(entity);
   }
 
+  /** Swap the ComponentBuffer of one world with this world */
   load(data: WorldData): World {
     const { buffer, capacity, version } = data;
     if (version !== this.version) {
@@ -173,6 +178,7 @@ export class World {
     return this;
   }
 
+  /** Runs various world maintenance functions */
   refresh(): World {
     this.queryManager.refreshQueries();
     this.archetypeManager.refreshArchetypes(this.queryManager.queryMap);
@@ -191,6 +197,7 @@ export class World {
     };
   }
 
+  /** Export various bits of data about the world */
   save(): WorldData {
     return Object.freeze({
       buffer: this.componentManager.getBuffer(),
