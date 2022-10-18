@@ -6,7 +6,7 @@ import { $_OWNERS, VERSION } from "./constants.js";
 import { EntityManager } from "./entity.js";
 import { QueryManager } from "./query/manager.js";
 import { Query } from "./query/query.js";
-import { isUint32 } from "./utils/utils.js";
+import { isObject, isPositiveInt } from "./utils/utils.js";
 import type { Component } from "./component/component.js";
 import type { ComponentInstance } from "./component/instance.js";
 import type { ComponentRecord } from "./component/manager.js";
@@ -27,10 +27,19 @@ export interface WorldSpec {
 }
 
 function validateWorldSpec(spec: WorldSpec): Required<WorldSpec> {
-  if (!spec) throw new SyntaxError("World creation requires a specification object.");
+  if (!spec || !isObject(spec)) {
+    throw new SyntaxError("World creation requires a specification object.");
+  }
   const { capacity, components } = spec;
-  if (!isUint32(capacity)) throw new SyntaxError("World: spec.capacity invalid.");
-  if (!components.length) throw new SyntaxError("World: spec.components invalid.");
+  if (!isPositiveInt(capacity)) {
+    throw new SyntaxError("World: spec.capacity invalid.");
+  }
+  if (
+    !Array.isArray(components) ||
+    !components.every((c) => Object.prototype.hasOwnProperty.call(c, "name"))
+  ) {
+    throw new TypeError("World: spec.components invalid.");
+  }
   return { ...spec, components: [...new Set(components)] };
 }
 
