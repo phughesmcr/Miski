@@ -120,16 +120,16 @@ export class World {
     return this.queryManager.getComponentsFromQuery(query);
   }
 
-  getQueryEntered(query: Query): Entity[] {
-    return this.queryManager.getEnteredFromQuery(query);
+  getQueryEntered(query: Query, arr: Entity[] = []): Entity[] {
+    return this.queryManager.getEnteredFromQuery(query, arr);
   }
 
   getQueryEntities(query: Query, arr: Entity[] = []): Entity[] {
     return this.queryManager.getEntitiesFromQuery(query, arr);
   }
 
-  getQueryExited(query: Query): Entity[] {
-    return this.queryManager.getExitedFromQuery(query);
+  getQueryExited(query: Query, arr: Entity[] = []): Entity[] {
+    return this.queryManager.getExitedFromQuery(query, arr);
   }
 
   hasComponent<T extends Schema<T>>(component: Component<T>): (entity: Entity) => Boolean {

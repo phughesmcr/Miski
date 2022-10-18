@@ -63,13 +63,13 @@ export class QueryManager {
     return this.getQueryInstance(query).components;
   }
 
-  /** @todo creates new array & set every time - wasteful */
   /** @returns an array of Entities which have entered this query since last refresh */
-  getEnteredFromQuery(query: Query): Entity[] {
-    const instance = this.getQueryInstance(query);
-    const res: Set<Entity> = new Set();
-    instance.archetypes.forEach(_flattenEntered, res);
-    return [...res];
+  getEnteredFromQuery(query: Query, arr: Entity[] = []): Entity[] {
+    arr.length = 0;
+    const res: Set<Entity> = new Set(); /** @todo avoid creating new set */
+    this.getQueryInstance(query)?.archetypes.forEach(_flattenEntered, res);
+    arr.push(...res)
+    return arr;
   }
 
   /** @returns an array of Entities which match the query */
@@ -115,11 +115,12 @@ export class QueryManager {
 
   /** @todo creates new array & set every time - wasteful */
   /** @returns an array of Entities which have been removed from this query since last refresh */
-  getExitedFromQuery(query: Query): Entity[] {
-    const instance = this.getQueryInstance(query);
-    const res: Set<Entity> = new Set();
-    instance.archetypes.forEach(_flattenExited, res);
-    return [...res];
+  getExitedFromQuery(query: Query, arr: Entity[] = []): Entity[] {
+    arr.length = 0;
+    const res: Set<Entity> = new Set(); /** @todo avoid creating new set */
+    this.getQueryInstance(query)?.archetypes.forEach(_flattenExited, res);
+    arr.push(...res)
+    return arr;
   }
 
   /** @returns an instantiated Query */
