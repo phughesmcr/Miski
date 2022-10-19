@@ -107,7 +107,6 @@ export class QueryManager {
         archetype.exited.forEach(cached.delete, cached);
       }
     });
-
     arr.push(...cached)
     return arr;
   }

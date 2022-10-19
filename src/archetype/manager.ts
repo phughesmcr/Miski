@@ -2,7 +2,7 @@
 
 import { Archetype } from "./archetype.js";
 import type { Query } from "../query/query.js";
-import type { QueryInstance } from "../query/instance.js";
+import type { Bitfield } from "../utils/bitfield.js";
 import type { Component } from "../component/component.js";
 import type { ComponentInstance } from "../component/instance.js";
 import type { Entity } from "../world.js";
@@ -74,16 +74,23 @@ export class ArchetypeManager {
   updateArchetype(entity: Entity, components: ComponentInstance<any>[]): Archetype {
     /** @todo replace this with a graph */
     const previousArchetype = this.entityArchetypes[entity];
-    previousArchetype?.removeEntity(entity);
-    const bitfield = previousArchetype
-      ? previousArchetype.bitfield.cloneWithToggle<ComponentInstance<any>>("id", components)
-      : this.rootArchetype.bitfield.cloneWithToggle<ComponentInstance<any>>("id", components);
+
+    let bitfield: Bitfield;
+    if (previousArchetype) {
+      previousArchetype.removeEntity(entity);
+      bitfield = previousArchetype.bitfield.cloneWithToggle("id", components);
+    } else {
+      bitfield = this.rootArchetype.bitfield.cloneWithToggle("id", components);
+    }
+
     const id = bitfield.toString();
-    let nextArchetype = this.archetypeMap.get(id)
+    let nextArchetype = this.archetypeMap.get(id);
+
     if (!nextArchetype) {
       nextArchetype = new Archetype(this.rootArchetype.bitfield.size, components, bitfield);
       this.archetypeMap.set(id, nextArchetype);
     }
+
     this.entityArchetypes[entity] = nextArchetype.addEntity(entity);
     return nextArchetype;
   }
