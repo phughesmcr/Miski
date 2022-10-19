@@ -21,8 +21,8 @@ export class Archetype {
   /** `true` if the object is in a dirty state */
   isDirty: boolean;
 
-  constructor(length: number, components: ComponentInstance<any>[], bitfield?: Bitfield) {
-    this.bitfield = bitfield ?? Bitfield.fromObjects(length, "id", components);
+  constructor(size: number, components: ComponentInstance<any>[], bitfield?: Bitfield) {
+    this.bitfield = bitfield ?? Bitfield.fromObjects(size, "id", components);
     this.candidateCache = new Map();
     this.components = components;
     this.entered = new Set();

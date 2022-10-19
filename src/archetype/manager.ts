@@ -81,7 +81,7 @@ export class ArchetypeManager {
     const id = bitfield.toString();
     let nextArchetype = this.archetypeMap.get(id)
     if (!nextArchetype) {
-      nextArchetype = new Archetype(this.rootArchetype.bitfield.length, components, bitfield);
+      nextArchetype = new Archetype(this.rootArchetype.bitfield.size, components, bitfield);
       this.archetypeMap.set(id, nextArchetype);
     }
     this.entityArchetypes[entity] = nextArchetype.addEntity(entity);
