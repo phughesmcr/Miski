@@ -1,6 +1,7 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
 import { Bitfield } from "../utils/bitfield.js";
+import { intersectBits } from "../utils/utils.js";
 import type { Archetype } from "../archetype/archetype.js";
 import type { Component } from "../component/component.js";
 import type { ComponentInstance } from "../component/instance.js";
@@ -72,11 +73,11 @@ export function createQueryInstance(spec: QueryInstanceSpec): QueryInstance {
   const archetypes: Set<Archetype> = new Set();
 
   const checkCandidacy = (target: number, idx: number): boolean => {
-    const OR = or[idx] === 0 || Bitfield.intersectBits(target, or[idx]) > 0;
+    const OR = or[idx] === 0 || intersectBits(target, or[idx]) > 0;
     if (!OR) return false;
-    const AND = Bitfield.intersectBits(target, and[idx]) === and[idx];
+    const AND = intersectBits(target, and[idx]) === and[idx];
     if (!AND) return false;
-    return Bitfield.intersectBits(target, not[idx]) === 0;
+    return intersectBits(target, not[idx]) === 0;
   };
 
   return Object.assign(Object.create(query), {

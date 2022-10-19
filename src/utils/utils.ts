@@ -1,6 +1,6 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
-import { FORBIDDEN_NAMES, MAX_UINT32, VALID_NAME_PATTERN } from "../constants.js";
+import { FORBIDDEN_NAMES, LOG_2, MAX_UINT32, VALID_NAME_PATTERN } from "../constants.js";
 
 /** @returns `true` if n is a number, >= 0, <= 2^32 - 1 */
 export function isUint32(n: number): n is number {
@@ -91,3 +91,14 @@ export const multipleOf4 = roundUpToMultipleOf(4);
 
 /** @returns the input rounded up to the closest multiple of 8 */
 export const multipleOf8 = roundUpToMultipleOf(8);
+
+/** @returns the intersection of two bits */
+export function intersectBits(a = 0, b = 0): number {
+  return a & b;
+}
+
+/** @returns the index of the least significant bit or -1 if error */
+export function getLsbIndex(value: number): number {
+  if (value === 2147483648) return 31;
+  return LOG_2[value & -value] ?? -1;
+}

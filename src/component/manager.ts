@@ -36,7 +36,7 @@ function add<T extends Schema<T>>(instance: ComponentInstance<T>, entity: number
   if (maxEntities && instance.count >= maxEntities) {
     throw new Error(`Component "${name}".maxEntities reached.`);
   }
-  if (instance[$_OWNERS].isOn(entity)) return null;
+  if (instance[$_OWNERS].isSet(entity)) return null;
   instance[$_OWNERS].toggle(entity);
   // set properties
   if (schema) {
@@ -51,7 +51,7 @@ function add<T extends Schema<T>>(instance: ComponentInstance<T>, entity: number
 /** @todo better async? */
 function remove(instance: ComponentInstance<any>, entity: Entity) {
   const { maxEntities, schema } = instance;
-  if (!instance[$_OWNERS].isOn(entity)) return null;
+  if (!instance[$_OWNERS].isSet(entity)) return null;
   instance[$_OWNERS].toggle(entity);
   if (schema) {
     /** @todo Object.entries creates an array. */

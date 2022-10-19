@@ -53,6 +53,10 @@ export class World {
   /** Pool of Entity states */
   private readonly entities: BitPool;
 
+  /** The maximum number of entities the world can hold */
+  readonly capacity: number;
+
+  /** Miski version */
   readonly version = VERSION;
 
   /**
@@ -63,6 +67,7 @@ export class World {
    */
   constructor(spec: WorldSpec) {
     const { capacity, components } = validateWorldSpec(spec);
+    this.capacity = capacity;
     this.entities = new BitPool(capacity);
     this.archetypeManager = new ArchetypeManager({ capacity, components });
     this.componentManager = new ComponentManager({ capacity, components });
@@ -71,19 +76,14 @@ export class World {
     Object.freeze(this);
   }
 
-  /** @returns the maximum number of entities the world can hold */
-  get capacity(): number {
-    return this.entities.size;
-  }
-
   /** @returns the number of active entities */
   get residents(): number {
-    return this.entities.residents;
+    return this.capacity - (this.entities.setCount - (this.entities.size - this.capacity));
   }
 
   /** @returns the number of available entities */
   get vacancies(): number {
-    return this.entities.vacancies;
+    return this.capacity - this.residents;
   }
 
   addComponentsToEntity(...components: Component<any>[]) {
@@ -174,17 +174,17 @@ export class World {
     return this.queryManager.getExitedFromQuery(query, arr);
   }
 
-  hasComponent<T extends Schema<T>>(component: Component<T>): (entity: Entity) => boolean {
+  hasComponent<T extends Schema<T>>(component: Component<T>): (entity: Entity) => boolean | null {
     const instance = this.componentManager.getInstance(component);
     if (!instance) throw new Error("Component is not registered.");
-    return (entity: Entity) => instance[$_OWNERS].isOn(entity);
+    return (entity: Entity) => instance[$_OWNERS].isSet(entity);
   }
 
-  hasComponents(...components: Component<any>[]): (entity: Entity) => boolean[] {
+  hasComponents(...components: Component<any>[]): (entity: Entity) => (boolean | null)[] {
     const instances = this.componentManager.getInstances(components).filter((x) => x) as ComponentInstance<any>[];
     if (instances.length !== components.length) throw new Error("Not all components registered!");
-    return (entity: Entity): boolean[] => {
-      return instances.map((component) => component[$_OWNERS].isOn(entity));
+    return (entity: Entity): (boolean | null)[] => {
+      return instances.map((component) => component[$_OWNERS].isSet(entity));
     };
   }
 
@@ -192,9 +192,9 @@ export class World {
    * @return `true` if the Entity is valid and exists in the world
    * @throws if the entity is invalid
    */
-  isEntityActive(entity: Entity): boolean {
-    if (!this.isValidEntity(entity)) throw new SyntaxError(`Entity ${entity as number} is not valid!`);
-    return this.entities.isOn(entity);
+  isEntityActive(entity: Entity): boolean | null {
+    if (!this.isValidEntity(entity)) return null;
+    return this.entities.isSet(entity);
   }
 
   /** @return `true` if the given entity is valid for the given capacity */
@@ -230,7 +230,7 @@ export class World {
     const self = this;
     return (entity: Entity) => {
       if (!this.isValidEntity(entity)) throw new SyntaxError(`Entity ${entity as number} is not valid!`);
-      this.archetypeManager.updateArchetype(entity, remover(entity)); /** @todo probably don't want to do this each loop */
+      this.archetypeManager.updateArchetype(entity, remover(entity));
       return self;
     };
   }

@@ -1,6 +1,7 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
 import { Bitfield } from "./bitfield.js";
+import { getLsbIndex } from "./utils.js";
 
 export class BitPool extends Bitfield {
   private nextAvailable = 0;
@@ -10,19 +11,15 @@ export class BitPool extends Bitfield {
     this.fill(4294967295);
   }
 
-  get residents() {
+  get setCount() {
     return Bitfield.getSetBitCountInBitfield(this);
-  }
-
-  get vacancies() {
-    return this.size - this.nextAvailable;
   }
 
   acquire() {
     const { nextAvailable } = this;
     if (nextAvailable <= -1) return -1;
     const index = this[nextAvailable] as number;
-    const position = Bitfield.getLsbIndex(index);
+    const position = getLsbIndex(index);
     this[nextAvailable] &= ~(1 << position);
     if (this[nextAvailable] === 0) {
       this.nextAvailable = -1;
