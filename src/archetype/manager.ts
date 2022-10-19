@@ -22,33 +22,30 @@ export class ArchetypeManager {
 
   constructor(spec: ArchetypeManagerSpec) {
     const { capacity, components } = spec;
+    this.rootArchetype = new Archetype(components.length, []);
     this.archetypeMap = new Map();
-    this.entityArchetypes = new Array(capacity) as Archetype[];
-    this.rootArchetype = new Archetype(components.length);
+    this.archetypeMap.set(this.rootArchetype.id, this.rootArchetype);
+    this.entityArchetypes = new Array(capacity).map((_, i) => this.rootArchetype.addEntity(i as Entity));
   }
 
-  export(): Record<string, Entity[]> {
-    return [...this.archetypeMap].reduce((res, [id, archetype]) => {
-      res[id] = [...archetype.entities];
-      return res;
-    }, {} as Record<string, Entity[]>);
-  }
-
-  getEntityArchetype(entity: Entity): Archetype | undefined {
+  /** @returns an entity's archetype or undefined if not found */
+  getArchetype(entity: Entity): Archetype | undefined {
     return this.entityArchetypes[entity];
   }
 
-  removeEntityArchetype(entity: Entity): ArchetypeManager {
+  /** Returns an entity to the root archetype */
+  resetArchetype(entity: Entity): ArchetypeManager {
+    if (this.entityArchetypes[entity] === this.rootArchetype) return this;
     this.entityArchetypes[entity]?.removeEntity(entity);
     this.entityArchetypes[entity] = this.rootArchetype.addEntity(entity);
     return this;
   }
 
+  /** Performs various archetype maintenance */
   refreshArchetypes(queries: Map<Query, QueryInstance>): ArchetypeManager {
     /** @todo double loop isn't ideal */
     this.archetypeMap.forEach((archetype) => {
       queries.forEach((query) => {
-        // this was other way around last time
         if (!query.archetypes.has(archetype) && archetype.isCandidate(query)) {
           query.isDirty = true;
           query.archetypes.add(archetype);
@@ -59,11 +56,12 @@ export class ArchetypeManager {
     return this;
   }
 
-  setEntityArchetype(entity: Entity, archetype: Archetype): ArchetypeManager {
+  /** Replace an entity's archetype */
+  setArchetype(entity: Entity, archetype: Archetype): ArchetypeManager {
+    if (!this.archetypeMap.has(archetype.id)) throw new Error("Invalid archetype.");
     if (this.entityArchetypes[entity] === archetype) return this;
     this.entityArchetypes[entity]?.removeEntity(entity);
     this.entityArchetypes[entity] = archetype.addEntity(entity);
-    this.archetypeMap.set(archetype.id, archetype);
     return this;
   }
 

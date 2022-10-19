@@ -118,7 +118,7 @@ export class World {
   }
 
   getEntityProperties(entity: Entity): Record<string, SchemaProps<unknown>> {
-    const archetype = this.archetypeManager.getEntityArchetype(entity);
+    const archetype = this.archetypeManager.getArchetype(entity);
     if (!archetype) return {};
     return archetype.components.reduce(
       <T extends Schema<T>>(res: Record<keyof T, SchemaProps<unknown>>, component: ComponentInstance<T>) => {
