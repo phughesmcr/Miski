@@ -4,20 +4,18 @@ import { Bitfield } from "./bitfield.js";
 
 export class BitPool extends Bitfield {
   private nextAvailable = 0;
-  private readonly capacity: number;
 
   constructor(size: number) {
     super(size);
     this.fill(4294967295);
-    this.capacity = size;
   }
 
-  get reservations() {
-    return Bitfield.getSetBitCount(this[this.nextAvailable] as number);
+  get residents() {
+    return Bitfield.getSetBitCountInBitfield(this);
   }
 
   get vacancies() {
-    return this.capacity - this.nextAvailable;
+    return this.size - this.nextAvailable;
   }
 
   acquire() {
@@ -40,6 +38,7 @@ export class BitPool extends Bitfield {
 
   release(idx: number): BitPool {
     const { index, position } = this.getPosition(idx);
+    if (index === -1) return this;
     this[index] |= 1 << position;
     this.nextAvailable = index;
     return this;

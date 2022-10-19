@@ -113,8 +113,28 @@ export class World {
     return this;
   }
 
+  getChangedFromComponents(...components: Component<any>[]): Entity[] {
+    const instances = this.componentManager.getInstances(components).filter((x) => x);
+    if (instances.length !== components.length) throw new Error("Not all components registered!");
+    return [...new Set(instances.reduce((res, inst) => {
+      res.push(...inst!.changed)
+      return res;
+    }, [] as Entity[]))];
+  }
+
+  getChangedFromQuery(query: Query, arr: Entity[] = []): Entity[] {
+    const instance = this.queryManager.getQueryInstance(query);
+    arr.length = 0;
+    Object.values(instance.components).forEach((inst) => arr.push(...inst.changed));
+    return [...new Set(arr)];
+  }
+
   getComponentInstance<T extends Schema<T>>(component: Component<T>): ComponentInstance<T> | undefined {
     return this.componentManager.componentMap.get(component);
+  }
+
+  getComponentInstances(...components: Component<any>[]): (ComponentInstance<any> | undefined)[] {
+    return this.componentManager.getInstances(components);
   }
 
   getEntityProperties(entity: Entity): Record<string, SchemaProps<unknown>> {
@@ -154,16 +174,16 @@ export class World {
     return this.queryManager.getExitedFromQuery(query, arr);
   }
 
-  hasComponent<T extends Schema<T>>(component: Component<T>): (entity: Entity) => Boolean {
+  hasComponent<T extends Schema<T>>(component: Component<T>): (entity: Entity) => boolean {
     const instance = this.componentManager.getInstance(component);
     if (!instance) throw new Error("Component is not registered.");
     return (entity: Entity) => instance[$_OWNERS].isOn(entity);
   }
 
-  hasComponents(...components: Component<any>[]): (entity: Entity) => Boolean[] {
+  hasComponents(...components: Component<any>[]): (entity: Entity) => boolean[] {
     const instances = this.componentManager.getInstances(components).filter((x) => x) as ComponentInstance<any>[];
     if (instances.length !== components.length) throw new Error("Not all components registered!");
-    return (entity: Entity): Boolean[] => {
+    return (entity: Entity): boolean[] => {
       return instances.map((component) => component[$_OWNERS].isOn(entity));
     };
   }

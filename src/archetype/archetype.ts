@@ -7,21 +7,21 @@ import type { QueryInstance } from "../query/instance.js";
 
 export class Archetype {
   /** The Archetype's Component Bitfield */
-  bitfield: Bitfield;
+  readonly bitfield: Bitfield;
   /** QueryInstances and their candidacy status*/
-  candidateCache: Map<QueryInstance, boolean>;
+  readonly candidateCache: Map<QueryInstance, boolean>;
   /** The components associated with this archetype */
-  components: ComponentInstance<any>[];
+  readonly components: ComponentInstance<any>[];
   /** Entities which have entered this archetype since last refresh */
-  entered: Set<Entity>;
+  readonly entered: Set<Entity>;
   /** Set of Entities which inhabit this Archetype */
-  entities: Set<Entity>;
+  readonly entities: Set<Entity>;
   /** Entities which have exited this archetype since last refresh */
-  exited: Set<Entity>;
+  readonly exited: Set<Entity>;
   /** `true` if the object is in a dirty state */
   isDirty: boolean;
 
-  constructor(length: number, components: ComponentInstance<any>[] = EMPTY_ARRAY as unknown as ComponentInstance<any>[], bitfield?: Bitfield) {
+  constructor(length: number, components: ComponentInstance<any>[], bitfield?: Bitfield) {
     this.bitfield = bitfield ?? Bitfield.fromObjects(length, "id", components);
     this.candidateCache = new Map();
     this.components = components;

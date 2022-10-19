@@ -25,9 +25,8 @@ function _flattenExited(this: Set<Entity>, { exited }: Archetype) {
   exited.forEach(this.add, this);
 }
 
-function refreshQuery(query: QueryInstance): QueryInstance {
+function refreshQuery(query: QueryInstance) {
   query.isDirty = false;
-  return query;
 }
 
 export interface QueryManagerSpec {
@@ -113,7 +112,6 @@ export class QueryManager {
     return arr;
   }
 
-  /** @todo creates new array & set every time - wasteful */
   /** @returns an array of Entities which have been removed from this query since last refresh */
   getExitedFromQuery(query: Query, arr: Entity[] = []): Entity[] {
     arr.length = 0;
@@ -139,7 +137,8 @@ export class QueryManager {
   }
 
   /** Perform routine maintenance on each registered query */
-  refreshQueries() {
+  refreshQueries(): QueryManager {
     this.queryMap.forEach(refreshQuery);
+    return this;
   }
 }
