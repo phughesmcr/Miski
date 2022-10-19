@@ -6,6 +6,7 @@ import type { Bitfield } from "../utils/bitfield.js";
 import type { Component } from "../component/component.js";
 import type { ComponentInstance } from "../component/instance.js";
 import type { Entity } from "../world.js";
+import type { QueryInstance } from "../query/instance.js";
 
 export interface ArchetypeManagerSpec {
   capacity: number;
