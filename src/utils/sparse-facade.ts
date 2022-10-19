@@ -2,7 +2,7 @@
 
 import { BitPool } from "./bitpool.js";
 import type { TypedArray } from "./utils.js";
-import type { Entity } from "../entity.js";
+import type { Entity } from "../world.js";
 
 /**
  * @param dense the typed array to apply the facade to

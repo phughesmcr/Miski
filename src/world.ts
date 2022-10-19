@@ -3,15 +3,17 @@
 import { ArchetypeManager } from "./archetype/manager.js";
 import { ComponentManager } from "./component/manager.js";
 import { $_OWNERS, VERSION } from "./constants.js";
-import { EntityManager } from "./entity.js";
 import { QueryManager } from "./query/manager.js";
 import { Query } from "./query/query.js";
-import { isObject, isPositiveInt } from "./utils/utils.js";
+import { BitPool } from "./utils/bitpool.js";
+import { isObject, isPositiveInt, isUint32, Opaque } from "./utils/utils.js";
 import type { Component } from "./component/component.js";
 import type { ComponentInstance } from "./component/instance.js";
 import type { ComponentRecord } from "./component/manager.js";
-import type { Entity } from "./entity.js";
 import type { Schema, SchemaProps } from "./component/schema.js";
+
+/** Entities are indexes of an EntityArray. An Entity is just an integer. */
+export type Entity = Opaque<number, "Entity">;
 
 export interface WorldData {
   buffer: ArrayBuffer;
@@ -46,8 +48,10 @@ function validateWorldSpec(spec: WorldSpec): Required<WorldSpec> {
 export class World {
   private readonly archetypeManager: ArchetypeManager;
   private readonly componentManager: ComponentManager;
-  private readonly entityManager: EntityManager;
   private readonly queryManager: QueryManager;
+
+  /** Pool of Entity states */
+  private readonly entities: BitPool;
 
   readonly version = VERSION;
 
@@ -59,9 +63,9 @@ export class World {
    */
   constructor(spec: WorldSpec) {
     const { capacity, components } = validateWorldSpec(spec);
+    this.entities = new BitPool(capacity);
     this.archetypeManager = new ArchetypeManager({ capacity, components });
     this.componentManager = new ComponentManager({ capacity, components });
-    this.entityManager = new EntityManager({ capacity });
     this.queryManager = new QueryManager({ componentManager: this.componentManager });
     this.refresh(); /** @todo is this necessary? */
     Object.freeze(this);
@@ -69,12 +73,17 @@ export class World {
 
   /** @returns the maximum number of entities the world can hold */
   get capacity(): number {
-    return this.entityManager.capacity;
+    return this.entities.size;
+  }
+
+  /** @returns the number of active entities */
+  get residents(): number {
+    return this.entities.residents;
   }
 
   /** @returns the number of available entities */
   get vacancies(): number {
-    return this.entityManager.getVacancies();
+    return this.entities.vacancies;
   }
 
   addComponentsToEntity(...components: Component<any>[]) {
@@ -82,25 +91,25 @@ export class World {
     // eslint-disable-next-line @typescript-eslint/no-this-alias
     const self = this;
     return (entity: Entity, properties?: Record<string, SchemaProps<unknown>>): World => {
-      if (!this.entityManager.isValidEntity(entity)) throw new SyntaxError(`Entity ${entity as number} is not valid!`);
-      this.archetypeManager.updateArchetype(entity, adder(entity, properties)); /** @todo probably don't want to do this each loop */
+      if (!this.isValidEntity(entity)) throw new SyntaxError(`Entity ${entity as number} is not valid!`);
+      this.archetypeManager.updateArchetype(entity, adder(entity, properties));
       return self;
     };
   }
 
   /** @returns the next available Entity or `undefined` if no Entity is available */
   createEntity(): Entity | undefined {
-    const entity = this.entityManager.createEntity();
-    if (entity === undefined) return;
-    this.archetypeManager.setEntityArchetype(entity, this.archetypeManager.rootArchetype);
+    const entity = this.entities.acquire() as Entity;
+    if (entity < 0) return;
+    this.archetypeManager.setArchetype(entity, this.archetypeManager.rootArchetype);
     return entity;
   }
 
   /** Remove and recycle an Entity */
   destroyEntity(entity: Entity): World {
-    if (!this.entityManager.isValidEntity(entity)) throw new SyntaxError(`Entity ${entity as number} is not valid!`);
-    this.archetypeManager.removeEntityArchetype(entity);
-    this.entityManager.destroyEntity(entity);
+    if (!this.isValidEntity(entity)) throw new SyntaxError(`Entity ${entity as number} is not valid!`);
+    this.archetypeManager.resetArchetype(entity);
+    this.entities.release(entity);
     return this;
   }
 
@@ -159,9 +168,18 @@ export class World {
     };
   }
 
-  /** @return `true` if the Entity is valid and exists in the world */
-  hasEntity(entity: Entity): boolean {
-    return this.entityManager.entityPool.isOn(entity);
+  /**
+   * @return `true` if the Entity is valid and exists in the world
+   * @throws if the entity is invalid
+   */
+  isEntityActive(entity: Entity): boolean {
+    if (!this.isValidEntity(entity)) throw new SyntaxError(`Entity ${entity as number} is not valid!`);
+    return this.entities.isOn(entity);
+  }
+
+  /** @return `true` if the given entity is valid for the given capacity */
+  isValidEntity(entity: Entity): entity is Entity {
+    return isUint32(entity) && entity < this.entities.size;
   }
 
   /** Swap the ComponentBuffer of one world with this world */
@@ -191,7 +209,7 @@ export class World {
     // eslint-disable-next-line @typescript-eslint/no-this-alias
     const self = this;
     return (entity: Entity) => {
-      if (!this.entityManager.isValidEntity(entity)) throw new SyntaxError(`Entity ${entity as number} is not valid!`);
+      if (!this.isValidEntity(entity)) throw new SyntaxError(`Entity ${entity as number} is not valid!`);
       this.archetypeManager.updateArchetype(entity, remover(entity)); /** @todo probably don't want to do this each loop */
       return self;
     };

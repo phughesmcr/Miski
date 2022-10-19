@@ -13,6 +13,7 @@ export const FORBIDDEN_NAMES = Object.freeze([
   "component",
   "count",
   "eid",
+  "entity",
   "id",
   "isTag",
   "maxEntities",

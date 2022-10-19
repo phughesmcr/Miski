@@ -1,9 +1,8 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
 import { Bitfield } from "../utils/bitfield.js";
-import { EMPTY_ARRAY } from "../constants.js";
 import type { ComponentInstance } from "../component/instance.js";
-import type { Entity } from "../entity.js";
+import type { Entity } from "../world.js";
 import type { QueryInstance } from "../query/instance.js";
 
 export class Archetype {

@@ -4,7 +4,7 @@ import type { Archetype } from "../archetype/archetype.js";
 import type { Component } from "../component/component.js";
 import type { ComponentInstance } from "../component/instance.js";
 import type { ComponentManager, ComponentRecord } from "../component/manager.js";
-import type { Entity } from "../entity.js";
+import type { Entity } from "../world.js";
 import type { QueryInstance } from "./instance.js";
 
 /** @todo find a nicer way of doing this */

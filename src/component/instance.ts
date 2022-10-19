@@ -6,7 +6,7 @@ import { storageProxy } from "./proxy.js";
 import { Bitfield } from "../utils/bitfield.js";
 import type { TypedArray } from "../utils/utils.js";
 import type { StorageProxy } from "./proxy.js";
-import type { Entity } from "../entity.js";
+import type { Entity } from "../world.js";
 import type { Component } from "./component.js";
 import type { Schema, SchemaStorage } from "./schema.js";
 

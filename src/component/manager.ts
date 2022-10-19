@@ -3,7 +3,7 @@
 import { $_OWNERS } from "../constants.js";
 import { createComponentInstance, refreshComponentInstance } from "./instance.js";
 import { ComponentBuffer } from "./buffer.js";
-import type { Entity } from "../entity.js";
+import type { Entity } from "../world.js";
 import type { TypedArrayConstructor } from "../utils/utils.js";
 import type { Component } from "./component.js";
 import type { ComponentInstance } from "./instance.js";
