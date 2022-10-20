@@ -51,6 +51,12 @@ function add<T extends Schema<T>>(
   return instance;
 }
 
+export const addEntity = <T extends Schema<T>>(
+  instance: ComponentInstance<T>,
+  entity: Entity,
+  properties?: Record<string, SchemaProps<T>>,
+) => add(instance, entity, properties);
+
 /** @todo better async? */
 function remove(instance: ComponentInstance<any>, entity: Entity) {
   const { maxEntities, schema } = instance;
@@ -72,6 +78,10 @@ function remove(instance: ComponentInstance<any>, entity: Entity) {
   return instance;
 }
 
+export const removeEntity = <T extends Schema<T>>(instance: ComponentInstance<T>, entity: Entity) => {
+  return remove(instance, entity);
+};
+
 export class ComponentManager {
   readonly buffer: ComponentBuffer;
   readonly componentMap: Map<Component<any>, ComponentInstance<any>>;
@@ -88,7 +98,9 @@ export class ComponentManager {
     const instances = this.getInstances(components).filter(Boolean) as ComponentInstance<any>[];
     if (instances.length !== components.length) throw new Error("Some components are not registered in this world!");
     return (entity: Entity, properties?: Record<string, SchemaProps<unknown>>) => {
-      return instances.map((instance) => add(instance, entity, properties)).filter(Boolean) as ComponentInstance<any>[];
+      return instances
+        .map((instance) => addEntity(instance, entity, properties))
+        .filter(Boolean) as ComponentInstance<any>[];
     };
   }
 
@@ -96,7 +108,7 @@ export class ComponentManager {
     const instances = this.getInstances(components).filter(Boolean) as ComponentInstance<any>[];
     if (instances.length !== components.length) throw new Error("Some components are not registered in this world!");
     return (entity: Entity) => {
-      return instances.map((instance) => remove(instance, entity)).filter(Boolean) as ComponentInstance<any>[];
+      return instances.map((instance) => removeEntity(instance, entity)).filter(Boolean) as ComponentInstance<any>[];
     };
   }
 
