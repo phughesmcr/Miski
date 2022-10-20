@@ -1,8 +1,5 @@
 "use strict";
 
-import commonjs from "@rollup/plugin-commonjs";
-import { nodeResolve } from "@rollup/plugin-node-resolve";
-import json from '@rollup/plugin-json';
 import typescript from 'rollup-plugin-typescript2';
 import dts from "rollup-plugin-dts";
 import { terser } from "rollup-plugin-terser";
@@ -10,8 +7,7 @@ import * as pkg from "./package.json";
 import replace from '@rollup/plugin-replace';
 
 const CURRENT_YEAR = new Date().getFullYear();
-const bannerText = `/*! Miski v${pkg.version}. MIT license. (C) 2021-${CURRENT_YEAR} the Miski authors. All rights reserved. **/\n/** @author P. Hughes<github@phugh.es>(https://www.phugh.es) */`;
-const extensions = [".js", ".jsx", ".es6", ".es", ".mjs", ".ts", ".tsx"];
+const bannerText = `/*! Miski v${pkg.version}. MIT license. (C) 2021-${CURRENT_YEAR} the Miski authors. All rights reserved. **/\n/*! @author P. Hughes<github@phugh.es>(https://www.phugh.es) **/`;
 const external = [...Object.keys(pkg.dependencies || {}), ...Object.keys(pkg.peerDependencies || {})];
 const globals = {};
 const input = "./src/index.ts";
@@ -29,22 +25,6 @@ export default [
           __VERSION__: pkg.version,
         },
         preventAssignment: true,
-      }),
-
-      nodeResolve({
-        extensions,
-        mainFields: ["module", "jsnext:main", "main"],
-      }),
-
-      commonjs({
-        include: "node_modules/**",
-        transformMixedEsModules: true,
-      }),
-
-      json({
-        exclude: 'node_modules/**',
-        compact: true,
-        preferConst: true,
       }),
 
       typescript({
