@@ -26,7 +26,7 @@ export class ArchetypeManager {
     this.rootArchetype = new Archetype(components.length, []);
     this.archetypeMap = new Map();
     this.archetypeMap.set(this.rootArchetype.id, this.rootArchetype);
-    this.entityArchetypes = new Array(capacity).map((_, i) => this.rootArchetype.addEntity(i as Entity));
+    this.entityArchetypes = Array.from({ length: capacity }, (_, i) => this.rootArchetype.addEntity(i as Entity));
   }
 
   /** @returns an entity's archetype or undefined if not found */

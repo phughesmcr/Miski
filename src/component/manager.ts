@@ -20,18 +20,19 @@ export interface ComponentManagerSpec {
 }
 
 function instantiate(buffer: ComponentBuffer, capacity: number, components: Component<any>[]) {
-  return components.reduce(
-    <T extends Schema<T>>(res: ComponentMap, component: Component<T>, id: number) => {
-      const instance = createComponentInstance({ capacity, component, id, storage: buffer.map.get(component) });
-      res.set(component, instance);
-      return res;
-    },
-    new Map() as ComponentMap,
-  );
+  return components.reduce(<T extends Schema<T>>(res: ComponentMap, component: Component<T>, id: number) => {
+    const instance = createComponentInstance({ capacity, component, id, storage: buffer.map.get(component) });
+    res.set(component, instance);
+    return res;
+  }, new Map() as ComponentMap);
 }
 
 /** @todo better async? */
-function add<T extends Schema<T>>(instance: ComponentInstance<T>, entity: number, properties?: Record<string, SchemaProps<unknown>>) {
+function add<T extends Schema<T>>(
+  instance: ComponentInstance<T>,
+  entity: number,
+  properties?: Record<string, SchemaProps<unknown>>,
+) {
   const { maxEntities, name, schema } = instance;
   if (maxEntities && instance.count >= maxEntities) {
     throw new Error(`Component "${name}".maxEntities reached.`);
@@ -42,11 +43,13 @@ function add<T extends Schema<T>>(instance: ComponentInstance<T>, entity: number
   if (schema) {
     /** @todo Object.entries creates an array. */
     Object.entries(schema).forEach(([key, value]) => {
-      instance[key as keyof T][entity] = properties ? (properties[name] as SchemaProps<T>)[key as keyof T] ?? (value as [TypedArrayConstructor, number])[1] ?? 0 : (value as [TypedArrayConstructor, number])[1] ?? 0;
+      instance[key as keyof T][entity] = properties
+        ? (properties[name] as SchemaProps<T>)[key as keyof T] ?? (value as [TypedArrayConstructor, number])[1] ?? 0
+        : (value as [TypedArrayConstructor, number])[1] ?? 0;
     });
   }
   return instance;
-};
+}
 
 /** @todo better async? */
 function remove(instance: ComponentInstance<any>, entity: Entity) {
@@ -67,7 +70,7 @@ function remove(instance: ComponentInstance<any>, entity: Entity) {
     });
   }
   return instance;
-};
+}
 
 export class ComponentManager {
   readonly buffer: ComponentBuffer;
@@ -79,12 +82,14 @@ export class ComponentManager {
     this.componentMap = instantiate(this.buffer, capacity, components);
   }
 
-  addComponentsToEntity(components: Component<any>[]): (entity: Entity, properties?: Record<string, SchemaProps<unknown>>) => ComponentInstance<any>[] {
+  addComponentsToEntity(
+    components: Component<any>[],
+  ): (entity: Entity, properties?: Record<string, SchemaProps<unknown>>) => ComponentInstance<any>[] {
     const instances = this.getInstances(components).filter(Boolean) as ComponentInstance<any>[];
     if (instances.length !== components.length) throw new Error("Some components are not registered in this world!");
     return (entity: Entity, properties?: Record<string, SchemaProps<unknown>>) => {
       return instances.map((instance) => add(instance, entity, properties)).filter(Boolean) as ComponentInstance<any>[];
-    }
+    };
   }
 
   removeComponentsFromEntity(components: Component<any>[]) {
@@ -92,7 +97,7 @@ export class ComponentManager {
     if (instances.length !== components.length) throw new Error("Some components are not registered in this world!");
     return (entity: Entity) => {
       return instances.map((instance) => remove(instance, entity)).filter(Boolean) as ComponentInstance<any>[];
-    }
+    };
   }
 
   getBuffer(): ArrayBuffer {
@@ -104,6 +109,7 @@ export class ComponentManager {
   }
 
   getInstances(components: Component<any>[]): (ComponentInstance<any> | undefined)[] {
+    // eslint-disable-next-line @typescript-eslint/unbound-method
     return components.map(this.getInstance, this);
   }
 

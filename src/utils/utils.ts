@@ -54,9 +54,9 @@ export function isTypedArrayConstructor(object: unknown): object is TypedArrayCo
 export function isValidName(str: string): boolean {
   return Boolean(
     typeof str === "string" &&
-    str.length > 0 &&
-    FORBIDDEN_NAMES.includes(str) === false &&
-    VALID_NAME_PATTERN.test(str)
+      str.length > 0 &&
+      FORBIDDEN_NAMES.includes(str) === false &&
+      VALID_NAME_PATTERN.test(str),
   );
 }
 

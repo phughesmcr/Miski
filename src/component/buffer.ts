@@ -19,7 +19,7 @@ export class ComponentBuffer extends ArrayBuffer {
     return components.reduce((total: number, component: Component<any>): number => {
       const { size } = component;
       if (!size || size < 0) return total;
-      return total + (size * capacity);
+      return total + size * capacity;
     }, 0);
   }
 
@@ -37,12 +37,12 @@ export class ComponentBuffer extends ArrayBuffer {
       Object.entries(schema).forEach(([key, value]) => {
         let typedArrayConstructor = value as TypedArrayConstructor;
         let initialValue = 0;
-        if (Array.isArray(value)) [typedArrayConstructor, initialValue] = value;
+        if (Array.isArray(value)) [typedArrayConstructor, initialValue] = value as [TypedArrayConstructor, number];
         const dense = new typedArrayConstructor(buffer, offset, requiredSize);
         storage[key as keyof T] = maxEntities === null ? dense : sparseFacade(dense);
         storage[key as keyof T].fill(initialValue as never);
-        offset += (typedArrayConstructor.BYTES_PER_ELEMENT * requiredSize);
-      })
+        offset += typedArrayConstructor.BYTES_PER_ELEMENT * requiredSize;
+      });
       buffer.map.set(component, storage);
     });
     return buffer;

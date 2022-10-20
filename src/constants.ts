@@ -1,7 +1,7 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
 /** Miski version */
-export const VERSION: string = "__VERSION__"; // __VERSION__ is replaced by rollup
+export const VERSION = "__VERSION__"; // __VERSION__ is replaced by rollup
 
 /** Maximum 32-bit integer (2^32 - 1) */
 export const MAX_UINT32 = 4_294_967_295;

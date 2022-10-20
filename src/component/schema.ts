@@ -29,7 +29,7 @@ function _validateProps(value: TypedArrayConstructor | [TypedArrayConstructor, n
   if (Array.isArray(value)) {
     // if this is an array, the user wants to set an initial value
     const [TAC, n] = value;
-    return (!isNaN(n) && isTypedArrayConstructor(TAC));
+    return !isNaN(n) && isTypedArrayConstructor(TAC);
   }
   return isTypedArrayConstructor(value);
 }
@@ -61,7 +61,7 @@ function byteSum(total: unknown, value: unknown): number {
   const size = Array.isArray(value)
     ? (value[0] as TypedArray).BYTES_PER_ELEMENT
     : (value as TypedArray).BYTES_PER_ELEMENT;
-  return ((total as number) + size);
+  return (total as number) + size;
 }
 
 /**

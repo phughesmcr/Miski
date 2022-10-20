@@ -67,7 +67,7 @@ export class QueryManager {
     arr.length = 0;
     const res: Set<Entity> = new Set(); /** @todo avoid creating new set */
     this.getQueryInstance(query)?.archetypes.forEach(_flattenEntered, res);
-    arr.push(...res)
+    arr.push(...res);
     return arr;
   }
 
@@ -86,7 +86,7 @@ export class QueryManager {
       const res: Set<Entity> = new Set();
       archetypes.forEach(_flattenEntities, res);
       this.entityCache.set(instance, res);
-      arr.push(...res)
+      arr.push(...res);
       return arr;
     }
 
@@ -94,7 +94,7 @@ export class QueryManager {
     if (isDirty === true) {
       cached.clear();
       archetypes.forEach(_flattenEntities, cached);
-      arr.push(...cached)
+      arr.push(...cached);
       return arr;
     }
 
@@ -107,7 +107,7 @@ export class QueryManager {
         archetype.exited.forEach(cached.delete, cached);
       }
     });
-    arr.push(...cached)
+    arr.push(...cached);
     return arr;
   }
 
@@ -116,7 +116,7 @@ export class QueryManager {
     arr.length = 0;
     const res: Set<Entity> = new Set(); /** @todo avoid creating new set */
     this.getQueryInstance(query)?.archetypes.forEach(_flattenExited, res);
-    arr.push(...res)
+    arr.push(...res);
     return arr;
   }
 

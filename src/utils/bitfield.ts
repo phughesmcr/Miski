@@ -74,12 +74,12 @@ export class Bitfield extends Uint32Array {
   }
 
   /** @returns the index and position of a bit in the bitfield */
-  getPosition(bit: number): { index: number, position: number } {
+  getPosition(bit: number): { index: number; position: number } {
     const index = Bitfield.indexOf(bit);
     return {
       index,
       position: bit - (index << 5),
-    }
+    };
   }
 
   /** @returns `true` if a given bit is set in the Bitfield or null on error */

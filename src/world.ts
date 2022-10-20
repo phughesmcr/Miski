@@ -36,10 +36,7 @@ function validateWorldSpec(spec: WorldSpec): Required<WorldSpec> {
   if (!isPositiveInt(capacity)) {
     throw new SyntaxError("World: spec.capacity invalid.");
   }
-  if (
-    !Array.isArray(components) ||
-    !components.every((c) => Object.prototype.hasOwnProperty.call(c, "name"))
-  ) {
+  if (!Array.isArray(components) || !components.every((c) => Object.prototype.hasOwnProperty.call(c, "name"))) {
     throw new TypeError("World: spec.components invalid.");
   }
   return { ...spec, components: [...new Set(components)] };
@@ -116,10 +113,14 @@ export class World {
   getChangedFromComponents(...components: Component<any>[]): Entity[] {
     const instances = this.componentManager.getInstances(components).filter((x) => x);
     if (instances.length !== components.length) throw new Error("Not all components registered!");
-    return [...new Set(instances.reduce((res, inst) => {
-      res.push(...inst!.changed)
-      return res;
-    }, [] as Entity[]))];
+    return [
+      ...new Set(
+        instances.reduce((res, inst) => {
+          res.push(...inst!.changed);
+          return res;
+        }, [] as Entity[]),
+      ),
+    ];
   }
 
   getChangedFromQuery(query: Query, arr: Entity[] = []): Entity[] {
