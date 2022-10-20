@@ -109,6 +109,7 @@ declare const $_OWNERS: unique symbol;
  */
 /** */
 declare class Bitfield extends Uint32Array {
+    static getHighestSetBit(value: number): number;
     /** @returns the number of set bits in a given value */
     static getSetBitCount(value: number): number;
     /** @returns the number of set bits in a given bitfield */
@@ -200,7 +201,7 @@ declare class World {
     /** The maximum number of entities the world can hold */
     readonly capacity: number;
     /** Miski version */
-    readonly version = "0.11.0";
+    readonly version = "0.11.1";
     /**
      * Create a new World object
      * @param spec An WorldSpec object

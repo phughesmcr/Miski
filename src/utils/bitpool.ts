@@ -11,13 +11,13 @@ export class BitPool extends Bitfield {
     this.fill(4294967295);
   }
 
-  get setCount() {
+  get setCount(): number {
     return Bitfield.getSetBitCountInBitfield(this);
   }
 
-  acquire() {
+  acquire(): number {
     const { nextAvailable } = this;
-    if (nextAvailable <= -1) return -1;
+    if (!~nextAvailable) return -1;
     const index = this[nextAvailable] as number;
     const position = getLsbIndex(index);
     this[nextAvailable] &= ~(1 << position);

@@ -1,7 +1,7 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
 import { ArchetypeManager } from "./archetype/manager.js";
-import { ComponentManager } from "./component/manager.js";
+import { ComponentManager, removeEntity } from "./component/manager.js";
 import { $_OWNERS, VERSION } from "./constants.js";
 import { QueryManager } from "./query/manager.js";
 import { Query } from "./query/query.js";
@@ -96,6 +96,7 @@ export class World {
 
   /** @returns the next available Entity or `undefined` if no Entity is available */
   createEntity(): Entity | undefined {
+    if (this.residents >= this.capacity) return;
     const entity = this.entities.acquire() as Entity;
     if (entity < 0) return;
     this.archetypeManager.setArchetype(entity, this.archetypeManager.rootArchetype);
@@ -105,6 +106,8 @@ export class World {
   /** Remove and recycle an Entity */
   destroyEntity(entity: Entity): World {
     if (!this.isValidEntity(entity)) throw new SyntaxError(`Entity ${entity as number} is not valid!`);
+    // eslint-disable-next-line array-callback-return
+    this.archetypeManager.entityArchetypes[entity]?.components.forEach((instance) => removeEntity(instance, entity));
     this.archetypeManager.resetArchetype(entity);
     this.entities.release(entity);
     return this;

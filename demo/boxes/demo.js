@@ -179,9 +179,6 @@ const shapeBuilder = world.addComponentsToEntity(cVelocity, cPosition, cShape, t
 
 /* 5. Create Entities and give them some components */
 const createShapes = (n, w = canvas.width, h = canvas.height) => {
-  while (NUM_ELEMENTS + n > world.capacity) {
-    n -= 1;
-  }
   for (let i = 0; i < n; i++) {
     const entity = world.createEntity(); // this is the only Miski specific bit
     if (entity !== undefined) {
@@ -198,9 +195,6 @@ const createShapes = (n, w = canvas.width, h = canvas.height) => {
 }
 
 const destroyShapes = (n) => {
-  while (NUM_ELEMENTS - n < 0) {
-    n -= 1;
-  }
   for (let i = 0; i < n; i++) {
     const e = ENTITIES.pop();
     if (e !== undefined) {
