@@ -126,6 +126,7 @@ export class World {
   getChangedFromQuery(query: Query, arr: Entity[] = []): Entity[] {
     const instance = this.queryManager.getQueryInstance(query);
     arr.length = 0;
+    // eslint-disable-next-line array-callback-return
     Object.values(instance.components).forEach((inst) => arr.push(...inst.changed));
     return [...new Set(arr)];
   }

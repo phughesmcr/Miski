@@ -69,6 +69,7 @@ export class Bitfield extends Uint32Array {
   /** @returns a new Bitfield based on this one with toggled bits */
   cloneWithToggle<T>(key: keyof T, sources: T[]): Bitfield {
     const bitfield = this.clone();
+    // eslint-disable-next-line array-callback-return
     sources.forEach((source) => bitfield.toggle(source[key] as number));
     return bitfield;
   }
