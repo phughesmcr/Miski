@@ -211,7 +211,7 @@ const destroyShapes = (n) => {
   updateEntityCount();
 }
 
-window.addEventListener("DOMContentLoaded", () => {
+window.addEventListener("load", () => {
   const sResX = document.getElementById("sResX");
   const sResY = document.getElementById("sResY");
   const rSpeed = document.getElementById("rSpeed");
