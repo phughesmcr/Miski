@@ -46,12 +46,14 @@ export class ArchetypeManager {
   refreshArchetypes(queries: Map<Query, QueryInstance>): ArchetypeManager {
     /** @todo double loop isn't ideal */
     this.archetypeMap.forEach((archetype) => {
-      queries.forEach((query) => {
-        if (!query.archetypes.has(archetype) && archetype.isCandidate(query)) {
-          query.isDirty = true;
-          query.archetypes.add(archetype);
-        }
-      });
+      if (!archetype.isEmpty) {
+        queries.forEach((query) => {
+          if (!query.archetypes.has(archetype) && archetype.isCandidate(query)) {
+            query.isDirty = true;
+            query.archetypes.add(archetype);
+          }
+        });
+      }
       archetype.refresh();
     });
     return this;
