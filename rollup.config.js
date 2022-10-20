@@ -3,12 +3,11 @@
 import typescript from 'rollup-plugin-typescript2';
 import dts from "rollup-plugin-dts";
 import { terser } from "rollup-plugin-terser";
-import * as pkg from "./package.json";
 import replace from '@rollup/plugin-replace';
 
+const VERSION = process.env.npm_package_version;
 const CURRENT_YEAR = new Date().getFullYear();
-const bannerText = `/*! Miski v${pkg.version}. MIT license. (C) 2021-${CURRENT_YEAR} the Miski authors. All rights reserved. **/\n/*! @author P. Hughes<github@phugh.es>(https://www.phugh.es) **/`;
-const external = [...Object.keys(pkg.dependencies || {}), ...Object.keys(pkg.peerDependencies || {})];
+const bannerText = `/*! Miski v${VERSION}. MIT license. (C) 2021-${CURRENT_YEAR} the Miski authors. All rights reserved. **/\n/*! @author P. Hughes<github@phugh.es>(https://www.phugh.es) **/`;
 const globals = {};
 const input = "./src/index.ts";
 
@@ -16,13 +15,11 @@ export default [
   {
     input,
 
-    external,
-
     plugins: [
       replace({
         exclude: 'node_modules/**',
         values: {
-          __VERSION__: pkg.version,
+          __VERSION__: VERSION,
         },
         preventAssignment: true,
       }),
@@ -32,8 +29,6 @@ export default [
         exclude: [ "node_modules", "*.d.ts", "**/*.d.ts" ],
         include: [ "*.ts+(|x)", "**/*.ts+(|x)", "*.m?js+(|x)", "**/*.m?js+(|x)" ],
         tsconfig: "tsconfig.json",
-        tslib: require("tslib"),
-        typescript: require("typescript"),
         tsconfigOverride: {
           declaration: false,
         },
