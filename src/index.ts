@@ -13,22 +13,20 @@
  *
  */
 
-export { createComponent } from "./component/component.js";
-export { createQuery, mergeQueries } from "./query/query.js";
-export { createSystem } from "./system.js";
-export { createWorld } from "./world.js";
+export { Component } from "./component/component.js";
+export { Query } from "./query/query.js";
+export { System } from "./system.js";
+export { World } from "./world.js";
 
 export type { Archetype } from "./archetype/archetype.js";
-export type { Bitfield } from "./bitfield.js";
-export type { Component, ComponentSpec } from "./component/component.js";
+export type { Bitfield } from "./utils/bitfield.js";
+export type { ComponentSpec } from "./component/component.js";
 export type { ComponentRecord } from "./component/manager.js";
 export type { ComponentInstance } from "./component/instance.js";
 export type { StorageProxy } from "./component/proxy.js";
-export type { Entity } from "./entity.js";
-export type { MiskiData } from "./serialize.js";
 export type { Opaque, ParametersExceptFirstTwo, TypedArray, TypedArrayConstructor } from "./utils/utils.js";
-export type { Query, QuerySpec } from "./query/query.js";
+export type { QuerySpec } from "./query/query.js";
 export type { QueryInstance } from "./query/instance.js";
 export type { Schema, SchemaProps } from "./component/schema.js";
-export type { System } from "./system.js";
-export type { World, WorldSpec } from "./world.js";
+export type { SystemCallback, SystemSpec } from "./system.js";
+export type { Entity, WorldData, WorldSpec } from "./world.js";

@@ -1,10 +1,15 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
-import { FORBIDDEN_NAMES, MAX_UINT32, VALID_NAME_PATTERN } from "../constants.js";
+import { FORBIDDEN_NAMES, LOG_2, MAX_UINT32, VALID_NAME_PATTERN } from "../constants.js";
 
 /** @returns `true` if n is a number, >= 0, <= 2^32 - 1 */
 export function isUint32(n: number): n is number {
   return !isNaN(n) && n >= 0 && n <= MAX_UINT32;
+}
+
+/** @returns true if `n` is a Uint32 > 0 */
+export function isPositiveInt(n: number) {
+  return isUint32(n) && n > 0;
 }
 
 /** All the various kinds of typed arrays */
@@ -48,8 +53,10 @@ export function isTypedArrayConstructor(object: unknown): object is TypedArrayCo
 /** @returns `true` if the given string is an valid name / label */
 export function isValidName(str: string): boolean {
   return Boolean(
-    (typeof str === "string" && str.length > 0 && VALID_NAME_PATTERN.test(str) === true) ||
-      !FORBIDDEN_NAMES.includes(str),
+    typeof str === "string" &&
+      str.length > 0 &&
+      FORBIDDEN_NAMES.includes(str) === false &&
+      VALID_NAME_PATTERN.test(str),
   );
 }
 
@@ -58,15 +65,10 @@ export function isObject(object: unknown): object is Record<string, unknown> {
   return Boolean(typeof object === "object" && !Array.isArray(object));
 }
 
-/** An empty function for use in Systems */
-export function noop(): void {
-  return void 0;
-}
-
-/** @author https://stackoverflow.com/a/67605309 */
-export type ParametersExceptFirst<F> = F extends (arg0: any, ...rest: infer R) => any ? R : never;
-
-/** The parameters of a function omitting the first two parameters */
+/**
+ * The parameters of a function omitting the first two parameters
+ * @author https://stackoverflow.com/a/67605309
+ */
 export type ParametersExceptFirstTwo<F> = F extends (arg0: any, arg1: any, ...rest: infer R) => any ? R : never;
 
 /**
@@ -79,50 +81,24 @@ export type ParametersExceptFirstTwo<F> = F extends (arg0: any, arg1: any, ...re
  */
 export type Opaque<T, K> = T & { _TYPE: K };
 
-export function createAvailabilityArray(capacity: number): number[] {
-  const total = capacity - 1;
-  return Array.from({ length: capacity }, (_, i) => total - i);
-}
-
-export function sortAscending(a: number, b: number): number {
-  return b - a;
-}
-
-export function hasOwnProperty<K extends PropertyKey>(key: K) {
-  return function <U>(obj: U): obj is U & Record<K, unknown> {
-    return Object.prototype.hasOwnProperty.call(obj, key);
-  };
-}
-
-export function filterEntries<K extends PropertyKey>(keys: K[]) {
-  return function <T extends Record<K, unknown>>(obj: T) {
-    const reducer = (curr: Record<K, T[K]>, key: K): Record<K, T[K]> => {
-      if (hasOwnProperty(key)(obj)) curr[key] = obj[key];
-      return curr;
-    };
-    return keys.reduce(reducer, {} as Record<K, T[K]>);
-  };
-}
-
-export function getProperty<K extends PropertyKey>(key: K) {
-  return function <U extends Record<K, unknown>>(obj: U): U[K] {
-    return obj[key];
-  };
-}
-
-export function getOwnProperty<K extends PropertyKey>(key: K) {
-  const hasKey = hasOwnProperty(key);
-  return function <U extends Record<K, unknown>>(obj: U): U[K] | undefined {
-    return hasKey(obj) ? obj[key] : undefined;
-  };
-}
-
-export function intersectBits(a = 0, b = 0): number {
-  return a & b;
-}
-
+/** Creates a function that will round a number up to a given multiple */
 export function roundUpToMultipleOf(f: number): (n: number) => number {
   return (n: number) => Math.ceil(n / f) * f;
 }
 
+/** @returns the input rounded up to the closest multiple of 4 */
 export const multipleOf4 = roundUpToMultipleOf(4);
+
+/** @returns the input rounded up to the closest multiple of 8 */
+export const multipleOf8 = roundUpToMultipleOf(8);
+
+/** @returns the intersection of two bits */
+export function intersectBits(a = 0, b = 0): number {
+  return a & b;
+}
+
+/** @returns the index of the least significant bit or -1 if error */
+export function getLsbIndex(value: number): number {
+  if (value === 2147483648) return 31;
+  return LOG_2[value & -value] ?? -1;
+}

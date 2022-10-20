@@ -1,45 +1,56 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
-import {
-  isObject,
-  isTypedArrayConstructor,
-  isValidName,
-  multipleOf4,
-  TypedArray,
-  TypedArrayConstructor,
-} from "../utils/utils.js";
+import { isObject, isTypedArrayConstructor, isValidName } from "../utils/utils.js";
+import type { TypedArray, TypedArrayConstructor } from "../utils/utils.js";
 
-/** Object of single component properties */
+/** Individual entity's component properties */
 export type SchemaProps<T> = Record<keyof T, number | bigint | undefined>;
 
-/** Component data storage */
+/** Internal component data storage */
 export type SchemaStorage<T> = Record<keyof T, TypedArray>;
 
 /**
  * Schemas are component storage definitions:
+ *
  * Schemas use TypedArray objects and so can only store a single number per property per entity.
  *
  * For example, `{ property: Int8Array }`;
- * Values in the array are initialised to 0 by default.
- * To set your own default value: `{ property: [Int8Array, default value] }`.
+ *
+ * Values in TypedArrays are initialised to 0 by default.
+ *
+ * To set an initial value: `{ property: [Int8Array, defaultValue] }`.
+ *
+ * Set to `null` to define a tag component.
  */
-export type Schema<T> = Record<keyof T, TypedArrayConstructor | [TypedArrayConstructor, number]>;
+export type Schema<T> = null | Record<keyof T, TypedArrayConstructor | [TypedArrayConstructor, number]>;
+
+/** Validates the properties of a schema entry */
+function _validateProps(value: TypedArrayConstructor | [TypedArrayConstructor, number]): boolean {
+  if (Array.isArray(value)) {
+    // if this is an array, the user wants to set an initial value
+    const [TAC, n] = value;
+    return !isNaN(n) && isTypedArrayConstructor(TAC);
+  }
+  return isTypedArrayConstructor(value);
+}
+
+/** Validates the names and values of a schema's entries */
+function _validateSchemaEntry([name, value]: [string, unknown]): boolean {
+  return isValidName(name) && _validateProps(value as TypedArrayConstructor | [TypedArrayConstructor, number]);
+}
 
 /** Schema type guard */
-export function isValidSchema<T>(schema: unknown): schema is Schema<T> {
-  const _validateProps = (value: TypedArrayConstructor | [TypedArrayConstructor, number]) => {
-    if (Array.isArray(value)) {
-      const [a, b] = value;
-      if (!isNaN(b) && isTypedArrayConstructor(a)) return true;
-    } else {
-      return isTypedArrayConstructor(value);
-    }
+export function isValidSchema<T extends Schema<T>>(schema: unknown): schema is Schema<T> {
+  try {
+    if (schema === undefined) return false;
+    if (schema === null) return true;
+    if (!isObject(schema)) return false;
+    const entries = Object.entries(schema);
+    if (!entries.length) return false;
+    return entries.every(_validateSchemaEntry);
+  } catch (_) {
     return false;
-  };
-  const _validate = ([name, value]: [string, unknown]) => {
-    return isValidName(name) && _validateProps(value as TypedArrayConstructor | [TypedArrayConstructor, number]);
-  };
-  return isObject(schema) && Object.entries(schema).every(_validate);
+  }
 }
 
 /**
@@ -53,7 +64,17 @@ function byteSum(total: unknown, value: unknown): number {
   return (total as number) + size;
 }
 
-/** @returns the size in bytes that a component's storage requires for one entity */
-export function calculateSchemaSize<T>(schema: Schema<T>): number {
-  return multipleOf4(Object.values(schema).reduce(byteSum, 0) as number);
+/**
+ * @returns the size in bytes that a component's storage requires for one entity
+ *          or NaN if the object is invalid;
+ */
+export function calculateSchemaSize<T extends Schema<T>>(schema: Schema<T>): number {
+  try {
+    if (!isValidSchema(schema)) return Number.NaN;
+    if (schema === null) return 0;
+    /** @todo should this be to multipleOf4? */
+    return Object.values(schema).reduce(byteSum, 0) as number;
+  } catch (_) {
+    return Number.NaN;
+  }
 }

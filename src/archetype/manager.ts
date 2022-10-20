@@ -1,210 +1,100 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
-import type { Bitfield } from "../bitfield.js";
-import type { ComponentInstance } from "../component/instance.js";
-import { $_DIRTY } from "../constants.js";
-import type { Entity } from "../entity.js";
-import type { QueryInstance } from "../query/instance.js";
+import { Archetype } from "./archetype.js";
 import type { Query } from "../query/query.js";
-import { intersectBits } from "../utils/utils.js";
-import { Archetype, ArchetypeSpec, createArchetype as _createArchetype } from "./archetype.js";
+import type { Bitfield } from "../utils/bitfield.js";
+import type { Component } from "../component/component.js";
+import type { ComponentInstance } from "../component/instance.js";
+import type { Entity } from "../world.js";
+import type { QueryInstance } from "../query/instance.js";
 
-interface ArchetypeManagerSpec {
+export interface ArchetypeManagerSpec {
   capacity: number;
-  EMPTY_BITFIELD: Bitfield;
-  toggleBit: (bit: number, bitfield: Bitfield) => boolean;
+  components: Component<any>[];
 }
 
-interface ArchetypeManager {
-  EMPTY_ARCHETYPE: Archetype;
-  createArchetype: (spec: ArchetypeSpec) => Archetype;
-  getEntityArchetype: (entity: Entity) => Archetype | undefined;
-  isArchetypeCandidate: (archetype: Archetype) => (query: QueryInstance) => boolean;
-  purgeArchetypesCaches: () => void;
-  refreshArchetypes: (queries: Map<Query, QueryInstance>) => void;
-  removeEntityFromArchetype: (entity: Entity, archetype: Archetype) => Archetype;
-  setEntityArchetype: (entity: Entity, archetype: Archetype) => Archetype;
-  updateArchetype: (entity: Entity, component: ComponentInstance<unknown> | ComponentInstance<unknown>[]) => Archetype;
-}
-
-/** Add an Entity to an Archetype's inhabitants list */
-function addEntityToArchetype(entity: Entity, archetype: Archetype): Archetype {
-  const { entities, entered } = archetype;
-  entities.add(entity);
-  entered.add(entity);
-  archetype[$_DIRTY] = true;
-  return archetype;
-}
-
-/** For use in the looping over of an Archetype's bitfield */
-function getCandidateStatus(query: QueryInstance): (target: number, idx: number) => boolean {
-  const { and, or, not } = query;
-  return (target: number, idx: number): boolean => {
-    const OR = or[idx] === 0 || intersectBits(target, or[idx]) > 0;
-    if (!OR) return false;
-    const AND = intersectBits(target, and[idx]) === and[idx];
-    if (!AND) return false;
-    return intersectBits(target, not[idx]) === 0;
-  };
-}
-
-/** @returns `true` if the query criteria match this archetype */
-function isArchetypeCandidate(archetype: Archetype): (query: QueryInstance) => boolean {
-  const { bitfield, candidateCache } = archetype;
-  return (query: QueryInstance): boolean => {
-    if (candidateCache.has(query)) return candidateCache.get(query) ?? false;
-    const checkStatus = getCandidateStatus(query);
-    const status = bitfield.every(checkStatus);
-    candidateCache.set(query, status);
-    return status;
-  };
-}
-
-/** Purge the `candidate` and `clone` caches in an Archetype */
-function purgeArchetypeCaches(archetype: Archetype): Archetype {
-  const { candidateCache, cloneCache } = archetype;
-  candidateCache.clear();
-  cloneCache.clear();
-  return archetype;
-}
-
-/** Clear the entered/exited list and set `isDirty` to `false` */
-function refreshArchetype(archetype: Archetype): Archetype {
-  const { entered, exited } = archetype;
-  entered.clear();
-  exited.clear();
-  archetype[$_DIRTY] = false;
-  return archetype;
-}
-
-/** Remove an Entity from an Archetype's inhabitants list */
-function _removeEntityFromArchetype(entity: Entity, archetype: Archetype): Archetype {
-  const { entities, exited } = archetype;
-  entities.delete(entity);
-  exited.add(entity);
-  archetype[$_DIRTY] = true;
-  return archetype;
-}
-
-/** Shorthand utility types */
-type ComponentInstances = ComponentInstance<unknown> | ComponentInstance<unknown>[];
-type ArchetypeCloneState = [string, () => Archetype];
-type ArchetypeCloner = (archetype: Archetype, component: ComponentInstances) => ArchetypeCloneState;
-
-function archetypeCloner(
-  createArchetype: (spec: ArchetypeSpec) => Archetype,
-  toggleBit: (bit: number, bitfield: Bitfield) => boolean,
-): ArchetypeCloner {
-  return (archetype: Archetype, component: ComponentInstances): ArchetypeCloneState => {
-    const { bitfield, cloneCache } = archetype;
-
-    // If component is single, attempt to get result from Archetype.cloneCache
-    if (!Array.isArray(component)) {
-      const cached = cloneCache.get(component);
-      if (cached) return [cached.id, () => cached];
-      component = [component];
-    }
-
-    // Clone the Archetype's bitfield
-    const bitfieldCopy = bitfield.slice() as Bitfield;
-
-    // Handle toggling of Components in the Archetype
-    const components = component.reduce((res, instance) => {
-      const isOn = toggleBit(instance.id, bitfieldCopy); // this is also modifying bitfieldCopy
-      if (isOn) res.push(instance);
-      return res;
-    }, [] as ComponentInstance<unknown>[]);
-
-    // Pre-evaluate the bitfield copy's ID after toggling components
-    const bitfieldId = bitfieldCopy.toString();
-
-    return [
-      bitfieldId,
-      () => {
-        const clone = createArchetype({ bitfield: bitfieldCopy, id: bitfieldId });
-        if (!Array.isArray(component)) cloneCache.set(component, clone);
-        const add = <T>(c: ComponentInstance<T>) => {
-          if (components.includes(c)) clone.components.add(c);
-        };
-        archetype.components.forEach(add);
-        components.forEach(add);
-        return clone;
-      },
-    ];
-  };
-}
-
-/** Instantiate World's Archetype functions */
-export function createArchetypeManager(spec: ArchetypeManagerSpec): ArchetypeManager {
-  const { EMPTY_BITFIELD, capacity, toggleBit } = spec;
-
+export class ArchetypeManager {
   /** Map<Archetype.id, Archetype> */
-  const archetypeMap: Map<string, Archetype> = new Map();
+  archetypeMap: Map<string, Archetype> = new Map();
+  /** Archetype's indexed by Entity */
+  entityArchetypes: Archetype[];
+  /** The root/empty archetype */
+  rootArchetype: Archetype;
 
-  /** arr[entity] = the entity's archetype */
-  const entityArchetypes: Archetype[] = [];
-  entityArchetypes.length = capacity; // @note V8 hack
+  constructor(spec: ArchetypeManagerSpec) {
+    const { capacity, components } = spec;
+    this.rootArchetype = new Archetype(components.length, []);
+    this.archetypeMap = new Map();
+    this.archetypeMap.set(this.rootArchetype.id, this.rootArchetype);
+    this.entityArchetypes = Array.from({ length: capacity }, (_, i) => this.rootArchetype.addEntity(i as Entity));
+  }
 
-  // exported this through the manager for consistency
-  const createArchetype = _createArchetype;
+  /** @returns an entity's archetype or undefined if not found */
+  getArchetype(entity: Entity): Archetype | undefined {
+    return this.entityArchetypes[entity];
+  }
 
-  const EMPTY_ARCHETYPE = createArchetype({ bitfield: EMPTY_BITFIELD });
+  /** Returns an entity to the root archetype */
+  resetArchetype(entity: Entity): ArchetypeManager {
+    if (this.entityArchetypes[entity] === this.rootArchetype) return this;
+    this.entityArchetypes[entity]?.removeEntity(entity);
+    this.entityArchetypes[entity] = this.rootArchetype.addEntity(entity);
+    return this;
+  }
 
-  const cloneArchetypeWithToggle = archetypeCloner(createArchetype, toggleBit);
-
-  /** @returns the Entity's Archetype or undefined if Entity is not alive */
-  const getEntityArchetype = (entity: Entity): Archetype | undefined => entityArchetypes[entity];
-
-  const purgeArchetypesCaches = () => archetypeMap.forEach(purgeArchetypeCaches);
-
-  const refreshArchetypes = (queries: Map<Query, QueryInstance>) => {
-    archetypeMap.forEach((archetype) => {
-      refreshArchetype(archetype);
-      const isCandidate = isArchetypeCandidate(archetype);
-      // Refresh the Query's Archetype candidate registry
-      queries.forEach((query) => {
-        query[$_DIRTY] = false;
-        if (isCandidate(query)) {
-          query[$_DIRTY] = true;
-          query.archetypes.add(archetype);
-        }
-      });
+  /** Performs various archetype maintenance */
+  refreshArchetypes(queries: Map<Query, QueryInstance>): ArchetypeManager {
+    /** @todo double loop isn't ideal */
+    this.archetypeMap.forEach((archetype) => {
+      if (!archetype.isEmpty) {
+        queries.forEach((query) => {
+          if (!query.archetypes.has(archetype) && archetype.isCandidate(query)) {
+            query.isDirty = true;
+            query.archetypes.add(archetype);
+          }
+        });
+      }
+      archetype.refresh();
     });
-  };
+    return this;
+  }
 
-  const removeEntityFromArchetype = (entity: Entity, archetype: Archetype) => {
-    delete entityArchetypes[entity];
-    return _removeEntityFromArchetype(entity, archetype);
-  };
-
-  const setEntityArchetype = (entity: Entity, archetype: Archetype) => (entityArchetypes[entity] = archetype);
+  /** Replace an entity's archetype */
+  setArchetype(entity: Entity, archetype: Archetype): ArchetypeManager {
+    if (!this.archetypeMap.has(archetype.id)) throw new Error("Invalid archetype.");
+    if (this.entityArchetypes[entity] === archetype) return this;
+    this.entityArchetypes[entity]?.removeEntity(entity);
+    this.entityArchetypes[entity] = archetype.addEntity(entity);
+    return this;
+  }
 
   /**
-   * Update an entity's archetype
+   * Update an Entity's archetype
    * @param entity the entity to update
-   * @param component the component to toggle
-   * @returns the entity's new archetype
+   * @param components the components to toggle
+   * @returns The entity's resulting archetype
    */
-  const updateArchetype = (entity: Entity, component: ComponentInstances) => {
-    const previousArchetype = getEntityArchetype(entity);
-    if (previousArchetype) removeEntityFromArchetype(entity, previousArchetype);
-    const [id, factory] = cloneArchetypeWithToggle(previousArchetype ?? EMPTY_ARCHETYPE, component);
-    const nextArchetype = archetypeMap.get(id) ?? factory();
-    archetypeMap.set(id, nextArchetype);
-    addEntityToArchetype(entity, nextArchetype);
-    setEntityArchetype(entity, nextArchetype);
-    return nextArchetype;
-  };
+  updateArchetype(entity: Entity, components: ComponentInstance<any>[]): Archetype {
+    /** @todo replace this with a graph */
+    const previousArchetype = this.entityArchetypes[entity];
 
-  return {
-    EMPTY_ARCHETYPE,
-    createArchetype,
-    getEntityArchetype,
-    isArchetypeCandidate,
-    purgeArchetypesCaches,
-    refreshArchetypes,
-    removeEntityFromArchetype,
-    setEntityArchetype,
-    updateArchetype,
-  };
+    let bitfield: Bitfield;
+    if (previousArchetype) {
+      previousArchetype.removeEntity(entity);
+      bitfield = previousArchetype.bitfield.cloneWithToggle("id", components);
+    } else {
+      bitfield = this.rootArchetype.bitfield.cloneWithToggle("id", components);
+    }
+
+    const id = bitfield.toString();
+    let nextArchetype = this.archetypeMap.get(id);
+
+    if (!nextArchetype) {
+      nextArchetype = new Archetype(this.rootArchetype.bitfield.size, components, bitfield);
+      this.archetypeMap.set(id, nextArchetype);
+    }
+
+    this.entityArchetypes[entity] = nextArchetype.addEntity(entity);
+    return nextArchetype;
+  }
 }

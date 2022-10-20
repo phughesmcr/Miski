@@ -7,17 +7,32 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🍬</text></svg>">
   <style>
+    * {
+      box-sizing: border-box;
+    }
+    *::before, *::after {
+      box-sizing: inherit;
+    }
     html, body {
       border: none;
       margin: 0;
       padding: 0;
-      background-color: black;
+      color: #fff;
+      font-family: 'Courier New', Courier, monospace;
+      background-color: #fff;
       overflow: hidden;
-    }
-    canvas {
       width: 100%;
       height: 100%;
-      object-fit: contain;
+    }
+    a {
+      color: aqua;
+    }
+    canvas {
+      cursor: crosshair;
+      background-color: #fff;
+      user-select: none;
+      width: 100%;
+      height: 100%;
       image-rendering: -moz-crisp-edges;
       image-rendering: -webkit-crisp-edges;
       image-rendering: crisp-edges;
@@ -30,41 +45,91 @@
       max-width: 100vw;
       max-height: 100vh;
     }
-    section {
+    aside {
       position: absolute;
       z-index: 9999;
-      width: 100%;
-      height: 100%;
     }
-    section div {
-      background-color: rgba(0, 0, 0, 0.6);
-      backdrop-filter: blur(20px);
-      color: #fff;
-      font-family: 'Courier New', Courier, monospace;
+    aside div {
+      background-color: rgba(29, 29, 31, 0.90);
       padding: 1em;
     }
     .top-left {
       position: absolute;
       top: 0;
       left: 0;
-      width: fit-content;
-      border-radius: 0 0 3px 0;
+      width: max-content;
+      border-radius: 0 0 5px 0;
       font-weight: 600;
+    }
+    .buttons {
+      margin: 10px 0;
+      background-color: transparent !important;
+      backdrop-filter: none;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      flex-wrap: nowrap;
+      align-content: center;
+      justify-content: space-between;
+      align-items: stretch;
+    }
+    .buttons.row {
+      flex-direction: row;
+    }
+    .buttons label, .buttons input {
+      display: inline;
+    }
+    .buttons p {
+      margin: 0 0 0.5em 0;
+    }
+    .buttons button {
+      height: 30px;
+      margin-bottom: 5px;
+      cursor: pointer;
+    }
+    .buttons .grid {
+      background-color: transparent !important;
+      backdrop-filter: none;
+      display: grid;
+      grid-template-columns: 50% 50%;
+      grid-row: auto auto;
+      grid-column-gap: 5px;
+      grid-row-gap: 5px;
+      margin: 0;
+      padding: 0;
+    }
+    .mt-0 {
+      margin-top: 0;
     }
   </style>
 </head>
 <body>
   <main>
-    <section>
+    <aside>
       <div class="top-left">
-        <p style="margin-top: 0;">FPS: <span id="sFPS">??</span></p>
-        <p>Entities: 600</p>
-        <p>Resolution: <span id="sResX">1280</span> x <span id="sResY">720</span></p>
-        <label for="rSpeed">Speed:</label>
-        <input type="range" min="0" max="200" value="30" step="10" id="rSpeed">
+        <p class="mt-0">Resolution: <span id="sResX">??</span> x <span id="sResY">??</span></p>
+        <div class="buttons">
+          <p>Entities: <span id="sEnts">??</span></p>
+          <div class="grid">
+            <button id="add" aria-label="Add 10 entities">+10</button>
+            <button id="addBig" aria-label="Add 100 entities">+100</button>
+            <button id="subtract" aria-label="Remove 10 entities">-10</button>
+            <button id="subtractBig" aria-label="Remove 100 entities">-100</button>
+          </div>
+        </div>
+        <div class="buttons row">
+          <label for="rSpeed">Speed:</label>
+          <input type="range" min="0" max="0.3" value="0.1" step="0.001" id="rSpeed">
+        </div>
+        <div class="buttons row">
+          <label for="bRender">Enable renderer:</label>
+          <input type="checkbox" name="bRender" id="bRender" checked>
+        </div>
+        <p>Click shapes to explode.</p>
+        <a href="../../index.html" target="_blank" rel="noopener noreferrer">&gt; Project page</a>
       </div>
-    </section>
-    <canvas width="640" height="480"></canvas>
+    </aside>
+    <canvas width="640" height="480" moz-opaque="true"></canvas>
   </main>
   <script src="demo.js" type="module"></script>
 </body>

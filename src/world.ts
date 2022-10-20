@@ -1,233 +1,248 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
-import type { Archetype } from "./archetype/archetype.js";
-import { createArchetypeManager } from "./archetype/manager.js";
-import { bitfieldFactory } from "./bitfield.js";
+import { ArchetypeManager } from "./archetype/manager.js";
+import { ComponentManager } from "./component/manager.js";
+import { $_OWNERS, VERSION } from "./constants.js";
+import { QueryManager } from "./query/manager.js";
+import { Query } from "./query/query.js";
+import { BitPool } from "./utils/bitpool.js";
+import { isObject, isPositiveInt, isUint32, Opaque } from "./utils/utils.js";
 import type { Component } from "./component/component.js";
-import { ComponentInstance, refreshComponentInstance } from "./component/instance.js";
-import { ComponentRecord, createComponentManager } from "./component/manager.js";
-import type { SchemaProps } from "./component/schema.js";
-import { DEFAULT_MAX_ENTITIES, VERSION } from "./constants.js";
-import { createEntityManager, Entity } from "./entity.js";
-import { createQueryManager } from "./query/manager.js";
-import type { Query } from "./query/query.js";
-import { createSerializationManager, MiskiData } from "./serialize.js";
-import { isUint32 } from "./utils/utils.js";
+import type { ComponentInstance } from "./component/instance.js";
+import type { ComponentRecord } from "./component/manager.js";
+import type { Schema, SchemaProps } from "./component/schema.js";
+
+/** Entities are indexes of an EntityArray. An Entity is just an integer. */
+export type Entity = Opaque<number, "Entity">;
+
+export interface WorldData {
+  buffer: ArrayBuffer;
+  capacity: number;
+  version: string;
+}
 
 export interface WorldSpec {
   /** The maximum number of entities allowed in the world */
   capacity: number;
-  /** Components to instantiate in the world  */
-  components: Component<unknown>[];
-}
-
-export interface World {
-  /** The maximum number of entities allowed in the world */
-  readonly capacity: number;
-  /** The Miski version used to create this World */
-  readonly version: string;
-  /** Add multiple components to an entity at once by defining a prefab. */
-  addComponentsToEntity: (
-    ...components: Component<unknown>[]
-  ) => (entity: Entity, properties?: Record<string, SchemaProps<unknown>>) => boolean;
-  /**
-   * Add a component to an entity.
-   * @param component the component to add.
-   * @param entity the entity to add the component to.
-   * @param props optional initial component values to set for the entity.
-   * @returns `true` if the component was added successfully.
-   */
-  addComponentToEntity: <T>(component: Component<T>) => (entity: Entity, properties?: SchemaProps<T>) => boolean;
-  /**
-   * Create a new entity for use in the world.
-   * @returns the entity or `undefined` if no entities were available.
-   */
-  createEntity: () => Entity | undefined;
-  /**
-   * Destroy a given entity.
-   * @returns `true` if the entity was successfully destroyed.
-   */
-  destroyEntity: (entity: Entity) => boolean;
-  /**
-   * Get a given entity's archetype.
-   * @param entity the entity to expose.
-   * @returns the Archetype object or `undefined` if no archetype found.
-   */
-  getEntityArchetype: (entity: Entity) => Archetype | undefined;
-  /** Get all component properties for a given entity */
-  getEntityProperties: (entity: Entity) => Record<string, SchemaProps<unknown>>;
-  /** @returns an array of entities which have entered a query's archetypes since last world.refresh() */
-  getQueryEntered: (query: Query) => Entity[];
-  /** @returns an array of entities which have left a query's archetypes since last world.refresh() */
-  getQueryExited: (query: Query) => Entity[];
-  /** @returns a tuple of entities and components which match the query's criteria */
-  getQueryResult: (query: Query) => [ComponentRecord, () => Entity[]];
-  /** @returns the number of available entities in the world. */
-  getVacancyCount: () => number;
-  /** Test a single component against a single entity */
-  hasComponent: <T>(component: Component<T>) => (entity: Entity) => boolean;
-  /** @returns `true` if the entity is valid and !== undefined */
-  hasEntity: (entity: Entity) => boolean;
-  /**
-   * Load data into the world.
-   * @param data the MiskiData object to load
-   * @returns `true` if all the data was successfully loaded into the world.
-   */
-  load: (data: MiskiData) => boolean;
-  /**
-   * Purge various caches throughout the world.
-   * Should not be necessary but useful if memory footprint is creeping.
-   */
-  purgeCaches: () => void;
-  /**
-   * Run various maintenance functions in the world.
-   * Recommended once per frame.
-   */
-  refresh: () => void;
-  /**
-   * Remove a component from an entity.
-   * @param component the component to remove.
-   * @param entity the entity to remove the component from.
-   * @returns `true` if the component was removed successfully.
-   */
-  removeComponentFromEntity: <T>(component: Component<T>) => (entity: Entity) => boolean;
-  /** Remove multiple components from an entity at once. */
-  removeComponentsFromEntity: (...components: Component<unknown>[]) => (entity: Entity) => ComponentInstance<unknown>[];
-  /** Serialize various aspects of the world's data */
-  save: () => Readonly<MiskiData>;
-  /** Reduces an array of entities to just those who have all the desired components */
-  withComponents: (...components: Component<unknown>[]) => (...entities: Entity[]) => Entity[];
+  /** Components to instantiate in the world */
+  components: Component<any>[];
 }
 
 function validateWorldSpec(spec: WorldSpec): Required<WorldSpec> {
-  if (!spec) throw new SyntaxError("World creation requires a specification object.");
-  const { capacity = DEFAULT_MAX_ENTITIES, components } = spec;
-  if (!isUint32(capacity)) throw new SyntaxError("World creation: spec.capacity invalid.");
-  if (!components.length) throw new SyntaxError("World creation: spec.components invalid.");
-  return { capacity, components };
+  if (!spec || !isObject(spec)) {
+    throw new SyntaxError("World creation requires a specification object.");
+  }
+  const { capacity, components } = spec;
+  if (!isPositiveInt(capacity)) {
+    throw new SyntaxError("World: spec.capacity invalid.");
+  }
+  if (!Array.isArray(components) || !components.every((c) => Object.prototype.hasOwnProperty.call(c, "name"))) {
+    throw new TypeError("World: spec.components invalid.");
+  }
+  return { ...spec, components: [...new Set(components)] };
 }
 
-/**
- * Create a new World object
- * @param spec The world's specification object
- * @param spec.capacity The maximum number of entities allowed in the world
- * @param spec.components Components to instantiate in the world
- * @returns a new, frozen World object
- */
-export function createWorld(spec: WorldSpec): Readonly<World> {
-  const { capacity, components } = validateWorldSpec(spec);
+export class World {
+  private readonly archetypeManager: ArchetypeManager;
+  private readonly componentManager: ComponentManager;
+  private readonly queryManager: QueryManager;
 
-  // eslint-disable-next-line prettier/prettier
-  const {
-    EMPTY_BITFIELD,
-    createBitfieldFromIds,
-    isBitOn,
-    toggleBit,
-  } = bitfieldFactory(components.length);
+  /** Pool of Entity states */
+  private readonly entities: BitPool;
 
-  const {
-    EMPTY_ARCHETYPE,
-    getEntityArchetype,
-    purgeArchetypesCaches,
-    refreshArchetypes,
-    removeEntityFromArchetype,
-    setEntityArchetype,
-    updateArchetype,
-  } = createArchetypeManager({
-    EMPTY_BITFIELD,
-    capacity,
-    toggleBit,
-  });
+  /** The maximum number of entities the world can hold */
+  readonly capacity: number;
 
-  // eslint-disable-next-line prettier/prettier
-  const {
-    createEntity,
-    destroyEntity,
-    getVacancyCount,
-    hasEntity,
-    isValidEntity,
-  } = createEntityManager({
-    capacity,
-    EMPTY_ARCHETYPE,
-    getEntityArchetype,
-    removeEntityFromArchetype,
-    setEntityArchetype,
-  });
+  /** Miski version */
+  readonly version = VERSION;
 
-  const {
-    componentMap,
-    addComponentsToEntity,
-    addComponentToEntity,
-    getBuffer,
-    getEntityProperties,
-    hasComponent,
-    removeComponentFromEntity,
-    removeComponentsFromEntity,
-    setBuffer,
-    withComponents,
-  } = createComponentManager({
-    capacity,
-    components,
-    getEntityArchetype,
-    isBitOn,
-    isValidEntity,
-    updateArchetype,
-  });
+  /**
+   * Create a new World object
+   * @param spec An WorldSpec object
+   * @param spec.capacity The maximum number of entities allowed in the world
+   * @param spec.components An array of components to instantiate in the world
+   */
+  constructor(spec: WorldSpec) {
+    const { capacity, components } = validateWorldSpec(spec);
+    this.capacity = capacity;
+    this.entities = new BitPool(capacity);
+    this.archetypeManager = new ArchetypeManager({ capacity, components });
+    this.componentManager = new ComponentManager({ capacity, components });
+    this.queryManager = new QueryManager({ componentManager: this.componentManager });
+    this.refresh(); /** @todo is this necessary? */
+    Object.freeze(this);
+  }
 
-  // eslint-disable-next-line prettier/prettier
-  const {
-    queryMap,
-    getQueryEntered,
-    getQueryExited,
-    getQueryResult,
-  } = createQueryManager({
-    createBitfieldFromIds,
-    componentMap,
-  });
+  /** @returns the number of active entities */
+  get residents(): number {
+    return this.capacity - (this.entities.setCount - (this.entities.size - this.capacity));
+  }
 
-  // eslint-disable-next-line prettier/prettier
-  const {
-    load,
-    save
-  } = createSerializationManager({
-    getBuffer,
-    setBuffer,
-    version: VERSION,
-  });
+  /** @returns the number of available entities */
+  get vacancies(): number {
+    return this.capacity - this.residents;
+  }
 
-  const purgeCaches = () => {
-    purgeArchetypesCaches();
-  };
-  purgeCaches();
+  addComponentsToEntity(...components: Component<any>[]) {
+    const adder = this.componentManager.addComponentsToEntity(components);
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
+    const self = this;
+    return (entity: Entity, properties?: Record<string, SchemaProps<unknown>>): World => {
+      if (!this.isValidEntity(entity)) throw new SyntaxError(`Entity ${entity as number} is not valid!`);
+      this.archetypeManager.updateArchetype(entity, adder(entity, properties));
+      return self;
+    };
+  }
 
-  const refresh = () => {
-    refreshArchetypes(queryMap);
-    componentMap.forEach(refreshComponentInstance);
-  };
-  refresh();
+  /** @returns the next available Entity or `undefined` if no Entity is available */
+  createEntity(): Entity | undefined {
+    const entity = this.entities.acquire() as Entity;
+    if (entity < 0) return;
+    this.archetypeManager.setArchetype(entity, this.archetypeManager.rootArchetype);
+    return entity;
+  }
 
-  return Object.freeze({
-    capacity,
-    version: VERSION,
+  /** Remove and recycle an Entity */
+  destroyEntity(entity: Entity): World {
+    if (!this.isValidEntity(entity)) throw new SyntaxError(`Entity ${entity as number} is not valid!`);
+    this.archetypeManager.resetArchetype(entity);
+    this.entities.release(entity);
+    return this;
+  }
 
-    addComponentsToEntity,
-    addComponentToEntity,
-    createEntity,
-    destroyEntity,
-    getEntityArchetype,
-    getEntityProperties,
-    getQueryEntered,
-    getQueryExited,
-    getQueryResult,
-    getVacancyCount,
-    hasComponent,
-    hasEntity,
-    load,
-    purgeCaches,
-    refresh,
-    removeComponentFromEntity,
-    removeComponentsFromEntity,
-    save,
-    withComponents,
-  }) as World;
+  getChangedFromComponents(...components: Component<any>[]): Entity[] {
+    const instances = this.componentManager.getInstances(components).filter((x) => x);
+    if (instances.length !== components.length) throw new Error("Not all components registered!");
+    return [
+      ...new Set(
+        instances.reduce((res, inst) => {
+          res.push(...inst!.changed);
+          return res;
+        }, [] as Entity[]),
+      ),
+    ];
+  }
+
+  getChangedFromQuery(query: Query, arr: Entity[] = []): Entity[] {
+    const instance = this.queryManager.getQueryInstance(query);
+    arr.length = 0;
+    // eslint-disable-next-line array-callback-return
+    Object.values(instance.components).forEach((inst) => arr.push(...inst.changed));
+    return [...new Set(arr)];
+  }
+
+  getComponentInstance<T extends Schema<T>>(component: Component<T>): ComponentInstance<T> | undefined {
+    return this.componentManager.componentMap.get(component);
+  }
+
+  getComponentInstances(...components: Component<any>[]): (ComponentInstance<any> | undefined)[] {
+    return this.componentManager.getInstances(components);
+  }
+
+  getEntityProperties(entity: Entity): Record<string, SchemaProps<unknown>> {
+    const archetype = this.archetypeManager.getArchetype(entity);
+    if (!archetype) return {};
+    return archetype.components.reduce(
+      <T extends Schema<T>>(res: Record<keyof T, SchemaProps<unknown>>, component: ComponentInstance<T>) => {
+        const { name, schema } = component;
+        res[name as keyof T] = {};
+        if (schema === null) {
+          res[name as keyof T] = true;
+        } else {
+          res[name as keyof T] = Object.keys(schema).reduce((prev, key) => {
+            prev[key as keyof T] = component[key as keyof T][entity];
+            return prev;
+          }, {} as SchemaProps<T>);
+        }
+        return res;
+      },
+      {},
+    );
+  }
+
+  getQueryComponents(query: Query): ComponentRecord {
+    return this.queryManager.getComponentsFromQuery(query);
+  }
+
+  getQueryEntered(query: Query, arr: Entity[] = []): Entity[] {
+    return this.queryManager.getEnteredFromQuery(query, arr);
+  }
+
+  getQueryEntities(query: Query, arr: Entity[] = []): Entity[] {
+    return this.queryManager.getEntitiesFromQuery(query, arr);
+  }
+
+  getQueryExited(query: Query, arr: Entity[] = []): Entity[] {
+    return this.queryManager.getExitedFromQuery(query, arr);
+  }
+
+  hasComponent<T extends Schema<T>>(component: Component<T>): (entity: Entity) => boolean | null {
+    const instance = this.componentManager.getInstance(component);
+    if (!instance) throw new Error("Component is not registered.");
+    return (entity: Entity) => instance[$_OWNERS].isSet(entity);
+  }
+
+  hasComponents(...components: Component<any>[]): (entity: Entity) => (boolean | null)[] {
+    const instances = this.componentManager.getInstances(components).filter((x) => x) as ComponentInstance<any>[];
+    if (instances.length !== components.length) throw new Error("Not all components registered!");
+    return (entity: Entity): (boolean | null)[] => {
+      return instances.map((component) => component[$_OWNERS].isSet(entity));
+    };
+  }
+
+  /**
+   * @return `true` if the Entity is valid and exists in the world
+   * @throws if the entity is invalid
+   */
+  isEntityActive(entity: Entity): boolean | null {
+    if (!this.isValidEntity(entity)) return null;
+    return this.entities.isSet(entity);
+  }
+
+  /** @return `true` if the given entity is valid for the given capacity */
+  isValidEntity(entity: Entity): entity is Entity {
+    return isUint32(entity) && entity < this.entities.size;
+  }
+
+  /** Swap the ComponentBuffer of one world with this world */
+  load(data: WorldData): World {
+    const { buffer, capacity, version } = data;
+    if (version !== this.version) {
+      throw new Error(`Version mismatch. Trying to load ${version} data into ${this.version} world.`);
+    }
+    if (capacity !== this.capacity) {
+      throw new Error(`Capacity mismatch. Data requires a world with a capacity of ${capacity}.`);
+    }
+    this.componentManager.setBuffer(buffer);
+    this.refresh();
+    return this;
+  }
+
+  /** Runs various world maintenance functions */
+  refresh(): World {
+    this.queryManager.refreshQueries();
+    this.archetypeManager.refreshArchetypes(this.queryManager.queryMap);
+    this.componentManager.refreshComponents();
+    return this;
+  }
+
+  removeComponentsFromEntity(...components: Component<any>[]): (entity: Entity) => World {
+    const remover = this.componentManager.removeComponentsFromEntity(components);
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
+    const self = this;
+    return (entity: Entity) => {
+      if (!this.isValidEntity(entity)) throw new SyntaxError(`Entity ${entity as number} is not valid!`);
+      this.archetypeManager.updateArchetype(entity, remover(entity));
+      return self;
+    };
+  }
+
+  /** Export various bits of data about the world */
+  save(): WorldData {
+    return Object.freeze({
+      buffer: this.componentManager.getBuffer(),
+      capacity: this.capacity,
+      version: this.version,
+    });
+  }
 }
