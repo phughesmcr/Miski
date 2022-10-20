@@ -96,6 +96,7 @@ export class World {
 
   /** @returns the next available Entity or `undefined` if no Entity is available */
   createEntity(): Entity | undefined {
+    if (this.residents >= this.capacity) return;
     const entity = this.entities.acquire() as Entity;
     if (entity < 0) return;
     this.archetypeManager.setArchetype(entity, this.archetypeManager.rootArchetype);
