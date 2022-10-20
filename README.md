@@ -44,7 +44,7 @@ Because Miski is designed to be used inside your own projects, we let you config
 
 ## Features
 * Simple, developer-friendly, human-readable API
-* Modern ES2020 data-oriented Typescript codebase
+* Modern modular ES2020 data-oriented Typescript codebase
 * Fast, cache-friendly ArrayBuffer-based component data storage
 * Ability to use more than 32 components in one world using Uint32Array bitfields
 * Ability to limit the number of entities a component can be added to
@@ -53,6 +53,7 @@ Because Miski is designed to be used inside your own projects, we let you config
 * Define components, systems and queries once, reuse them across multiple worlds
 * `AND`,`OR`,`NOT` operators in Queries
 * `world.getQueryEntered` & `world.getQueryExited` methods
+* ~5kb gzipped
 * No dependencies
 * MIT license
 

@@ -109,33 +109,28 @@ declare const $_OWNERS: unique symbol;
  */
 /** */
 declare class Bitfield extends Uint32Array {
-    static get [Symbol.species](): Uint32ArrayConstructor;
-    /** @returns the index of the least significant bit or -1 if error */
-    static getLsbIndex(value: number): number;
-    /** @returns the number of set bits in a given number */
+    /** @returns the number of set bits in a given value */
     static getSetBitCount(value: number): number;
     /** @returns the number of set bits in a given bitfield */
     static getSetBitCountInBitfield(bitfield: Bitfield): number;
     /**
      * Create a new Bitfield from an array of objects
-     * @param length the number of bits in the bitfield
+     * @param size the number of bits in the bitfield
      * @param key the key of the property to use for the bitfield's indexes
      * @param objs an array of objects which have the key as an index to a number
      *
      * @example
-     * // Creating 32 bit bitfield from <T extends { id: number }>:
-     * Bitfield.fromObjects(32, "id", [{ id: 0, ... }, ...]);
+     *  // Creating 32 bit bitfield from <T extends { id: number }>:
+     *  Bitfield.fromObjects(32, "id", [{ id: 0, ... }, ...]);
      */
-    static fromObjects<T>(length: number, key: keyof T, objs: T[]): Bitfield;
-    /** @returns the index of a bit in the bitfield */
+    static fromObjects<T>(size: number, key: keyof T, objs: T[]): Bitfield;
+    /** @returns the index of a bit in a bitfield */
     static indexOf(bit: number): number;
-    /** @returns the intersection of two bits */
-    static intersectBits(a?: number, b?: number): number;
     /**
      * Creates a new Bitfield
-     * @param length the number of bits in the array
+     * @param size the number of bits in the array
      */
-    constructor(length: number);
+    constructor(size: number);
     /** @returns The amount of bits in the array */
     get size(): number;
     /** @returns a new Bitfield with identical properties to this Bitfield */
@@ -147,14 +142,13 @@ declare class Bitfield extends Uint32Array {
         index: number;
         position: number;
     };
-    /** @returns `true` if a given bit is 'on' (i.e., truthy) in the Bitfield */
-    isOn(bit: number): boolean;
+    /** @returns `true` if a given bit is set in the Bitfield or null on error */
+    isSet(bit: number): boolean | null;
     /**
      * Toggle a bit in the Bitfield
-     * @return the resulting state of the bit
-     * @throws if the bit is not found (i.e., indexOf(bit) === -1)
+     * @return the resulting state of the bit or null if error
      */
-    toggle(bit: number): boolean;
+    toggle(bit: number): boolean | null;
 }
 
 /**
@@ -203,7 +197,10 @@ declare class World {
     private readonly queryManager;
     /** Pool of Entity states */
     private readonly entities;
-    readonly version: string;
+    /** The maximum number of entities the world can hold */
+    readonly capacity: number;
+    /** Miski version */
+    readonly version = "0.11.0";
     /**
      * Create a new World object
      * @param spec An WorldSpec object
@@ -211,8 +208,6 @@ declare class World {
      * @param spec.components An array of components to instantiate in the world
      */
     constructor(spec: WorldSpec);
-    /** @returns the maximum number of entities the world can hold */
-    get capacity(): number;
     /** @returns the number of active entities */
     get residents(): number;
     /** @returns the number of available entities */
@@ -231,13 +226,13 @@ declare class World {
     getQueryEntered(query: Query, arr?: Entity[]): Entity[];
     getQueryEntities(query: Query, arr?: Entity[]): Entity[];
     getQueryExited(query: Query, arr?: Entity[]): Entity[];
-    hasComponent<T extends Schema<T>>(component: Component<T>): (entity: Entity) => boolean;
-    hasComponents(...components: Component<any>[]): (entity: Entity) => boolean[];
+    hasComponent<T extends Schema<T>>(component: Component<T>): (entity: Entity) => boolean | null;
+    hasComponents(...components: Component<any>[]): (entity: Entity) => (boolean | null)[];
     /**
      * @return `true` if the Entity is valid and exists in the world
      * @throws if the entity is invalid
      */
-    isEntityActive(entity: Entity): boolean;
+    isEntityActive(entity: Entity): boolean | null;
     /** @return `true` if the given entity is valid for the given capacity */
     isValidEntity(entity: Entity): entity is Entity;
     /** Swap the ComponentBuffer of one world with this world */
@@ -321,7 +316,7 @@ declare class Archetype {
     readonly exited: Set<Entity>;
     /** `true` if the object is in a dirty state */
     isDirty: boolean;
-    constructor(length: number, components: ComponentInstance<any>[], bitfield?: Bitfield);
+    constructor(size: number, components: ComponentInstance<any>[], bitfield?: Bitfield);
     /** The Archetype's unique identifier */
     get id(): string;
     /** `true` if this Archetype has no entities associated with it */

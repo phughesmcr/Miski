@@ -10,6 +10,15 @@ const rnd = (a, b) => Math.random() * (b - a) + a;
 const getRandomVelocity = () => ({ vx: rnd(-2, 2), vy: rnd(-2, 2) });
 const getRandomPosition = (w, h) => ({ x: Math.random() * w, y: Math.random() * h });
 const getRandomShape = () => ({ primitive: Math.random() >= 0.5 ? 1 : 0 }); // 0 = box, 1 = circle
+const intersectRect = (r1, r2) => !(r2.left > r1.right || r2.right < r1.left || r2.top > r1.bottom || r2.bottom < r1.top);
+/** @param {MouseEvent} event */
+const getMousePosition = (event) => {
+  const { left, top } = canvas.getBoundingClientRect();
+  return {
+    mx: (event.clientX - left),
+    my: (event.clientY - top),
+  }
+}
 
 // Simulation constants
 const ENTITIES = [];
@@ -40,6 +49,7 @@ const cShape = new Component({ name: "shape", schema: { primitive: Uint8Array }}
 const cVelocity = new Component({ name: "velocity", schema: { vx: Float32Array, vy: Float32Array }});
 // a tag component:
 const tRenderable = new Component({ name: "renderable" });
+const tClicked = new Component({ name: "clicked" });
 
 /* 2. Create queries
  *
@@ -69,6 +79,7 @@ const world = new World({
     cShape,
     cVelocity,
     tRenderable,
+    tClicked,
   ]
 });
 
@@ -125,6 +136,27 @@ const drawBox = (x, y) => {
   ctx.stroke();
 }
 
+const drawSpecial = (x, y) => {
+  ctx.save();
+  ctx.fillStyle= "yellow";
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = "black";
+  ctx.beginPath();
+  ctx.translate(x, y);
+  ctx.moveTo(0, 0 - 5);
+  for (let i = 0; i < 5; i++) {
+    const t = Math.PI / 5;
+    ctx.rotate(t);
+    ctx.lineTo(0, 0 - (5 * 5));
+    ctx.rotate(t);
+    ctx.lineTo(0, 0 - 5);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+}
+
 const sRender = new System({ query: qRenderable, system: (components, entities, alpha) => {
   const { position, shape } = components;
   const { x, y } = position;
@@ -134,8 +166,10 @@ const sRender = new System({ query: qRenderable, system: (components, entities, 
   for (let entity of entities) {
     if (primitive[entity] === 0) {
       drawBox(x[entity], y[entity]);
-    } else {
+    } else if (primitive[entity] === 1) {
       drawCircle(x[entity], y[entity]);
+    } else {
+      drawSpecial(x[entity], y[entity]);
     }
   }
 }}).init(world);
@@ -190,9 +224,40 @@ window.addEventListener("DOMContentLoaded", () => {
   bAdd.addEventListener("click", () => { createShapes(10); }, { passive: true });
   bSub.addEventListener("click", () => { destroyShapes(10); }, { passive: true });
   bAddBig.addEventListener("click", () => { createShapes(100); }, { passive: true });
-  bSubBig.addEventListener("click", () => { destroyShapes(100); }, { passive: true })
+  bSubBig.addEventListener("click", () => { destroyShapes(100); }, { passive: true });
+
   rSpeed.addEventListener("input", () => { SPEED_MULTIPLIER = rSpeed.value; }, { passive: true });
   SPEED_MULTIPLIER = rSpeed.value;
+
+  /** @param {MouseEvent} event */
+  const onClick = (event) => {
+    const { mx, my } = getMousePosition(event);
+    const r1 = {
+      top: my,
+      right: mx + SHAPE_SIZE,
+      bottom: my + SHAPE_SIZE,
+      left: mx,
+    };
+    const { position, shape } = world.getQueryComponents(qRenderable);
+    const { x, y } = position;
+    const { primitive } = shape;
+    const entities = world.getQueryEntities(qRenderable);
+    for (const entity of entities) {
+      const r2 = {
+        top: y[entity],
+        right: x[entity] + SHAPE_SIZE,
+        bottom: y[entity] + SHAPE_SIZE,
+        left: x[entity],
+      };
+      if (intersectRect(r1, r2)) {
+        primitive[entity] = 3;
+        world.addComponentsToEntity(tClicked)(entity);
+        console.log("clicked on entity " + entity);
+        break;
+      }
+    }
+  }
+  canvas.addEventListener("mousedown", onClick, { passive: true });
 
   const resize = () => {
     const { devicePixelRatio = 1 } = window;

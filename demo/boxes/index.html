@@ -10,6 +10,9 @@
     * {
       box-sizing: border-box;
     }
+    *::before, *::after {
+      box-sizing: inherit;
+    }
     html, body {
       border: none;
       margin: 0;
@@ -21,7 +24,11 @@
       width: 100%;
       height: 100%;
     }
+    a {
+      color: aqua;
+    }
     canvas {
+      cursor: crosshair;
       background-color: #fff;
       user-select: none;
       width: 100%;
@@ -118,9 +125,11 @@
           <label for="bRender">Enable renderer:</label>
           <input type="checkbox" name="bRender" id="bRender" checked>
         </div>
+        <p>Click shapes to explode.</p>
+        <a href="../../index.html" target="_blank" rel="noopener noreferrer">&gt; Project page</a>
       </div>
     </aside>
-    <canvas width="640" height="480"></canvas>
+    <canvas width="640" height="480" moz-opaque="true"></canvas>
   </main>
   <script src="demo.js" type="module"></script>
 </body>
