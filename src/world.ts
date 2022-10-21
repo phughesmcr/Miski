@@ -15,9 +15,13 @@ import type { Schema, SchemaProps } from "./component/schema.js";
 /** Entities are indexes of an EntityArray. An Entity is just an integer. */
 export type Entity = Opaque<number, "Entity">;
 
+/** The object returned from `world.save();` */
 export interface WorldData {
+  /** The world's component storage buffer */
   buffer: ArrayBuffer;
+  /** The maximum number of entities allowed in the world */
   capacity: number;
+  /** The Miski version of the creating world */
   version: string;
 }
 
@@ -28,14 +32,23 @@ export interface WorldSpec {
   components: Component<any>[];
 }
 
+/**
+ * Creates a valid WorldSpec (if possible) from an object
+ * @param spec The object to examine
+ * @returns A new WorldSpec object
+ * @throws On invalid WorldSpec properties
+ */
 function validateWorldSpec(spec: WorldSpec): Required<WorldSpec> {
+  // check spec exists
   if (!spec || !isObject(spec)) {
     throw new SyntaxError("World creation requires a specification object.");
   }
   const { capacity, components } = spec;
+  // check capacity
   if (!isPositiveInt(capacity)) {
     throw new SyntaxError("World: spec.capacity invalid.");
   }
+  // check components
   if (!Array.isArray(components) || !components.every((c) => Object.prototype.hasOwnProperty.call(c, "name"))) {
     throw new TypeError("World: spec.components invalid.");
   }
@@ -61,6 +74,7 @@ export class World {
    * @param spec An WorldSpec object
    * @param spec.capacity The maximum number of entities allowed in the world
    * @param spec.components An array of components to instantiate in the world
+   * @throws If the spec is invalid
    */
   constructor(spec: WorldSpec) {
     const { capacity, components } = validateWorldSpec(spec);
@@ -69,7 +83,7 @@ export class World {
     this.archetypeManager = new ArchetypeManager({ capacity, components });
     this.componentManager = new ComponentManager({ capacity, components });
     this.queryManager = new QueryManager({ componentManager: this.componentManager });
-    this.refresh(); /** @todo is this necessary? */
+    this.refresh();
     Object.freeze(this);
   }
 
@@ -83,13 +97,19 @@ export class World {
     return this.capacity - this.residents;
   }
 
+  /**
+   * Creates a function to add a given set of components to an entity
+   * @param components One or more components to add
+   * @returns A function which takes an entity and optional properties object
+   * @throws if one or more components are not registered in this world
+   */
   addComponentsToEntity(...components: Component<any>[]) {
-    const adder = this.componentManager.addComponentsToEntity(components);
+    const cb = this.componentManager.addComponentsToEntity(components);
     // eslint-disable-next-line @typescript-eslint/no-this-alias
     const self = this;
     return (entity: Entity, properties?: Record<string, SchemaProps<unknown>>): World => {
       if (!this.isValidEntity(entity)) throw new SyntaxError(`Entity ${entity as number} is not valid!`);
-      this.archetypeManager.updateArchetype(entity, adder(entity, properties));
+      this.archetypeManager.updateArchetype(entity, cb(entity, properties));
       return self;
     };
   }
@@ -103,7 +123,12 @@ export class World {
     return entity;
   }
 
-  /** Remove and recycle an Entity */
+  /**
+   * Remove and recycle an Entity
+   * @param entity the entity to destroy
+   * @returns the world
+   * @throws if the entity is invalid
+   */
   destroyEntity(entity: Entity): World {
     if (!this.isValidEntity(entity)) throw new SyntaxError(`Entity ${entity as number} is not valid!`);
     // eslint-disable-next-line array-callback-return
@@ -113,6 +138,12 @@ export class World {
     return this;
   }
 
+  /**
+   * Get all the changed entities from a set of components
+   * @param components The components to collect changed entities from
+   * @returns An array of entities
+   * @throws if one or more components are not registered in this world
+   */
   getChangedFromComponents(...components: Component<any>[]): Entity[] {
     const instances = this.componentManager.getInstances(components).filter((x) => x);
     if (instances.length !== components.length) throw new Error("Not all components registered!");
@@ -126,6 +157,13 @@ export class World {
     ];
   }
 
+  /**
+   * Get all the changed entities from a query
+   * @param query the query to collect changed entities from
+   * @param arr an optional array to be emptied and recycled
+   * @returns an array of entities
+   * @throws if query is invalid
+   */
   getChangedFromQuery(query: Query, arr: Entity[] = []): Entity[] {
     const instance = this.queryManager.getQueryInstance(query);
     arr.length = 0;
@@ -134,14 +172,29 @@ export class World {
     return [...new Set(arr)];
   }
 
+  /**
+   * Get this world's instance of a component
+   * @param component The component to retrieve the instance of
+   * @returns The component instance or undefined if the component is not registered
+   */
   getComponentInstance<T extends Schema<T>>(component: Component<T>): ComponentInstance<T> | undefined {
     return this.componentManager.componentMap.get(component);
   }
 
+  /**
+   * Get this world's instances of a set of components
+   * @param component The component to retrieve the instance of
+   * @returns An array of component instances or undefined if the component is not registered
+   */
   getComponentInstances(...components: Component<any>[]): (ComponentInstance<any> | undefined)[] {
     return this.componentManager.getInstances(components);
   }
 
+  /**
+   * Get all of the component properties of a given entity
+   * @param entity The entity to retrieve the properties of
+   * @returns An object where keys are component names and properties are the entity's properties
+   */
   getEntityProperties(entity: Entity): Record<string, SchemaProps<unknown>> {
     const archetype = this.archetypeManager.getArchetype(entity);
     if (!archetype) return {};
@@ -163,28 +216,71 @@ export class World {
     );
   }
 
+  /**
+   * Get all the components positively associated with a query
+   * @param query The query to get the components from
+   * @returns An object where keys are component names and properties are component instances
+   * @throws If the query is invalid
+   */
   getQueryComponents(query: Query): ComponentRecord {
     return this.queryManager.getComponentsFromQuery(query);
   }
 
+  /**
+   * Get all the entities which have entered the query since the last refresh
+   * @param query The query to get the entities from
+   * @param arr An optional array to be emptied and recycled
+   * @returns An array of entities
+   * @throws If the query is invalid
+   */
   getQueryEntered(query: Query, arr: Entity[] = []): Entity[] {
     return this.queryManager.getEnteredFromQuery(query, arr);
   }
 
+  /**
+   * Get all the entities which match a query
+   * @param query The query to get the entities from
+   * @param arr An optional array to be emptied and recycled
+   * @returns An array of entities
+   * @throws If the query is invalid
+   */
   getQueryEntities(query: Query, arr: Entity[] = []): Entity[] {
     return this.queryManager.getEntitiesFromQuery(query, arr);
   }
 
+  /**
+   * Get all the entities which have exited the query since the last refresh
+   * @param query The query to get the entities from
+   * @param arr An optional array to be emptied and recycled
+   * @returns An array of entities
+   * @throws If the query is invalid
+   */
   getQueryExited(query: Query, arr: Entity[] = []): Entity[] {
     return this.queryManager.getExitedFromQuery(query, arr);
   }
 
+  /**
+   * Create a function to test entities for a given component
+   * @param component The component to test for
+   * @returns A function which takes an entity and returns
+   *     true if the entity has the component, false if it does not
+   *     or null if the entity does not exist.
+   * @throws if the component is not registered in this world
+   */
   hasComponent<T extends Schema<T>>(component: Component<T>): (entity: Entity) => boolean | null {
     const instance = this.componentManager.getInstance(component);
     if (!instance) throw new Error("Component is not registered.");
     return (entity: Entity) => instance[$_OWNERS].isSet(entity);
   }
 
+  /**
+   * Create a function to test entities for a given component
+   * @param components The components to test for
+   * @returns A function which takes an entity and returns an array of
+   *     true if the entity has the component, false if it does not
+   *     or null if the entity does not exist.
+   * @throws if one or more component is not registered in this world
+   */
   hasComponents(...components: Component<any>[]): (entity: Entity) => (boolean | null)[] {
     const instances = this.componentManager.getInstances(components).filter((x) => x) as ComponentInstance<any>[];
     if (instances.length !== components.length) throw new Error("Not all components registered!");
@@ -194,8 +290,9 @@ export class World {
   }
 
   /**
-   * @return `true` if the Entity is valid and exists in the world
-   * @throws if the entity is invalid
+   * Test if an entity is active in the world
+   * @return a boolean or null if the entity is invalid
+   *
    */
   isEntityActive(entity: Entity): boolean | null {
     if (!this.isValidEntity(entity)) return null;
@@ -207,7 +304,11 @@ export class World {
     return isUint32(entity) && entity < this.entities.size;
   }
 
-  /** Swap the ComponentBuffer of one world with this world */
+  /**
+   * Swap the ComponentBuffer of one world with this world
+   * @returns the world
+   * @throws if the capacity or version of the data to load is mismatched
+   */
   load(data: WorldData): World {
     const { buffer, capacity, version } = data;
     if (version !== this.version) {
@@ -229,6 +330,12 @@ export class World {
     return this;
   }
 
+  /**
+   * Creates a function to remove a given set of components from an entity
+   * @param components One or more components to remove
+   * @returns A function which takes an entity
+   * @throws if one or more components are not registered in this world
+   */
   removeComponentsFromEntity(...components: Component<any>[]): (entity: Entity) => World {
     const remover = this.componentManager.removeComponentsFromEntity(components);
     // eslint-disable-next-line @typescript-eslint/no-this-alias

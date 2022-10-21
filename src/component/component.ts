@@ -34,6 +34,7 @@ export class Component<T extends Schema<T>> {
    * @param spec.name the component's string identifier.
    * @param spec.schema the component's optional schema object.
    * @returns A valid Component object - a reusable definitions for the creation of ComponentInstances
+   * @throws If the spec is invalid
    */
   constructor(spec: ComponentSpec<T>) {
     if (!spec) throw new SyntaxError("A specification object is required.");

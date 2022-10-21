@@ -48,13 +48,17 @@ export class System<
   }
 
   /**
+   * Initialize the system for a given world
    * @param world the world to execute the system in
-   * @param args arguments to pass to the system's callback function
-   * @returns the result of the system's callback function
+   * @returns an initialized system function
    */
   init(world: World): (...args: U) => ReturnType<T> {
     const components = world.getQueryComponents(this.query);
     const entities: Entity[] = [];
+    /**
+     * @param args arguments to pass to the system's callback function
+     * @returns the result of the system's callback function
+     */
     return (...args: U) => this.system(components, world.getQueryEntities(this.query, entities), ...args);
   }
 }
