@@ -35,6 +35,11 @@ const canvas = document.querySelector('canvas');
 const ctx = canvas.getContext('2d', { alpha: false });
 ctx.imageSmoothingEnabled = false;
 
+// Offscreen canvas
+const offCanvas = document.createElement('canvas');
+const offCtx = offCanvas.getContext('2d', { alpha: false, desynchronized: true });
+offCtx.imageSmoothingEnabled = false;
+
 /* 1. Define components
  *
  * Components are reusable data storage definitions.
@@ -47,8 +52,7 @@ ctx.imageSmoothingEnabled = false;
 const cPosition = new Component({ name: "position", schema: { x: Float32Array, y: Float32Array }});
 const cShape = new Component({ name: "shape", schema: { primitive: Uint8Array }});
 const cVelocity = new Component({ name: "velocity", schema: { vx: Float32Array, vy: Float32Array }});
-// a tag component:
-const tRenderable = new Component({ name: "renderable" });
+// Tag components:
 const tClicked = new Component({ name: "clicked" });
 
 /* 2. Create queries
@@ -62,7 +66,7 @@ const tClicked = new Component({ name: "clicked" });
  * Note: the entities array is essentially in a random order (by archetype id) so you may want to sort it yourself.
  */
 const qMovable = new Query({ all: [cPosition, cVelocity] });
-const qRenderable = new Query({ all: [cPosition, cShape, tRenderable] });
+const qRenderable = new Query({ all: [cPosition, cShape] });
 
 /* 3. Create a world and destructure functions
  *
@@ -78,7 +82,6 @@ const world = new World({
     cPosition,
     cShape,
     cVelocity,
-    tRenderable,
     tClicked,
   ]
 });
@@ -117,52 +120,49 @@ const sMovable = new System({ query: qMovable, system: (components, entities, de
 }}).init(world);
 
 const drawCircle = (x, y) => {
-  ctx.fillStyle = "#888";
-  ctx.beginPath();
-  ctx.arc(x, y, SHAPE_HALF_SIZE, 0, TAU, false);
-  ctx.fill();
-  ctx.lineWidth = 1;
-  ctx.strokeStyle = "#222";
-  ctx.stroke();
+  offCtx.fillStyle = "#888";
+  offCtx.beginPath();
+  offCtx.arc(x, y, SHAPE_HALF_SIZE, 0, TAU, false);
+  offCtx.fill();
+  offCtx.strokeStyle = "#222";
+  offCtx.stroke();
 }
 
 const drawBox = (x, y) => {
-  ctx.beginPath();
-  ctx.rect(x - SHAPE_HALF_SIZE, y - SHAPE_HALF_SIZE, SHAPE_SIZE, SHAPE_SIZE);
-  ctx.fillStyle= "#f28d89";
-  ctx.fill();
-  ctx.lineWidth = 1;
-  ctx.strokeStyle = "#800904";
-  ctx.stroke();
+  offCtx.beginPath();
+  offCtx.rect(x - SHAPE_HALF_SIZE, y - SHAPE_HALF_SIZE, SHAPE_SIZE, SHAPE_SIZE);
+  offCtx.fillStyle= "#f28d89";
+  offCtx.fill();
+  offCtx.strokeStyle = "#800904";
+  offCtx.stroke();
 }
 
 const drawSpecial = (x, y) => {
-  ctx.save();
-  ctx.fillStyle= "yellow";
-  ctx.lineWidth = 1;
-  ctx.strokeStyle = "black";
-  ctx.beginPath();
-  ctx.translate(x, y);
-  ctx.moveTo(0, 0 - 5);
+  offCtx.save();
+  offCtx.fillStyle= "yellow";
+  offCtx.strokeStyle = "black";
+  offCtx.beginPath();
+  offCtx.translate(x, y);
+  offCtx.moveTo(0, 0 - 5);
   for (let i = 0; i < 5; i++) {
     const t = Math.PI / 5;
-    ctx.rotate(t);
-    ctx.lineTo(0, 0 - (5 * 5));
-    ctx.rotate(t);
-    ctx.lineTo(0, 0 - 5);
+    offCtx.rotate(t);
+    offCtx.lineTo(0, 0 - (5 * 5));
+    offCtx.rotate(t);
+    offCtx.lineTo(0, 0 - 5);
   }
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
-  ctx.restore();
+  offCtx.closePath();
+  offCtx.fill();
+  offCtx.stroke();
+  offCtx.restore();
 }
 
 const sRender = new System({ query: qRenderable, system: (components, entities, alpha) => {
   const { position, shape } = components;
   const { x, y } = position;
   const { primitive } = shape;
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  offCtx.fillStyle = "#ffffff";
+  offCtx.fillRect(0, 0, offCanvas.width, offCanvas.height);
   for (let entity of entities) {
     if (primitive[entity] === 0) {
       drawBox(x[entity], y[entity]);
@@ -172,10 +172,11 @@ const sRender = new System({ query: qRenderable, system: (components, entities, 
       drawSpecial(x[entity], y[entity]);
     }
   }
+  ctx.drawImage(offCanvas, 0, 0);
 }}).init(world);
 
 // You can define a prefab factory like so:
-const shapeBuilder = world.addComponentsToEntity(cVelocity, cPosition, cShape, tRenderable);
+const shapeBuilder = world.addComponentsToEntity(cVelocity, cPosition, cShape);
 
 /* 5. Create Entities and give them some components */
 const createShapes = (n, w = canvas.width, h = canvas.height) => {
@@ -256,11 +257,13 @@ window.addEventListener("load", () => {
   const resize = () => {
     const { devicePixelRatio = 1 } = window;
     const { clientHeight, clientWidth } = document.documentElement;
+    offCanvas.width = clientWidth;
+    offCanvas.height = clientHeight;
     canvas.width = clientWidth * devicePixelRatio;
     canvas.height = clientHeight * devicePixelRatio;
     canvas.style.width = clientWidth + "px";
     canvas.style.height = clientHeight + "px";
-    ctx.scale(devicePixelRatio, devicePixelRatio)
+    ctx.scale(devicePixelRatio, devicePixelRatio);
     sResX.textContent = canvas.width;
     sResY.textContent = canvas.height;
   }
@@ -284,7 +287,7 @@ window.addEventListener("load", () => {
       updated = true;
     }
     if (updated) {
-      if (bRender.checked) sRender(lag / frameDuration);
+      if (bRender.checked) sRender();
     }
     // runs World maintenance functions
     // I recommend calling this once per frame
