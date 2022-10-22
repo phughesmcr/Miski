@@ -2,7 +2,6 @@
 
 import { Archetype } from "./archetype.js";
 import type { Query } from "../query/query.js";
-import type { Bitfield } from "../utils/bitfield.js";
 import type { Component } from "../component/component.js";
 import type { ComponentInstance } from "../component/instance.js";
 import type { Entity } from "../world.js";

@@ -65,6 +65,7 @@ declare class Component<T extends Schema<T>> {
      * @param spec.name the component's string identifier.
      * @param spec.schema the component's optional schema object.
      * @returns A valid Component object - a reusable definitions for the creation of ComponentInstances
+     * @throws If the spec is invalid
      */
     constructor(spec: ComponentSpec<T>);
 }
@@ -93,6 +94,7 @@ declare class Query {
      * @param spec.all AND - Gather entities as long as they have all these components
      * @param spec.any OR - Gather entities as long as they have 0...* of these components
      * @param spec.none NOT - Gather entities as long as they don't have these components
+     * @throws If the spec is invalid
      */
     constructor(spec: QuerySpec);
 }
@@ -109,7 +111,6 @@ declare const $_OWNERS: unique symbol;
  */
 /** */
 declare class Bitfield extends Uint32Array {
-    static getHighestSetBit(value: number): number;
     /** @returns the number of set bits in a given value */
     static getSetBitCount(value: number): number;
     /** @returns the number of set bits in a given bitfield */
@@ -153,14 +154,18 @@ declare class Bitfield extends Uint32Array {
 }
 
 /**
- * A storage proxy is a convenience method
- * for setting entity's component properties
- * in a way which is type safe and
- * flips the `changed` property on the entity
- * at the expense of performance.
- * */
+ * A storage proxy is a convenience method for setting entity's component
+ * properties in a way which is type safe and flips the `changed` property
+ * on the entity at the expense of performance vs. direct array access.
+ */
 declare type StorageProxy<T extends Schema<T>> = Record<keyof T, number> & {
+    /** @returns the entity the proxy is currently pointed at */
     getEntity(): Entity;
+    /**
+     * Change the proxy's cursor to a given entity
+     * @param entity The entity to change
+     * @throws If the entity is not a number
+     */
     setEntity(entity: Entity): Entity;
 };
 
@@ -181,9 +186,13 @@ declare type ComponentInstance<T extends Schema<T>> = Component<T> & Record<keyo
 
 /** Entities are indexes of an EntityArray. An Entity is just an integer. */
 declare type Entity = Opaque<number, "Entity">;
+/** The object returned from `world.save();` */
 interface WorldData {
+    /** The world's component storage buffer */
     buffer: ArrayBuffer;
+    /** The maximum number of entities allowed in the world */
     capacity: number;
+    /** The Miski version of the creating world */
     version: string;
 }
 interface WorldSpec {
@@ -207,39 +216,133 @@ declare class World {
      * @param spec An WorldSpec object
      * @param spec.capacity The maximum number of entities allowed in the world
      * @param spec.components An array of components to instantiate in the world
+     * @throws If the spec is invalid
      */
     constructor(spec: WorldSpec);
     /** @returns the number of active entities */
     get residents(): number;
     /** @returns the number of available entities */
     get vacancies(): number;
+    /**
+     * Creates a function to add a given set of components to an entity
+     * @param components One or more components to add
+     * @returns A function which takes an entity and optional properties object
+     * @throws if one or more components are not registered in this world
+     */
     addComponentsToEntity(...components: Component<any>[]): (entity: Entity, properties?: Record<string, SchemaProps<unknown>>) => World;
     /** @returns the next available Entity or `undefined` if no Entity is available */
     createEntity(): Entity | undefined;
-    /** Remove and recycle an Entity */
+    /**
+     * Remove and recycle an Entity
+     * @param entity the entity to destroy
+     * @returns the world
+     * @throws if the entity is invalid
+     */
     destroyEntity(entity: Entity): World;
+    /**
+     * Get all the changed entities from a set of components
+     * @param components The components to collect changed entities from
+     * @returns An array of entities
+     * @throws if one or more components are not registered in this world
+     */
     getChangedFromComponents(...components: Component<any>[]): Entity[];
+    /**
+     * Get all the changed entities from a query
+     * @param query the query to collect changed entities from
+     * @param arr an optional array to be emptied and recycled
+     * @returns an array of entities
+     * @throws if query is invalid
+     */
     getChangedFromQuery(query: Query, arr?: Entity[]): Entity[];
+    /**
+     * Get this world's instance of a component
+     * @param component The component to retrieve the instance of
+     * @returns The component instance or undefined if the component is not registered
+     */
     getComponentInstance<T extends Schema<T>>(component: Component<T>): ComponentInstance<T> | undefined;
+    /**
+     * Get this world's instances of a set of components
+     * @param component The component to retrieve the instance of
+     * @returns An array of component instances or undefined if the component is not registered
+     */
     getComponentInstances(...components: Component<any>[]): (ComponentInstance<any> | undefined)[];
+    /**
+     * Get all of the component properties of a given entity
+     * @param entity The entity to retrieve the properties of
+     * @returns An object where keys are component names and properties are the entity's properties
+     */
     getEntityProperties(entity: Entity): Record<string, SchemaProps<unknown>>;
+    /**
+     * Get all the components positively associated with a query
+     * @param query The query to get the components from
+     * @returns An object where keys are component names and properties are component instances
+     * @throws If the query is invalid
+     */
     getQueryComponents(query: Query): ComponentRecord;
+    /**
+     * Get all the entities which have entered the query since the last refresh
+     * @param query The query to get the entities from
+     * @param arr An optional array to be emptied and recycled
+     * @returns An array of entities
+     * @throws If the query is invalid
+     */
     getQueryEntered(query: Query, arr?: Entity[]): Entity[];
+    /**
+     * Get all the entities which match a query
+     * @param query The query to get the entities from
+     * @param arr An optional array to be emptied and recycled
+     * @returns An array of entities
+     * @throws If the query is invalid
+     */
     getQueryEntities(query: Query, arr?: Entity[]): Entity[];
+    /**
+     * Get all the entities which have exited the query since the last refresh
+     * @param query The query to get the entities from
+     * @param arr An optional array to be emptied and recycled
+     * @returns An array of entities
+     * @throws If the query is invalid
+     */
     getQueryExited(query: Query, arr?: Entity[]): Entity[];
+    /**
+     * Create a function to test entities for a given component
+     * @param component The component to test for
+     * @returns A function which takes an entity and returns
+     *     true if the entity has the component, false if it does not
+     *     or null if the entity does not exist.
+     * @throws if the component is not registered in this world
+     */
     hasComponent<T extends Schema<T>>(component: Component<T>): (entity: Entity) => boolean | null;
+    /**
+     * Create a function to test entities for a given component
+     * @param components The components to test for
+     * @returns A function which takes an entity and returns an array of
+     *     true if the entity has the component, false if it does not
+     *     or null if the entity does not exist.
+     * @throws if one or more component is not registered in this world
+     */
     hasComponents(...components: Component<any>[]): (entity: Entity) => (boolean | null)[];
     /**
-     * @return `true` if the Entity is valid and exists in the world
-     * @throws if the entity is invalid
+     * Test if an entity is active in the world
+     * @return a boolean or null if the entity is invalid
+     *
      */
     isEntityActive(entity: Entity): boolean | null;
     /** @return `true` if the given entity is valid for the given capacity */
     isValidEntity(entity: Entity): entity is Entity;
-    /** Swap the ComponentBuffer of one world with this world */
+    /**
+     * Swap the ComponentBuffer of one world with this world
+     * @returns the world
+     * @throws if the capacity or version of the data to load is mismatched
+     */
     load(data: WorldData): World;
     /** Runs various world maintenance functions */
     refresh(): World;
+    /**
+     * Creates a function to remove a given set of components from an entity
+     * @param components One or more components to remove
+     * @returns A function which takes an entity
+     * @throws if one or more components are not registered in this world
+     */
     removeComponentsFromEntity(...components: Component<any>[]): (entity: Entity) => World;
     /** Export various bits of data about the world */
     save(): WorldData;
@@ -274,9 +377,9 @@ declare class System<T extends (components: ComponentRecord, entities: Entity[],
      */
     constructor(spec: SystemSpec<T, U>);
     /**
+     * Initialize the system for a given world
      * @param world the world to execute the system in
-     * @param args arguments to pass to the system's callback function
-     * @returns the result of the system's callback function
+     * @returns an initialized system function
      */
     init(world: World): (...args: U) => ReturnType<T>;
 }

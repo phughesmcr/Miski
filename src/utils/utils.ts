@@ -102,3 +102,10 @@ export function getLsbIndex(value: number): number {
   if (value === 2147483648) return 31;
   return LOG_2[value & -value] ?? -1;
 }
+
+/** Round a number up to the closest power of 2 */
+export function roundUpToPwr2(n: number): number {
+  let p = 2;
+  while ((n >>= 1)) p <<= 1;
+  return p;
+}

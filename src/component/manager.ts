@@ -143,7 +143,7 @@ export class ComponentManager {
   export() {
     return {
       buffer: this.buffer.slice(0),
-      componentMap: [...this.componentMap.entries()],
+      components: [...this.componentMap.values()],
     };
   }
 }

@@ -140,4 +140,10 @@ export class QueryManager {
     this.queryMap.forEach(refreshQuery);
     return this;
   }
+
+  export() {
+    return {
+      queries: [...this.queryMap.values()],
+    };
+  }
 }

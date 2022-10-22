@@ -1,0 +1,22 @@
+html, body {
+  border: none;
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+  max-width: 100vw;
+  max-height: 100vh;
+  background-color: black;
+  overflow: hidden;
+}
+canvas {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border: 1px solid white;
+}
+main {
+  position: relative;
+  height: 100%;
+  width: 100%;
+}
