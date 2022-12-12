@@ -1,5 +1,9 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
+// Constants
+const BITS_PER_INT = 32;
+const NO_INDEX = -1;
+
 /**
  * @note
  * `bit >>> 5` is used in place of `Math.floor(bit / 32)`.
@@ -42,7 +46,7 @@ export class Bitfield extends Uint32Array {
 
   /** @returns the index of a bit in a bitfield */
   static indexOf(bit: number): number {
-    if (isNaN(bit) || bit < 0) return -1;
+    if (isNaN(bit) || bit < 0) return NO_INDEX;
     return bit >>> 5;
   }
 
@@ -51,7 +55,7 @@ export class Bitfield extends Uint32Array {
    * @param size the number of bits in the array
    */
   constructor(size: number) {
-    super(Math.ceil(size / 32));
+    super(Math.ceil(size / BITS_PER_INT));
   }
 
   /** @returns The amount of bits in the array */
@@ -69,8 +73,9 @@ export class Bitfield extends Uint32Array {
   /** @returns a new Bitfield based on this one with toggled bits */
   cloneWithToggle<T>(key: keyof T, sources: T[]): Bitfield {
     const bitfield = this.clone();
-    // eslint-disable-next-line array-callback-return
-    sources.forEach((source) => bitfield.toggle(source[key] as number));
+    sources.forEach((source) => {
+      bitfield.toggle(source[key] as number);
+    });
     return bitfield;
   }
 
@@ -86,8 +91,8 @@ export class Bitfield extends Uint32Array {
   /** @returns `true` if a given bit is set in the Bitfield or null on error */
   isSet(bit: number): boolean | null {
     const i = Bitfield.indexOf(bit);
-    if (i === -1 || this[i] === undefined) return null;
-    return !!(this[i]! & (1 << (bit - i * 32)));
+    if (i === NO_INDEX || this[i] === undefined) return null;
+    return !!(this[i]! & (1 << (bit - i * BITS_PER_INT)));
   }
 
   /**
@@ -96,8 +101,8 @@ export class Bitfield extends Uint32Array {
    */
   toggle(bit: number): boolean | null {
     const i = Bitfield.indexOf(bit);
-    if (i === -1) return null;
-    this[i] ^= 1 << (bit - i * 32);
-    return !!(this[i]! & (1 << (bit - i * 32)));
+    if (i === NO_INDEX) return null;
+    this[i] ^= 1 << (bit - i * BITS_PER_INT);
+    return !!(this[i]! & (1 << (bit - i * BITS_PER_INT)));
   }
 }
