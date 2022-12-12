@@ -106,8 +106,13 @@ export function createComponentInstance<T extends Schema<T>>(
       enumerable: true,
       writable: false,
     });
+
     // assign raw storage
-    Object.assign(instance, storage);
+    Object.keys(storage).forEach((k) => {
+      Object.defineProperty(instance, k, {
+        value: storage[k as keyof T],
+      });
+    });
   }
 
   return Object.freeze(instance);
