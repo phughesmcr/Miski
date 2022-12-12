@@ -41,6 +41,11 @@ export class Archetype {
     return this.entities.size === 0;
   }
 
+  /** The number of entities in the archetype */
+  get size(): number {
+    return this.entities.size;
+  }
+
   /** Add an Entity to the Archetype */
   addEntity(entity: Entity): Archetype {
     this.entities.add(entity);
