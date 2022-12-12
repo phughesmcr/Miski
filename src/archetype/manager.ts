@@ -1,8 +1,8 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
 import { Archetype } from "./archetype.js";
+import { Bitfield } from "../utils/bitfield.js";
 import type { Query } from "../query/query.js";
-import type { Bitfield } from "../utils/bitfield.js";
 import type { Component } from "../component/component.js";
 import type { ComponentInstance } from "../component/instance.js";
 import type { Entity } from "../world.js";
@@ -76,9 +76,11 @@ export class ArchetypeManager {
    */
   updateArchetype(entity: Entity, components: ComponentInstance<any>[]): Archetype {
     /** @todo replace this with a graph */
-    const previousArchetype = this.entityArchetypes[entity]!;
-    previousArchetype.removeEntity(entity);
-    const bitfield = previousArchetype.bitfield.cloneWithToggle("id", components);
+    const previousArchetype = this.entityArchetypes[entity];
+    previousArchetype?.removeEntity(entity);
+    const bitfield =
+      previousArchetype?.bitfield.cloneWithToggle("id", components) ??
+      Bitfield.fromObjects(this.rootArchetype.bitfield.size, "id", components);
     const id = bitfield.toString();
     let nextArchetype = this.archetypeMap.get(id);
     if (!nextArchetype) {
