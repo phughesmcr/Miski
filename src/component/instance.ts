@@ -37,6 +37,11 @@ export type ComponentInstance<T extends Schema<T>> = Component<T> &
     proxy: StorageProxy<T>;
   };
 
+/**
+ * Perform routine maintenance on a component instance
+ * @param instance The ComponentInstance to refresh
+ * @returns The ComponentInstance
+ */
 export function refreshComponentInstance<T extends Schema<T>>(instance: ComponentInstance<T>): ComponentInstance<T> {
   instance[$_CHANGED].clear();
   return instance;
