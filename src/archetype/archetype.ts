@@ -89,13 +89,15 @@ export class Archetype {
   }
 
   /** Serialize the Archetype to a string */
-  toString(): string {
-    return `
-{
-  bitfield: ${this.bitfield.toString()},
-  components: ${this.components.map((inst) => inst.id).join(",")},
-  entities: ${[...this.entities.values()].join(",")},
-},
-    `;
+  toString(replacer?: (this: any, key: string, value: any) => any, space?: string | number): string {
+    return JSON.stringify(
+      {
+        bitfield: this.bitfield.toString(),
+        components: this.components.map((inst) => inst.id).join(","),
+        entities: [...this.entities.values()].join(","),
+      },
+      replacer,
+      space,
+    );
   }
 }
