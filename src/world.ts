@@ -52,7 +52,7 @@ function validateWorldSpec(spec: WorldSpec): Required<WorldSpec> {
   if (!Array.isArray(components) || !components.every((c) => Object.prototype.hasOwnProperty.call(c, "name"))) {
     throw new TypeError("World: spec.components invalid.");
   }
-  return { ...spec, components: [...new Set(components)] };
+  return { ...spec, capacity: Math.ceil(capacity), components: [...new Set(components)] };
 }
 
 export class World {
