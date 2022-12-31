@@ -280,7 +280,7 @@ export class World {
    * @throws if one or more component is not registered in this world
    */
   hasComponents(...components: Component<any>[]): (entity: Entity) => (boolean | null)[] {
-    const instances = this.componentManager.getInstances(components).filter((x) => x) as ComponentInstance<any>[];
+    const instances = this.componentManager.getInstances(components).filter(Boolean) as ComponentInstance<any>[];
     if (instances.length !== components.length) throw new Error("Not all components registered!");
     return (entity: Entity): (boolean | null)[] => {
       return instances.map((component) => component[$_OWNERS].isSet(entity));
