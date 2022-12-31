@@ -38,10 +38,12 @@ export class Bitfield extends Uint32Array {
    *  Bitfield.fromObjects(32, "id", [{ id: 0, ... }, ...]);
    */
   static fromObjects<T>(size: number, key: keyof T, objs: T[]): Bitfield {
-    return objs.reduce((bitfield, obj) => {
-      bitfield.toggle(obj[key] as number);
-      return bitfield;
-    }, new Bitfield(size));
+    const res = new Bitfield(size);
+    for (const obj of objs) {
+      if (obj[key] === undefined) continue;
+      res.toggle(obj[key] as number);
+    }
+    return res;
   }
 
   /** @returns the index of a bit in a bitfield */
