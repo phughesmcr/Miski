@@ -61,14 +61,7 @@ export function createQueryInstance(spec: QueryInstanceSpec): QueryInstance {
   const not = Bitfield.fromObjects(length, "id", _noneInstances);
 
   /** The components matched by the and/or bitfields */
-  const components: Record<string, ComponentInstance<any>> = [..._allInstances, ..._anyInstances].reduce(
-    (res, component) => {
-      res[component.name] = component;
-      return res;
-    },
-    {} as Record<string, ComponentInstance<any>>,
-  );
-  Object.freeze(components);
+  const components = Object.fromEntries([..._allInstances, ..._anyInstances].map((c) => [c.name, c]));
 
   const archetypes: Set<Archetype> = new Set();
 
