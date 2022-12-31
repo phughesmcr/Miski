@@ -33,10 +33,10 @@ function instantiate(buffer: ComponentBuffer, capacity: number, components: Comp
 }
 
 /** @todo better async? */
-function add<T extends Schema<T>>(
+function addEntity<T extends Schema<T>>(
   instance: ComponentInstance<T>,
-  entity: number,
-  properties?: Record<string, SchemaProps<unknown>>,
+  entity: Entity,
+  properties?: Record<string, SchemaProps<T>>,
 ) {
   const { maxEntities, name, schema } = instance;
   if (maxEntities && instance.count >= maxEntities) {
@@ -56,36 +56,26 @@ function add<T extends Schema<T>>(
   return instance;
 }
 
-export const addEntity = <T extends Schema<T>>(
-  instance: ComponentInstance<T>,
-  entity: Entity,
-  properties?: Record<string, SchemaProps<T>>,
-) => add(instance, entity, properties);
-
 /** @todo better async? */
-function remove(instance: ComponentInstance<any>, entity: Entity) {
+function removeEntity<T extends Schema<T>>(instance: ComponentInstance<T>, entity: Entity) {
   const { maxEntities, schema } = instance;
   if (!instance[$_OWNERS].isSet(entity)) return null;
   instance[$_OWNERS].toggle(entity);
   if (schema) {
     /** @todo Object.entries creates an array. */
     Object.entries(schema).forEach(([key, prop]) => {
-      const storage = instance[key];
+      const storage = instance[key as keyof T];
       if (storage) {
         if (maxEntities) {
           delete storage[entity];
         } else {
-          storage[entity] = Array.isArray(prop) ? prop[1] : 0;
+          storage[entity] = Array.isArray(prop) ? (prop[1] as number) : 0;
         }
       }
     });
   }
   return instance;
 }
-
-export const removeEntity = <T extends Schema<T>>(instance: ComponentInstance<T>, entity: Entity) => {
-  return remove(instance, entity);
-};
 
 export class ComponentManager {
   readonly buffer: ComponentBuffer;
