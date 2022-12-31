@@ -20,16 +20,17 @@ export interface ComponentManagerSpec {
 }
 
 function instantiate(buffer: ComponentBuffer, capacity: number, components: Component<any>[]) {
-  return components.reduce(<T extends Schema<T>>(res: ComponentMap, component: Component<T>, id: number) => {
-    const instance = createComponentInstance({
-      capacity,
+  return new Map<Component<any>, ComponentInstance<any>>(
+    components.map((component, id) => [
       component,
-      id,
-      storage: buffer.partitions.get(component),
-    });
-    res.set(component, instance);
-    return res;
-  }, new Map() as ComponentMap);
+      createComponentInstance({
+        capacity,
+        component,
+        id,
+        storage: buffer.partitions.get(component),
+      }),
+    ]),
+  );
 }
 
 /** @todo better async? */
