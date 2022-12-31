@@ -65,7 +65,7 @@ export function partitionComponentBuffer(
     if (!schema) return partitions;
     // maxEntities should always be less than capacity
     const requiredSize = maxEntities ?? capacity;
-    // the resultin partition object
+    // the result in partition object
     const partition = {} as SchemaStorage<any>;
     // loop though each item in the schema and create a new PartitionProperty object
     for (const [key, value] of Object.entries(schema)) {
@@ -86,7 +86,7 @@ export function partitionComponentBuffer(
 }
 
 /**
- * Serialize a ComponentBuffer object into a stringifyable object
+ * Serialize a ComponentBuffer object into a stringify-able object
  * @param buffer The ComponentBuffer to serialize
  * @returns A new ComponentBufferData object
  */
