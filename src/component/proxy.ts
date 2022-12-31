@@ -34,34 +34,32 @@ export function storageProxy<T extends Schema<T>>(storage: SchemaStorage<T>, cha
   /** The currently selected entity */
   let entityId: Entity = 0 as Entity;
 
-  return Object.freeze(
-    // Create a getter and setter for each storage property
-    Object.keys(storage).reduce(
-      (res, key) => {
-        Object.defineProperty(res, key, {
-          get() {
-            return storage[key as keyof T][entityId];
-          },
-          set(value: number) {
-            if (storage[key as keyof T][entityId] !== value) {
-              storage[key as keyof T][entityId] = value;
-              changed.add(entityId);
-            }
-          },
-        });
-        return res;
+  // allow the user to control which entity the proxy should modify
+  const proxy = {
+    getEntity(): Entity {
+      return entityId;
+    },
+    setEntity(entity: Entity): Entity {
+      if (isNaN(entity) || entity < 0) throw new TypeError("Expected entity to be a positive number.");
+      entityId = entity;
+      return entityId;
+    },
+  } as StorageProxy<T>;
+
+  // Create a getter and setter for each storage property
+  for (const key in storage) {
+    Object.defineProperty(proxy, key, {
+      // eslint-disable-next-line no-loop-func
+      get: () => storage[key as keyof T][entityId],
+      // eslint-disable-next-line no-loop-func
+      set: (value: number) => {
+        if (storage[key as keyof T][entityId] !== value) {
+          storage[key as keyof T][entityId] = value;
+          changed.add(entityId);
+        }
       },
-      // allow the user to control which entity the proxy should modify
-      {
-        getEntity(): Entity {
-          return entityId;
-        },
-        setEntity(entity: Entity): Entity {
-          if (isNaN(entity)) throw new TypeError("Expected entity to be a number.");
-          entityId = entity;
-          return entityId;
-        },
-      } as StorageProxy<T>,
-    ),
-  );
+    });
+  }
+
+  return Object.freeze(proxy);
 }
