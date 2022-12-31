@@ -105,12 +105,10 @@ export class World {
    */
   addComponentsToEntity(...components: Component<any>[]) {
     const cb = this.componentManager.addComponentsToEntity(components);
-    // eslint-disable-next-line @typescript-eslint/no-this-alias
-    const self = this;
     return (entity: Entity, properties?: Record<string, SchemaProps<unknown>>): World => {
       if (!this.isValidEntity(entity)) throw new SyntaxError(`Entity ${entity as number} is not valid!`);
       this.archetypeManager.updateArchetype(entity, cb(entity, properties));
-      return self;
+      return this;
     };
   }
 
@@ -338,12 +336,10 @@ export class World {
    */
   removeComponentsFromEntity(...components: Component<any>[]): (entity: Entity) => World {
     const remover = this.componentManager.removeComponentsFromEntity(components);
-    // eslint-disable-next-line @typescript-eslint/no-this-alias
-    const self = this;
     return (entity: Entity) => {
       if (!this.isValidEntity(entity)) throw new SyntaxError(`Entity ${entity as number} is not valid!`);
       this.archetypeManager.updateArchetype(entity, remover(entity));
-      return self;
+      return this;
     };
   }
 
