@@ -122,7 +122,7 @@ export class QueryManager {
 
   /** @returns an instantiated Query */
   getQueryInstance(query: Query): QueryInstance {
-    return this.registerQuery(query);
+    return this.queryMap.get(query) ?? this.registerQuery(query);
   }
 
   /** Register a Query in the world, producing a QueryInstance */
