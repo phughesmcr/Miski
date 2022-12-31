@@ -33,7 +33,7 @@ function instantiate(buffer: ComponentBuffer, capacity: number, components: Comp
 }
 
 /** @todo better async? */
-function addEntity<T extends Schema<T>>(
+export function addEntity<T extends Schema<T>>(
   instance: ComponentInstance<T>,
   entity: Entity,
   properties?: Record<string, SchemaProps<T>>,
@@ -57,7 +57,7 @@ function addEntity<T extends Schema<T>>(
 }
 
 /** @todo better async? */
-function removeEntity<T extends Schema<T>>(instance: ComponentInstance<T>, entity: Entity) {
+export function removeEntity<T extends Schema<T>>(instance: ComponentInstance<T>, entity: Entity) {
   const { maxEntities, schema } = instance;
   if (!instance[$_OWNERS].isSet(entity)) return null;
   instance[$_OWNERS].toggle(entity);
