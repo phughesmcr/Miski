@@ -32,7 +32,7 @@
     "eslint-config-problems": "^7.0.1",
     "eslint-plugin-no-explicit-type-exports": "^0.12.1",
     "eslint-plugin-prettier": "^4.2.1",
-    "eslint-plugin-sonarjs": "^0.16.0",
+    "eslint-plugin-sonarjs": "^0.17.0",
     "esm": "^3.2.25",
     "gh-pages": "^4.0.0",
     "mocha": "^10.1.0",
