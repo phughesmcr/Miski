@@ -14,8 +14,11 @@ export const getPopulationCount = (value: number): number => {
   return (((b + (b >> 4)) & 0xf0f0f0f) * 0x1010101) >> 24;
 };
 
+/** @returns the lowest set bit in the binary representation of a number */
 export const getLowestSetBit = (value: number) => value & -value;
 
-export const getLowestSetPosition = (value: number) => LOG_2[getLowestSetBit(value)] ?? NO_INDEX;
+/** @returns the index of the lowest set bit in the binary representation of a number */
+export const getLowestSetIndex = (value: number) => LOG_2[getLowestSetBit(value)] ?? NO_INDEX;
 
+/** @returns the intersection of two values */
 export const intersectBits = (a = 0, b = 0): number => a & b;

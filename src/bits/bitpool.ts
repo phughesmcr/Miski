@@ -3,11 +3,14 @@
 import type { Bitfield } from "./bitfield.js";
 import * as bitfield from "./bitfield.js";
 import { NO_INDEX } from "./constants.js";
-import { getLowestSetPosition } from "./utils.js";
+import { getLowestSetIndex } from "./utils.js";
 
 export type Bitpool = {
+  /** A bitfield, where each bit represents a free index in the bitpool */
   field: Bitfield;
+  /** The next available index in the bitpool */
   nextAvailableIdx: number;
+  /** The size of the bitpool */
   size: number;
 };
 
@@ -15,6 +18,8 @@ export type Bitpool = {
  * Creates a new BitPool with the specified size.
  * @param size The number of bits in the BitPool.
  * @returns A new BitPool instance.
+ * @throws {SyntaxError} if `size` is <= 0
+ * @throws {TypeError} if `size` is NaN
  */
 export const create = (size: number): Bitpool => {
   const field = bitfield.create(size);
@@ -45,7 +50,7 @@ export const acquire = (bitpool: Bitpool) => {
   const { nextAvailableIdx } = bitpool;
   if (!~nextAvailableIdx) return NO_INDEX;
   const index = bitpool.field[nextAvailableIdx] as number;
-  const position = getLowestSetPosition(index);
+  const position = getLowestSetIndex(index);
   if (position >= bitpool.size) return NO_INDEX;
   bitpool.field[nextAvailableIdx] &= ~(1 << position);
   if (bitpool.field[nextAvailableIdx] === 0) {

@@ -3,18 +3,19 @@
 import { BITS_PER_INT, NO_INDEX } from "./constants.js";
 import { getPopulationCount as popcnt } from "./utils.js";
 
-/**
- *
- */
+/** A little-endian bitfield backed by a Uint32Array */
 export type Bitfield = Uint32Array;
 
 /**
- * @returns The amount of bits in the array
+ * @returns the number of bits in the bitfield.
+ * @param field The bitfield to get the size of.
  */
 export const getSize = (field: Bitfield) => field.length << 5;
 
 /**
- * @returns the index of a bit in a bitfield, -1 if not found
+ * @returns the index of a bit in a bitfield, or -1 if invalid
+ * @param bit the bit to get the index of
+ * @throws {TypeError} if `bit` is NaN
  */
 export const indexOf = (bit: number): number => {
   if (isNaN(bit)) throw new TypeError(`Expected a number, found "${typeof bit}"`);
@@ -23,8 +24,11 @@ export const indexOf = (bit: number): number => {
 };
 
 /**
- * Toggle a bit in the Bitfield
+ * Toggle the state of a bit in a Bitfield
+ * @param field the bitfield in which the bit resides
+ * @param bit the bit to check
  * @return the resulting state of the bit
+ * @throws {RangeError} if `bit` is not found
  */
 export const toggle = (field: Bitfield, bit: number): boolean => {
   const i = indexOf(bit);
@@ -37,14 +41,19 @@ export const toggle = (field: Bitfield, bit: number): boolean => {
 /**
  * Creates a new Bitfield
  * @param size the number of bits in the array
+ * @throws {SyntaxError} if `size` is <= 0
+ * @throws {TypeError} if `size` is NaN
  */
 export const create = (size: number): Bitfield => {
+  if (isNaN(size)) throw new TypeError(`Expected "size" to be a number, found "${typeof size}".`);
+  if (size <= 0) throw new SyntaxError(`"size" must be > 0, found ${size.toString()}.`);
   return new Uint32Array(Math.ceil(size / BITS_PER_INT));
 };
 
 /**
- *
- * @returns a new Bitfield with identical properties to this Bitfield
+ * Create a new copy of a bitfield.
+ * @param field the bitfield to clone
+ * @returns the new clone bitfield
  */
 export const clone = (field: Bitfield): Bitfield => {
   const size = getSize(field);
@@ -55,17 +64,18 @@ export const clone = (field: Bitfield): Bitfield => {
 
 /**
  * @returns a new Bitfield based on this one with toggled bits
+ * @throws {RangeError} if a value is not found in the bitfield
  */
 export const cloneWithToggle = <T>(field: Bitfield, key: keyof T, sources: T[]): Bitfield => {
-  const res = clone(field);
+  const result = clone(field);
   const visited: Set<number> = new Set();
   for (const source of sources) {
     const value = source[key] as number;
     if (visited.has(value)) continue;
-    toggle(res, value);
+    toggle(result, value);
     visited.add(value);
   }
-  return res;
+  return result;
 };
 
 /**
@@ -73,6 +83,7 @@ export const cloneWithToggle = <T>(field: Bitfield, key: keyof T, sources: T[]):
  * @param size the number of bits in the bitfield
  * @param key the key of the property to use for the bitfield's indexes
  * @param objs an array of objects which have the key as an index to a number
+ * @throws {RangeError} if a value is not found in the bitfield
  *
  * @example
  *  // Creating 43 bit bitfield from <T extends { id: number }>:
@@ -93,14 +104,13 @@ export const fromObjects = <T>(size: number, key: keyof T, objs: T[]): Bitfield 
 /**
  * @returns the number of set bits in a given bitfield
  */
-export const getPopulationCount = (field: Bitfield): number =>
-  field.reduce((res, val) => {
-    if (!val) return res;
-    return res + popcnt(val);
-  }, 0);
+export const getPopulationCount = (field: Bitfield): number => {
+  return field.reduce((res, val) => res + popcnt(val), 0);
+};
 
 /**
  * @returns the index and position of a bit in the bitfield
+ * @throws {TypeError} if `bit` is NaN
  */
 export const getPosition = (bit: number): { index: number; position: number } => ({
   index: indexOf(bit),
@@ -109,6 +119,7 @@ export const getPosition = (bit: number): { index: number; position: number } =>
 
 /**
  * @returns `true` if a given bit is set in the Bitfield
+ * @throws {RangeError} if `bit` is not found
  */
 export const isSet = (field: Bitfield, bit: number): boolean => {
   const idx = indexOf(bit);
