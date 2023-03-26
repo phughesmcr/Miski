@@ -1,4 +1,4 @@
-/* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
+/* Copyright 2023 the Miski authors. All rights reserved. MIT license. */
 
 import { createQueryInstance } from "./instance.js";
 import { Query } from "./query.js";

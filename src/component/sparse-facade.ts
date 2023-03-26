@@ -1,4 +1,4 @@
-/* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
+/* Copyright 2023 the Miski authors. All rights reserved. MIT license. */
 
 import * as bitpool from "../bits/bitpool.js";
 import type { TypedArray } from "../utils/utils.js";

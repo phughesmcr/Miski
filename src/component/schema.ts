@@ -1,4 +1,4 @@
-/* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
+/* Copyright 2023 the Miski authors. All rights reserved. MIT license. */
 
 import { isObject, isTypedArrayConstructor, isValidName } from "../utils/utils.js";
 import type { TypedArray, TypedArrayConstructor } from "../utils/utils.js";

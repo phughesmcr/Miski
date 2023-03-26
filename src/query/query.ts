@@ -1,4 +1,4 @@
-/* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
+/* Copyright 2023 the Miski authors. All rights reserved. MIT license. */
 
 import { Component } from "../component/component.js";
 import { EMPTY_ARRAY } from "../constants.js";

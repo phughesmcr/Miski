@@ -1,4 +1,4 @@
-/* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
+/* Copyright 2023 the Miski authors. All rights reserved. MIT license. */
 
 import { BITS_PER_INT, NO_INDEX } from "./constants.js";
 import { getPopulationCount as popcnt } from "./utils.js";

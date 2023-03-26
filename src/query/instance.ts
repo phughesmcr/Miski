@@ -1,4 +1,4 @@
-/* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
+/* Copyright 2023 the Miski authors. All rights reserved. MIT license. */
 
 import type { Archetype } from "../archetype/archetype.js";
 import type { Bitfield } from "../bits/bitfield.js";

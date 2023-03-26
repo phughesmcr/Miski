@@ -1,4 +1,4 @@
-/* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
+/* Copyright 2023 the Miski authors. All rights reserved. MIT license. */
 
 /** Miski version */
 export const VERSION = "__VERSION__"; // __VERSION__ is replaced by rollup

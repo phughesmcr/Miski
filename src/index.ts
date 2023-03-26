@@ -8,7 +8,7 @@
  * @file         index.js
  * @description  An Entity-Component-System (ECS) architecture in Typescript.
  * @author       P. Hughes <peter@phugh.es> (https://www.phugh.es)
- * @copyright    2022 the Miski authors. All rights reserved.
+ * @copyright    2023 the Miski authors. All rights reserved.
  * @license      MIT
  *
  */

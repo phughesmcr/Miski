@@ -1,4 +1,4 @@
-/* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
+/* Copyright 2023 the Miski authors. All rights reserved. MIT license. */
 
 import { $_OWNERS } from "../constants.js";
 import { createComponentInstance, refreshComponentInstance } from "./instance.js";
