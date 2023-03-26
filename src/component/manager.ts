@@ -3,6 +3,7 @@
 import { $_OWNERS } from "../constants.js";
 import { createComponentInstance, refreshComponentInstance } from "./instance.js";
 import { ComponentBuffer } from "./buffer.js";
+import * as bitfield from "../bits/bitfield.js";
 import type { Entity } from "../world.js";
 import type { TypedArrayConstructor } from "../utils/utils.js";
 import type { Component } from "./component.js";
@@ -43,8 +44,8 @@ export function addEntity<T extends Schema<T>>(
   if (maxEntities && instance.count >= maxEntities) {
     throw new Error(`Component "${name}".maxEntities reached.`);
   }
-  if (instance[$_OWNERS].isSet(entity)) return null;
-  instance[$_OWNERS].toggle(entity);
+  if (bitfield.isSet(instance[$_OWNERS], entity)) return null;
+  bitfield.toggle(instance[$_OWNERS], entity);
   // set properties
   if (schema) {
     /** @todo Object.entries creates an array. */
@@ -60,8 +61,8 @@ export function addEntity<T extends Schema<T>>(
 /** @todo better async? */
 export function removeEntity<T extends Schema<T>>(instance: ComponentInstance<T>, entity: Entity) {
   const { maxEntities, schema } = instance;
-  if (!instance[$_OWNERS].isSet(entity)) return null;
-  instance[$_OWNERS].toggle(entity);
+  if (!bitfield.isSet(instance[$_OWNERS], entity)) return null;
+  bitfield.toggle(instance[$_OWNERS], entity);
   if (schema) {
     /** @todo Object.entries creates an array. */
     Object.entries(schema).forEach(([key, prop]) => {
@@ -138,8 +139,8 @@ export class ComponentManager {
 
   export() {
     return {
-      buffer: this.buffer.slice(0),
-      componentMap: [...this.componentMap.entries()],
+      buffer: this.buffer,
+      components: [...this.componentMap.values()],
     };
   }
 }

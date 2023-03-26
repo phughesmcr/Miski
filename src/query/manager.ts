@@ -1,3 +1,5 @@
+/* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
+
 import { createQueryInstance } from "./instance.js";
 import { Query } from "./query.js";
 import type { Archetype } from "../archetype/archetype.js";
@@ -63,61 +65,50 @@ export class QueryManager {
   }
 
   /** @returns an array of Entities which have entered this query since last refresh */
-  getEnteredFromQuery(query: Query, arr: Entity[] = []): Entity[] {
-    arr.length = 0;
-    const res: Set<Entity> = new Set(); /** @todo avoid creating new set */
-    this.getQueryInstance(query)?.archetypes.forEach(_flattenEntered, res);
-    arr.push(...res);
-    return arr;
+  getEnteredFromQuery(query: Query): () => IterableIterator<Entity> {
+    const res: Set<Entity> = new Set();
+    const instance = this.getQueryInstance(query);
+    return (): IterableIterator<Entity> => {
+      res.clear();
+      instance.archetypes.forEach(_flattenEntered, res);
+      return res.values();
+    };
   }
 
   /** @returns an array of Entities which match the query */
-  getEntitiesFromQuery(query: Query, arr: Entity[] = []): Entity[] {
-    arr.length = 0;
-
+  getEntitiesFromQuery(query: Query): () => IterableIterator<Entity> {
     const instance = this.getQueryInstance(query);
-
-    const { archetypes, isDirty } = instance;
-
-    const cached = this.entityCache.get(instance) as Set<Entity>;
-
-    // if new query, do full sweep and create cache set
-    if (!cached) {
-      const res: Set<Entity> = new Set();
-      archetypes.forEach(_flattenEntities, res);
-      this.entityCache.set(instance, res);
-      arr.push(...res);
-      return arr;
-    }
-
-    // if query has new Archetypes, clear cache and do full sweep
-    if (isDirty === true) {
-      cached.clear();
-      archetypes.forEach(_flattenEntities, cached);
-      arr.push(...cached);
-      return arr;
-    }
-
-    // else just update the dirty archetypes
-    archetypes.forEach((archetype) => {
-      if (archetype.isDirty === true) {
-        // eslint-disable-next-line @typescript-eslint/unbound-method
-        archetype.entered.forEach(cached.add, cached);
-        // eslint-disable-next-line @typescript-eslint/unbound-method
-        archetype.exited.forEach(cached.delete, cached);
+    const cached = this.entityCache.get(instance) ?? this.entityCache.set(instance, new Set()).get(instance)!;
+    return () => {
+      const { archetypes, isDirty } = instance;
+      if (isDirty === true || !cached.size) {
+        // if query has new Archetypes, clear cache and do full sweep
+        cached.clear();
+        archetypes.forEach(_flattenEntities, cached);
+      } else {
+        // else just update the dirty archetypes
+        archetypes.forEach((archetype) => {
+          if (archetype.isDirty === true) {
+            // eslint-disable-next-line @typescript-eslint/unbound-method
+            archetype.entered.forEach(cached.add, cached);
+            // eslint-disable-next-line @typescript-eslint/unbound-method
+            archetype.exited.forEach(cached.delete, cached);
+          }
+        });
       }
-    });
-    arr.push(...cached);
-    return arr;
+      return cached.values();
+    };
   }
 
   /** @returns an array of Entities which have been removed from this query since last refresh */
-  getExitedFromQuery(query: Query, arr: Entity[] = []): Entity[] {
-    arr.length = 0;
-    const res: Set<Entity> = new Set(); /** @todo avoid creating new set */
-    this.getQueryInstance(query)?.archetypes.forEach(_flattenExited, res);
-    arr.push(...res);
-    return arr;
+  getExitedFromQuery(query: Query): () => IterableIterator<Entity> {
+    const res: Set<Entity> = new Set();
+    const instance = this.getQueryInstance(query);
+    return (): IterableIterator<Entity> => {
+      res.clear();
+      instance.archetypes.forEach(_flattenExited, res);
+      return res.values();
+    };
   }
 
   /** @returns an instantiated Query */
@@ -139,5 +130,11 @@ export class QueryManager {
   refreshQueries(): QueryManager {
     this.queryMap.forEach(refreshQuery);
     return this;
+  }
+
+  export() {
+    return {
+      queries: [...this.queryMap.values()],
+    };
   }
 }

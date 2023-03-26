@@ -1,6 +1,6 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
-import { sparseFacade } from "../utils/sparse-facade.js";
+import { sparseFacade } from "./sparse-facade.js";
 import type { Component } from "./component.js";
 import type { Schema, SchemaStorage } from "./schema.js";
 import type { TypedArrayConstructor } from "../utils/utils.js";

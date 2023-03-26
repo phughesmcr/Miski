@@ -3,7 +3,8 @@
 import { $_CHANGED, $_OWNERS } from "../constants.js";
 import { isObject, isPositiveInt, isUint32 } from "../utils/utils.js";
 import { storageProxy } from "./proxy.js";
-import { Bitfield } from "../utils/bitfield.js";
+import * as bitfield from "../bits/bitfield.js";
+import type { Bitfield } from "../bits/bitfield.js";
 import type { TypedArray } from "../utils/utils.js";
 import type { StorageProxy } from "./proxy.js";
 import type { Entity } from "../world.js";
@@ -65,7 +66,7 @@ export function createComponentInstance<T extends Schema<T>>(
   if (storage && !isObject(storage)) throw new TypeError("Component storage is malformed.");
 
   const changed: Set<Entity> = new Set();
-  const owners: Bitfield = new Bitfield(capacity);
+  const owners: Bitfield = bitfield.create(capacity);
 
   const instance = Object.create(component, {
     [$_CHANGED]: {
@@ -87,7 +88,7 @@ export function createComponentInstance<T extends Schema<T>>(
     },
     count: {
       get() {
-        return Bitfield.getSetBitCountInBitfield(owners);
+        return bitfield.getPopulationCount(owners);
       },
     },
     id: {

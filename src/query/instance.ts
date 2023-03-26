@@ -1,12 +1,13 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
-import { Bitfield } from "../utils/bitfield.js";
-import { intersectBits } from "../utils/utils.js";
 import type { Archetype } from "../archetype/archetype.js";
+import type { Bitfield } from "../bits/bitfield.js";
+import * as bitfield from "../bits/bitfield.js";
+import { intersectBits } from "../bits/utils.js";
 import type { Component } from "../component/component.js";
 import type { ComponentInstance } from "../component/instance.js";
-import type { Query } from "./query.js";
 import type { Schema } from "../component/schema.js";
+import type { Query } from "./query.js";
 
 interface QueryInstanceSpec {
   componentMap: Map<Component<any>, ComponentInstance<any>>;
@@ -52,13 +53,13 @@ export function createQueryInstance(spec: QueryInstanceSpec): QueryInstance {
   const length = componentMap.size;
 
   const _allInstances = all.reduce(getComponentInstances, new Array(all.length) as ComponentInstance<any>[]);
-  const and = Bitfield.fromObjects(length, "id", _allInstances);
+  const and = bitfield.fromObjects(length, "id", _allInstances);
 
   const _anyInstances = any.reduce(getComponentInstances, new Array(any.length) as ComponentInstance<any>[]);
-  const or = Bitfield.fromObjects(length, "id", _anyInstances);
+  const or = bitfield.fromObjects(length, "id", _anyInstances);
 
   const _noneInstances = none.reduce(getComponentInstances, new Array(none.length) as ComponentInstance<any>[]);
-  const not = Bitfield.fromObjects(length, "id", _noneInstances);
+  const not = bitfield.fromObjects(length, "id", _noneInstances);
 
   /** The components matched by the and/or bitfields */
   const components = Object.fromEntries([..._allInstances, ..._anyInstances].map((c) => [c.name, c]));

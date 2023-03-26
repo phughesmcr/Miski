@@ -1,9 +1,10 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
-import { Bitfield } from "../utils/bitfield.js";
+import * as bitfield from "../bits/bitfield.js";
+import type { Bitfield } from "../bits/bitfield.js";
 import type { ComponentInstance } from "../component/instance.js";
-import type { Entity } from "../world.js";
 import type { QueryInstance } from "../query/instance.js";
+import type { Entity } from "../world.js";
 
 export class Archetype {
   /** The Archetype's Component Bitfield */
@@ -21,8 +22,8 @@ export class Archetype {
   /** `true` if the object is in a dirty state */
   isDirty: boolean;
 
-  constructor(size: number, components: ComponentInstance<any>[], bitfield?: Bitfield) {
-    this.bitfield = bitfield ?? Bitfield.fromObjects(size, "id", components);
+  constructor(size: number, components: ComponentInstance<any>[], field?: Bitfield) {
+    this.bitfield = field ?? bitfield.fromObjects(size, "id", components);
     this.candidateCache = new Map();
     this.components = components;
     this.entered = new Set();
@@ -56,7 +57,7 @@ export class Archetype {
 
   /** Create a new Archetype from this Archetype */
   clone(): Archetype {
-    return new Archetype(this.bitfield.length, this.components, this.bitfield.clone());
+    return new Archetype(this.bitfield.length, this.components, bitfield.clone(this.bitfield));
   }
 
   /**

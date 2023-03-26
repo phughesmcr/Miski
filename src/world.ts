@@ -1,16 +1,18 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
 import { ArchetypeManager } from "./archetype/manager.js";
-import { ComponentManager, removeEntity } from "./component/manager.js";
-import { $_OWNERS, VERSION } from "./constants.js";
-import { QueryManager } from "./query/manager.js";
-import { Query } from "./query/query.js";
-import { BitPool } from "./utils/bitpool.js";
-import { isObject, isPositiveInt, isUint32, Opaque } from "./utils/utils.js";
+import * as bitfield from "./bits/bitfield.js";
+import type { Bitpool } from "./bits/bitpool.js";
+import * as bitpool from "./bits/bitpool.js";
 import type { Component } from "./component/component.js";
 import type { ComponentInstance } from "./component/instance.js";
 import type { ComponentRecord } from "./component/manager.js";
+import { ComponentManager, removeEntity } from "./component/manager.js";
 import type { Schema, SchemaProps } from "./component/schema.js";
+import { $_OWNERS, VERSION } from "./constants.js";
+import { QueryManager } from "./query/manager.js";
+import { Query } from "./query/query.js";
+import { isObject, isPositiveInt, isUint32, Opaque } from "./utils/utils.js";
 
 /** Entities are indexes of an EntityArray. An Entity is just an integer. */
 export type Entity = Opaque<number, "Entity">;
@@ -61,7 +63,7 @@ export class World {
   private readonly queryManager: QueryManager;
 
   /** Pool of Entity states */
-  private readonly entities: BitPool;
+  private readonly entities: Bitpool;
 
   /** The maximum number of entities the world can hold */
   readonly capacity: number;
@@ -79,7 +81,7 @@ export class World {
   constructor(spec: WorldSpec) {
     const { capacity, components } = validateWorldSpec(spec);
     this.capacity = capacity;
-    this.entities = new BitPool(capacity);
+    this.entities = bitpool.create(capacity);
     this.archetypeManager = new ArchetypeManager({ capacity, components });
     this.componentManager = new ComponentManager({ capacity, components });
     this.queryManager = new QueryManager({ componentManager: this.componentManager });
@@ -89,7 +91,10 @@ export class World {
 
   /** @returns the number of active entities */
   get residents(): number {
-    return this.capacity - (this.entities.setCount - (this.entities.size - this.capacity));
+    const { capacity } = this;
+    const { field } = this.entities;
+    const { getPopulationCount, getSize } = bitfield;
+    return capacity - (getPopulationCount(field) - (getSize(field) - capacity));
   }
 
   /** @returns the number of available entities */
@@ -115,7 +120,7 @@ export class World {
   /** @returns the next available Entity or `undefined` if no Entity is available */
   createEntity(): Entity | undefined {
     if (this.residents >= this.capacity) return;
-    const entity = this.entities.acquire() as Entity;
+    const entity = bitpool.acquire(this.entities) as Entity;
     if (entity < 0) return;
     this.archetypeManager.setArchetype(entity, this.archetypeManager.rootArchetype);
     return entity;
@@ -129,10 +134,11 @@ export class World {
    */
   destroyEntity(entity: Entity): World {
     if (!this.isValidEntity(entity)) throw new SyntaxError(`Entity ${entity as number} is not valid!`);
-    // eslint-disable-next-line array-callback-return
-    this.archetypeManager.entityArchetypes[entity]?.components.forEach((instance) => removeEntity(instance, entity));
+    this.archetypeManager.entityArchetypes[entity]?.components.forEach((instance) => {
+      removeEntity(instance, entity);
+    });
     this.archetypeManager.resetArchetype(entity);
-    this.entities.release(entity);
+    bitpool.release(this.entities, entity);
     return this;
   }
 
@@ -142,17 +148,20 @@ export class World {
    * @returns An array of entities
    * @throws if one or more components are not registered in this world
    */
-  getChangedFromComponents(...components: Component<any>[]): Entity[] {
-    const instances = this.componentManager.getInstances(components).filter((x) => x);
+  getChangedFromComponents(...components: Component<any>[]): () => IterableIterator<Entity> {
+    const instances = this.componentManager.getInstances(components).filter(Boolean) as ComponentInstance<any>[];
     if (instances.length !== components.length) throw new Error("Not all components registered!");
-    return [
-      ...new Set(
-        instances.reduce((res, inst) => {
-          res.push(...inst!.changed);
-          return res;
-        }, [] as Entity[]),
-      ),
-    ];
+    const changedSets = Object.values(instances).map((inst) => inst.changed);
+    const entities = new Set<Entity>();
+    return (): IterableIterator<Entity> => {
+      entities.clear();
+      for (const changed of changedSets) {
+        for (const entity of changed) {
+          entities.add(entity);
+        }
+      }
+      return entities.values();
+    };
   }
 
   /**
@@ -162,12 +171,19 @@ export class World {
    * @returns an array of entities
    * @throws if query is invalid
    */
-  getChangedFromQuery(query: Query, arr: Entity[] = []): Entity[] {
-    const instance = this.queryManager.getQueryInstance(query);
-    arr.length = 0;
-    // eslint-disable-next-line array-callback-return
-    Object.values(instance.components).forEach((inst) => arr.push(...inst.changed));
-    return [...new Set(arr)];
+  getChangedFromQuery(query: Query): () => IterableIterator<Entity> {
+    const { components } = this.queryManager.getQueryInstance(query);
+    const changedSets = Object.values(components).map((inst) => inst.changed);
+    const entities = new Set<Entity>();
+    return (): IterableIterator<Entity> => {
+      entities.clear();
+      for (const changed of changedSets) {
+        for (const entity of changed) {
+          entities.add(entity);
+        }
+      }
+      return entities.values();
+    };
   }
 
   /**
@@ -193,24 +209,21 @@ export class World {
    * @param entity The entity to retrieve the properties of
    * @returns An object where keys are component names and properties are the entity's properties
    */
-  getEntityProperties(entity: Entity): Record<string, SchemaProps<unknown>> {
+  getEntityProperties(entity: Entity): Record<string, boolean | SchemaProps<unknown>> {
     const archetype = this.archetypeManager.getArchetype(entity);
     if (!archetype) return {};
-    return archetype.components.reduce(
-      <T extends Schema<T>>(res: Record<keyof T, SchemaProps<unknown>>, component: ComponentInstance<T>) => {
+    const { components } = archetype;
+    return Object.fromEntries(
+      components.map(<T extends Schema<T>>(component: ComponentInstance<T>) => {
         const { name, schema } = component;
-        res[name as keyof T] = {};
-        if (schema === null) {
-          res[name as keyof T] = true;
-        } else {
-          res[name as keyof T] = Object.keys(schema).reduce((prev, key) => {
-            prev[key as keyof T] = component[key as keyof T][entity];
-            return prev;
-          }, {} as SchemaProps<T>);
+        let props: boolean | SchemaProps<T> = true;
+        if (schema) {
+          props = Object.fromEntries(
+            Object.keys(schema).map((key) => [key as keyof T, component[key as keyof T]?.[entity]]),
+          ) as SchemaProps<T>;
         }
-        return res;
-      },
-      {},
+        return [name, props];
+      }),
     );
   }
 
@@ -227,34 +240,31 @@ export class World {
   /**
    * Get all the entities which have entered the query since the last refresh
    * @param query The query to get the entities from
-   * @param arr An optional array to be emptied and recycled
-   * @returns An array of entities
+   * @returns An iterator of entities
    * @throws If the query is invalid
    */
-  getQueryEntered(query: Query, arr: Entity[] = []): Entity[] {
-    return this.queryManager.getEnteredFromQuery(query, arr);
+  getQueryEntered(query: Query): () => IterableIterator<Entity> {
+    return this.queryManager.getEnteredFromQuery(query);
   }
 
   /**
    * Get all the entities which match a query
    * @param query The query to get the entities from
-   * @param arr An optional array to be emptied and recycled
-   * @returns An array of entities
+   * @returns An iterator of entities
    * @throws If the query is invalid
    */
-  getQueryEntities(query: Query, arr: Entity[] = []): Entity[] {
-    return this.queryManager.getEntitiesFromQuery(query, arr);
+  getQueryEntities(query: Query): () => IterableIterator<Entity> {
+    return this.queryManager.getEntitiesFromQuery(query);
   }
 
   /**
    * Get all the entities which have exited the query since the last refresh
    * @param query The query to get the entities from
-   * @param arr An optional array to be emptied and recycled
-   * @returns An array of entities
+   * @returns An iterator of entities
    * @throws If the query is invalid
    */
-  getQueryExited(query: Query, arr: Entity[] = []): Entity[] {
-    return this.queryManager.getExitedFromQuery(query, arr);
+  getQueryExited(query: Query): () => IterableIterator<Entity> {
+    return this.queryManager.getExitedFromQuery(query);
   }
 
   /**
@@ -268,7 +278,7 @@ export class World {
   hasComponent<T extends Schema<T>>(component: Component<T>): (entity: Entity) => boolean | null {
     const instance = this.componentManager.getInstance(component);
     if (!instance) throw new Error("Component is not registered.");
-    return (entity: Entity) => instance[$_OWNERS].isSet(entity);
+    return (entity: Entity) => bitfield.isSet(instance[$_OWNERS], entity);
   }
 
   /**
@@ -283,7 +293,7 @@ export class World {
     const instances = this.componentManager.getInstances(components).filter(Boolean) as ComponentInstance<any>[];
     if (instances.length !== components.length) throw new Error("Not all components registered!");
     return (entity: Entity): (boolean | null)[] => {
-      return instances.map((component) => component[$_OWNERS].isSet(entity));
+      return instances.map((component) => bitfield.isSet(component[$_OWNERS], entity));
     };
   }
 
@@ -294,12 +304,12 @@ export class World {
    */
   isEntityActive(entity: Entity): boolean | null {
     if (!this.isValidEntity(entity)) return null;
-    return this.entities.isSet(entity);
+    return bitfield.isSet(this.entities.field, entity);
   }
 
   /** @return `true` if the given entity is valid for the given capacity */
   isValidEntity(entity: Entity): entity is Entity {
-    return isUint32(entity) && entity < this.entities.size;
+    return isUint32(entity) && entity < bitfield.getSize(this.entities.field);
   }
 
   /**

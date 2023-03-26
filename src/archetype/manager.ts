@@ -1,12 +1,12 @@
 /* Copyright 2022 the Miski authors. All rights reserved. MIT license. */
 
-import { Archetype } from "./archetype.js";
-import { Bitfield } from "../utils/bitfield.js";
-import type { Query } from "../query/query.js";
+import * as bitfield from "../bits/bitfield.js";
 import type { Component } from "../component/component.js";
 import type { ComponentInstance } from "../component/instance.js";
-import type { Entity } from "../world.js";
 import type { QueryInstance } from "../query/instance.js";
+import type { Query } from "../query/query.js";
+import type { Entity } from "../world.js";
+import { Archetype } from "./archetype.js";
 
 export interface ArchetypeManagerSpec {
   capacity: number;
@@ -45,9 +45,9 @@ export class ArchetypeManager {
   /** Performs various archetype maintenance */
   refreshArchetypes(queries: Map<Query, QueryInstance>): ArchetypeManager {
     /** @todo double loop isn't ideal */
-    for (const [_, archetype] of this.archetypeMap) {
+    for (const archetype of this.archetypeMap.values()) {
       if (!archetype.isEmpty) {
-        for (const [_, inst] of queries) {
+        for (const inst of queries.values()) {
           if (!inst.archetypes.has(archetype) && archetype.isCandidate(inst)) {
             inst.isDirty = true;
             inst.archetypes.add(archetype);
@@ -78,13 +78,13 @@ export class ArchetypeManager {
     /** @todo replace this with a graph */
     const previousArchetype = this.entityArchetypes[entity];
     previousArchetype?.removeEntity(entity);
-    const bitfield =
-      previousArchetype?.bitfield.cloneWithToggle("id", components) ??
-      Bitfield.fromObjects(this.rootArchetype.bitfield.size, "id", components);
-    const id = bitfield.toString();
+    const field = previousArchetype?.bitfield
+      ? bitfield.cloneWithToggle(previousArchetype.bitfield, "id", components)
+      : bitfield.fromObjects(bitfield.getSize(this.rootArchetype.bitfield), "id", components);
+    const id = field.toString();
     let nextArchetype = this.archetypeMap.get(id);
     if (!nextArchetype) {
-      nextArchetype = new Archetype(this.rootArchetype.bitfield.size, components, bitfield);
+      nextArchetype = new Archetype(bitfield.getSize(this.rootArchetype.bitfield), components, field);
       this.archetypeMap.set(id, nextArchetype);
     }
     this.entityArchetypes[entity] = nextArchetype.addEntity(entity);
