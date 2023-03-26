@@ -1,12 +1,12 @@
 /** All the various kinds of typed arrays */
-declare type TypedArray = Int8Array | Uint8Array | Uint8ClampedArray | Int16Array | Uint16Array | Int32Array | Uint32Array | Float32Array | Float64Array | BigInt64Array | BigUint64Array;
+type TypedArray = Int8Array | Uint8Array | Uint8ClampedArray | Int16Array | Uint16Array | Int32Array | Uint32Array | Float32Array | Float64Array | BigInt64Array | BigUint64Array;
 /** All the various kinds of typed array constructors */
-declare type TypedArrayConstructor = Int8ArrayConstructor | Uint8ArrayConstructor | Uint8ClampedArrayConstructor | Int16ArrayConstructor | Uint16ArrayConstructor | Int32ArrayConstructor | Uint32ArrayConstructor | Float32ArrayConstructor | Float64ArrayConstructor | BigInt64ArrayConstructor | BigUint64ArrayConstructor;
+type TypedArrayConstructor = Int8ArrayConstructor | Uint8ArrayConstructor | Uint8ClampedArrayConstructor | Int16ArrayConstructor | Uint16ArrayConstructor | Int32ArrayConstructor | Uint32ArrayConstructor | Float32ArrayConstructor | Float64ArrayConstructor | BigInt64ArrayConstructor | BigUint64ArrayConstructor;
 /**
  * The parameters of a function omitting the first two parameters
  * @author https://stackoverflow.com/a/67605309
  */
-declare type ParametersExceptFirstTwo<F> = F extends (arg0: any, arg1: any, ...rest: infer R) => any ? R : never;
+type ParametersExceptFirstTwo<F> = F extends (arg0: any, arg1: any, ...rest: infer R) => any ? R : never;
 /**
  * Opaque typing allows for nominal types
  * @example
@@ -15,12 +15,12 @@ declare type ParametersExceptFirstTwo<F> = F extends (arg0: any, arg1: any, ...r
  * type Entity = Opaque<number, "Entity">;
  * const b: Entity = 1 // b = Entity;
  */
-declare type Opaque<T, K> = T & {
+type Opaque<T, K> = T & {
     _TYPE: K;
 };
 
 /** Individual entity's component properties */
-declare type SchemaProps<T> = Record<keyof T, number | bigint | undefined>;
+type SchemaProps<T> = Record<keyof T, number | bigint | undefined>;
 /**
  * Schemas are component storage definitions:
  *
@@ -34,7 +34,7 @@ declare type SchemaProps<T> = Record<keyof T, number | bigint | undefined>;
  *
  * Set to `null` to define a tag component.
  */
-declare type Schema<T> = null | Record<keyof T, TypedArrayConstructor | [TypedArrayConstructor, number]>;
+type Schema<T> = null | Record<keyof T, TypedArrayConstructor | [TypedArrayConstructor, number]>;
 
 interface ComponentSpec<T> {
     /**
@@ -65,6 +65,7 @@ declare class Component<T extends Schema<T>> {
      * @param spec.name the component's string identifier.
      * @param spec.schema the component's optional schema object.
      * @returns A valid Component object - a reusable definitions for the creation of ComponentInstances
+     * @throws If the spec is invalid
      */
     constructor(spec: ComponentSpec<T>);
 }
@@ -93,6 +94,7 @@ declare class Query {
      * @param spec.all AND - Gather entities as long as they have all these components
      * @param spec.any OR - Gather entities as long as they have 0...* of these components
      * @param spec.none NOT - Gather entities as long as they don't have these components
+     * @throws If the spec is invalid
      */
     constructor(spec: QuerySpec);
 }
@@ -103,68 +105,27 @@ declare const $_CHANGED: unique symbol;
 declare const $_OWNERS: unique symbol;
 
 /**
- * @note
- * `bit >>> 5` is used in place of `Math.floor(bit / 32)`.
- * `(bit - (bit >>> 5) * 32)` is used in place of `bit % 32`.
+ *
  */
-/** */
-declare class Bitfield extends Uint32Array {
-    static getHighestSetBit(value: number): number;
-    /** @returns the number of set bits in a given value */
-    static getSetBitCount(value: number): number;
-    /** @returns the number of set bits in a given bitfield */
-    static getSetBitCountInBitfield(bitfield: Bitfield): number;
-    /**
-     * Create a new Bitfield from an array of objects
-     * @param size the number of bits in the bitfield
-     * @param key the key of the property to use for the bitfield's indexes
-     * @param objs an array of objects which have the key as an index to a number
-     *
-     * @example
-     *  // Creating 32 bit bitfield from <T extends { id: number }>:
-     *  Bitfield.fromObjects(32, "id", [{ id: 0, ... }, ...]);
-     */
-    static fromObjects<T>(size: number, key: keyof T, objs: T[]): Bitfield;
-    /** @returns the index of a bit in a bitfield */
-    static indexOf(bit: number): number;
-    /**
-     * Creates a new Bitfield
-     * @param size the number of bits in the array
-     */
-    constructor(size: number);
-    /** @returns The amount of bits in the array */
-    get size(): number;
-    /** @returns a new Bitfield with identical properties to this Bitfield */
-    clone(): Bitfield;
-    /** @returns a new Bitfield based on this one with toggled bits */
-    cloneWithToggle<T>(key: keyof T, sources: T[]): Bitfield;
-    /** @returns the index and position of a bit in the bitfield */
-    getPosition(bit: number): {
-        index: number;
-        position: number;
-    };
-    /** @returns `true` if a given bit is set in the Bitfield or null on error */
-    isSet(bit: number): boolean | null;
-    /**
-     * Toggle a bit in the Bitfield
-     * @return the resulting state of the bit or null if error
-     */
-    toggle(bit: number): boolean | null;
-}
+type Bitfield = Uint32Array;
 
 /**
- * A storage proxy is a convenience method
- * for setting entity's component properties
- * in a way which is type safe and
- * flips the `changed` property on the entity
- * at the expense of performance.
- * */
-declare type StorageProxy<T extends Schema<T>> = Record<keyof T, number> & {
+ * A storage proxy is a convenience method for setting entity's component
+ * properties in a way which is type safe and flips the `changed` property
+ * on the entity at the expense of performance vs. direct array access.
+ */
+type StorageProxy<T extends Schema<T>> = Record<keyof T, number> & {
+    /** @returns the entity the proxy is currently pointed at */
     getEntity(): Entity;
+    /**
+     * Change the proxy's cursor to a given entity
+     * @param entity The entity to change
+     * @throws If the entity is not a number
+     */
     setEntity(entity: Entity): Entity;
 };
 
-declare type ComponentInstance<T extends Schema<T>> = Component<T> & Record<keyof T, TypedArray> & {
+type ComponentInstance<T extends Schema<T>> = Component<T> & Record<keyof T, TypedArray> & {
     /** @internal */
     [$_CHANGED]: Set<Entity>;
     /** @internal */
@@ -180,10 +141,14 @@ declare type ComponentInstance<T extends Schema<T>> = Component<T> & Record<keyo
 };
 
 /** Entities are indexes of an EntityArray. An Entity is just an integer. */
-declare type Entity = Opaque<number, "Entity">;
+type Entity = Opaque<number, "Entity">;
+/** The object returned from `world.save();` */
 interface WorldData {
+    /** The world's component storage buffer */
     buffer: ArrayBuffer;
+    /** The maximum number of entities allowed in the world */
     capacity: number;
+    /** The Miski version of the creating world */
     version: string;
 }
 interface WorldSpec {
@@ -207,60 +172,151 @@ declare class World {
      * @param spec An WorldSpec object
      * @param spec.capacity The maximum number of entities allowed in the world
      * @param spec.components An array of components to instantiate in the world
+     * @throws If the spec is invalid
      */
     constructor(spec: WorldSpec);
     /** @returns the number of active entities */
     get residents(): number;
     /** @returns the number of available entities */
     get vacancies(): number;
+    /**
+     * Creates a function to add a given set of components to an entity
+     * @param components One or more components to add
+     * @returns A function which takes an entity and optional properties object
+     * @throws if one or more components are not registered in this world
+     */
     addComponentsToEntity(...components: Component<any>[]): (entity: Entity, properties?: Record<string, SchemaProps<unknown>>) => World;
     /** @returns the next available Entity or `undefined` if no Entity is available */
     createEntity(): Entity | undefined;
-    /** Remove and recycle an Entity */
+    /**
+     * Remove and recycle an Entity
+     * @param entity the entity to destroy
+     * @returns the world
+     * @throws if the entity is invalid
+     */
     destroyEntity(entity: Entity): World;
-    getChangedFromComponents(...components: Component<any>[]): Entity[];
-    getChangedFromQuery(query: Query, arr?: Entity[]): Entity[];
+    /**
+     * Get all the changed entities from a set of components
+     * @param components The components to collect changed entities from
+     * @returns An array of entities
+     * @throws if one or more components are not registered in this world
+     */
+    getChangedFromComponents(...components: Component<any>[]): () => IterableIterator<Entity>;
+    /**
+     * Get all the changed entities from a query
+     * @param query the query to collect changed entities from
+     * @param arr an optional array to be emptied and recycled
+     * @returns an array of entities
+     * @throws if query is invalid
+     */
+    getChangedFromQuery(query: Query): () => IterableIterator<Entity>;
+    /**
+     * Get this world's instance of a component
+     * @param component The component to retrieve the instance of
+     * @returns The component instance or undefined if the component is not registered
+     */
     getComponentInstance<T extends Schema<T>>(component: Component<T>): ComponentInstance<T> | undefined;
+    /**
+     * Get this world's instances of a set of components
+     * @param component The component to retrieve the instance of
+     * @returns An array of component instances or undefined if the component is not registered
+     */
     getComponentInstances(...components: Component<any>[]): (ComponentInstance<any> | undefined)[];
-    getEntityProperties(entity: Entity): Record<string, SchemaProps<unknown>>;
+    /**
+     * Get all of the component properties of a given entity
+     * @param entity The entity to retrieve the properties of
+     * @returns An object where keys are component names and properties are the entity's properties
+     */
+    getEntityProperties(entity: Entity): Record<string, boolean | SchemaProps<unknown>>;
+    /**
+     * Get all the components positively associated with a query
+     * @param query The query to get the components from
+     * @returns An object where keys are component names and properties are component instances
+     * @throws If the query is invalid
+     */
     getQueryComponents(query: Query): ComponentRecord;
-    getQueryEntered(query: Query, arr?: Entity[]): Entity[];
-    getQueryEntities(query: Query, arr?: Entity[]): Entity[];
-    getQueryExited(query: Query, arr?: Entity[]): Entity[];
+    /**
+     * Get all the entities which have entered the query since the last refresh
+     * @param query The query to get the entities from
+     * @returns An iterator of entities
+     * @throws If the query is invalid
+     */
+    getQueryEntered(query: Query): () => IterableIterator<Entity>;
+    /**
+     * Get all the entities which match a query
+     * @param query The query to get the entities from
+     * @returns An iterator of entities
+     * @throws If the query is invalid
+     */
+    getQueryEntities(query: Query): () => IterableIterator<Entity>;
+    /**
+     * Get all the entities which have exited the query since the last refresh
+     * @param query The query to get the entities from
+     * @returns An iterator of entities
+     * @throws If the query is invalid
+     */
+    getQueryExited(query: Query): () => IterableIterator<Entity>;
+    /**
+     * Create a function to test entities for a given component
+     * @param component The component to test for
+     * @returns A function which takes an entity and returns
+     *     true if the entity has the component, false if it does not
+     *     or null if the entity does not exist.
+     * @throws if the component is not registered in this world
+     */
     hasComponent<T extends Schema<T>>(component: Component<T>): (entity: Entity) => boolean | null;
+    /**
+     * Create a function to test entities for a given component
+     * @param components The components to test for
+     * @returns A function which takes an entity and returns an array of
+     *     true if the entity has the component, false if it does not
+     *     or null if the entity does not exist.
+     * @throws if one or more component is not registered in this world
+     */
     hasComponents(...components: Component<any>[]): (entity: Entity) => (boolean | null)[];
     /**
-     * @return `true` if the Entity is valid and exists in the world
-     * @throws if the entity is invalid
+     * Test if an entity is active in the world
+     * @return a boolean or null if the entity is invalid
+     *
      */
     isEntityActive(entity: Entity): boolean | null;
     /** @return `true` if the given entity is valid for the given capacity */
     isValidEntity(entity: Entity): entity is Entity;
-    /** Swap the ComponentBuffer of one world with this world */
+    /**
+     * Swap the ComponentBuffer of one world with this world
+     * @returns the world
+     * @throws if the capacity or version of the data to load is mismatched
+     */
     load(data: WorldData): World;
     /** Runs various world maintenance functions */
     refresh(): World;
+    /**
+     * Creates a function to remove a given set of components from an entity
+     * @param components One or more components to remove
+     * @returns A function which takes an entity
+     * @throws if one or more components are not registered in this world
+     */
     removeComponentsFromEntity(...components: Component<any>[]): (entity: Entity) => World;
     /** Export various bits of data about the world */
     save(): WorldData;
 }
 
 /** [component name]: component instance */
-declare type ComponentRecord = Record<string, ComponentInstance<any>>;
+type ComponentRecord = Record<string, ComponentInstance<any>>;
 
 /**
  * A multi-arity function where the first two parameters
  * are the components and entities available to
  * the system respectively.
  */
-declare type SystemCallback<T extends (components: ComponentRecord, entities: Entity[], ...args: unknown[]) => ReturnType<T>, U extends ParametersExceptFirstTwo<T>> = (components: ComponentRecord, entities: Entity[], ...args: U) => ReturnType<T>;
-interface SystemSpec<T extends (components: ComponentRecord, entities: Entity[], ...args: unknown[]) => ReturnType<T>, U extends ParametersExceptFirstTwo<T>> {
+type SystemCallback<T extends (components: ComponentRecord, entities: IterableIterator<Entity>, ...args: unknown[]) => ReturnType<T>, U extends ParametersExceptFirstTwo<T>> = (components: ComponentRecord, entities: IterableIterator<Entity>, ...args: U) => ReturnType<T>;
+interface SystemSpec<T extends (components: ComponentRecord, entities: IterableIterator<Entity>, ...args: unknown[]) => ReturnType<T>, U extends ParametersExceptFirstTwo<T>> {
     /** The core function of the system. Called when this.exec is called. */
     system: SystemCallback<T, U>;
     /** The query which will provide the components and entities to the system. */
     query: Query;
 }
-declare class System<T extends (components: ComponentRecord, entities: Entity[], ...args: unknown[]) => ReturnType<T>, U extends ParametersExceptFirstTwo<T>> {
+declare class System<T extends (components: ComponentRecord, entities: IterableIterator<Entity>, ...args: unknown[]) => ReturnType<T>, U extends ParametersExceptFirstTwo<T>> {
     /** The core function of the system. Called when this.exec is called. */
     system: SystemCallback<T, U>;
     /** The query which will provide the components and entities to the system. */
@@ -274,9 +330,9 @@ declare class System<T extends (components: ComponentRecord, entities: Entity[],
      */
     constructor(spec: SystemSpec<T, U>);
     /**
+     * Initialize the system for a given world
      * @param world the world to execute the system in
-     * @param args arguments to pass to the system's callback function
-     * @returns the result of the system's callback function
+     * @returns an initialized system function
      */
     init(world: World): (...args: U) => ReturnType<T>;
 }
@@ -317,11 +373,13 @@ declare class Archetype {
     readonly exited: Set<Entity>;
     /** `true` if the object is in a dirty state */
     isDirty: boolean;
-    constructor(size: number, components: ComponentInstance<any>[], bitfield?: Bitfield);
+    constructor(size: number, components: ComponentInstance<any>[], field?: Bitfield);
     /** The Archetype's unique identifier */
     get id(): string;
     /** `true` if this Archetype has no entities associated with it */
     get isEmpty(): boolean;
+    /** The number of entities in the archetype */
+    get size(): number;
     /** Add an Entity to the Archetype */
     addEntity(entity: Entity): Archetype;
     /** Create a new Archetype from this Archetype */
@@ -337,7 +395,7 @@ declare class Archetype {
     /** Remove an Entity from the Archetype */
     removeEntity(entity: Entity): Archetype;
     /** Serialize the Archetype to a string */
-    toString(): string;
+    toString(replacer?: (this: any, key: string, value: any) => any, space?: string | number): string;
 }
 
 export { Archetype, Bitfield, Component, ComponentInstance, ComponentRecord, ComponentSpec, Entity, Opaque, ParametersExceptFirstTwo, Query, QueryInstance, QuerySpec, Schema, SchemaProps, StorageProxy, System, SystemCallback, SystemSpec, TypedArray, TypedArrayConstructor, World, WorldData, WorldSpec };
