@@ -49,14 +49,13 @@
     "typescript": "^5.0.2"
   },
   "scripts": {
-    "prebuild": "npm run clean && npm run lint:fix",
+    "prebuild": "npm run clean:pre && npm run lint:fix",
     "build": "rollup -c ./rollup.config.js",
     "postbuild": "npm run build:docs && npm run clean:post",
     "build:docs": "npx typedoc src/index.ts --out docs --excludePrivate",
-    "clean": "npm run clean:pre && npm run clean:post && npm run clean:docs",
     "clean:docs": "rimraf docs",
-    "clean:pre": "rimraf build && rimraf dist && rimraf types",
-    "clean:post": "rimraf types",
+    "clean:pre": "rimraf build && rimraf dist && npm run clean:docs",
+    "clean:post": "rimraf build",
     "lint": "eslint \"./src/**/*.ts\"",
     "lint:fix": "eslint --fix \"./src/**/*.ts\"",
     "test": "mocha",

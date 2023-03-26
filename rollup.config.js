@@ -1,9 +1,9 @@
 "use strict";
 
-import typescript from 'rollup-plugin-typescript2';
-import dts from "rollup-plugin-dts";
 import { terser } from "rollup-plugin-terser";
+import dts from "rollup-plugin-dts";
 import replace from '@rollup/plugin-replace';
+import typescript from 'rollup-plugin-typescript2';
 
 const VERSION = process.env.npm_package_version;
 const CURRENT_YEAR = new Date().getFullYear();
@@ -14,6 +14,8 @@ const input = "./src/index.ts";
 export default [
   {
     input,
+
+    treeshake: true,
 
     plugins: [
       replace({
@@ -54,7 +56,7 @@ export default [
     }],
   },
   {
-    input: "./types/index.d.ts",
+    input: "./build/index.d.ts",
     output: [
       {
         file: "./dist/miski.min.d.ts",
