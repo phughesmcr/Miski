@@ -170,6 +170,7 @@ import { Component, Query, System, World } from "../../dist/miski.min.js";
   // First, let's define our sprite sheet
   const img = new Image();
   let imgLoaded = false;
+  img.crossOrigin = 'anonymous';
   img.style.imageRendering = "pixelated";
   img.imageSmoothingEnabled = false;
   img.addEventListener("load", () => { imgLoaded = true; });
@@ -184,6 +185,7 @@ import { Component, Query, System, World } from "../../dist/miski.min.js";
   // Second, we'll define our background image
   const bgImg = new Image();
   let bgImgLoaded = false;
+  bgImg.crossOrigin = 'anonymous'
   bgImg.style.imageRendering = "pixelated";
   bgImg.imageSmoothingEnabled = false;
   bgImg.addEventListener("load", () => { bgImgLoaded = true; });
@@ -222,7 +224,8 @@ import { Component, Query, System, World } from "../../dist/miski.min.js";
       const { x, y, px, py } = position;
       const { primitive } = shape;
       // Clear canvas
-      offscreenCtx.drawImage(bgImg, 0, 0, 1024, 1024, 0, 0, offscreenCanvas.width, offscreenCanvas.height);
+      const size = Math.max(offscreenCanvas.width, offscreenCanvas.height, 1024);
+      offscreenCtx.drawImage(bgImg, 0, 0, 1024, 1024, 0, 0, size, size);
       // Draw entities
       for (const entity of entities) {
         drawSprite(
