@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  <title>Miski | Boxes and Circles Demo</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Miski | Sprite Demo</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🍬</text></svg>">
   <style>
     * {
@@ -16,20 +16,36 @@
     html, body {
       border: none;
       margin: 0;
-      padding: 0;
-      color: #fff;
-      font-family: 'Courier New', Courier, monospace;
-      background-color: #fff;
       overflow: hidden;
+    }
+    html {
+      padding: 0;
       width: 100%;
       height: 100%;
     }
+    body {
+      padding-right: 0;
+      padding-right: env(safe-area-inset-right);
+      padding-left: 0;
+      padding-left: env(safe-area-inset-left);
+
+      width: 100vw;
+      width: 100dvw;
+      height: 100vh;
+      height: 100dvh;
+
+      background-color: #292a2d;
+      color: #e5e5e5;
+      font-family: 'Courier New', Courier, monospace;
+      touch-action: manipulation;
+      overscroll-behavior: none;
+    }
     a {
-      color: aqua;
+      color: cornflowerblue;
     }
     canvas {
       cursor: crosshair;
-      background-color: #fff;
+      background-color: #292a2d;
       user-select: none;
       width: 100%;
       height: 100%;
@@ -37,6 +53,7 @@
       image-rendering: -webkit-crisp-edges;
       image-rendering: crisp-edges;
       image-rendering: pixelated;
+      touch-action: manipulation;
     }
     main {
       position: relative;
@@ -44,21 +61,23 @@
       height: 100%;
       max-width: 100vw;
       max-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
     }
     aside {
-      position: absolute;
       z-index: 9999;
     }
     aside div {
       background-color: rgba(29, 29, 31, 0.90);
       padding: 1em;
     }
-    .top-left {
+    .top-right {
       position: absolute;
       top: 0;
-      left: 0;
+      right: 0;
       width: max-content;
-      border-radius: 0 0 5px 0;
+      border-radius: 0 0 0 5px;
       font-weight: 600;
     }
     .buttons {
@@ -106,7 +125,7 @@
 <body>
   <main>
     <aside>
-      <div class="top-left">
+      <div class="top-right">
         <p class="mt-0">Resolution: <span id="sResX">??</span> x <span id="sResY">??</span></p>
         <div class="buttons">
           <p>Entities: <span id="sEnts">??</span></p>
@@ -125,7 +144,18 @@
           <label for="bRender">Enable renderer:</label>
           <input type="checkbox" name="bRender" id="bRender" checked>
         </div>
-        <p>Click shapes to explode.</p>
+        <details class="buttons row">
+          <summary>Instructions</summary>
+          <p>Click shapes to explode.</p>
+          <p>Use URL query parameters to configure:</p>
+          <ul>
+            <li>?init = the number of entities to start with</li>
+            <li>?capacity = the world capacity</li>
+            <li>?width = the canvas width in px</li>
+            <li>?height = the canvas height in px</li>
+            <li>?scale = the canvas scaling factor</li>
+          </ul>
+        </details>
         <a href="../../index.html" target="_blank" rel="noopener noreferrer">&gt; Project page</a>
       </div>
     </aside>

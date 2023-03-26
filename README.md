@@ -15,19 +15,30 @@ __Miski ECS__: A sweet ECS architecture written in Typescript.
 </p>
 
 ## Contents
-  * [Purpose](#purpose)
-  * [Features](#features)
-  * [Importing](#importing)
-  * [API Reference](#quick-start-api-reference)
-  * [Docs](#docs)
-  * [Demos](#demos)
-  * [Benchmarks](#benchmarks)
-  * [Building](#building)
-  * [To-Do](#to-do)
-  * [Contributing](#contributing)
-  * [Feature Requests](#feature-requests)
-  * [Acknowledgements](#acknowledgements)
-  * [License](#license)
+- [🍬 Miski ECS](#-miski-ecs)
+  - [Contents](#contents)
+  - [Purpose](#purpose)
+    - [Goals](#goals)
+    - [Not Goals](#not-goals)
+  - [Features](#features)
+  - [Importing](#importing)
+  - [Quick Start API Reference](#quick-start-api-reference)
+    - [World](#world)
+    - [Components](#components)
+    - [Entities](#entities)
+    - [Queries](#queries)
+    - [Systems](#systems)
+  - [Docs](#docs)
+  - [Demos](#demos)
+  - [Building](#building)
+  - [To-Do](#to-do)
+    - [Before Beta](#before-beta)
+    - [Before 1.0.0](#before-100)
+    - [Future](#future)
+  - [Contributing](#contributing)
+  - [Feature Requests](#feature-requests)
+  - [Acknowledgements](#acknowledgements)
+  - [License](#license)
 
 ## Purpose
 Miski's purpose is to provide a stable, developer-friendly ECS architecture for modern Javascript projects.
@@ -330,6 +341,6 @@ Miski is inspired by [ape-ecs](https://github.com/fritzy/ape-ecs), [BECSY](https
 ## License
 Miski ECS is released under the MIT license. See `LICENSE` for further details.
 
-&copy; 2021-2022 The Miski Authors. All rights reserved.
+&copy; 2021-2023 The Miski Authors. All rights reserved.
 
 See `AUTHORS.md` for author details.
