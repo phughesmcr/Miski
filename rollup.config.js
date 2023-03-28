@@ -1,6 +1,6 @@
 "use strict";
 
-import { terser } from "rollup-plugin-terser";
+import terser from '@rollup/plugin-terser';
 import dts from "rollup-plugin-dts";
 import replace from '@rollup/plugin-replace';
 import typescript from 'rollup-plugin-typescript2';
