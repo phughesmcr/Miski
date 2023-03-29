@@ -8,10 +8,8 @@ describe('Bitfield', () => {
     assert.equal(bitfield.length, 2);
   });
 
-  it('should create an empty Bitfield', () => {
-    const bitfield = Bitfield.create(0);
-    assert.instanceOf(bitfield, Uint32Array);
-    assert.equal(bitfield.length, 0);
+  it('should fail to create an empty Bitfield', () => {
+    assert.throws(() => Bitfield.create(0), SyntaxError);
   });
 
   it('should handle large bit numbers', () => {
