@@ -2,7 +2,7 @@
 
 import type { Bitfield } from "./bitfield.js";
 import * as bitfield from "./bitfield.js";
-import { NO_INDEX } from "./constants.js";
+import { BITMASK, NO_INDEX } from "./constants.js";
 import { getLowestSetIndex } from "./utils.js";
 
 export type Bitpool = {
@@ -23,7 +23,7 @@ export type Bitpool = {
  */
 export const create = (size: number): Bitpool => {
   const field = bitfield.create(size);
-  field.fill(0xffffffff);
+  field.fill(BITMASK);
   return {
     field,
     nextAvailableIdx: 0,

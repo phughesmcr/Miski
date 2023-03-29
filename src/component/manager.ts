@@ -1,13 +1,13 @@
 /* Copyright 2023 the Miski authors. All rights reserved. MIT license. */
 
 import { $_OWNERS } from "../constants.js";
-import { createComponentInstance, refreshComponentInstance } from "./instance.js";
-import { ComponentBuffer } from "./buffer.js";
-import * as bitfield from "../bits/bitfield.js";
-import type { Entity } from "../world.js";
+import { bitfield } from "../utils/bits/index.js";
 import type { TypedArrayConstructor } from "../utils/utils.js";
+import type { Entity } from "../world.js";
+import { ComponentBuffer } from "./buffer.js";
 import type { Component } from "./component.js";
 import type { ComponentInstance } from "./instance.js";
+import { createComponentInstance, refreshComponentInstance } from "./instance.js";
 import type { Schema, SchemaProps } from "./schema.js";
 
 /** [component name]: component instance */

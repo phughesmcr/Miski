@@ -3,6 +3,9 @@
 /** The number of bits per integer value in the bitfield */
 export const BITS_PER_INT = 32;
 
+/** The maximum number of bits that can be stored in a single bitfield index */
+export const BITMASK = 0xffffffff;
+
 /** Value representing an erroneous or non-existant index in the bitfield */
 export const NO_INDEX = -1;
 

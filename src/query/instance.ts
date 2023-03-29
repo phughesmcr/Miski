@@ -1,12 +1,10 @@
 /* Copyright 2023 the Miski authors. All rights reserved. MIT license. */
 
 import type { Archetype } from "../archetype/archetype.js";
-import type { Bitfield } from "../bits/bitfield.js";
-import * as bitfield from "../bits/bitfield.js";
-import { intersectBits } from "../bits/utils.js";
 import type { Component } from "../component/component.js";
 import type { ComponentInstance } from "../component/instance.js";
 import type { Schema } from "../component/schema.js";
+import { bitfield, intersectBits, type Bitfield } from "../utils/bits/index.js";
 import type { Query } from "./query.js";
 
 interface QueryInstanceSpec {

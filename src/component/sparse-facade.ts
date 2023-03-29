@@ -1,6 +1,6 @@
 /* Copyright 2023 the Miski authors. All rights reserved. MIT license. */
 
-import * as bitpool from "../bits/bitpool.js";
+import { bitpool } from "../utils/bits/index.js";
 import type { TypedArray } from "../utils/utils.js";
 import type { Entity } from "../world.js";
 

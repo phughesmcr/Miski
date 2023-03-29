@@ -1,9 +1,6 @@
 /* Copyright 2023 the Miski authors. All rights reserved. MIT license. */
 
 import { ArchetypeManager } from "./archetype/manager.js";
-import * as bitfield from "./bits/bitfield.js";
-import type { Bitpool } from "./bits/bitpool.js";
-import * as bitpool from "./bits/bitpool.js";
 import type { Component } from "./component/component.js";
 import type { ComponentInstance } from "./component/instance.js";
 import type { ComponentRecord } from "./component/manager.js";
@@ -12,7 +9,8 @@ import type { Schema, SchemaProps } from "./component/schema.js";
 import { $_OWNERS, VERSION } from "./constants.js";
 import { QueryManager } from "./query/manager.js";
 import { Query } from "./query/query.js";
-import { isObject, isPositiveInt, isUint32, Opaque } from "./utils/utils.js";
+import { bitfield, bitpool, type Bitpool } from "./utils/bits/index.js";
+import { Opaque, isObject, isPositiveInt, isUint32 } from "./utils/utils.js";
 
 /** Entities are indexes of an EntityArray. An Entity is just an integer. */
 export type Entity = Opaque<number, "Entity">;

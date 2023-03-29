@@ -1,14 +1,13 @@
 /* Copyright 2023 the Miski authors. All rights reserved. MIT license. */
 
 import { $_CHANGED, $_OWNERS } from "../constants.js";
-import { isObject, isPositiveInt, isUint32 } from "../utils/utils.js";
-import { storageProxy } from "./proxy.js";
-import * as bitfield from "../bits/bitfield.js";
-import type { Bitfield } from "../bits/bitfield.js";
+import { bitfield, type Bitfield } from "../utils/bits/index.js";
 import type { TypedArray } from "../utils/utils.js";
-import type { StorageProxy } from "./proxy.js";
+import { isObject, isPositiveInt, isUint32 } from "../utils/utils.js";
 import type { Entity } from "../world.js";
 import type { Component } from "./component.js";
+import type { StorageProxy } from "./proxy.js";
+import { storageProxy } from "./proxy.js";
 import type { Schema, SchemaStorage } from "./schema.js";
 
 interface ComponentInstanceSpec<T extends Schema<T>> {

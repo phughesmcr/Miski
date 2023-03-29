@@ -1,7 +1,7 @@
 /* Copyright 2023 the Miski authors. All rights reserved. MIT license. */
 
-import { isObject, isTypedArrayConstructor, isValidName } from "../utils/utils.js";
 import type { TypedArray, TypedArrayConstructor } from "../utils/utils.js";
+import { isObject, isTypedArrayConstructor, isValidName } from "../utils/utils.js";
 
 /** Individual entity's component properties */
 export type SchemaProps<T> = Record<keyof T, number | bigint | undefined>;

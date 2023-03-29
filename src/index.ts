@@ -19,7 +19,7 @@ export { System } from "./system.js";
 export { World } from "./world.js";
 
 export type { Archetype } from "./archetype/archetype.js";
-export type { Bitfield } from "./bits/bitfield.js";
+export type { Bitfield } from "./utils/bits/bitfield.js";
 export type { ComponentSpec } from "./component/component.js";
 export type { ComponentRecord } from "./component/manager.js";
 export type { ComponentInstance } from "./component/instance.js";

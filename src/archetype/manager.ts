@@ -1,10 +1,10 @@
 /* Copyright 2023 the Miski authors. All rights reserved. MIT license. */
 
-import * as bitfield from "../bits/bitfield.js";
 import type { Component } from "../component/component.js";
 import type { ComponentInstance } from "../component/instance.js";
 import type { QueryInstance } from "../query/instance.js";
 import type { Query } from "../query/query.js";
+import { bitfield } from "../utils/bits/index.js";
 import type { Entity } from "../world.js";
 import { Archetype } from "./archetype.js";
 
