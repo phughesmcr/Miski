@@ -34,7 +34,10 @@ function instantiate(buffer: ComponentBuffer, capacity: number, components: Comp
   );
 }
 
-/** @todo better async? */
+/**
+ * @todo better async?
+ * @throws {Error} if maxEntities is reached.
+ */
 export function addEntity<T extends Schema<T>>(
   instance: ComponentInstance<T>,
   entity: Entity,
@@ -89,6 +92,9 @@ export class ComponentManager {
     this.componentMap = instantiate(this.buffer, capacity, components);
   }
 
+  /**
+   * @throws {Error} if some components are not registered in this world.
+   */
   addComponentsToEntity(
     components: Component<any>[],
   ): (entity: Entity, properties?: Record<string, SchemaProps<unknown>>) => ComponentInstance<any>[] {
@@ -101,6 +107,7 @@ export class ComponentManager {
     };
   }
 
+  /** @throws {Error} if some components are not registered in this world. */
   removeComponentsFromEntity(components: Component<any>[]) {
     const instances = this.getInstances(components).filter(Boolean) as ComponentInstance<any>[];
     if (instances.length !== components.length) throw new Error("Some components are not registered in this world!");
@@ -122,6 +129,7 @@ export class ComponentManager {
     return components.map(this.getInstance, this);
   }
 
+  /** @throws {Error} if byteLength mismatch */
   setBuffer(source: ArrayBuffer): ComponentManager {
     if (source.byteLength !== this.buffer.byteLength) {
       throw new Error("setBuffer: byteLength mismatch!");

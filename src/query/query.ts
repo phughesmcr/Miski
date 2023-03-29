@@ -34,7 +34,7 @@ export class Query {
    * @param spec.all AND - Gather entities as long as they have all these components
    * @param spec.any OR - Gather entities as long as they have 0...* of these components
    * @param spec.none NOT - Gather entities as long as they don't have these components
-   * @throws If the spec is invalid
+   * @throws {SyntaxError} if the spec is invalid
    */
   constructor(spec: QuerySpec) {
     if (!spec) throw new SyntaxError("Query specification object is required.");

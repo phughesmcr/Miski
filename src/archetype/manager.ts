@@ -59,7 +59,10 @@ export class ArchetypeManager {
     return this;
   }
 
-  /** Replace an entity's archetype */
+  /**
+   * Replace an entity's archetype
+   * @throws {Error} if the archetype is not registered
+   */
   setArchetype(entity: Entity, archetype: Archetype): ArchetypeManager {
     if (!this.archetypeMap.has(archetype.id)) throw new Error("Invalid archetype.");
     if (this.entityArchetypes[entity] === archetype) return this;

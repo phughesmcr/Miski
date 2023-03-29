@@ -36,7 +36,7 @@ export interface WorldSpec {
  * Creates a valid WorldSpec (if possible) from an object
  * @param spec The object to examine
  * @returns A new WorldSpec object
- * @throws On invalid WorldSpec properties
+ * @throws {SyntaxError|TypeError} On invalid WorldSpec properties
  */
 function validateWorldSpec(spec: WorldSpec): Required<WorldSpec> {
   // check spec exists
@@ -74,7 +74,7 @@ export class World {
    * @param spec An WorldSpec object
    * @param spec.capacity The maximum number of entities allowed in the world
    * @param spec.components An array of components to instantiate in the world
-   * @throws If the spec is invalid
+   * @throws {SyntaxError|TypeError} If the spec is invalid
    */
   constructor(spec: WorldSpec) {
     const { capacity, components } = validateWorldSpec(spec);
@@ -104,7 +104,7 @@ export class World {
    * Creates a function to add a given set of components to an entity
    * @param components One or more components to add
    * @returns A function which takes an entity and optional properties object
-   * @throws if one or more components are not registered in this world
+   * @throws {SyntaxError} if one or more components are not registered in this world
    */
   addComponentsToEntity(...components: Component<any>[]) {
     const cb = this.componentManager.addComponentsToEntity(components);
@@ -128,7 +128,7 @@ export class World {
    * Remove and recycle an Entity
    * @param entity the entity to destroy
    * @returns the world
-   * @throws if the entity is invalid
+   * @throws {SyntaxError} if the entity is invalid
    */
   destroyEntity(entity: Entity): World {
     if (!this.isValidEntity(entity)) throw new SyntaxError(`Entity ${entity as number} is not valid!`);
@@ -144,7 +144,7 @@ export class World {
    * Get all the changed entities from a set of components
    * @param components The components to collect changed entities from
    * @returns An array of entities
-   * @throws if one or more components are not registered in this world
+   * @throws {Error} if one or more components are not registered in this world
    */
   getChangedFromComponents(...components: Component<any>[]): () => IterableIterator<Entity> {
     const instances = this.componentManager.getInstances(components).filter(Boolean) as ComponentInstance<any>[];
@@ -167,7 +167,7 @@ export class World {
    * @param query the query to collect changed entities from
    * @param arr an optional array to be emptied and recycled
    * @returns an array of entities
-   * @throws if query is invalid
+   * @throws {TypeError} if the object is not a valid Query
    */
   getChangedFromQuery(query: Query): () => IterableIterator<Entity> {
     const { components } = this.queryManager.getQueryInstance(query);
@@ -229,7 +229,7 @@ export class World {
    * Get all the components positively associated with a query
    * @param query The query to get the components from
    * @returns An object where keys are component names and properties are component instances
-   * @throws If the query is invalid
+   * @throws {TypeError} if the object is not a valid Query
    */
   getQueryComponents(query: Query): ComponentRecord {
     return this.queryManager.getComponentsFromQuery(query);
@@ -239,7 +239,7 @@ export class World {
    * Get all the entities which have entered the query since the last refresh
    * @param query The query to get the entities from
    * @returns An iterator of entities
-   * @throws If the query is invalid
+   * @throws {TypeError} if the object is not a valid Query
    */
   getQueryEntered(query: Query): () => IterableIterator<Entity> {
     return this.queryManager.getEnteredFromQuery(query);
@@ -249,7 +249,7 @@ export class World {
    * Get all the entities which match a query
    * @param query The query to get the entities from
    * @returns An iterator of entities
-   * @throws If the query is invalid
+   * @throws {TypeError} if the object is not a valid Query
    */
   getQueryEntities(query: Query): () => IterableIterator<Entity> {
     return this.queryManager.getEntitiesFromQuery(query);
@@ -259,7 +259,7 @@ export class World {
    * Get all the entities which have exited the query since the last refresh
    * @param query The query to get the entities from
    * @returns An iterator of entities
-   * @throws If the query is invalid
+   * @throws {TypeError} if the object is not a valid Query
    */
   getQueryExited(query: Query): () => IterableIterator<Entity> {
     return this.queryManager.getExitedFromQuery(query);
@@ -271,7 +271,7 @@ export class World {
    * @returns A function which takes an entity and returns
    *     true if the entity has the component, false if it does not
    *     or null if the entity does not exist.
-   * @throws if the component is not registered in this world
+   * @throws {Error} if the component is not registered in this world
    */
   hasComponent<T extends Schema<T>>(component: Component<T>): (entity: Entity) => boolean | null {
     const instance = this.componentManager.getInstance(component);
@@ -285,7 +285,7 @@ export class World {
    * @returns A function which takes an entity and returns an array of
    *     true if the entity has the component, false if it does not
    *     or null if the entity does not exist.
-   * @throws if one or more component is not registered in this world
+   * @throws {Error} if one or more component is not registered in this world
    */
   hasComponents(...components: Component<any>[]): (entity: Entity) => (boolean | null)[] {
     const instances = this.componentManager.getInstances(components).filter(Boolean) as ComponentInstance<any>[];
@@ -313,15 +313,15 @@ export class World {
   /**
    * Swap the ComponentBuffer of one world with this world
    * @returns the world
-   * @throws if the capacity or version of the data to load is mismatched
+   * @throws {SyntaxError} if the capacity or version of the data to load is mismatched
    */
   load(data: WorldData): World {
     const { buffer, capacity, version } = data;
     if (version !== this.version) {
-      throw new Error(`Version mismatch. Trying to load ${version} data into ${this.version} world.`);
+      throw new SyntaxError(`Version mismatch. Trying to load ${version} data into ${this.version} world.`);
     }
     if (capacity !== this.capacity) {
-      throw new Error(`Capacity mismatch. Data requires a world with a capacity of ${capacity}.`);
+      throw new SyntaxError(`Capacity mismatch. Data requires a world with a capacity of ${capacity}.`);
     }
     this.componentManager.setBuffer(buffer);
     this.refresh();
@@ -340,7 +340,7 @@ export class World {
    * Creates a function to remove a given set of components from an entity
    * @param components One or more components to remove
    * @returns A function which takes an entity
-   * @throws if one or more components are not registered in this world
+   * @throws {SyntaxError} if one or more components are not registered in this world
    */
   removeComponentsFromEntity(...components: Component<any>[]): (entity: Entity) => World {
     const remover = this.componentManager.removeComponentsFromEntity(components);

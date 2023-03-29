@@ -100,7 +100,10 @@ export class QueryManager {
     };
   }
 
-  /** @returns an array of Entities which have been removed from this query since last refresh */
+  /**
+   * @returns an array of Entities which have been removed from this query since last refresh
+   * @throws {TypeError} if the object is not a valid Query
+   */
   getExitedFromQuery(query: Query): () => IterableIterator<Entity> {
     const res: Set<Entity> = new Set();
     const instance = this.getQueryInstance(query);
@@ -111,14 +114,20 @@ export class QueryManager {
     };
   }
 
-  /** @returns an instantiated Query */
+  /**
+   * @returns an instantiated Query
+   * @throws {TypeError} if the object is not a valid Query
+   */
   getQueryInstance(query: Query): QueryInstance {
     return this.queryMap.get(query) ?? this.registerQuery(query);
   }
 
-  /** Register a Query in the world, producing a QueryInstance */
+  /**
+   * Register a Query in the world, producing a QueryInstance
+   * @throws {TypeError} if the object is not a valid Query
+   */
   registerQuery(query: Query): QueryInstance {
-    if (!(query instanceof Query)) throw new Error("Object is not a valid query.");
+    if (!(query instanceof Query)) throw new TypeError("Object is not a valid query.");
     const cached = this.queryMap.get(query);
     if (cached) return cached;
     const instance = createQueryInstance({ componentMap: this.componentMap, query });

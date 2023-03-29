@@ -54,13 +54,14 @@ export function refreshComponentInstance<T extends Schema<T>>(instance: Componen
  * @param spec.component The component to instantiate
  * @param spec.id The component instance's identifier
  * @param spec.storage The component's TypedArray storage object
+ * @throws {SyntaxError|TypeError} on invalid spec properties.
  */
 export function createComponentInstance<T extends Schema<T>>(
   spec: ComponentInstanceSpec<T>,
 ): Readonly<ComponentInstance<T>> {
   const { capacity, component, id, storage } = spec;
   if (!isPositiveInt(capacity)) throw new SyntaxError("Capacity must be integer > 0.");
-  if (!component) throw new Error("Component instantiation requires as component!");
+  if (!component) throw new TypeError("Component instantiation requires as component!");
   if (!isUint32(id)) throw new SyntaxError("Component ID is invalid.");
   if (storage && !isObject(storage)) throw new TypeError("Component storage is malformed.");
 
