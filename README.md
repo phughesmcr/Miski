@@ -25,6 +25,11 @@ __Miski ECS__: A sweet ECS architecture written in Typescript.
   - [Quick Start API Reference](#quick-start-api-reference)
     - [World](#world)
     - [Components](#components)
+      - [Tags](#tags)
+      - [MaxEntities](#maxentities)
+      - [Adding and Removing Components](#adding-and-removing-components)
+      - [Test for Component presence](#test-for-component-presence)
+      - [Modifying an Entity's Component properties](#modifying-an-entitys-component-properties)
     - [Entities](#entities)
     - [Queries](#queries)
     - [Systems](#systems)
@@ -64,7 +69,7 @@ Because Miski is designed to be used inside your own projects, we let you config
 * Define components, systems and queries once, reuse them across multiple worlds
 * `AND`,`OR`,`NOT` operators in Queries
 * `world.getQueryEntered` & `world.getQueryExited` methods
-* ~5kb gzipped
+* ~6kb gzipped
 * No dependencies
 * MIT license
 
@@ -87,8 +92,6 @@ Each concept in this reference builds on the previous concept, it should be read
 ### World
 The world object is the primary container for all things Miski.
 
-⚠️ Components cannot be added to a world after its creation.
-
 We can create a new world like so:
 
 ```typescript
@@ -100,8 +103,9 @@ const world = new World({
 });
 ```
 
-The world requires frequent maintenance (i.e., once per frame):
+⚠️ Components cannot be added to a world after its creation.
 
+ℹ️ The world requires frequent maintenance (usually once per frame):
 ```typescript
 world.refresh();
 ```
@@ -111,12 +115,10 @@ A component is a data structure that gives entities their state.
 
 Components can be created once and used across multiple worlds.
 
-⚠️ There are a few names you cannot use for components or their schema properties. See `constants.ts`.
-
 For example, to create a 2d position component:
 
 ```typescript
-interface Vec2 = { x: number, y: number };
+type Vec2 = { x: number, y: number };
 const positionComponent = new Component<Vec2>({
   name: "position",
   schema: {
@@ -126,6 +128,10 @@ const positionComponent = new Component<Vec2>({
 });
 ```
 
+⚠️ There are a few names you cannot use for components or their schema properties. The full list can be found in `./src/constants.ts`.
+
+#### Tags
+
 We can create a tag component by omitting the schema object:
 
 ```typescript
@@ -134,7 +140,9 @@ const activeComponent = new Component<null>({
 });
 ```
 
-By default a component can be added to as many entities as the world's capacity, we can change this behavior like so:
+#### MaxEntities
+
+By default a component can be added to as many entities as the world's capacity, we can change this behaviour like so:
 
 ```typescript
 const player = new Component<null>({
@@ -142,6 +150,8 @@ const player = new Component<null>({
   maxEntities: 1,
 });
 ```
+
+#### Adding and Removing Components
 
 We can add and remove components from entities like so:
 
@@ -160,6 +170,7 @@ const removePositionFromEntity = world.removeComponentFromEntity(positionCompone
 removePositionFromEntity(entity);
 ```
 
+#### Test for Component presence
 We can also test if entities have components:
 
 ```typescript
@@ -170,7 +181,9 @@ const hasPosition: boolean = world.hasComponent(positionComponent)(entity);
 const hasXYZ: boolean[] = world.hasComponents(positionComponent, ...)(entity);
 ```
 
-To access the component's data relevant to a specific world, we have to get the ComponentInstance, like so:
+#### Modifying an Entity's Component properties
+
+To access the component's data from a specific world, we have to get the ComponentInstance, like so:
 
 ```typescript
 // returns ComponentInstance<T> or undefined
@@ -180,7 +193,7 @@ const positionInstance = world.getComponentInstance(positionComponent);
 const instances = world.getComponentInstances(positionComponent, ...);
 ```
 
-The component instance is accessible quickly using Systems (see below).
+ℹ️ The component instance is accessible quickly using Systems (see below).
 
 Once we have the component instance we can modify entity properties.
 
@@ -212,7 +225,7 @@ positionInstance.proxy.x = 1;
 [...positionInstance.changed] = [444] // does not include entity 101
 ```
 
-N.B. The `.changed` array is reset with every `world.refresh()`.
+ℹ️  The `.changed` array is reset with every `world.refresh()`.
 
 You can also access the changed entities of a component like so:
 
@@ -265,7 +278,7 @@ const entered = world.getQueryEntered(positionQuery);
 const exited = world.getQueryExited(positionQuery);
 ```
 
-`getQueryEntities`, `getQueryEntered`, and `getQueryExited` optionally take an array as a second argument to avoid creating a new underlying array each time, reducing GC cost.
+ℹ️ `getQueryEntities`, `getQueryEntered`, and `getQueryExited` optionally take an array as a second argument to avoid creating a new underlying array each time, reducing GC cost.
 
 ### Systems
 Systems are functions which use queries to modify entity properties.
