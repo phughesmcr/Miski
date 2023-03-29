@@ -1,5 +1,5 @@
 import { assert } from "chai";
-import { getPopulationCount } from "../../src/bits/utils.js";
+import { getPopulationCount } from "../../src/utils/bits/utils.js";
 
 describe('Bit Utils', () => {
   it('should get the set bit count of a value with all bits set', () => {

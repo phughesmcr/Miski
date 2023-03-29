@@ -1,4 +1,4 @@
-import * as Bitfield from '../../src/bits/bitfield.js';
+import * as Bitfield from '../../src/utils/bits/bitfield.js';
 import { assert } from 'chai';
 
 describe('Bitfield', () => {

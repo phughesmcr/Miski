@@ -1,4 +1,4 @@
-import * as Bitpool from '../../src/bits/bitpool.js';
+import * as Bitpool from '../../src/utils/bits/bitpool.js';
 import { expect } from 'chai';
 
 describe('Bitpool', () => {
