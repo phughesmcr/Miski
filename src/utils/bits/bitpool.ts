@@ -49,19 +49,10 @@ export const getSize = ({ size }: Bitpool) => size << 5;
 export const acquire = (bitpool: Bitpool) => {
   const { nextAvailableIdx } = bitpool;
   if (!~nextAvailableIdx) return NO_INDEX;
-  const index = bitpool.field[nextAvailableIdx] as number;
-  const position = getLowestSetIndex(index);
+  const position = getLowestSetIndex(bitpool.field[nextAvailableIdx] as number);
   if (position >= bitpool.size) return NO_INDEX;
   bitpool.field[nextAvailableIdx] &= ~(1 << position);
-  if (bitpool.field[nextAvailableIdx] === 0) {
-    bitpool.nextAvailableIdx = NO_INDEX;
-    for (let i = 0; i < bitpool.field.length; i++) {
-      if (bitpool.field[i] !== 0) {
-        bitpool.nextAvailableIdx = i;
-        break;
-      }
-    }
-  }
+  bitpool.nextAvailableIdx = bitpool.field.findIndex((n) => n > 0);
   return (nextAvailableIdx << 5) + position;
 };
 
