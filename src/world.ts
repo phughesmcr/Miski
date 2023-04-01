@@ -218,7 +218,7 @@ export class World {
         let props: boolean | SchemaProps<T> = true;
         if (schema) {
           props = Object.fromEntries(
-            Object.keys(schema).map((key) => [key as keyof T, component[key as keyof T]?.[entity]]),
+            Object.keys(schema).map((key) => [key as keyof T, component[key as keyof T][entity]]),
           ) as SchemaProps<T>;
         }
         return [name, props];
