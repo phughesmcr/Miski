@@ -69,13 +69,11 @@ export function removeEntity<T extends Schema<T>>(instance: ComponentInstance<T>
     /** @todo Object.entries creates an array. */
     Object.entries(schema).forEach(([key, prop]) => {
       const storage = instance[key as keyof T];
-      if (storage) {
-        if (maxEntities) {
-          // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
-          delete storage[entity];
-        } else {
-          storage[entity] = Array.isArray(prop) ? (prop[1] as number) : 0;
-        }
+      if (maxEntities) {
+        // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+        delete storage[entity];
+      } else {
+        storage[entity] = Array.isArray(prop) ? (prop[1] as number) : 0;
       }
     });
   }
