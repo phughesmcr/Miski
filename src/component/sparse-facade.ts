@@ -27,7 +27,7 @@ export function sparseFacade<T extends TypedArray>(dense: T): SparseFacade<T> {
   /** @returns `false` if dense array is full, `true` if value set successfully */
   const set = (entity: Entity, value: T[0]): boolean => {
     const idx = sparse.get(entity) ?? bitpool.acquire(available);
-    if (idx === undefined) return false;
+    if (idx === -1) return false;
     dense[idx] = value;
     sparse.set(entity, idx);
     return true;
