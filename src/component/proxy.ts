@@ -28,9 +28,6 @@ export type StorageProxy<T extends Schema<T>> = Record<keyof T, number> & {
  * @throws {SyntaxError} if no storage or changed set are provided
  */
 export function storageProxy<T extends Schema<T>>(storage: SchemaStorage<T>, changed: Set<Entity>): StorageProxy<T> {
-  if (!storage) throw new SyntaxError("Proxy can only be used on components, not tags.");
-  if (!changed) throw new SyntaxError("Proxy requires a changed set.");
-
   /** The currently selected entity */
   let entityId: Entity = 0 as Entity;
 
