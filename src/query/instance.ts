@@ -7,12 +7,12 @@ import type { Schema } from "../component/schema.js";
 import { bitfield, intersectBits, type Bitfield } from "../utils/bits/index.js";
 import type { Query } from "./query.js";
 
-interface QueryInstanceSpec {
+export type QueryInstanceSpec = {
   componentMap: Map<Component<any>, ComponentInstance<any>>;
   query: Query;
-}
+};
 
-export interface QueryInstance extends Query {
+export type QueryInstance = Query & {
   /** A bitfield for the AND match criteria */
   and: Readonly<Bitfield>;
   /** */
@@ -31,7 +31,7 @@ export interface QueryInstance extends Query {
   or: Readonly<Bitfield>;
   /** A bitfield for the NOT match criteria */
   not: Readonly<Bitfield>;
-}
+};
 
 export function createQueryInstance(spec: QueryInstanceSpec): QueryInstance {
   const { componentMap, query } = spec;

@@ -3,7 +3,7 @@
 import { isPositiveInt, isValidName } from "../utils/utils.js";
 import { calculateSchemaSize, isValidSchema, Schema } from "./schema.js";
 
-export interface ComponentSpec<T> {
+export type ComponentSpec<T> = {
   /**
    * The maximum number of entities able to equip this component per world.
    *
@@ -14,7 +14,7 @@ export interface ComponentSpec<T> {
   name: string;
   /** The component's property definitions. Omit to define a tag component. */
   schema?: Schema<T>;
-}
+};
 
 export class Component<T extends Schema<T>> {
   /** `true` if the component has no schema */

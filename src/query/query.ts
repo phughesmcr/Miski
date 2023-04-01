@@ -4,14 +4,14 @@ import { Component } from "../component/component.js";
 import type { Schema } from "../component/schema.js";
 import { EMPTY_ARRAY } from "../constants.js";
 
-export interface QuerySpec {
+export type QuerySpec = {
   /** AND - Gather entities as long as they have all these components */
   all?: Component<any>[];
   /** OR - Gather entities as long as they have 0...* of these components */
   any?: Component<any>[];
   /** NOT - Gather entities as long as they don't have these components */
   none?: Component<any>[];
-}
+};
 
 function _validateQueryArrays<T extends Schema<T>>(component: Component<T>) {
   return component instanceof Component;

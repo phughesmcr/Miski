@@ -15,15 +15,15 @@ export type SystemCallback<
   U extends ParametersExceptFirstTwo<T>,
 > = (components: ComponentRecord, entities: IterableIterator<Entity>, ...args: U) => ReturnType<T>;
 
-export interface SystemSpec<
+export type SystemSpec<
   T extends (components: ComponentRecord, entities: IterableIterator<Entity>, ...args: unknown[]) => ReturnType<T>,
   U extends ParametersExceptFirstTwo<T>,
-> {
+> = {
   /** The core function of the system. Called when this.exec is called. */
   system: SystemCallback<T, U>;
   /** The query which will provide the components and entities to the system. */
   query: Query;
-}
+};
 
 export class System<
   T extends (components: ComponentRecord, entities: IterableIterator<Entity>, ...args: unknown[]) => ReturnType<T>,

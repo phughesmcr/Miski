@@ -5,12 +5,12 @@ import type { Component } from "./component.js";
 import type { Schema, SchemaStorage } from "./schema.js";
 import type { TypedArrayConstructor } from "../utils/utils.js";
 
-export interface ComponentBufferSpec {
+export type ComponentBufferSpec = {
   /** The maximum number of Entities in the World */
   capacity: number;
   /** An array of Components to partition to buffer for */
   components: Component<any>[];
-}
+};
 
 /** Serialized component partition property object */
 export type PartitionProperty = {
@@ -22,14 +22,14 @@ export type PartitionsObject = {
   [componentName: string]: PartitionProperty;
 };
 
-export interface ComponentBufferData {
+export type ComponentBufferData = {
   /** The ArrayBuffer as a string */
   buffer: string;
   /** The maximum number of Entities in the World */
   capacity: number;
   /** Map of components and the byteOffset of their schema properties */
   partitions: PartitionsObject;
-}
+};
 
 /**
  * Calculate the total required storage space for all component schemas

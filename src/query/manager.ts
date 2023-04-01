@@ -31,9 +31,9 @@ function refreshQuery(query: QueryInstance) {
   query.isDirty = false;
 }
 
-export interface QueryManagerSpec {
+export type QueryManagerSpec = {
   componentManager: ComponentManager;
-}
+};
 
 export class QueryManager {
   /** The components, and their instances, of a given world */

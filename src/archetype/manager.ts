@@ -8,10 +8,10 @@ import { bitfield } from "../utils/bits/index.js";
 import type { Entity } from "../world.js";
 import { Archetype } from "./archetype.js";
 
-export interface ArchetypeManagerSpec {
+export type ArchetypeManagerSpec = {
   capacity: number;
   components: Component<any>[];
-}
+};
 
 export class ArchetypeManager {
   /** Map<Archetype.id, Archetype> */

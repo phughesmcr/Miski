@@ -10,7 +10,7 @@ import type { StorageProxy } from "./proxy.js";
 import { storageProxy } from "./proxy.js";
 import type { Schema, SchemaStorage } from "./schema.js";
 
-interface ComponentInstanceSpec<T extends Schema<T>> {
+export type ComponentInstanceSpec<T extends Schema<T>> = {
   /** The world's entity capacity */
   capacity: number;
   /** The component to instantiate */
@@ -19,7 +19,7 @@ interface ComponentInstanceSpec<T extends Schema<T>> {
   id: number;
   /** The component's TypedArray storage object */
   storage?: SchemaStorage<T> | undefined;
-}
+};
 
 export type ComponentInstance<T extends Schema<T>> = Component<T> &
   Record<keyof T, TypedArray> & {

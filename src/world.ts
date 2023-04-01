@@ -16,21 +16,22 @@ import { Opaque, isObject, isPositiveInt, isUint32 } from "./utils/utils.js";
 export type Entity = Opaque<number, "Entity">;
 
 /** The object returned from `world.save();` */
-export interface WorldData {
+export type WorldData = {
   /** The world's component storage buffer */
   buffer: ArrayBuffer;
   /** The maximum number of entities allowed in the world */
   capacity: number;
   /** The Miski version of the creating world */
   version: string;
-}
+};
 
-export interface WorldSpec {
+/** The object returned from `world.save();` */
+export type WorldSpec = {
   /** The maximum number of entities allowed in the world */
   capacity: number;
   /** Components to instantiate in the world */
   components: Component<any>[];
-}
+};
 
 /**
  * Creates a valid WorldSpec (if possible) from an object

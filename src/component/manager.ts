@@ -15,10 +15,10 @@ export type ComponentRecord = Record<string, ComponentInstance<any>>;
 
 export type ComponentMap = Map<Component<any>, ComponentInstance<any>>;
 
-export interface ComponentManagerSpec {
+export type ComponentManagerSpec = {
   capacity: number;
   components: Component<any>[];
-}
+};
 
 function instantiate(buffer: ComponentBuffer, capacity: number, components: Component<any>[]) {
   return new Map<Component<any>, ComponentInstance<any>>(
