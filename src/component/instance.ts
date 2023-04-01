@@ -2,12 +2,10 @@
 
 import { $_CHANGED, $_OWNERS } from "../constants.js";
 import { bitfield, type Bitfield } from "../utils/bits/index.js";
-import type { TypedArray } from "../utils/utils.js";
-import { isObject, isPositiveInt, isUint32 } from "../utils/utils.js";
+import { isObject, isPositiveInt, isUint32, type TypedArray } from "../utils/utils.js";
 import type { Entity } from "../world.js";
 import type { Component } from "./component.js";
-import type { StorageProxy } from "./proxy.js";
-import { storageProxy } from "./proxy.js";
+import { storageProxy, type StorageProxy } from "./proxy.js";
 import type { Schema, SchemaStorage } from "./schema.js";
 
 export type ComponentInstanceSpec<T extends Schema<T>> = {
@@ -47,6 +45,39 @@ export function refreshComponentInstance<T extends Schema<T>>(instance: Componen
   return instance;
 }
 
+export const validateSpec = (spec: ComponentInstanceSpec<any>): ComponentInstanceSpec<any> => {
+  const { capacity, component, id, storage } = spec;
+  if (!isPositiveInt(capacity)) throw new SyntaxError("Capacity must be integer > 0.");
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+  if (!component) throw new TypeError("Component instantiation requires as component!");
+  if (!isUint32(id)) throw new SyntaxError("Component ID is invalid.");
+  if (storage && !isObject(storage)) throw new TypeError("Component storage is malformed.");
+  return spec;
+};
+
+export const attachStorage = <T extends Schema<T>>(
+  instance: ComponentInstance<T>,
+  storage: SchemaStorage<T>,
+  changed: Set<Entity>,
+): SchemaStorage<T> => {
+  // create instance.proxy
+  Object.defineProperty(instance, "proxy", {
+    value: storageProxy(storage, changed),
+    configurable: false,
+    enumerable: true,
+    writable: false,
+  });
+
+  // assign raw storage
+  Object.keys(storage).forEach((k) => {
+    Object.defineProperty(instance, k, {
+      value: storage[k as keyof T],
+    });
+  });
+
+  return storage;
+};
+
 /**
  * Create a new ComponentInstance.
  * A ComponentInstance is a Component tied to a World with storage
@@ -59,27 +90,21 @@ export function refreshComponentInstance<T extends Schema<T>>(instance: Componen
 export function createComponentInstance<T extends Schema<T>>(
   spec: ComponentInstanceSpec<T>,
 ): Readonly<ComponentInstance<T>> {
-  const { capacity, component, id, storage } = spec;
-  if (!isPositiveInt(capacity)) throw new SyntaxError("Capacity must be integer > 0.");
-  if (!component) throw new TypeError("Component instantiation requires as component!");
-  if (!isUint32(id)) throw new SyntaxError("Component ID is invalid.");
-  if (storage && !isObject(storage)) throw new TypeError("Component storage is malformed.");
+  const { capacity, component, id, storage } = validateSpec(spec);
 
   const changed: Set<Entity> = new Set();
   const owners: Bitfield = bitfield.create(capacity);
 
   const instance = Object.create(component, {
     [$_CHANGED]: {
-      value: changed,
-      configurable: false,
-      enumerable: false,
-      writable: false,
+      get() {
+        return changed;
+      },
     },
     [$_OWNERS]: {
-      value: owners,
-      configurable: false,
-      enumerable: false,
-      writable: false,
+      get() {
+        return owners;
+      },
     },
     changed: {
       get() {
@@ -92,29 +117,13 @@ export function createComponentInstance<T extends Schema<T>>(
       },
     },
     id: {
-      value: id,
-      configurable: false,
-      enumerable: true,
-      writable: false,
+      get() {
+        return id;
+      },
     },
   }) as ComponentInstance<T>;
 
-  if (storage) {
-    // create instance.proxy
-    Object.defineProperty(instance, "proxy", {
-      value: storageProxy(storage, changed),
-      configurable: false,
-      enumerable: true,
-      writable: false,
-    });
-
-    // assign raw storage
-    Object.keys(storage).forEach((k) => {
-      Object.defineProperty(instance, k, {
-        value: storage[k as keyof T],
-      });
-    });
-  }
+  if (storage) attachStorage(instance, storage, changed);
 
   return Object.freeze(instance);
 }
