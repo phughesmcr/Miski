@@ -37,6 +37,7 @@ export class Query {
    * @throws {SyntaxError} if the spec is invalid
    */
   constructor(spec: QuerySpec) {
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     if (!spec) throw new SyntaxError("Query specification object is required.");
     const { all = EMPTY_ARRAY, any = EMPTY_ARRAY, none = EMPTY_ARRAY } = spec;
     if (![...all, ...any, ...none].every(_validateQueryArrays)) {

@@ -5,8 +5,7 @@ import type { Component } from "../component/component.js";
 import type { ComponentInstance } from "../component/instance.js";
 import type { ComponentManager, ComponentRecord } from "../component/manager.js";
 import type { Entity } from "../world.js";
-import type { QueryInstance } from "./instance.js";
-import { createQueryInstance } from "./instance.js";
+import { createQueryInstance, type QueryInstance } from "./instance.js";
 import { Query } from "./query.js";
 
 /** @todo find a nicer way of doing this */

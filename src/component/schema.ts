@@ -1,7 +1,12 @@
 /* Copyright 2023 the Miski authors. All rights reserved. MIT license. */
 
-import type { TypedArray, TypedArrayConstructor } from "../utils/utils.js";
-import { isObject, isTypedArrayConstructor, isValidName } from "../utils/utils.js";
+import {
+  isObject,
+  isTypedArrayConstructor,
+  isValidName,
+  type TypedArray,
+  type TypedArrayConstructor,
+} from "../utils/utils.js";
 
 /** Individual entity's component properties */
 export type SchemaProps<T> = Record<keyof T, number | bigint | undefined>;
@@ -48,6 +53,7 @@ export function isValidSchema<T extends Schema<T>>(schema: unknown): schema is S
     const entries = Object.entries(schema);
     if (!entries.length) return false;
     return entries.every(_validateSchemaEntry);
+    // eslint-disable-next-line no-unused-vars
   } catch (_) {
     return false;
   }
@@ -74,6 +80,7 @@ export function calculateSchemaSize<T extends Schema<T>>(schema: Schema<T>): num
     if (schema === null) return 0;
     /** @todo should this be to multipleOf4? */
     return Object.values(schema).reduce(byteSum, 0) as number;
+    // eslint-disable-next-line no-unused-vars
   } catch (_) {
     return Number.NaN;
   }

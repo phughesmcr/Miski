@@ -6,8 +6,7 @@ import type { TypedArrayConstructor } from "../utils/utils.js";
 import type { Entity } from "../world.js";
 import { ComponentBuffer } from "./buffer.js";
 import type { Component } from "./component.js";
-import type { ComponentInstance } from "./instance.js";
-import { createComponentInstance, refreshComponentInstance } from "./instance.js";
+import { createComponentInstance, refreshComponentInstance, type ComponentInstance } from "./instance.js";
 import type { Schema, SchemaProps } from "./schema.js";
 
 /** [component name]: component instance */
@@ -72,6 +71,7 @@ export function removeEntity<T extends Schema<T>>(instance: ComponentInstance<T>
       const storage = instance[key as keyof T];
       if (storage) {
         if (maxEntities) {
+          // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
           delete storage[entity];
         } else {
           storage[entity] = Array.isArray(prop) ? (prop[1] as number) : 0;

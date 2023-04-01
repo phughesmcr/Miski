@@ -1,9 +1,9 @@
 /* Copyright 2023 the Miski authors. All rights reserved. MIT license. */
 
-import { sparseFacade } from "./sparse-facade.js";
+import type { TypedArrayConstructor } from "../utils/utils.js";
 import type { Component } from "./component.js";
 import type { Schema, SchemaStorage } from "./schema.js";
-import type { TypedArrayConstructor } from "../utils/utils.js";
+import { sparseFacade } from "./sparse-facade.js";
 
 export type ComponentBufferSpec = {
   /** The maximum number of Entities in the World */
@@ -96,7 +96,7 @@ export function serializeComponentBuffer(buffer: ComponentBuffer): ComponentBuff
   // Reduce the partitions to { componentName: { propertyName: byteOffset, ... }, ... }
   const parts: PartitionsObject = {};
   for (const [component, storage] of partitions) {
-    const props: PartitionProperty = {};
+    const props = {} as PartitionProperty;
     for (const [name, arr] of Object.entries(storage)) {
       props[name] = [arr.byteOffset, arr.constructor.name, component.maxEntities];
     }

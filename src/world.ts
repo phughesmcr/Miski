@@ -3,8 +3,7 @@
 import { ArchetypeManager } from "./archetype/manager.js";
 import type { Component } from "./component/component.js";
 import type { ComponentInstance } from "./component/instance.js";
-import type { ComponentRecord } from "./component/manager.js";
-import { ComponentManager, removeEntity } from "./component/manager.js";
+import { ComponentManager, removeEntity, type ComponentRecord } from "./component/manager.js";
 import type { Schema, SchemaProps } from "./component/schema.js";
 import { $_OWNERS, VERSION } from "./constants.js";
 import { QueryManager } from "./query/manager.js";
@@ -41,6 +40,7 @@ export type WorldSpec = {
  */
 function validateWorldSpec(spec: WorldSpec): Required<WorldSpec> {
   // check spec exists
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
   if (!spec || !isObject(spec)) {
     throw new SyntaxError("World creation requires a specification object.");
   }
@@ -57,18 +57,18 @@ function validateWorldSpec(spec: WorldSpec): Required<WorldSpec> {
 }
 
 export class World {
+  /** The maximum number of entities the world can hold */
+  readonly capacity: number;
+
+  /** Miski version */
+  readonly version = VERSION;
+
   private readonly archetypeManager: ArchetypeManager;
   private readonly componentManager: ComponentManager;
   private readonly queryManager: QueryManager;
 
   /** Pool of Entity states */
   private readonly entities: Bitpool;
-
-  /** The maximum number of entities the world can hold */
-  readonly capacity: number;
-
-  /** Miski version */
-  readonly version = VERSION;
 
   /**
    * Create a new World object
