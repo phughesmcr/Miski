@@ -87,14 +87,14 @@ export class QueryManager {
         archetypes.forEach(_flattenEntities, cached);
       } else {
         // else just update the dirty archetypes
-        archetypes.forEach((archetype) => {
+        for (const archetype of archetypes) {
           if (archetype.isDirty === true) {
             // eslint-disable-next-line @typescript-eslint/unbound-method
             archetype.entered.forEach(cached.add, cached);
             // eslint-disable-next-line @typescript-eslint/unbound-method
             archetype.exited.forEach(cached.delete, cached);
           }
-        });
+        }
       }
       return cached.values();
     };
