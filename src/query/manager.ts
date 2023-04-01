@@ -80,14 +80,14 @@ export class QueryManager {
     const cached = this.entityCache.get(instance) ?? this.entityCache.set(instance, new Set()).get(instance)!;
     return () => {
       const { archetypes, isDirty } = instance;
-      if (isDirty === true || !cached.size) {
+      if (isDirty || !cached.size) {
         // if query has new Archetypes, clear cache and do full sweep
         cached.clear();
         archetypes.forEach(_flattenEntities, cached);
       } else {
         // else just update the dirty archetypes
         for (const archetype of archetypes) {
-          if (archetype.isDirty === true) {
+          if (archetype.isDirty) {
             // eslint-disable-next-line @typescript-eslint/unbound-method
             archetype.entered.forEach(cached.add, cached);
             // eslint-disable-next-line @typescript-eslint/unbound-method
