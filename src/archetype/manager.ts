@@ -36,7 +36,7 @@ export class ArchetypeManager {
 
   /** Returns an entity to the root archetype */
   resetArchetype(entity: Entity): ArchetypeManager {
-    if (this.entityArchetypes[entity] === this.rootArchetype) return this;
+    if (this.entityArchetypes[entity] === this.rootArchetype || entity > this.entityArchetypes.length) return this;
     this.entityArchetypes[entity]?.removeEntity(entity);
     this.entityArchetypes[entity] = this.rootArchetype.addEntity(entity);
     return this;
