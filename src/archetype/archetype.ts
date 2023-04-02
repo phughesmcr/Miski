@@ -48,6 +48,7 @@ export class Archetype {
 
   /** Add an Entity to the Archetype */
   addEntity(entity: Entity): Archetype {
+    if (this.entities.has(entity)) return this;
     this.entities.add(entity);
     this.entered.add(entity);
     this.isDirty = true;
@@ -82,6 +83,7 @@ export class Archetype {
 
   /** Remove an Entity from the Archetype */
   removeEntity(entity: Entity): Archetype {
+    if (!this.entities.has(entity)) return this;
     this.entities.delete(entity);
     this.exited.add(entity);
     this.isDirty = true;
