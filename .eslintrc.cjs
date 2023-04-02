@@ -48,7 +48,6 @@ module.exports = {
     "class-methods-use-this": ["error"],
     "complexity": ["error"],
     "eol-last": ["error", "always"],
-    "indent": ["error", 2],
     "linebreak-style": ["error","unix"],
     "max-depth": ["error"],
     "max-len": ["error", { "code": 120 }],
