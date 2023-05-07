@@ -25,7 +25,6 @@ module.exports = {
   "plugins": [
     "prettier",
     "@typescript-eslint",
-    "eslint-plugin-no-explicit-type-exports",
     "sonarjs"
   ],
   "rules": {

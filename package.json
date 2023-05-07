@@ -31,7 +31,6 @@
     "eslint": "^8.36.0",
     "eslint-config-prettier": "^8.8.0",
     "eslint-config-problems": "^7.0.1",
-    "eslint-plugin-no-explicit-type-exports": "^0.12.1",
     "eslint-plugin-prettier": "^4.2.1",
     "eslint-plugin-sonarjs": "^0.19.0",
     "esm": "^3.2.25",
