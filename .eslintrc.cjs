@@ -6,12 +6,12 @@ module.exports = {
     "node": true
   },
   "extends": [
-    "plugin:sonarjs/recommended",
     "eslint:recommended",
     "problems",
     "plugin:@typescript-eslint/recommended",
     "plugin:@typescript-eslint/recommended-requiring-type-checking",
-    "plugin:prettier/recommended"
+    "plugin:prettier/recommended",
+    "plugin:sonarjs/recommended",
   ],
   "parser": "@typescript-eslint/parser",
   "parserOptions": {
