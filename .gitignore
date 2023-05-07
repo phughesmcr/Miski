@@ -1,5 +1,6 @@
 # Junk
 scratch/
+.hintrc
 
 # Intermediate build steps / generated files
 build/

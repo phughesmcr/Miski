@@ -13,6 +13,7 @@ types/
 .eslintrc.json
 .gitattributes
 .gitignore
+.hintrc
 .mocharc.json
 .prettierignore
 .prettierrc
