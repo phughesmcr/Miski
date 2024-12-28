@@ -1,0 +1,36 @@
+{
+  "name": "@phughesmcr/miski",
+  "version": "0.1.0",
+  "license": "MIT",
+  "exports": "./mod.ts",
+  "compilerOptions": {
+    "allowUnreachableCode": false,
+    "allowUnusedLabels": false,
+    "lib": ["deno.ns", "dom", "esnext"],
+    "noErrorTruncation": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitAny": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noImplicitThis": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "noUncheckedIndexedAccess": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "strict": true
+  },
+  "fmt": {
+    "indentWidth": 2,
+    "lineWidth": 120,
+    "semiColons": true,
+    "singleQuote": false,
+    "proseWrap": "always",
+    "useTabs": false,
+    "exclude": ["*.md", "LICENSE"]
+  },
+  "imports": {
+    "@phughesmcr/bitpool": "jsr:@phughesmcr/bitpool@^0.3.0",
+    "@phughesmcr/booleanarray": "jsr:@phughesmcr/booleanarray@^0.5.0",
+    "@phughesmcr/partitionedbuffer": "jsr:@phughesmcr/partitionedbuffer@^0.2.4"
+  }
+}
