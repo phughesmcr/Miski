@@ -5,25 +5,73 @@
  * @license     MIT
  */
 
-import { type Component, isValidComponentArray, type SchemaOrNull } from "../component/Component.ts";
-import { isObject } from "../utils.ts";
+import { BooleanArray } from "@phughesmcr/booleanarray";
+import { type ComponentInstance, SpecError, World } from "../../mod.ts";
+import { type Component, isValidComponentArray } from "../component/Component.ts";
+import type { QueryInstance, QuerySpec, SchemaOrNull } from "../types.ts";
+import { intersectBits, isObject } from "../utils.ts";
+import type { Archetype } from "../archetype/Archetype.ts";
 
-/** The Query constructor specification */
-export type QuerySpec = {
-  /** `AND` - Gather entities as long as they have all these components */
-  all?: Component<SchemaOrNull>[];
-  /** `OR` - Gather entities as long as they have 0...* of these components */
-  any?: Component<SchemaOrNull>[];
-  /** `NOT` - Gather entities as long as they don't have these components */
-  none?: Component<SchemaOrNull>[];
-};
+export function createQueryInstance(world: World, query: Query): QueryInstance {
+  const registry = world.components.registry;
+  const size = world.components.count;
+
+  const andInstances = query.all.map((component) => registry[component.name]).filter(Boolean) as ComponentInstance<
+    SchemaOrNull
+  >[];
+  const and = new BooleanArray(size);
+  for (const instance of andInstances) {
+    and.setBool(instance.id, true);
+  }
+
+  const or = new BooleanArray(size);
+  const orInstances = query.any.map((component) => registry[component.name]).filter(Boolean) as ComponentInstance<
+    SchemaOrNull
+  >[];
+  for (const instance of orInstances) {
+    or.setBool(instance.id, true);
+  }
+
+  const not = new BooleanArray(size);
+  const notInstances = query.none.map((component) => registry[component.name]).filter(Boolean) as ComponentInstance<
+    SchemaOrNull
+  >[];
+  for (const instance of notInstances) {
+    not.setBool(instance.id, true);
+  }
+
+  const archetypes = new Set<Archetype>();
+
+  const checkCandidacy = (target: number, idx: number): boolean => {
+    // OR: either no components specified (or[idx] === 0) or at least one bit matches
+    const OR = or[idx] === 0 || (target & or[idx]) !== 0;
+    if (!OR) return false;
+
+    // AND: all required bits must be present
+    const AND = (target & and[idx]) === and[idx];
+    if (!AND) return false;
+
+    // NOT: no forbidden bits should be present
+    return (target & not[idx]) === 0;
+  };
+
+  return {
+    and,
+    or,
+    not,
+    archetypes,
+    checkCandidacy,
+    components: Object.freeze({ ...andInstances, ...orInstances }),
+    isDirty: true,
+  };
+}
 
 /**
  * Type guard for QuerySpec
  * @param spec The specification object to check
  * @returns `true` if the spec is valid, `false` otherwise
  */
-export const isQuerySpec = (spec: unknown): spec is QuerySpec => {
+export const isValidQuerySpec = (spec: unknown): spec is QuerySpec => {
   if (!isObject(spec)) return false;
   const { all, any, none } = spec as QuerySpec;
   if (!all && !any && !none) return false;
@@ -36,13 +84,13 @@ export const isQuerySpec = (spec: unknown): spec is QuerySpec => {
 /** A Query is a collection of Components that can be used to find Entities */
 export class Query {
   /** `AND` - Gather entities as long as they have all these components */
-  readonly all: Component<SchemaOrNull>[];
+  readonly all: Readonly<Component<SchemaOrNull>[]>;
 
   /** `OR` - Gather entities as long as they have 0...* of these components */
-  readonly any: Component<SchemaOrNull>[];
+  readonly any: Readonly<Component<SchemaOrNull>[]>;
 
   /** `NOT` - Gather entities as long as they don't have these components */
-  readonly none: Component<SchemaOrNull>[];
+  readonly none: Readonly<Component<SchemaOrNull>[]>;
 
   /**
    * Create a new Query
@@ -51,14 +99,14 @@ export class Query {
    * @param spec.any `OR` - Gather entities as long as they have 0...* of these components
    * @param spec.none `NOT` - Gather entities as long as they don't have these components
    * @returns A new Query object
-   * @throws {TypeError} if the spec is invalid
+   * @throws {SpecError} if the spec is invalid
    */
-  private constructor(spec: QuerySpec) {
-    if (!isQuerySpec(spec)) {
-      throw new TypeError("Query specification object is invalid.");
+  constructor(spec: QuerySpec) {
+    if (!isValidQuerySpec(spec)) {
+      throw new SpecError("Query specification object is invalid.");
     }
-    this.all = [...new Set(spec.all ?? [])];
-    this.any = [...new Set(spec.any ?? [])];
-    this.none = [...new Set(spec.none ?? [])];
+    this.all = Object.freeze([...new Set(spec.all ?? [])]);
+    this.any = Object.freeze([...new Set(spec.any ?? [])]);
+    this.none = Object.freeze([...new Set(spec.none ?? [])]);
   }
 }

@@ -1,31 +1,22 @@
 /**
- * @module    EntityManager
+ * @module      EntityManager
  * @description A simple entity manager for managing entities in a game or simulation
- * @copyright 2024 the Miski authors. All rights reserved.
- * @license   MIT
+ * @copyright   2024 the Miski authors. All rights reserved.
+ * @license     MIT
  */
 
 import { BitPool } from "@phughesmcr/bitpool";
-
-/** An Entity is essentially just an ID number / pointer */
-export type Entity = number;
-
-/**
- * Convert a string representation of a number array to an array of numbers
- * @param str The string representation of the number array
- * @returns The array of numbers
- */
-function numberArrayFromString(str: string): number[] {
-  return str
-    .replaceAll(/[\[\]]/g, "")
-    .split(",")
-    .map((n) => parseInt(n, 10));
-}
+import { isPositiveUint32, isUint32, numberArrayFromString } from "../utils.ts";
+import type { Entity, EntityManagerSerialized } from "../types.ts";
+import { EntityNotFoundError } from "../errors.ts";
 
 /**
  * An EntityManager is a simple entity manager for managing entities in a game or simulation
  */
 export class EntityManager {
+  /** The maximum capacity of any EntityManager */
+  static readonly MAX_CAPACITY = BitPool.MAX_SAFE_SIZE;
+
   /** The entity ID pool */
   #pool: BitPool;
 
@@ -33,9 +24,15 @@ export class EntityManager {
    * Create a new EntityManager from a JSON string
    * @param json The JSON string matching {@link EntityManager.toJSON} format
    * @returns A new EntityManager
+   * @throws {RangeError} If the `MAX_CAPACITY` does not match {@link EntityManager.MAX_CAPACITY}
    */
   static fromJSON(json: string): EntityManager {
-    const { capacity, entities } = JSON.parse(json);
+    const { MAX_CAPACITY, capacity, entities } = JSON.parse(json) as EntityManagerSerialized;
+    if (MAX_CAPACITY !== EntityManager.MAX_CAPACITY) {
+      throw new RangeError(
+        `EntityManager.MAX_CAPACITY mismatch: ${MAX_CAPACITY} !== ${EntityManager.MAX_CAPACITY}`,
+      );
+    }
     const arr = numberArrayFromString(entities);
     const pool = BitPool.fromArray(arr, capacity);
     return new EntityManager(capacity, pool);
@@ -44,13 +41,18 @@ export class EntityManager {
   /**
    * Create a new EntityManager
    * @param capacity The maximum number of entities allowed in the pool (inclusive)
+   * @param pool The pool to use for entity management
+   * @throws {TypeError} If the capacity is not a Uint32 number
+   * @throws {RangeError} If the capacity is not a positive integer or above 0 and below {@link EntityManager.MAX_CAPACITY}
    */
   constructor(capacity: number, pool: BitPool = new BitPool(capacity)) {
-    if (typeof capacity !== "number" || !isNaN(capacity)) {
-      throw new TypeError("EntityManager capacity must be a positive integer");
+    if (!isUint32(capacity)) {
+      throw new TypeError("EntityManager capacity must be a number (uint32)");
     }
-    if (capacity <= 0 || capacity > BitPool.MAX_SAFE_SIZE) {
-      throw new RangeError("EntityManager capacity must be a positive integer");
+    if (capacity <= 0 || capacity > EntityManager.MAX_CAPACITY) {
+      throw new RangeError(
+        `EntityManager capacity must be a positive integer, above 0 and below ${EntityManager.MAX_CAPACITY}`,
+      );
     }
     this.#pool = pool;
   }
@@ -65,7 +67,10 @@ export class EntityManager {
     const size = this.capacity;
     const population = this.#pool.getPopulationCount();
     const active = size - population;
-    return active > this.capacity ? this.capacity : active;
+    if (active > this.capacity) {
+      return this.capacity;
+    }
+    return active;
   }
 
   /** @returns the number of available entities */
@@ -80,10 +85,7 @@ export class EntityManager {
    * @see EntityManager.exists to check if an entity is valid and resident
    */
   isEntity(entity: Entity): entity is Entity {
-    if (typeof entity !== "number" || isNaN(entity) || !Number.isSafeInteger(entity)) {
-      return false;
-    }
-    if (entity < 0 || entity > 4294967295) {
+    if (!isPositiveUint32(entity)) {
       return false;
     }
     if (entity > this.capacity) {
@@ -116,14 +118,13 @@ export class EntityManager {
   /**
    * Destroy an entity
    * @param entity The entity to destroy
-   * @returns `true` if the entity was destroyed successfully, `false` otherwise
+   * @throws {EntityNotFoundError} If the entity is not found
    */
-  destroy(entity: Entity): boolean {
+  destroy(entity: Entity): void {
     if (!this.isEntity(entity)) {
-      return false;
+      throw new EntityNotFoundError(entity);
     }
     this.#pool.release(entity);
-    return true;
   }
 
   /**
@@ -134,6 +135,7 @@ export class EntityManager {
   stringify(): string {
     return JSON.stringify(
       {
+        MAX_CAPACITY: EntityManager.MAX_CAPACITY,
         capacity: this.#pool.size,
         entities: this.#pool.toString(),
       },

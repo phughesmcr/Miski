@@ -5,15 +5,8 @@
  * @license     MIT
  */
 
-import type { Component, SchemaOrNull } from "./Component.ts";
-import type { Schema } from "@phughesmcr/partitionedbuffer";
-
-export type ComponentInstanceSpec<T extends SchemaOrNull> = {
-  id: number;
-  proxy: T extends Schema<infer U> ? StorageProxyWithProperties<U> : null;
-  storage: T extends Schema<infer U> ? SchemaStorage<U> : null;
-  type: Component<T>;
-};
+import type { Schema, SchemaOrNull } from "../types.ts";
+import type { Component } from "./Component.ts";
 
 export class ComponentInstance<T extends SchemaOrNull> {
   readonly id: number;

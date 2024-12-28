@@ -6,7 +6,7 @@
   "compilerOptions": {
     "allowUnreachableCode": false,
     "allowUnusedLabels": false,
-    "lib": ["deno.ns", "dom", "esnext"],
+    "lib": ["esnext"],
     "noErrorTruncation": true,
     "noFallthroughCasesInSwitch": true,
     "noImplicitAny": true,
@@ -17,7 +17,8 @@
     "noUncheckedIndexedAccess": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "strict": true
+    "strict": true,
+    "verbatimModuleSyntax": true
   },
   "fmt": {
     "indentWidth": 2,

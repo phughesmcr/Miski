@@ -171,18 +171,202 @@
  * ```
  */
 
+import type { ArchetypeManager } from "../archetype/ArchetypeManager.ts";
+import { Component, isValidComponentArray } from "../component/Component.ts";
+import { ComponentManager } from "../component/ComponentManager.ts";
+import { VERSION } from "../constants.ts";
+import { EntityManager } from "../entity/EntityManager.ts";
+import { SpecError, WorldStateError } from "../errors.ts";
+import type { Query } from "../query/Query.ts";
+import { QueryManager } from "../query/QueryManager.ts";
+import type { System } from "../system/System.ts";
+import { SystemManager } from "../system/SystemManager.ts";
+import type {
+  Entity,
+  SchemaOrNull,
+  WorldComponentAPI,
+  WorldEntityAPI,
+  WorldSpec,
+  WorldState,
+  WorldSystemAPI,
+} from "../types.ts";
+import { isObject, isPositiveUint32 } from "../utils.ts";
+
+/**
+ * Test if an object is a valid WorldSpec
+ * @param spec The object to test
+ * @returns `true` if the object is a valid WorldSpec, `false` otherwise
+ */
+export function isValidWorldSpec(spec: unknown): spec is WorldSpec {
+  if (!isObject(spec)) return false;
+  const { capacity, components } = spec;
+  if (!isPositiveUint32(capacity)) return false;
+  if (!isValidComponentArray(components)) return false;
+  return true;
+}
+
 export class World {
+  /**
+   * Deserialize a World from a JSON string
+   * @param json The JSON string to deserialize
+   * @returns The deserialized World
+   */
+  static fromJSON(json: string): World {
+    const spec: WorldSpec = JSON.parse(json);
+    const world = new World(spec);
+    // TODO: setup everything
+    return world;
+  }
+
+  /** Miski library version */
+  static readonly version: string = VERSION;
+
+  /** Handles groupings of components */
   #archetypeManager: ArchetypeManager;
+
+  /** Handles component registration and allocation */
   #componentManager: ComponentManager;
+
+  /** Handles entity creation and destruction */
   #entityManager: EntityManager;
+
+  /** Handles groupings of entities */
   #queryManager: QueryManager;
+
+  /** Handles system creation and destruction */
   #systemManager: SystemManager;
 
-  constructor(options: WorldOptions) {
-    this.#archetypeManager = new ArchetypeManager(options.capacity);
-    this.#componentManager = new ComponentManager(options.components);
-    this.#entityManager = new EntityManager(options.capacity);
-    this.#queryManager = new QueryManager(options.queries);
-    this.#systemManager = new SystemManager(options.systems);
+  /** The World's current state */
+  #state: WorldState;
+
+  /** Entity Management API */
+  readonly entities: WorldEntityAPI;
+
+  /** Component Management API */
+  readonly components: WorldComponentAPI;
+
+  /** System Management API */
+  readonly systems: WorldSystemAPI;
+
+  constructor(spec: WorldSpec) {
+    if (!isValidWorldSpec(spec)) {
+      throw new SpecError("Invalid WorldSpec");
+    }
+
+    this.#state = "uninitialized";
+
+    const { capacity, components } = spec;
+    this.#archetypeManager = new ArchetypeManager(capacity, components);
+    this.#componentManager = new ComponentManager(capacity, components);
+    this.#entityManager = new EntityManager(capacity);
+    this.#queryManager = new QueryManager(components, components);
+    this.#systemManager = new SystemManager(components, components);
+
+    this.components = {
+      registry: Object.create(null),
+      addToEntity: this.#componentManager.addToEntity,
+      entityHas: this.#componentManager.entityHas,
+      fromEntity: this.#componentManager.fromEntity,
+      get: this.#componentManager.get,
+      getData: this.#componentManager.getData,
+      isRegistered: this.#componentManager.isRegistered,
+      query: this.#queryManager.components,
+      removeFromEntity: this.#componentManager.removeFromEntity,
+      setData: this.#componentManager.setData,
+    };
+
+    // Setup the components.byName property
+    for (const component of components) {
+      Object.defineProperty(this.components.registry, component.name, {
+        value: this.#componentManager.get(component),
+        writable: false,
+        configurable: false,
+      });
+    }
+
+    this.entities = {
+      create: this.#entityManager.create,
+      destroy: (entity: Entity) => {
+        this.#entityManager.destroy(entity);
+        return this;
+      },
+      exists: this.#entityManager.exists,
+      query: this.#queryManager.entities,
+    };
+
+    this.systems = {
+      create: this.#systemManager.create.bind(this.#systemManager, this),
+      get: this.#systemManager.get,
+      has: this.#systemManager.has,
+      destroy: this.#systemManager.destroy.bind(this.#systemManager, this),
+    };
+  }
+
+  /** The World's current state */
+  get state(): WorldState {
+    return this.#state;
+  }
+
+  /**
+   * Initialize the world
+   * @returns The world
+   * @throws {WorldStateError} If the world is already initialized
+   * @throws {WorldStateError} If the world has already been destroyed
+   */
+  async init(): Promise<this> {
+    if (this.#state === "initialized") {
+      throw new WorldStateError("World has already been initialized");
+    } else if (this.#state === "destroyed") {
+      throw new WorldStateError("World has already been destroyed");
+    }
+    // TODO: ensure everything is in its correct initial state
+    await this.#systemManager.init(this);
+    this.#state = "initialized";
+    return this;
+  }
+
+  /**
+   * Destroy the world
+   * @returns The world
+   * @throws {WorldStateError} If the world has not yet been initialized
+   * @throws {WorldStateError} If the world has already been destroyed
+   */
+  async destroy(): Promise<this> {
+    if (this.#state === "uninitialized") {
+      throw new WorldStateError("World has not been initialized");
+    } else if (this.#state === "destroyed") {
+      throw new WorldStateError("World has already been destroyed");
+    }
+    // TODO: destroy everything and clearing up memory
+    await this.#systemManager.destroyAll(this);
+    this.#state = "destroyed";
+    return this;
+  }
+
+  /**
+   * Refresh the world
+   * @returns The world
+   * @throws {WorldStateError} If the world has not yet been initialized
+   * @throws {WorldStateError} If the world has already been destroyed
+   */
+  refresh(): this {
+    if (this.#state === "uninitialized") {
+      throw new WorldStateError("World has not been initialized");
+    } else if (this.#state === "destroyed") {
+      throw new WorldStateError("World has already been destroyed");
+    }
+    return this;
+  }
+
+  stringify(): string {
+    return JSON.stringify({
+      version: World.version,
+      state: this.#state,
+      archetypes: this.#archetypeManager.stringify(),
+      entities: this.#entityManager.stringify(),
+      components: this.#componentManager.stringify(),
+      queries: this.#queryManager.stringify(),
+      systems: this.#systemManager.stringify(),
+    });
   }
 }

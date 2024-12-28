@@ -12,46 +12,21 @@
  *   schema: { x: Float32Array, y: Float32Array },
  *   maxEntities: null,
  * });
+ *
  * // component can then be registered with a world
  * const world = new World({ components: [component], ... });
  * ```
  */
 
-import { isSchema, isValidName, Partition, type Schema } from "@phughesmcr/partitionedbuffer";
+import { isSchema, isValidName, Partition, type PartitionSpec } from "@phughesmcr/partitionedbuffer";
 import { isPositiveUint32 } from "../utils.ts";
-
-// deno-lint-ignore no-explicit-any
-export type SchemaOrNull = Schema<any> | null;
-
-/** The Component's constructor specification */
-export type ComponentSpec<T extends SchemaOrNull> =
-  & {
-    /** The component's label */
-    name: string;
-
-    /**
-     * The maximum number of entities able to equip this component per world.
-     *
-     * __Warning__: use this only where memory use is a concern, performance will be worse.
-     */
-    maxEntities?: number | null;
-  }
-  // deno-lint-ignore no-explicit-any
-  & (T extends Schema<any> ? {
-      /** The component's property definitions */
-      schema: Schema<T>;
-    }
-    : {
-      /** No schema for tag components */
-      schema?: null;
-    });
 
 /**
  * Component specification type guard.
  * @param spec the component's specification.
  * @returns `true` if the spec is valid, `false` otherwise
  */
-export function isComponentSpec<T extends SchemaOrNull>(spec: unknown): spec is ComponentSpec<T> {
+export function isValidComponentSpec<T extends SchemaOrNull>(spec: unknown): spec is ComponentSpec<T> {
   const { maxEntities, name, schema } = spec as ComponentSpec<T>;
   if (!isValidName(name)) return false;
   if (maxEntities && !isPositiveUint32(maxEntities)) return false;
@@ -83,15 +58,17 @@ export class Component<T extends SchemaOrNull> {
    * @throws {TypeError} If the spec is invalid
    */
   constructor(spec: ComponentSpec<T>) {
-    if (!isComponentSpec(spec)) {
+    if (!isValidComponentSpec(spec)) {
       throw new TypeError("Invalid component specification.");
     }
     const { name, schema, maxEntities = null } = spec;
-    this.#partition = new Partition<T>({
-      name,
-      schema: schema as Schema<T> | null,
-      maxOwners: maxEntities as number | null,
-    });
+    this.#partition = new Partition<T>(
+      {
+        name,
+        schema: schema as Schema<T> | null,
+        maxOwners: maxEntities as number | null,
+      } as unknown as PartitionSpec<T>,
+    );
     this.isTag = !schema;
   }
 
