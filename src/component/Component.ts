@@ -17,7 +17,7 @@
  * ```
  */
 
-import { isSchema, isValidName, Partition, type Schema, type PartitionSpec } from "@phughesmcr/partitionedbuffer";
+import { isSchema, isValidName, Partition, type Schema } from "@phughesmcr/partitionedbuffer";
 import { isPositiveUint32 } from "../utils.ts";
 
 // deno-lint-ignore no-explicit-any
