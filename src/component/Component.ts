@@ -20,6 +20,7 @@
 
 import { isSchema, isValidName, Partition, type PartitionSpec } from "@phughesmcr/partitionedbuffer";
 import { isPositiveUint32 } from "../utils.ts";
+import type { ComponentSpec, Schema, SchemaOrNull } from "../types.ts";
 
 /**
  * Component specification type guard.

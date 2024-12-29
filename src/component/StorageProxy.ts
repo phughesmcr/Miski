@@ -1,7 +1,7 @@
 import type { BooleanArray } from "@phughesmcr/booleanarray";
 import type { Partition } from "@phughesmcr/partitionedbuffer";
+import type { Entity, SchemaStorage } from "../types.ts";
 import { hasOwnProperty } from "../utils.ts";
-import type { BigTypedArray, Entity } from "../types.ts";
 
 export type StorageProxySpec<T> = {
   changed: BooleanArray;
@@ -28,14 +28,9 @@ export class StorageProxy<T> {
         get() {
           return this.#storage.storage[key as keyof T][this.#cursor];
         },
-        set(value: T[keyof T] extends BigTypedArray ? bigint : number) {
+        set(value: number) {
           const storage = this.#storage.storage[key as keyof T];
           if (storage[this.#cursor] !== value) {
-            if (typeof storage[this.#cursor] !== typeof value) {
-              throw new TypeError(
-                `Cannot set ${key} to ${typeof value} (${value}). Expected ${typeof storage[this.#cursor]}.`,
-              );
-            }
             storage[this.#cursor] = value;
             changed.setBool(this.#cursor, true);
           }

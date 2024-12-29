@@ -171,7 +171,7 @@
  * ```
  */
 
-import type { ArchetypeManager } from "../archetype/ArchetypeManager.ts";
+import { ArchetypeManager } from "../archetype/ArchetypeManager.ts";
 import { isValidComponentArray } from "../component/Component.ts";
 import { ComponentManager } from "../component/ComponentManager.ts";
 import { VERSION } from "../constants.ts";
@@ -246,11 +246,11 @@ export class World {
     this.#state = "uninitialized";
 
     const { capacity, components } = spec;
-    this.#archetypeManager = new ArchetypeManager(capacity, components);
-    this.#componentManager = new ComponentManager(capacity, components);
+    this.#archetypeManager = new ArchetypeManager(capacity);
+    this.#componentManager = new ComponentManager(capacity);
     this.#entityManager = new EntityManager(capacity);
-    this.#queryManager = new QueryManager(components, components);
-    this.#systemManager = new SystemManager(components, components);
+    this.#queryManager = new QueryManager();
+    this.#systemManager = new SystemManager();
 
     this.components = {
       count: this.#componentManager.count,
@@ -290,6 +290,7 @@ export class World {
       get: this.#systemManager.get,
       has: this.#systemManager.has,
       destroy: this.#systemManager.destroy.bind(this.#systemManager, this),
+      registry: this.#systemManager.registry,
     };
   }
 

@@ -10,6 +10,7 @@ import { type ComponentInstance, SpecError, type World } from "../../mod.ts";
 import { type Component, isValidComponentArray } from "../component/Component.ts";
 import type { QueryInstance, QuerySpec, SchemaOrNull } from "../types.ts";
 import type { Archetype } from "../archetype/Archetype.ts";
+import { isObject } from "../utils.ts";
 
 export function createQueryInstance(world: World, query: Query): QueryInstance {
   const registry = world.components.registry;

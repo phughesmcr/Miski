@@ -198,8 +198,6 @@ export type WorldComponentAPI = {
   entityHas<T extends SchemaOrNull>(component: Component<T>, entity: Entity): boolean;
   /** Get all the component instances associated with an entity */
   fromEntity<T extends SchemaOrNull>(entity: Entity): Record<string, ComponentInstance<T>>;
-  /** Get all the component instances associated with a query (i.e., `any` and `all`, but not `none`) */
-  fromQuery<T extends SchemaOrNull>(query: Query): Record<string, ComponentInstance<T>>;
   /** Get a component from the World */
   get<T extends SchemaOrNull>(component: Component<T> | string): ComponentInstance<T> | undefined;
   /** Get the data of a component from an entity */
