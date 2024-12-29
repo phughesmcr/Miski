@@ -1,3 +1,10 @@
+/**
+ * @module      errors
+ * @description Error classes used throughout the library.
+ * @copyright   2024 the Miski authors. All rights reserved.
+ * @license     MIT
+ */
+
 import type { Entity } from "./types.ts";
 
 /** The base error class for all Miski errors */

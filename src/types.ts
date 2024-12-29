@@ -1,4 +1,10 @@
-import type { Schema } from "@phughesmcr/partitionedbuffer";
+/**
+ * @module      types
+ * @description Type definitions used throughout the library.
+ * @copyright   2024 the Miski authors. All rights reserved.
+ * @license     MIT
+ */
+
 import type { Component } from "./component/Component.ts";
 import type { Query } from "./query/Query.ts";
 import type { World } from "./world/World.ts";
@@ -6,8 +12,10 @@ import type { System } from "./system/System.ts";
 import type { ComponentInstance } from "./component/ComponentInstance.ts";
 import type { BooleanArray } from "@phughesmcr/booleanarray";
 import type { Archetype } from "./archetype/Archetype.ts";
+import type { StorageProxy } from "./component/StorageProxy.ts";
 
-export type { Schema };
+import type { Schema, TypedArray, TypedArrayConstructor } from "@phughesmcr/partitionedbuffer";
+export type { Schema, TypedArray, TypedArrayConstructor };
 
 /** An Entity is essentially just an ID number / pointer */
 export type Entity = number;
@@ -21,6 +29,24 @@ export type EntityManagerSerialized = {
   /** The entities in the EntityManager */
   entities: string;
 };
+
+export type StorageProxyWithProperties<T> =
+  & {
+    [key in keyof T]: number;
+  }
+  & StorageProxy<T>;
+
+/**
+ * Internal component data storage
+ */
+export type SchemaStorage<T> = Readonly<{
+  byteOffset: number;
+  byteLength: number;
+  storage: Readonly<Record<keyof T, TypedArray>>;
+}>;
+
+/** A Record of ComponentInstances by Component name */
+export type ComponentRecord = Record<string, ComponentInstance<SchemaOrNull>>;
 
 /** A Schema or null (null = tag component) */
 // deno-lint-ignore no-explicit-any
@@ -51,7 +77,7 @@ export type ComponentSpec<T extends SchemaOrNull> =
 
 export type ComponentInstanceSpec<T extends SchemaOrNull> = {
   id: number;
-  proxy: T extends Schema<infer U> ? StorageProxyWithProperties<U> : null;
+  proxy: any; // T extends Schema<infer U> ? StorageProxyWithProperties<U> : null;
   storage: T extends Schema<infer U> ? SchemaStorage<U> : null;
   type: Component<T>;
 };
@@ -88,13 +114,14 @@ export type QueryInstance = {
   not: BooleanArray;
 };
 
+/** A Record of SystemInstances by System name */
+export type SystemRecord = Record<string, SystemInstance<any, any>>;
+
 /**
  * The parameters of a function omitting the first two parameters
  * @author https://stackoverflow.com/a/67605309
  */
 export type ParametersExceptFirstTwo<F> = F extends (arg0: any, arg1: any, ...rest: infer R) => any ? R : never;
-
-export type ComponentRecord = Record<string, ComponentInstance<SchemaOrNull>>;
 
 /**
  * A multi-arity function where the first two parameters
@@ -185,10 +212,13 @@ export type WorldComponentAPI = {
   removeFromEntity<T extends SchemaOrNull>(component: Component<T>, entity: Entity): void;
   /** Set the data of a component for an entity */
   setData<T extends SchemaOrNull>(component: Component<T> | string, entity: Entity, value?: T): void;
-  /** The components by name */
-  registry: Record<string, ComponentInstance<SchemaOrNull>>;
+  /** The number of components registered */
+  count: number;
+  /** The ComponentInstances by name */
+  registry: ComponentRecord;
 };
 
+/** The public System management API */
 export type WorldSystemAPI = {
   /** Create a system */
   create<
@@ -210,4 +240,6 @@ export type WorldSystemAPI = {
     T extends (components: ComponentRecord, entities: IterableIterator<Entity>, ...args: unknown[]) => ReturnType<T>,
     U extends ParametersExceptFirstTwo<T>,
   >(system: System<T, U> | string): void;
+  /** The systems by name */
+  registry: SystemRecord;
 };

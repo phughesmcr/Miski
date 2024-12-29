@@ -6,10 +6,9 @@
  */
 
 import { BooleanArray } from "@phughesmcr/booleanarray";
-import { type ComponentInstance, SpecError, World } from "../../mod.ts";
+import { type ComponentInstance, SpecError, type World } from "../../mod.ts";
 import { type Component, isValidComponentArray } from "../component/Component.ts";
 import type { QueryInstance, QuerySpec, SchemaOrNull } from "../types.ts";
-import { intersectBits, isObject } from "../utils.ts";
 import type { Archetype } from "../archetype/Archetype.ts";
 
 export function createQueryInstance(world: World, query: Query): QueryInstance {
@@ -40,19 +39,28 @@ export function createQueryInstance(world: World, query: Query): QueryInstance {
     not.setBool(instance.id, true);
   }
 
+  const components: Record<string, ComponentInstance<SchemaOrNull>> = {};
+  for (const instance of andInstances) {
+    components[instance.name] = instance;
+  }
+  for (const instance of orInstances) {
+    components[instance.name] = instance;
+  }
+
   const archetypes = new Set<Archetype>();
 
   const checkCandidacy = (target: number, idx: number): boolean => {
     // OR: either no components specified (or[idx] === 0) or at least one bit matches
-    const OR = or[idx] === 0 || (target & or[idx]) !== 0;
+    // arr[idx]! is safe because (any number & undefined) === 0
+    const OR = or[idx] === 0 || (target & or[idx]!) !== 0;
     if (!OR) return false;
 
     // AND: all required bits must be present
-    const AND = (target & and[idx]) === and[idx];
+    const AND = (target & and[idx]!) === and[idx];
     if (!AND) return false;
 
     // NOT: no forbidden bits should be present
-    return (target & not[idx]) === 0;
+    return (target & not[idx]!) === 0;
   };
 
   return {
@@ -61,7 +69,7 @@ export function createQueryInstance(world: World, query: Query): QueryInstance {
     not,
     archetypes,
     checkCandidacy,
-    components: Object.freeze({ ...andInstances, ...orInstances }),
+    components: {},
     isDirty: true,
   };
 }

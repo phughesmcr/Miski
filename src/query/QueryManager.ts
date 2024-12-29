@@ -1,1 +1,3 @@
-export class QueryManager {}
+export class QueryManager {
+  stringify() {}
+}

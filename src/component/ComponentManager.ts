@@ -1,6 +1,7 @@
-import { BooleanArray } from "@phughesmcr/booleanarray";
-import { type Partition, PartitionedBuffer, type Schema } from "@phughesmcr/partitionedbuffer";
-import { Component } from "./Component.ts";
+import type { BooleanArray } from "@phughesmcr/booleanarray";
+import type { ComponentInstance } from "./ComponentInstance.ts";
+import type { Component } from "./Component.ts";
+import { PartitionedBuffer } from "@phughesmcr/partitionedbuffer";
 
 export class ComponentManager {
   #buffer: PartitionedBuffer;
@@ -20,6 +21,10 @@ export class ComponentManager {
    */
   get all(): IterableIterator<ComponentInstance<any>> {
     return this.#registry.values();
+  }
+
+  get count(): number {
+    return this.#registry.size;
   }
 
   /**

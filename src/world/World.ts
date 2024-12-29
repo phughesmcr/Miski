@@ -172,24 +172,14 @@
  */
 
 import type { ArchetypeManager } from "../archetype/ArchetypeManager.ts";
-import { Component, isValidComponentArray } from "../component/Component.ts";
+import { isValidComponentArray } from "../component/Component.ts";
 import { ComponentManager } from "../component/ComponentManager.ts";
 import { VERSION } from "../constants.ts";
 import { EntityManager } from "../entity/EntityManager.ts";
 import { SpecError, WorldStateError } from "../errors.ts";
-import type { Query } from "../query/Query.ts";
 import { QueryManager } from "../query/QueryManager.ts";
-import type { System } from "../system/System.ts";
 import { SystemManager } from "../system/SystemManager.ts";
-import type {
-  Entity,
-  SchemaOrNull,
-  WorldComponentAPI,
-  WorldEntityAPI,
-  WorldSpec,
-  WorldState,
-  WorldSystemAPI,
-} from "../types.ts";
+import type { Entity, WorldComponentAPI, WorldEntityAPI, WorldSpec, WorldState, WorldSystemAPI } from "../types.ts";
 import { isObject, isPositiveUint32 } from "../utils.ts";
 
 /**
@@ -263,6 +253,7 @@ export class World {
     this.#systemManager = new SystemManager(components, components);
 
     this.components = {
+      count: this.#componentManager.count,
       registry: Object.create(null),
       addToEntity: this.#componentManager.addToEntity,
       entityHas: this.#componentManager.entityHas,
@@ -320,6 +311,7 @@ export class World {
       throw new WorldStateError("World has already been destroyed");
     }
     // TODO: ensure everything is in its correct initial state
+    this.#archetypeManager.init();
     await this.#systemManager.init(this);
     this.#state = "initialized";
     return this;

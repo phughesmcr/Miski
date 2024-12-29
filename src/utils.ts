@@ -1,3 +1,12 @@
+/**
+ * @module      utils
+ * @description Utility functions
+ * @copyright   2024 the Miski authors. All rights reserved.
+ * @license     MIT
+ */
+
+import { MAX_UINT32, MIN_UINT32 } from "./constants.ts";
+
 /** @return `true` if the object has the given key */
 export function hasOwnProperty<T>(object: T, key: PropertyKey): key is keyof T {
   return Object.prototype.hasOwnProperty.call(object, key);
@@ -10,7 +19,7 @@ export function isNumber(n: unknown): n is number {
 
 /** @returns `true` if n is a number, >= 0, <= 2^32 - 1 (4294967295)*/
 export function isUint32(n: unknown): n is number {
-  return isNumber(n) && !isNaN(n) && n >= 0 && n <= 0xffffffff;
+  return isNumber(n) && !isNaN(n) && n >= MIN_UINT32 && n <= MAX_UINT32;
 }
 
 /** @returns true if `n` is a Uint32 > 0 */
@@ -20,13 +29,18 @@ export function isPositiveUint32(n: unknown): n is number {
 
 /** Test if an object is a valid Record  */
 export function isObject<T extends Record<string, unknown>>(object: unknown): object is T {
-  return !!(typeof object === "object" && !Array.isArray(object));
+  return (typeof object === "object" && !Array.isArray(object));
 }
 
 /**
  * Convert a string representation of a number array to an array of numbers
  * @param str The string representation of the number array
  * @returns The array of numbers
+ * @example
+ * ```ts
+ * numberArrayFromString("1,2,3") // [1, 2, 3]
+ * numberArrayFromString("[1,2,3]") // [1, 2, 3]
+ * ```
  */
 export function numberArrayFromString(str: string): number[] {
   return str

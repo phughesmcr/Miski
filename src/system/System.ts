@@ -1,6 +1,6 @@
+import { isValidName } from "@phughesmcr/partitionedbuffer";
 import { $_SYSTEM_DESTROY_KEY, $_SYSTEM_INIT_KEY } from "../constants.ts";
 import { isObject, noop } from "../utils.ts";
-import { isValidName } from "@phughesmcr/partitionedbuffer";
 import { Query } from "../query/Query.ts";
 import { NoComponentsFoundError, SpecError } from "../errors.ts";
 import type {

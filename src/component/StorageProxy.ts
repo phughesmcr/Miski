@@ -1,6 +1,7 @@
 import type { BooleanArray } from "@phughesmcr/booleanarray";
-import type { Partition, PartitionedBuffer } from "@phughesmcr/partitionedbuffer";
+import type { Partition } from "@phughesmcr/partitionedbuffer";
 import { hasOwnProperty } from "../utils.ts";
+import type { BigTypedArray, Entity } from "../types.ts";
 
 export type StorageProxySpec<T> = {
   changed: BooleanArray;
@@ -8,9 +9,6 @@ export type StorageProxySpec<T> = {
 };
 
 export class StorageProxy<T> {
-  /** The component's changed entity set */
-  #changed: Bitfield;
-
   /** The current entity ID the proxy is pointed at */
   #cursor: Entity = 0 as Entity;
 
@@ -19,7 +17,6 @@ export class StorageProxy<T> {
 
   constructor(spec: StorageProxySpec<T>) {
     const { changed, storage } = spec;
-    this.#changed = changed;
     this.#storage = storage;
 
     // Create a getter and setter for each storage property
@@ -31,16 +28,31 @@ export class StorageProxy<T> {
         get() {
           return this.#storage.storage[key as keyof T][this.#cursor];
         },
-        set(value: number | bigint) {
+        set(value: T[keyof T] extends BigTypedArray ? bigint : number) {
           const storage = this.#storage.storage[key as keyof T];
           if (storage[this.#cursor] !== value) {
+            if (typeof storage[this.#cursor] !== typeof value) {
+              throw new TypeError(
+                `Cannot set ${key} to ${typeof value} (${value}). Expected ${typeof storage[this.#cursor]}.`,
+              );
+            }
             storage[this.#cursor] = value;
-            this.#changed.toggle(this.#cursor, true);
+            changed.setBool(this.#cursor, true);
           }
         },
         enumerable: true,
         configurable: false,
       });
     }
+  }
+
+  /** The current entity ID the proxy is pointed at */
+  get cursor(): Entity {
+    return this.#cursor;
+  }
+
+  /** Set the current entity ID the proxy is pointed at */
+  set cursor(value: Entity) {
+    this.#cursor = value;
   }
 }

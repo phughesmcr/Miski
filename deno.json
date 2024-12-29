@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "license": "MIT",
   "exports": "./mod.ts",
+  "bench": {
+    "include": ["bench/**/*.bench.ts"]
+  },
   "compilerOptions": {
     "allowUnreachableCode": false,
     "allowUnusedLabels": false,
@@ -20,6 +23,7 @@
     "strict": true,
     "verbatimModuleSyntax": true
   },
+  "exclude": ["example/**/*.ts"],
   "fmt": {
     "indentWidth": 2,
     "lineWidth": 120,
@@ -32,6 +36,20 @@
   "imports": {
     "@phughesmcr/bitpool": "jsr:@phughesmcr/bitpool@^0.3.0",
     "@phughesmcr/booleanarray": "jsr:@phughesmcr/booleanarray@^0.5.0",
-    "@phughesmcr/partitionedbuffer": "jsr:@phughesmcr/partitionedbuffer@^0.2.4"
+    "@phughesmcr/partitionedbuffer": "jsr:@phughesmcr/partitionedbuffer@^0.2.5"
+  },
+  "lint": {
+    "rules": {
+      "exclude": ["no-explicit-any"]
+    }
+  },
+  "tasks": {
+    "prep": {
+      "description": "Format, lint, and check the codebase",
+      "command": "deno fmt && deno lint && deno check mod.ts src/**/*.ts"
+    }
+  },
+  "test": {
+    "include": ["test/**/*.test.ts"]
   }
 }

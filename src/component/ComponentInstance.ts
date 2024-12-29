@@ -12,13 +12,17 @@ export class ComponentInstance<T extends SchemaOrNull> {
   readonly id: number;
   readonly proxy: T extends Schema<infer U> ? StorageProxyWithProperties<U> : null;
   readonly storage: T extends Schema<infer U> ? SchemaStorage<U> : null;
-  readonly type: Component<T>;
+  readonly proto: Component<T>;
 
   private constructor(spec: ComponentInstanceSpec<T>) {
     const { id, proxy, storage, type } = spec;
     this.id = id;
     this.proxy = proxy as T extends Schema<infer U> ? StorageProxyWithProperties<U> : null;
     this.storage = storage as T extends Schema<infer U> ? SchemaStorage<U> : null;
-    this.type = type;
+    this.proto = type;
+  }
+
+  get name(): string {
+    return this.proto.name;
   }
 }

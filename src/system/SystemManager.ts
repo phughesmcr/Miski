@@ -110,4 +110,6 @@ export class SystemManager {
   >(system: string | System<T, U>): boolean {
     return this.get(system) !== undefined;
   }
+
+  stringify() {}
 }
