@@ -29,7 +29,7 @@ import type { ComponentSpec, Schema, SchemaOrNull } from "../types.ts";
  */
 export function isValidComponentSpec<T extends SchemaOrNull>(spec: unknown): spec is ComponentSpec<T> {
   const { maxEntities, name, schema } = spec as ComponentSpec<T>;
-  if (!isValidName(name)) return false;
+  if (isValidName(name) === false) return false;
   if (maxEntities && !isPositiveUint32(maxEntities)) return false;
   if (schema && !isSchema(schema)) return false;
   return true;
@@ -59,7 +59,7 @@ export class Component<T extends SchemaOrNull> {
    * @throws {TypeError} If the spec is invalid
    */
   constructor(spec: ComponentSpec<T>) {
-    if (!isValidComponentSpec(spec)) {
+    if (isValidComponentSpec(spec) === false) {
       throw new TypeError("Invalid component specification.");
     }
     const { name, schema, maxEntities = null } = spec;

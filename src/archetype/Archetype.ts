@@ -9,12 +9,7 @@ import { BooleanArray } from "@phughesmcr/booleanarray";
 import type { ComponentInstance } from "../component/ComponentInstance.ts";
 import type { Entity, QueryInstance } from "../types.ts";
 
-export type ArchetypeSpec = {
-  bitfield?: BooleanArray;
-  components: ComponentInstance<any>[];
-  capacity: number;
-};
-
+/** An Archetype is a collection of ComponentInstances which define the schema of an Entity. */
 export class Archetype {
   /** The Archetype's Component Bitfield */
   #bitfield: BooleanArray;
@@ -39,14 +34,16 @@ export class Archetype {
 
   /**
    * Creates a new Archetype
-   * @param spec.capacity The maximum number of components this Archetype can represent
-   * @param spec.components The components associated with this Archetype
-   * @param spec.bitfield The Archetype's Component Bitfield
+   * @param capacity - The maximum number of components this Archetype can represent
+   * @param components - The components associated with this Archetype
+   * @param bitfield - Optional BooleanArray to use as the Archetype's Component Bitfield
    * @returns a new Archetype object
    */
-  constructor(spec: Required<ArchetypeSpec>) {
-    const { components } = spec;
-    const bitfield = spec.bitfield ?? BooleanArray.fromObjects(spec.capacity, "id", spec.components);
+  constructor(
+    capacity: number,
+    components: ComponentInstance<any>[],
+    bitfield: BooleanArray = BooleanArray.fromObjects(capacity, "id", components),
+  ) {
     this.id = bitfield.toString();
     this.#bitfield = bitfield;
     this.#candidateCache = new Map();
@@ -73,7 +70,7 @@ export class Archetype {
 
   /**
    * Add an Entity to the Archetype
-   * @param entity The Entity to add
+   * @param entity - The Entity to add
    * @returns The Archetype with the Entity added
    */
   addEntity(entity: Entity): Archetype {
@@ -88,11 +85,7 @@ export class Archetype {
    * @returns A new Archetype
    */
   clone(): Archetype {
-    return new Archetype({
-      capacity: this.#bitfield.length,
-      components: this.#components,
-      bitfield: BooleanArray.clone(this.#bitfield),
-    });
+    return new Archetype(this.capacity, this.#components, this.#bitfield.clone());
   }
 
   /**
@@ -129,7 +122,7 @@ export class Archetype {
 
   /**
    * Test this Archetype matches a given QueryInstance
-   * @param query The QueryInstance to test
+   * @param query - The QueryInstance to test
    * @returns `true` if the QueryInstance is a match, `false` otherwise
    */
   isCandidate(query: QueryInstance): boolean {
@@ -168,11 +161,11 @@ export class Archetype {
 
   /**
    * Remove an Entity from an Archetype
-   * @param entity The Entity to remove
+   * @param entity - The Entity to remove
    * @returns The Archetype with the Entity removed
    */
   removeEntity(entity: Entity): Archetype {
-    if (!this.#entities.has(entity)) return this;
+    if (this.#entities.has(entity) === false) return this;
     // TODO: should the entity be removed from entered too?
     this.#entities.delete(entity);
     this.#exited.add(entity);
@@ -181,7 +174,6 @@ export class Archetype {
 
   /**
    * Serialize the Archetype to a string
-   * @param archetype The Archetype to serialize
    * @returns The serialized Archetype
    */
   stringify(): string {

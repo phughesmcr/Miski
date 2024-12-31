@@ -5,7 +5,7 @@
  * @license     MIT
  */
 
-import type { Schema, SchemaOrNull, SchemaStorage, StorageProxyWithProperties } from "../types.ts";
+import type { ComponentInstanceSpec, Schema, SchemaOrNull, SchemaStorage, StorageProxyWithProperties } from "../types.ts";
 import type { Component } from "./Component.ts";
 
 export class ComponentInstance<T extends SchemaOrNull> {

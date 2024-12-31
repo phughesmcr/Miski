@@ -40,10 +40,10 @@ export function createSystemInstance<
  */
 // deno-lint-ignore no-explicit-any
 export function isValidSystemSpec(spec: unknown): spec is SystemSpec<any, any> {
-  if (!isObject(spec)) return false;
+  if (isObject(spec) === false) return false;
   const { name, query, callback, destroy, init } = spec;
   if (typeof name !== "string" || !isValidName(name)) return false;
-  if (!(query instanceof Query)) return false;
+  if ((query instanceof Query) === false) return false;
   if (typeof callback !== "function") return false;
   if (typeof destroy !== "undefined" && typeof destroy !== "function") return false;
   if (typeof init !== "undefined" && typeof init !== "function") return false;
@@ -79,7 +79,7 @@ export class System<
    * @throws {SpecError} If the system specification is invalid
    */
   constructor(spec: SystemSpec<T, U>) {
-    if (!isValidSystemSpec(spec)) {
+    if (isValidSystemSpec(spec) === false) {
       throw new SpecError("Invalid system specification");
     }
     const { name, query, callback, destroy = noop, init = noop } = spec;

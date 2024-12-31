@@ -188,10 +188,10 @@ import { isObject, isPositiveUint32 } from "../utils.ts";
  * @returns `true` if the object is a valid WorldSpec, `false` otherwise
  */
 export function isValidWorldSpec(spec: unknown): spec is WorldSpec {
-  if (!isObject(spec)) return false;
+  if (isObject(spec) === false) return false;
   const { capacity, components } = spec;
-  if (!isPositiveUint32(capacity)) return false;
-  if (!isValidComponentArray(components)) return false;
+  if (isPositiveUint32(capacity) === false) return false;
+  if (isValidComponentArray(components) === false) return false;
   return true;
 }
 
@@ -239,7 +239,7 @@ export class World {
   readonly systems: WorldSystemAPI;
 
   constructor(spec: WorldSpec) {
-    if (!isValidWorldSpec(spec)) {
+    if (isValidWorldSpec(spec) === false) {
       throw new SpecError("Invalid WorldSpec");
     }
 

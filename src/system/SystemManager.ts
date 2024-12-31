@@ -60,8 +60,8 @@ export class SystemManager {
     U extends ParametersExceptFirstTwo<T>,
   >(world: World, system: System<T, U> | string, throwOnNotFound = true): Promise<void> {
     const instance = this.get(system);
-    if (!instance) {
-      if (!throwOnNotFound) return;
+    if (instance === undefined) {
+      if (throwOnNotFound === false) return;
       const name = typeof system === "string" ? system : system.name;
       throw new NotRegisteredError(`System "${name}" is not registered in the world`);
     }

@@ -17,6 +17,29 @@ import type { StorageProxy } from "./component/StorageProxy.ts";
 import type { Schema, TypedArray, TypedArrayConstructor } from "@phughesmcr/partitionedbuffer";
 export type { Schema, TypedArray, TypedArrayConstructor };
 
+/**
+ * The specification for a StorageProxy
+ * @param T The Schema / Partition type of the StorageProxy
+ */
+export type StorageProxySpec<T> = {
+  /** The BooleanArray of changed values */
+  changed: BooleanArray;
+  /** The Partition data of the StorageProxy */
+  storage: Partition<T>;
+};
+
+/**
+ * A StorageProxy with properties
+ * @param T The Schema / Partition type of the StorageProxy
+ */
+export type StorageProxyWithProperties<T> =
+  & {
+    /** The properties of the StorageProxy */
+    [key in keyof T]: number;
+  }
+  /** The StorageProxy */
+  & StorageProxy<T>;
+
 /** An Entity is essentially just an ID number / pointer */
 export type Entity = number;
 
@@ -30,18 +53,23 @@ export type EntityManagerSerialized = {
   entities: string;
 };
 
-export type StorageProxyWithProperties<T> =
-  & {
-    [key in keyof T]: number;
-  }
-  & StorageProxy<T>;
+/** The specification for an Archetype */
+export type ArchetypeSpec = {
+  /** The bitfield of the Archetype */
+  bitfield?: BooleanArray;
+  /** The components to include in the Archetype */
+  components: ComponentInstance<any>[];
+  /** The number of entities the Archetype can hold */
+  capacity: number;
+};
 
-/**
- * Internal component data storage
- */
+/** Internal component data storage */
 export type SchemaStorage<T> = Readonly<{
+  /** The byte offset of the StorageProxy */
   byteOffset: number;
+  /** The byte length of the StorageProxy */
   byteLength: number;
+  /** The storage of the StorageProxy */
   storage: Readonly<Record<keyof T, TypedArray>>;
 }>;
 
@@ -75,10 +103,15 @@ export type ComponentSpec<T extends SchemaOrNull> =
       schema?: null;
     });
 
+/** The specification for a ComponentInstance */
 export type ComponentInstanceSpec<T extends SchemaOrNull> = {
+  /** The unique identifier of the ComponentInstance */
   id: number;
+  /** The StorageProxy of the ComponentInstance */
   proxy: any; // T extends Schema<infer U> ? StorageProxyWithProperties<U> : null;
+  /** The storage of the ComponentInstance */
   storage: T extends Schema<infer U> ? SchemaStorage<U> : null;
+  /** The Component of the ComponentInstance */
   type: Component<T>;
 };
 
@@ -95,13 +128,15 @@ export type QuerySpec = {
 export type QueryInstance = {
   /** A BooleanArray for the AND match criteria */
   and: BooleanArray;
-  /** */
+  /** The archetypes which match this query */
   archetypes: Set<Archetype>;
-  /** */
+  /**  */
   checkCandidacy: (target: number, idx: number) => boolean;
-  /** */
+  /** The components which match this query */
   // deno-lint-ignore no-explicit-any
   components: Readonly<Record<string, ComponentInstance<any>>>;
+  /** The QueryInstance's unique identifier */
+  id: string;
   /**
    * `true` if the object is in a dirty state
    *
