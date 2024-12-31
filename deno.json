@@ -34,9 +34,9 @@
     "exclude": ["*.md", "LICENSE"]
   },
   "imports": {
-    "@phughesmcr/bitpool": "jsr:@phughesmcr/bitpool@^0.3.1",
-    "@phughesmcr/booleanarray": "jsr:@phughesmcr/booleanarray@^0.5.1",
-    "@phughesmcr/partitionedbuffer": "jsr:@phughesmcr/partitionedbuffer@^0.2.6"
+    "@phughesmcr/bitpool": "jsr:@phughesmcr/bitpool@^0.3.2",
+    "@phughesmcr/booleanarray": "jsr:@phughesmcr/booleanarray@^0.6.0",
+    "@phughesmcr/partitionedbuffer": "jsr:@phughesmcr/partitionedbuffer@^0.2.7"
   },
   "lint": {
     "rules": {
