@@ -31,7 +31,7 @@
     "singleQuote": false,
     "proseWrap": "always",
     "useTabs": false,
-    "exclude": ["*.md", "LICENSE"]
+    "exclude": ["*/.*", "*.md", "LICENSE"]
   },
   "imports": {
     "@phughesmcr/bitpool": "jsr:@phughesmcr/bitpool@^0.3.2",
