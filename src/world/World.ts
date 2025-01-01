@@ -354,6 +354,8 @@ export class World {
     } else if (this.#state === "destroyed") {
       throw new WorldStateError("World has already been destroyed");
     }
+    this.#archetypeManager.refresh(this.#queryManager.registry.values());
+    this.#componentManager.refresh();
     return this;
   }
 

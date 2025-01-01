@@ -57,6 +57,7 @@ export class ArchetypeManager {
   update: (entity: Entity, components: ComponentInstance<any>[]) => Archetype;
 
   /**
+   * @internal
    * Create a new ArchetypeManager
    * @param capacity The maximum number of entities the manager can manage
    */
@@ -170,13 +171,13 @@ export class ArchetypeManager {
    * Run routine maintenance on the ArchetypeManager
    * @returns this
    */
-  refresh(): this {
+  refresh(queries: IterableIterator<QueryInstance>): this {
     for (const archetype of this.registry.values()) {
       if (archetype.isEmpty() === false) {
-        for (const [_, queryInstance] of queries) {
-          if (this.queryArchetypes.has(queryInstance)) continue;
-          if (archetype.isCandidate(queryInstance) === false) continue;
-          this.queryArchetypes.set(queryInstance, new Set([archetype]));
+        for (const instance of queries) {
+          if (this.queryArchetypes.has(instance)) continue;
+          if (archetype.isCandidate(instance) === false) continue;
+          this.queryArchetypes.set(instance, new Set([archetype]));
         }
       }
       archetype.refresh();
