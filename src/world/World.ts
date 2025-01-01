@@ -253,7 +253,7 @@ export class World {
 
     const { capacity, components } = spec;
     this.#archetypeManager = new ArchetypeManager(capacity);
-    this.#componentManager = new ComponentManager(capacity);
+    this.#componentManager = new ComponentManager(capacity, components, this);
     this.#entityManager = new EntityManager(capacity);
     this.#queryManager = new QueryManager(this);
     this.#systemManager = new SystemManager();

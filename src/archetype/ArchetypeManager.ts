@@ -10,6 +10,7 @@ import { BooleanArray } from "@phughesmcr/booleanarray";
 import { NotRegisteredError } from "../errors.ts";
 import type { ComponentInstance } from "../component/ComponentInstance.ts";
 import type { Entity, QueryInstance } from "../types.ts";
+import { ID_KEY } from "../constants.ts";
 
 /** ArchetypeManager handles creation and allocation of Archetypes */
 export class ArchetypeManager {
@@ -86,7 +87,7 @@ export class ArchetypeManager {
           nextBitfield.toggleBool(component.id);
         }
       } else {
-        nextBitfield = BooleanArray.fromObjects(capacity, "id", components);
+        nextBitfield = BooleanArray.fromObjects(capacity, ID_KEY, components);
       }
 
       // Check if the archetype has changed

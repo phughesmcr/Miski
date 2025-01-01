@@ -19,8 +19,9 @@
  */
 
 import { isSchema, isValidName, Partition, type PartitionSpec } from "@phughesmcr/partitionedbuffer";
+import { $_PARTITION_KEY } from "../constants.ts";
 import { isPositiveUint32 } from "../utils.ts";
-import type { ComponentSpec, Schema, SchemaOrNull } from "../types.ts";
+import type { ComponentPrivateMethods, ComponentSpec, Schema, SchemaOrNull } from "../types.ts";
 
 /**
  * Component specification type guard.
@@ -46,9 +47,9 @@ export function isValidComponentArray(array: unknown): array is Array<Component<
 }
 
 /** */
-export class Component<T extends SchemaOrNull> {
+export class Component<T extends SchemaOrNull> implements ComponentPrivateMethods<T> {
   /** The component's storage partition */
-  #partition: Partition<T>;
+  readonly [$_PARTITION_KEY]: Partition<T>;
 
   /** `true` if the component has no schema */
   readonly isTag: boolean;
@@ -63,7 +64,7 @@ export class Component<T extends SchemaOrNull> {
       throw new TypeError("Invalid component specification.");
     }
     const { name, schema, maxEntities = null } = spec;
-    this.#partition = new Partition<T>(
+    this[$_PARTITION_KEY] = new Partition<T>(
       {
         name,
         schema: schema as Schema<T> | null,
@@ -75,21 +76,21 @@ export class Component<T extends SchemaOrNull> {
 
   /** The maximum number of entities able to equip this component per world */
   get maxEntities(): number | null {
-    return this.#partition.maxOwners;
+    return this[$_PARTITION_KEY].maxOwners;
   }
 
   /** The component's label */
   get name(): string {
-    return this.#partition.name;
+    return this[$_PARTITION_KEY].name;
   }
 
   /** The component's property definitions */
   get schema(): Schema<T> | null {
-    return this.#partition.schema as Schema<T> | null;
+    return this[$_PARTITION_KEY].schema as Schema<T> | null;
   }
 
   /** The component's size in bytes for a single entity */
   get size(): number {
-    return this.#partition.size;
+    return this[$_PARTITION_KEY].size;
   }
 }

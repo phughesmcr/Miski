@@ -14,7 +14,7 @@ export class StorageProxy<T> {
   #cursor: Entity = 0 as Entity;
 
   /** The component's raw storage */
-  #storage: SchemaStorage<T>;
+  readonly storage: SchemaStorage<T>;
 
   /**
    * Create a new StorageProxy
@@ -22,7 +22,7 @@ export class StorageProxy<T> {
    */
   constructor(spec: StorageProxySpec<T>) {
     const { changed, storage } = spec;
-    this.#storage = storage;
+    this.storage = storage;
 
     // Create a getter and setter for each storage property
     for (const key in storage.storage) {
@@ -31,12 +31,12 @@ export class StorageProxy<T> {
       }
       Object.defineProperty(this, key, {
         get() {
-          return this.#storage.storage[key as keyof T][this.#cursor];
+          return this.storage.storage[key as keyof T][this.#cursor];
         },
         set(value: number) {
-          const storage = this.#storage.storage[key as keyof T];
-          if (storage[this.#cursor] !== value) {
-            storage[this.#cursor] = value;
+          const store = this.storage.storage[key as keyof T];
+          if (store[this.#cursor] !== value) {
+            store[this.#cursor] = value;
             changed.setBool(this.#cursor, true);
           }
         },

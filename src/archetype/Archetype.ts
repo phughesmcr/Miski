@@ -8,6 +8,7 @@
 import { BooleanArray } from "@phughesmcr/booleanarray";
 import type { ComponentInstance } from "../component/ComponentInstance.ts";
 import type { Entity, QueryInstance } from "../types.ts";
+import { ID_KEY } from "../constants.ts";
 
 /** An Archetype is a collection of ComponentInstances which define the schema of an Entity. */
 export class Archetype {
@@ -42,7 +43,7 @@ export class Archetype {
   constructor(
     capacity: number,
     components: ComponentInstance<any>[],
-    bitfield: BooleanArray = BooleanArray.fromObjects(capacity, "id", components),
+    bitfield: BooleanArray = BooleanArray.fromObjects(capacity, ID_KEY, components),
   ) {
     this.id = bitfield.toString();
     this.#bitfield = bitfield;

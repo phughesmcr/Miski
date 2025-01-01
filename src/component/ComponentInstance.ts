@@ -20,7 +20,7 @@ export class ComponentInstance<T extends SchemaOrNull> {
   readonly storage: T extends Schema<infer U> ? SchemaStorage<U> : null;
   readonly proto: Component<T>;
 
-  private constructor(spec: ComponentInstanceSpec<T>) {
+  constructor(spec: ComponentInstanceSpec<T>) {
     const { id, proxy, storage, type } = spec;
     this.id = id;
     this.proxy = proxy as T extends Schema<infer U> ? StorageProxyWithProperties<U> : null;

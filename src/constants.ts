@@ -17,6 +17,12 @@ export const MIN_UINT32 = 0;
 /** The maximum value for a Uint32 */
 export const MAX_UINT32 = 0xffffffff;
 
+/** The key used to store the Entity's id */
+export const ID_KEY = "id" as const;
+
+/** The symbol used to store the component's partition */
+export const $_PARTITION_KEY: unique symbol = Symbol(`$_PARTITION_KEY_${randomHexString()}`);
+
 /** The symbol used to store the system's init function */
 export const $_SYSTEM_INIT_KEY: unique symbol = Symbol(`$_SYSTEM_INIT_KEY_${randomHexString()}`);
 

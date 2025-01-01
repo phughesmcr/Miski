@@ -13,9 +13,10 @@ import type { ComponentInstance } from "./component/ComponentInstance.ts";
 import type { BooleanArray } from "@phughesmcr/booleanarray";
 import type { Archetype } from "./archetype/Archetype.ts";
 import type { StorageProxy } from "./component/StorageProxy.ts";
-import type { $_SYSTEM_DESTROY_KEY, $_SYSTEM_INIT_KEY } from "./constants.ts";
+import type { $_PARTITION_KEY, $_SYSTEM_DESTROY_KEY, $_SYSTEM_INIT_KEY } from "./constants.ts";
 
 import type { Partition, Schema, TypedArray, TypedArrayConstructor } from "@phughesmcr/partitionedbuffer";
+import type { SchemaStorage } from "@phughesmcr/partitionedbuffer";
 export type { Schema, TypedArray, TypedArrayConstructor };
 
 /**
@@ -26,7 +27,7 @@ export type StorageProxySpec<T> = {
   /** The BooleanArray of changed values */
   changed: BooleanArray;
   /** The Partition data of the StorageProxy */
-  storage: Partition<T>;
+  storage: SchemaStorage<T>;
 };
 
 /**
@@ -64,16 +65,6 @@ export type ArchetypeSpec = {
   capacity: number;
 };
 
-/** Internal component data storage */
-export type SchemaStorage<T> = Readonly<{
-  /** The byte offset of the StorageProxy */
-  byteOffset: number;
-  /** The byte length of the StorageProxy */
-  byteLength: number;
-  /** The storage of the StorageProxy */
-  storage: Readonly<Record<keyof T, TypedArray>>;
-}>;
-
 /** A Record of ComponentInstances by Component name */
 export type ComponentRecord = Record<string, ComponentInstance<SchemaOrNull>>;
 
@@ -103,6 +94,12 @@ export type ComponentSpec<T extends SchemaOrNull> =
       /** No schema for tag components */
       schema?: null;
     });
+
+/** The private methods of a Component */
+export interface ComponentPrivateMethods<T extends SchemaOrNull> {
+  /** The Partition object of the Component */
+  readonly [$_PARTITION_KEY]: Partition<T>;
+}
 
 /** The specification for a ComponentInstance */
 export type ComponentInstanceSpec<T extends SchemaOrNull> = {
