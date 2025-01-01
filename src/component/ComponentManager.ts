@@ -27,6 +27,24 @@ export class ComponentManager {
     return this.#registry.size;
   }
 
+  addToEntity(entity: Entity, component: Component<any>): ComponentInstance<any> {
+  }
+
+  get(component: Component<any> | string): ComponentInstance<any> | undefined {
+    if (typeof component === "string") {
+      const instance = this.#registry.keys().find((key) => key.name === component);
+      if (instance === undefined) {
+        return undefined;
+      }
+      return this.#registry.get(instance);
+    }
+    return this.#registry.get(component);
+  }
+
+  isRegistered(component: Component<any> | string): boolean {
+    return this.get(component) !== undefined;
+  }
+
   /**
    * Run routine maintenance on the component manager
    * @returns The component manager

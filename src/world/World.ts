@@ -179,8 +179,8 @@ import { EntityManager } from "../entity/EntityManager.ts";
 import { SpecError, WorldStateError } from "../errors.ts";
 import { QueryManager } from "../query/QueryManager.ts";
 import { SystemManager } from "../system/SystemManager.ts";
-import type { Entity, WorldComponentAPI, WorldEntityAPI, WorldSpec, WorldState, WorldSystemAPI } from "../types.ts";
 import { isObject, isPositiveUint32 } from "../utils.ts";
+import type { Entity, WorldComponentAPI, WorldEntityAPI, WorldSpec, WorldState, WorldSystemAPI } from "../types.ts";
 
 /**
  * Test if an object is a valid WorldSpec
@@ -195,6 +195,7 @@ export function isValidWorldSpec(spec: unknown): spec is WorldSpec {
   return true;
 }
 
+/** The World is the central context in which all Entities and Components exist. */
 export class World {
   /**
    * Deserialize a World from a JSON string
@@ -238,6 +239,11 @@ export class World {
   /** System Management API */
   readonly systems: WorldSystemAPI;
 
+  /**
+   * Create a new World
+   * @param spec The specification object
+   * @throws {SpecError} If the WorldSpec is invalid
+   */
   constructor(spec: WorldSpec) {
     if (isValidWorldSpec(spec) === false) {
       throw new SpecError("Invalid WorldSpec");
@@ -249,7 +255,7 @@ export class World {
     this.#archetypeManager = new ArchetypeManager(capacity);
     this.#componentManager = new ComponentManager(capacity);
     this.#entityManager = new EntityManager(capacity);
-    this.#queryManager = new QueryManager();
+    this.#queryManager = new QueryManager(this);
     this.#systemManager = new SystemManager();
 
     this.components = {
@@ -351,6 +357,10 @@ export class World {
     return this;
   }
 
+  /**
+   * Serialize the world to a JSON string
+   * @returns The serialized world
+   */
   stringify(): string {
     return JSON.stringify({
       version: World.version,

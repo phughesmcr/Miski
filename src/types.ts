@@ -13,8 +13,9 @@ import type { ComponentInstance } from "./component/ComponentInstance.ts";
 import type { BooleanArray } from "@phughesmcr/booleanarray";
 import type { Archetype } from "./archetype/Archetype.ts";
 import type { StorageProxy } from "./component/StorageProxy.ts";
+import type { $_SYSTEM_DESTROY_KEY, $_SYSTEM_INIT_KEY } from "./constants.ts";
 
-import type { Schema, TypedArray, TypedArrayConstructor } from "@phughesmcr/partitionedbuffer";
+import type { Partition, Schema, TypedArray, TypedArrayConstructor } from "@phughesmcr/partitionedbuffer";
 export type { Schema, TypedArray, TypedArrayConstructor };
 
 /**
@@ -130,13 +131,17 @@ export type QueryInstance = {
   and: BooleanArray;
   /** The archetypes which match this query */
   archetypes: Set<Archetype>;
-  /**  */
-  checkCandidacy: (target: number, idx: number) => boolean;
   /** The components which match this query */
   // deno-lint-ignore no-explicit-any
   components: Readonly<Record<string, ComponentInstance<any>>>;
   /** The QueryInstance's unique identifier */
   id: string;
+  /**
+   * @param target
+   * @param idx
+   * @returns
+   */
+  isCandidate: (target: number, idx: number) => boolean;
   /**
    * `true` if the object is in a dirty state
    *
@@ -187,6 +192,11 @@ export interface SystemSpec<
   init?: (world: World) => void | Promise<void>;
   /** The function to call when the system is destroyed. */
   destroy?: (world: World) => void | Promise<void>;
+}
+
+export interface SystemPrivateMethods {
+  [$_SYSTEM_INIT_KEY]: (world: World) => void | Promise<void>;
+  [$_SYSTEM_DESTROY_KEY]: (world: World) => void | Promise<void>;
 }
 
 /**

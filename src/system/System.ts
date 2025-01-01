@@ -9,6 +9,7 @@ import type {
   ParametersExceptFirstTwo,
   SystemCallback,
   SystemInstance,
+  SystemPrivateMethods,
   SystemSpec,
 } from "../types.ts";
 import type { World } from "../world/World.ts";
@@ -54,7 +55,7 @@ export function isValidSystemSpec(spec: unknown): spec is SystemSpec<any, any> {
 export class System<
   T extends (components: ComponentRecord, entities: IterableIterator<Entity>, ...args: unknown[]) => ReturnType<T>,
   U extends ParametersExceptFirstTwo<T>,
-> {
+> implements SystemPrivateMethods {
   /** The function to call when the system is destroyed. */
   readonly [$_SYSTEM_DESTROY_KEY]: (world: World) => void | Promise<void>;
 

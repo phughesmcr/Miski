@@ -7,6 +7,11 @@
 
 import { MAX_UINT32, MIN_UINT32 } from "./constants.ts";
 
+/** @returns a random hex string */
+export function randomHexString(): string {
+  return Math.random().toString(36).substring(2, 15);
+}
+
 /** @return `true` if the object has the given key */
 export function hasOwnProperty<T>(object: T, key: PropertyKey): key is keyof T {
   return Object.prototype.hasOwnProperty.call(object, key);

@@ -1,7 +1,7 @@
 /**
  * @module      SystemManager
  * @description The SystemManager is responsible for creating and destroying systems.
- * @copyright   2024 the Miski authors. All rights reserved
+ * @copyright   2024 the Miski authors. All rights reserved.
  * @license     MIT
  */
 
@@ -11,12 +11,16 @@ import { NotRegisteredError } from "../errors.ts";
 import type { ComponentRecord, Entity, ParametersExceptFirstTwo, SystemInstance } from "../types.ts";
 import type { World } from "../world/World.ts";
 
+/** The SystemManager is responsible for creating, registering, initializing, and destroying systems. */
 export class SystemManager {
   // deno-lint-ignore no-explicit-any
-  #registry: Record<string, SystemInstance<any, any>>;
+  registry: Record<string, SystemInstance<any, any>>;
 
+  /**
+   * Create a new SystemManager
+   */
   constructor() {
-    this.#registry = {};
+    this.registry = {};
   }
 
   /**
@@ -24,7 +28,7 @@ export class SystemManager {
    * @param world The world to initialize the systems in
    */
   async init(world: World): Promise<void> {
-    for (const instance of Object.values(this.#registry)) {
+    for (const instance of Object.values(this.registry)) {
       // deno-lint-ignore no-explicit-any
       const system: System<any, any> = Object.getPrototypeOf(instance);
       await system[$_SYSTEM_INIT_KEY](world);
@@ -47,7 +51,7 @@ export class SystemManager {
       return existing;
     }
     const instance = createSystemInstance(world, system);
-    this.#registry[system.name] = instance;
+    this.registry[system.name] = instance;
     return instance;
   }
 
@@ -67,7 +71,7 @@ export class SystemManager {
     }
     const proto = Object.getPrototypeOf(instance);
     await proto[$_SYSTEM_DESTROY_KEY](world);
-    delete this.#registry[proto.name];
+    delete this.registry[proto.name];
   }
 
   /**
@@ -75,7 +79,7 @@ export class SystemManager {
    * @param world The world to destroy the systems in
    */
   async destroyAll(world: World): Promise<void> {
-    for (const instance of Object.values(this.#registry)) {
+    for (const instance of Object.values(this.registry)) {
       await this.destroy(world, instance.name);
     }
   }
@@ -90,9 +94,9 @@ export class SystemManager {
     U extends ParametersExceptFirstTwo<T>,
   >(system: string | System<T, U>): SystemInstance<T, U> | undefined {
     if (typeof system === "string") {
-      return this.#registry[system];
+      return this.registry[system];
     }
-    const result = this.#registry[system.name];
+    const result = this.registry[system.name];
     if (result && Object.getPrototypeOf(result) !== system) {
       return undefined;
     }
@@ -111,5 +115,9 @@ export class SystemManager {
     return this.get(system) !== undefined;
   }
 
+  /**
+   * Serialize the system manager to a JSON string
+   * @returns The serialized system manager
+   */
   stringify() {}
 }

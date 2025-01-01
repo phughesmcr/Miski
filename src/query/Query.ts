@@ -15,6 +15,7 @@ import type { QueryInstance, QuerySpec, SchemaOrNull } from "../types.ts";
 import type { World } from "../world/World.ts";
 
 /**
+ * @internal
  * Creates a runtime instance of a Query for efficient entity matching
  * @param world - The World instance containing the component registry
  * @param query - The Query definition specifying component requirements
@@ -61,7 +62,7 @@ export function createQueryInstance(world: World, query: Query): QueryInstance {
   const archetypes = new Set<Archetype>();
 
   // Optimized candidacy check using bitwise operations
-  const checkCandidacy = (target: number, idx: number): boolean => {
+  const isCandidate = (target: number, idx: number): boolean => {
     // Check OR first for early exit
     const OR = or[idx] === 0 || (target & or[idx]!) !== 0;
     if (!OR) return false;
@@ -75,9 +76,9 @@ export function createQueryInstance(world: World, query: Query): QueryInstance {
   };
 
   // turn the three arrays into a string
-  const id = `${and.toString()},${or.toString()},${not.toString()}`;
+  const id = `${and.toString()}:${or.toString()}:${not.toString()}`;
 
-  return { and, or, not, archetypes, checkCandidacy, components, isDirty: true, id };
+  return { and, or, not, archetypes, isCandidate, components, isDirty: true, id };
 }
 
 /**

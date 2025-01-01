@@ -81,7 +81,10 @@ export class ArchetypeManager {
       // Convert the components to a bitfield
       let nextBitfield: BooleanArray; // TODO: This could be pooled
       if (currentArchetype) {
-        nextBitfield = BooleanArray.cloneWithToggle(currentArchetype.bitfield, "id", components);
+        nextBitfield = currentArchetype.bitfield.clone();
+        for (const component of components) {
+          nextBitfield.toggleBool(component.id);
+        }
       } else {
         nextBitfield = BooleanArray.fromObjects(capacity, "id", components);
       }
@@ -99,7 +102,7 @@ export class ArchetypeManager {
 
       // Get the existing archetype or create a new one
       const existing = this.registry.get(nextId);
-      const nextArchetype = existing ?? new Archetype(this.capacity, [], nextBitfield);
+      const nextArchetype = existing ?? new Archetype(capacity, [], nextBitfield);
 
       // Register the new archetype if it doesn't already exist
       if (this.registry.has(nextId) === false) {
