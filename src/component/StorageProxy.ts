@@ -25,16 +25,16 @@ export class StorageProxy<T> {
     this.storage = storage;
 
     // Create a getter and setter for each storage property
-    for (const key in storage.storage) {
+    for (const key in storage.partitions) {
       if (hasOwnProperty(storage, key) === false) {
         continue;
       }
       Object.defineProperty(this, key, {
         get() {
-          return this.storage.storage[key as keyof T][this.#cursor];
+          return this.storage.partitions[key as keyof T][this.#cursor];
         },
         set(value: number) {
-          const store = this.storage.storage[key as keyof T];
+          const store = this.storage.partitions[key as keyof T];
           if (store[this.#cursor] !== value) {
             store[this.#cursor] = value;
             changed.setBool(this.#cursor, true);

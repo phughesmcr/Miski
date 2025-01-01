@@ -17,7 +17,7 @@ import type { $_PARTITION_KEY, $_SYSTEM_DESTROY_KEY, $_SYSTEM_INIT_KEY } from ".
 
 import type { Partition, Schema, TypedArray, TypedArrayConstructor } from "@phughesmcr/partitionedbuffer";
 import type { SchemaStorage } from "@phughesmcr/partitionedbuffer";
-export type { Schema, TypedArray, TypedArrayConstructor };
+export type { Schema, SchemaStorage, TypedArray, TypedArrayConstructor };
 
 /**
  * The specification for a StorageProxy

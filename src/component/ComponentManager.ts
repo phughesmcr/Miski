@@ -5,12 +5,14 @@
  * @license     MIT
  */
 
+import { $_PARTITION_KEY } from "../constants.ts";
 import { BooleanArray } from "@phughesmcr/booleanarray";
 import { ComponentInstance } from "./ComponentInstance.ts";
+import { isObject } from "../utils.ts";
 import { PartitionedBuffer } from "@phughesmcr/partitionedbuffer";
 import { StorageProxy } from "./StorageProxy.ts";
 import type { Component } from "./Component.ts";
-import { $_PARTITION_KEY } from "../constants.ts";
+import type { Entity, SchemaOrNull, TypedArray } from "../types.ts";
 
 /** A component manager is responsible for managing the components of a world. */
 export class ComponentManager {
@@ -60,7 +62,32 @@ export class ComponentManager {
     return this.#registry.size;
   }
 
-  addToEntity(entity: Entity, component: Component<any>): ComponentInstance<any> {
+  addToEntity<T extends SchemaOrNull>(
+    entity: Entity,
+    component: Component<T>,
+    data?: { [k in keyof T]: number },
+  ): ComponentManager {
+    const instance = this.get(component);
+    if (!instance) {
+      throw new Error(`Component "${component.name}" not registered.`);
+    }
+    const ownerState = this.#owners.get(component)?.setBool(entity, true);
+    if (ownerState === undefined) {
+      throw new Error(`Error setting owner state for component "${component.name}".`);
+    }
+    const changedState = this.#changed.get(component)?.setBool(entity, true);
+    if (changedState === undefined) {
+      throw new Error(`Error setting changed state for component "${component.name}".`);
+    }
+    const storage = instance.storage?.partitions as Record<keyof T, TypedArray>;
+    if (storage && isObject(data)) {
+      for (const key in data) {
+        if (key in storage) {
+          storage[key][entity] = data[key];
+        }
+      }
+    }
+    return this;
   }
 
   get(component: Component<any> | string): ComponentInstance<any> | undefined {

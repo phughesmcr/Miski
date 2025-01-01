@@ -6,7 +6,7 @@
  */
 
 import { createQueryInstance, type Query } from "./Query.ts";
-import type { Entity, QueryInstance } from "../types.ts";
+import type { QueryInstance } from "../types.ts";
 import type { World } from "../world/World.ts";
 
 /** The QueryManager is responsible for creating, registering, and destroying queries. */
@@ -40,8 +40,7 @@ export class QueryManager {
     return instance;
   }
 
-  entities(query: Query): IterableIterator<Entity> {
-    const instance = this.#register(query);
+  entities(_query: Query) {
   }
 
   stringify() {}
