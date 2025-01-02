@@ -5,26 +5,30 @@
  * @license     MIT
  */
 
-import { $_PARTITION_KEY } from "../constants.ts";
 import { BooleanArray } from "@phughesmcr/booleanarray";
+import { PartitionedBuffer } from "@phughesmcr/partitionedbuffer";
+import { $_PARTITION_KEY } from "../constants.ts";
 import { ComponentInstance } from "./ComponentInstance.ts";
 import { isObject } from "../utils.ts";
-import { PartitionedBuffer } from "@phughesmcr/partitionedbuffer";
 import { StorageProxy } from "./StorageProxy.ts";
 import type { Component } from "./Component.ts";
 import type { Entity, SchemaOrNull, TypedArray } from "../types.ts";
 
 /** A component manager is responsible for managing the components of a world. */
 export class ComponentManager {
+  /** The storage buffer for the component manager */
   #buffer: PartitionedBuffer;
+  /** The changed state for each component */
   #changed: Map<Component<any>, BooleanArray>;
+  /** The owner state for each component */
   #owners: Map<Component<any>, BooleanArray>;
+  /** The registry of component instances */
   #registry: Map<Component<any>, ComponentInstance<any>>;
 
   /**
    * Create a new component manager.
-   * @param capacity The capacity of the component manager
-   * @param components The components to register
+   * @param capacity - The capacity of the component manager
+   * @param components - The components to register
    */
   constructor(capacity: number, components: Component<any>[]) {
     // create the storage buffer
@@ -51,22 +55,28 @@ export class ComponentManager {
     }
   }
 
-  /**
-   * @returns an iterable of all component instances
-   */
+  /** @returns an iterable of all component instances */
   get all(): IterableIterator<ComponentInstance<any>> {
     return this.#registry.values();
   }
 
+  /** @returns the number of components registered */
   get count(): number {
     return this.#registry.size;
   }
 
+  /**
+   * Add a component to an entity
+   * @param component - The component to add to the entity
+   * @param entity - The entity to add the component to
+   * @param data - Optional data to set for the component
+   * @returns The component manager
+   */
   addToEntity<T extends SchemaOrNull>(
-    entity: Entity,
     component: Component<T>,
+    entity: Entity,
     data?: { [k in keyof T]: number },
-  ): ComponentManager {
+  ): this {
     const instance = this.get(component);
     if (!instance) {
       throw new Error(`Component "${component.name}" not registered.`);
@@ -90,6 +100,25 @@ export class ComponentManager {
     return this;
   }
 
+  /**
+   * Check if an entity has a component
+   * @param component - The component to check for
+   * @param entity - The entity to check for the component on
+   * @returns `true` if the entity has the component, `false` otherwise
+   */
+  entityOwns<T extends SchemaOrNull>(component: Component<T>, entity: Entity): boolean {
+    const instance = this.get(component);
+    if (!instance) {
+      return false;
+    }
+    return this.#owners.get(component)?.getBool(entity) ?? false;
+  }
+
+  /**
+   * Get a component instance
+   * @param component - The component to get the instance of
+   * @returns The component instance or `undefined` if the component is not registered
+   */
   get(component: Component<any> | string): ComponentInstance<any> | undefined {
     if (typeof component === "string") {
       const instance = this.#registry.keys().find((key) => key.name === component);
@@ -101,6 +130,60 @@ export class ComponentManager {
     return this.#registry.get(component);
   }
 
+  /**
+   * Get an iterable of all entities with one or more changed properties for a given component
+   * @param component The component to get changed entities for
+   * @returns An iterable of entities or `undefined` if the component is not registered
+   */
+  getChanged<T extends SchemaOrNull>(component: Component<T>): IterableIterator<Entity> | undefined {
+    return this.#changed.get(component)?.truthyIndices() as IterableIterator<Entity> | undefined;
+  }
+
+  /**
+   * Get the registered instance of a given component
+   * @param component The component to get the instance of
+   * @returns The component instance or `undefined` if the component is not registered
+   */
+  getInstance<T extends SchemaOrNull>(component: Component<T>): ComponentInstance<T> | undefined {
+    return this.#registry.get(component);
+  }
+
+  /**
+   * Get an iterable of all entities with a given component
+   * @param component The component to get entities for
+   * @returns An iterable of entities or `undefined` if the component is not registered
+   */
+  getOwners<T extends SchemaOrNull>(component: Component<T>): () => IterableIterator<Entity> | undefined {
+    return () => this.#owners.get(component)?.truthyIndices() as IterableIterator<Entity> | undefined;
+  }
+
+  /**
+   * Get the data for a component on an entity
+   * @param component - The component to get the data for
+   * @param entity - The entity to get the data for
+   * @returns The data for the component or `undefined` if the component is not registered
+   */
+  getEntityData<T extends SchemaOrNull>(component: Component<T>, entity: Entity): Record<keyof T, number> | undefined {
+    const instance = this.get(component);
+    if (!instance) {
+      return undefined;
+    }
+    const storage = instance.storage?.partitions as Record<keyof T, TypedArray> | undefined;
+    if (!storage) {
+      return undefined;
+    }
+    const result: Record<keyof T, number> = {} as Record<keyof T, number>;
+    for (const key in storage) {
+      result[key] = storage[key][entity] ?? Number.NaN;
+    }
+    return result;
+  }
+
+  /**
+   * Check if a component is registered
+   * @param component - The component to check for
+   * @returns `true` if the component is registered, `false` otherwise
+   */
   isRegistered(component: Component<any> | string): boolean {
     return this.get(component) !== undefined;
   }
@@ -116,6 +199,53 @@ export class ComponentManager {
     return this;
   }
 
+  /**
+   * Remove a component from an entity
+   * @param component - The component to remove from the entity
+   * @param entity - The entity to remove the component from
+   * @returns The component manager
+   */
+  removeFromEntity<T extends SchemaOrNull>(component: Component<T>, entity: Entity): ComponentManager {
+    const instance = this.get(component);
+    if (!instance) {
+      return this;
+    }
+    const ownerState = this.#owners.get(component);
+    if (!ownerState?.getBool(entity)) {
+      return this;
+    }
+    ownerState.setBool(entity, false);
+    this.#changed.get(component)?.setBool(entity, false);
+    return this;
+  }
+
+  /**
+   * Set the data for a component on an entity
+   * @param component - The component to set the data for
+   * @param entity - The entity to set the data for
+   * @param value - The data to set for the component
+   */
+  setEntityData<T extends SchemaOrNull>(component: Component<T>, entity: Entity, value: Record<keyof T, number>): this {
+    const instance = this.get(component);
+    if (!instance || !value) {
+      return this;
+    }
+    const storage = instance.storage?.partitions as Record<keyof T, TypedArray> | undefined;
+    if (!storage) {
+      return this;
+    }
+    for (const key in value) {
+      if (key in storage) {
+        storage[key][entity] = value[key];
+      }
+    }
+    return this;
+  }
+
+  /**
+   * Stringify the component manager
+   * @returns A string representation of the component manager
+   */
   stringify(): string {
     return JSON.stringify(
       {

@@ -118,6 +118,23 @@ export class ArchetypeManager {
   }
 
   /**
+   * Get the components associated with an entity
+   * @param entity - The entity to get the components for
+   * @returns A record of component instances
+   */
+  entityComponents(entity: Entity): Record<string, ComponentInstance<any>> {
+    const archetype = this.fromEntity(entity);
+    if (!archetype) {
+      return {};
+    }
+    const components: Record<string, ComponentInstance<any>> = {};
+    for (const component of archetype.components) {
+      components[component.name] = component;
+    }
+    return components;
+  }
+
+  /**
    * @internal
    * Called by `world.destroy()`
    *

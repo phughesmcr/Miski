@@ -53,6 +53,7 @@ export class EntityManager {
       );
     }
     this.#pool = pool;
+    this.active = this.#pool.truthyIndices;
   }
 
   /** @returns the maximum number of entities allowed in the pool (inclusive) */
@@ -60,46 +61,8 @@ export class EntityManager {
     return this.#pool.size;
   }
 
-  /** @returns the number of active entities */
-  getActiveCount(): number {
-    const size = this.capacity;
-    const population = this.#pool.getPopulationCount();
-    const active = size - population;
-    if (active > this.capacity) {
-      return this.capacity;
-    }
-    return active;
-  }
-
-  /** @returns the number of available entities */
-  getVacancyCount(): number {
-    return this.capacity - this.getActiveCount();
-  }
-
-  /**
-   * Check if an entity is valid for this pool
-   * @param entity - The entity to check
-   * @returns `true` if the entity is valid, `false` otherwise
-   * @see EntityManager.exists to check if an entity is valid and resident
-   */
-  isEntity(entity: Entity): entity is Entity {
-    if (isPositiveUint32(entity) === false) {
-      return false;
-    }
-    if (entity > this.capacity) {
-      return false;
-    }
-    return true;
-  }
-
-  /**
-   * Check if an entity exists (i.e., is valid && is active)
-   * @param entity - The entity to check
-   * @returns `true` if the entity exists, `false` otherwise
-   */
-  exists(entity: Entity): boolean {
-    return this.isEntity(entity) && this.#pool.isOccupied(entity);
-  }
+  /** @returns an iterable of all active entities */
+  active: (startEntity?: Entity, endEntity?: Entity) => IterableIterator<Entity>;
 
   /**
    * Create a new entity
@@ -123,6 +86,47 @@ export class EntityManager {
       throw new EntityNotFoundError(entity);
     }
     this.#pool.release(entity);
+  }
+
+  /** @returns the number of active entities */
+  getActiveCount(): number {
+    const size = this.capacity;
+    const population = this.#pool.getPopulationCount();
+    const active = size - population;
+    if (active > this.capacity) {
+      return this.capacity;
+    }
+    return active;
+  }
+
+  /** @returns the number of available entities */
+  getAvailableCount(): number {
+    return this.capacity - this.getActiveCount();
+  }
+
+  /**
+   * Check if an entity exists (i.e., is valid && is active)
+   * @param entity - The entity to check
+   * @returns `true` if the entity exists, `false` otherwise
+   */
+  isActive(entity: Entity): boolean {
+    return this.isEntity(entity) && this.#pool.isOccupied(entity);
+  }
+
+  /**
+   * Check if an entity is valid for this pool
+   * @param entity - The entity to check
+   * @returns `true` if the entity is valid, `false` otherwise
+   * @see EntityManager.exists to check if an entity is valid and resident
+   */
+  isEntity(entity: Entity): entity is Entity {
+    if (isPositiveUint32(entity) === false) {
+      return false;
+    }
+    if (entity > this.capacity) {
+      return false;
+    }
+    return true;
   }
 
   /**

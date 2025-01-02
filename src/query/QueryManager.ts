@@ -6,8 +6,9 @@
  */
 
 import { createQueryInstance, type Query } from "./Query.ts";
-import type { QueryInstance } from "../types.ts";
+import type { Entity, QueryInstance, SchemaOrNull } from "../types.ts";
 import type { World } from "../world/World.ts";
+import type { ComponentInstance } from "../component/ComponentInstance.ts";
 
 /** The QueryManager is responsible for creating, registering, and destroying queries. */
 export class QueryManager {
@@ -40,7 +41,27 @@ export class QueryManager {
     return instance;
   }
 
-  entities(_query: Query) {
+  *entities(query: Query): IterableIterator<Entity> {
+    const visited = new Set<Entity>();
+    const archetypes = this.registry.get(query)!.archetypes;
+    for (const archetype of archetypes) {
+      for (const entity of archetype.getEntities()) {
+        if (visited.has(entity)) continue;
+        visited.add(entity);
+        yield entity;
+      }
+    }
+  }
+
+  components(query: Query): Record<string, ComponentInstance<SchemaOrNull>> {
+    const archetypes = this.registry.get(query)!.archetypes;
+    const res: Record<string, ComponentInstance<SchemaOrNull>> = {}; // TODO: memoize
+    for (const archetype of archetypes) {
+      for (const component of archetype.components) {
+        res[component.name] = component;
+      }
+    }
+    return res;
   }
 
   stringify() {}

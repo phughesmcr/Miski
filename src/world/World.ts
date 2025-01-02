@@ -259,44 +259,39 @@ export class World {
     this.#systemManager = new SystemManager();
 
     this.components = {
+      all: this.#componentManager.all,
       count: this.#componentManager.count,
-      registry: Object.create(null),
       addToEntity: this.#componentManager.addToEntity,
-      entityHas: this.#componentManager.entityHas,
-      fromEntity: this.#componentManager.fromEntity,
-      get: this.#componentManager.get,
-      getData: this.#componentManager.getData,
+      entityOwns: this.#componentManager.entityOwns,
+      getChanged: this.#componentManager.getChanged,
+      getEntityData: this.#componentManager.getEntityData,
+      getInstance: this.#componentManager.getInstance,
+      getOwners: this.#componentManager.getOwners,
       isRegistered: this.#componentManager.isRegistered,
       query: this.#queryManager.components,
       removeFromEntity: this.#componentManager.removeFromEntity,
-      setData: this.#componentManager.setData,
+      setEntityData: this.#componentManager.setEntityData,
     };
 
-    // Setup the components.byName property
-    for (const component of components) {
-      Object.defineProperty(this.components.registry, component.name, {
-        value: this.#componentManager.get(component),
-        writable: false,
-        configurable: false,
-      });
-    }
-
     this.entities = {
+      capacity: this.#entityManager.capacity,
+      active: this.#entityManager.active,
       create: this.#entityManager.create,
-      destroy: (entity: Entity) => {
-        this.#entityManager.destroy(entity);
-        return this;
-      },
-      exists: this.#entityManager.exists,
+      destroy: this.#entityManager.destroy,
+      exists: this.#entityManager.isActive,
+      getActiveCount: this.#entityManager.getActiveCount,
+      getAvailableCount: this.#entityManager.getAvailableCount,
+      isActive: this.#entityManager.isActive,
+      isEntity: this.#entityManager.isEntity,
       query: this.#queryManager.entities,
     };
 
     this.systems = {
+      registry: this.#systemManager.registry,
       create: this.#systemManager.create.bind(this.#systemManager, this),
       get: this.#systemManager.get,
       has: this.#systemManager.has,
       destroy: this.#systemManager.destroy.bind(this.#systemManager, this),
-      registry: this.#systemManager.registry,
     };
   }
 
@@ -317,7 +312,7 @@ export class World {
     } else if (this.#state === "destroyed") {
       throw new WorldStateError("World has already been destroyed");
     }
-    // TODO: ensure everything is in its correct initial state
+    // TODO: ensure everything is in its correct initial state - however, fromJSON world's shouldn't set everything to initial??
     this.#archetypeManager.init();
     await this.#systemManager.init(this);
     this.#state = "initialized";

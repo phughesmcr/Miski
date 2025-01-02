@@ -46,7 +46,7 @@ export function isValidComponentArray(array: unknown): array is Array<Component<
   return Array.isArray(array) && array.every(isComponent);
 }
 
-/** */
+/** A Component is a collection of properties that are stored in a world */
 export class Component<T extends SchemaOrNull> implements ComponentPrivateMethods<T> {
   /** The component's storage partition */
   readonly [$_PARTITION_KEY]: Partition<T>;

@@ -95,7 +95,10 @@ export type ComponentSpec<T extends SchemaOrNull> =
       schema?: null;
     });
 
-/** The private methods of a Component */
+/**
+ * @internal
+ * The private methods of a Component
+ */
 export interface ComponentPrivateMethods<T extends SchemaOrNull> {
   /** The Partition object of the Component */
   readonly [$_PARTITION_KEY]: Partition<T>;
@@ -175,10 +178,10 @@ export type SystemCallback<
  * @param T The callback's type
  * @param U The parameters of the callback excluding the first two (which are always the components and entities)
  */
-export interface SystemSpec<
+export type SystemSpec<
   T extends (components: ComponentRecord, entities: IterableIterator<Entity>, ...args: unknown[]) => ReturnType<T>,
   U extends ParametersExceptFirstTwo<T>,
-> {
+> = {
   /** The name of the system */
   name: string;
   /** The query which will provide the components and entities to the system. */
@@ -189,8 +192,12 @@ export interface SystemSpec<
   init?: (world: World) => void | Promise<void>;
   /** The function to call when the system is destroyed. */
   destroy?: (world: World) => void | Promise<void>;
-}
+};
 
+/**
+ * @internal
+ * The private methods of a System
+ */
 export interface SystemPrivateMethods {
   [$_SYSTEM_INIT_KEY]: (world: World) => void | Promise<void>;
   [$_SYSTEM_DESTROY_KEY]: (world: World) => void | Promise<void>;
@@ -222,44 +229,60 @@ export type WorldState = "uninitialized" | "initialized" | "destroyed";
 
 /** The public Entity management API */
 export type WorldEntityAPI = {
+  /** The capacity of the EntityManager */
+  capacity: number;
+  /** Get an iterable of all active entities */
+  active(startEntity?: Entity, endEntity?: Entity): IterableIterator<Entity>;
   /** Create an entity */
   create(): Entity | undefined;
   /** Destroy an entity */
-  destroy(entity: Entity): World;
+  destroy(entity: Entity): void;
   /** Check if an entity exists */
   exists(entity: Entity): boolean;
+  /** Get the number of active entities */
+  getActiveCount(): number;
+  /** Get the number of available entities */
+  getAvailableCount(): number;
+  /** Check if an entity is active */
+  isActive(entity: Entity): boolean;
+  /** Check if an entity is valid */
+  isEntity(entity: Entity): boolean;
   /** Query for entities */
   query(query: Query): IterableIterator<Entity>;
 };
 
 /** The public Component management API */
 export type WorldComponentAPI = {
+  /** An iterable of all ComponentInstances registered */
+  all: IterableIterator<ComponentInstance<any>>;
+  /** The number of components registered */
+  count: number;
   /** Add a component to an entity */
-  addToEntity<T extends SchemaOrNull>(component: Component<T>, entity: Entity): void;
+  addToEntity<T extends SchemaOrNull>(component: Component<T>, entity: Entity, data?: { [k in keyof T]: number }): void;
   /** Check if an entity has a component */
-  entityHas<T extends SchemaOrNull>(component: Component<T>, entity: Entity): boolean;
-  /** Get all the component instances associated with an entity */
-  fromEntity<T extends SchemaOrNull>(entity: Entity): Record<string, ComponentInstance<T>>;
-  /** Get a component from the World */
-  get<T extends SchemaOrNull>(component: Component<T> | string): ComponentInstance<T> | undefined;
+  entityOwns<T extends SchemaOrNull>(component: Component<T>, entity: Entity): boolean;
+  /** Get an iterable of all entities with one or more changed properties for a given component */
+  getChanged<T extends SchemaOrNull>(component: Component<T>): IterableIterator<Entity> | undefined;
   /** Get the data of a component from an entity */
-  getData<T extends SchemaOrNull>(component: Component<T> | string, entity: Entity): T | undefined;
+  getEntityData<T extends SchemaOrNull>(component: Component<T> | string, entity: Entity): T | undefined;
   /** Check if a component is registered */
   isRegistered<T extends SchemaOrNull>(component: Component<T> | string): boolean;
+  /** Get the registered instance of a given component */
+  getInstance<T extends SchemaOrNull>(component: Component<T>): ComponentInstance<T> | undefined;
+  /** Get an iterable of all entities with a given component */
+  getOwners<T extends SchemaOrNull>(component: Component<T>): () => IterableIterator<Entity> | undefined;
   /** Query for components */
-  query<T extends SchemaOrNull>(query: Query): Record<string, ComponentInstance<T>>;
+  query(query: Query): Record<string, ComponentInstance<SchemaOrNull>>;
   /** Remove a component from an entity */
   removeFromEntity<T extends SchemaOrNull>(component: Component<T>, entity: Entity): void;
   /** Set the data of a component for an entity */
-  setData<T extends SchemaOrNull>(component: Component<T> | string, entity: Entity, value?: T): void;
-  /** The number of components registered */
-  count: number;
-  /** The ComponentInstances by name */
-  registry: ComponentRecord;
+  setEntityData<T extends SchemaOrNull>(component: Component<T> | string, entity: Entity, value?: T): void;
 };
 
 /** The public System management API */
 export type WorldSystemAPI = {
+  /** The systems by name */
+  registry: SystemRecord;
   /** Create a system */
   create<
     T extends (components: ComponentRecord, entities: IterableIterator<Entity>, ...args: unknown[]) => ReturnType<T>,
@@ -280,6 +303,4 @@ export type WorldSystemAPI = {
     T extends (components: ComponentRecord, entities: IterableIterator<Entity>, ...args: unknown[]) => ReturnType<T>,
     U extends ParametersExceptFirstTwo<T>,
   >(system: System<T, U> | string): void;
-  /** The systems by name */
-  registry: SystemRecord;
 };
