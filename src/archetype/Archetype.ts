@@ -6,9 +6,9 @@
  */
 
 import { BooleanArray } from "@phughesmcr/booleanarray";
+import { ID_KEY } from "../constants.ts";
 import type { ComponentInstance } from "../component/ComponentInstance.ts";
 import type { Entity, QueryInstance } from "../types.ts";
-import { ID_KEY } from "../constants.ts";
 
 /** An Archetype is a collection of ComponentInstances which define the schema of an Entity. */
 export class Archetype {
@@ -166,8 +166,7 @@ export class Archetype {
    * @returns The Archetype with the Entity removed
    */
   removeEntity(entity: Entity): Archetype {
-    if (this.#entities.has(entity) === false) return this;
-    // TODO: should the entity be removed from entered too?
+    this.#entered.delete(entity);
     this.#entities.delete(entity);
     this.#exited.add(entity);
     return this;

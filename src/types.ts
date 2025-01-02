@@ -257,26 +257,39 @@ export type WorldComponentAPI = {
   all: IterableIterator<ComponentInstance<any>>;
   /** The number of components registered */
   count: number;
+  /** A Record of ComponentInstances by Component name */
+  registry: Record<string, ComponentInstance<any>>;
   /** Add a component to an entity */
-  addToEntity<T extends SchemaOrNull>(component: Component<T>, entity: Entity, data?: { [k in keyof T]: number }): void;
+  addToEntity<T extends SchemaOrNull>(
+    component: Component<T> | string,
+    entity: Entity,
+    data?: { [k in keyof T]: number },
+  ): void;
   /** Check if an entity has a component */
-  entityOwns<T extends SchemaOrNull>(component: Component<T>, entity: Entity): boolean;
+  entityOwns<T extends SchemaOrNull>(component: Component<T> | string, entity: Entity): boolean;
   /** Get an iterable of all entities with one or more changed properties for a given component */
-  getChanged<T extends SchemaOrNull>(component: Component<T>): IterableIterator<Entity> | undefined;
+  getChanged<T extends SchemaOrNull>(component: Component<T> | string): IterableIterator<Entity> | undefined;
   /** Get the data of a component from an entity */
-  getEntityData<T extends SchemaOrNull>(component: Component<T> | string, entity: Entity): T | undefined;
+  getEntityData<T extends SchemaOrNull>(
+    component: Component<T> | string,
+    entity: Entity,
+  ): Record<keyof T, number> | undefined;
   /** Check if a component is registered */
   isRegistered<T extends SchemaOrNull>(component: Component<T> | string): boolean;
   /** Get the registered instance of a given component */
-  getInstance<T extends SchemaOrNull>(component: Component<T>): ComponentInstance<T> | undefined;
+  getInstance<T extends SchemaOrNull>(component: Component<T> | string): ComponentInstance<T> | undefined;
   /** Get an iterable of all entities with a given component */
-  getOwners<T extends SchemaOrNull>(component: Component<T>): () => IterableIterator<Entity> | undefined;
+  getOwners<T extends SchemaOrNull>(component: Component<T> | string): IterableIterator<Entity> | undefined;
   /** Query for components */
   query(query: Query): Record<string, ComponentInstance<SchemaOrNull>>;
   /** Remove a component from an entity */
-  removeFromEntity<T extends SchemaOrNull>(component: Component<T>, entity: Entity): void;
+  removeFromEntity<T extends SchemaOrNull>(component: Component<T> | string, entity: Entity): void;
   /** Set the data of a component for an entity */
-  setEntityData<T extends SchemaOrNull>(component: Component<T> | string, entity: Entity, value?: T): void;
+  setEntityData<T extends SchemaOrNull>(
+    component: Component<T> | string,
+    entity: Entity,
+    value?: Record<keyof T, number>,
+  ): void;
 };
 
 /** The public System management API */

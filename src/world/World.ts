@@ -180,7 +180,7 @@ import { SpecError, WorldStateError } from "../errors.ts";
 import { QueryManager } from "../query/QueryManager.ts";
 import { SystemManager } from "../system/SystemManager.ts";
 import { isObject, isPositiveUint32 } from "../utils.ts";
-import type { Entity, WorldComponentAPI, WorldEntityAPI, WorldSpec, WorldState, WorldSystemAPI } from "../types.ts";
+import type { WorldComponentAPI, WorldEntityAPI, WorldSpec, WorldState, WorldSystemAPI } from "../types.ts";
 
 /**
  * Test if an object is a valid WorldSpec
@@ -197,18 +197,6 @@ export function isValidWorldSpec(spec: unknown): spec is WorldSpec {
 
 /** The World is the central context in which all Entities and Components exist. */
 export class World {
-  /**
-   * Deserialize a World from a JSON string
-   * @param json The JSON string to deserialize
-   * @returns The deserialized World
-   */
-  static fromJSON(json: string): World {
-    const spec: WorldSpec = JSON.parse(json);
-    const world = new World(spec);
-    // TODO: setup everything
-    return world;
-  }
-
   /** Miski library version */
   static readonly version: string = VERSION;
 
@@ -241,8 +229,8 @@ export class World {
 
   /**
    * Create a new World
-   * @param spec The specification object
-   * @throws {SpecError} If the WorldSpec is invalid
+   * @param spec - The specification to create the World with
+   * @throws {SpecError} - If the provided spec object is invalid
    */
   constructor(spec: WorldSpec) {
     if (isValidWorldSpec(spec) === false) {
@@ -261,6 +249,7 @@ export class World {
     this.components = {
       all: this.#componentManager.all,
       count: this.#componentManager.count,
+      registry: this.#componentManager.registry,
       addToEntity: this.#componentManager.addToEntity,
       entityOwns: this.#componentManager.entityOwns,
       getChanged: this.#componentManager.getChanged,
@@ -301,10 +290,9 @@ export class World {
   }
 
   /**
-   * Initialize the world
-   * @returns The world
-   * @throws {WorldStateError} If the world is already initialized
-   * @throws {WorldStateError} If the world has already been destroyed
+   * Initialize the World
+   * @returns The World
+   * @throws {WorldStateError} - If the World is already initialized, or has already been destroyed
    */
   async init(): Promise<this> {
     if (this.#state === "initialized") {
@@ -320,10 +308,9 @@ export class World {
   }
 
   /**
-   * Destroy the world
-   * @returns The world
-   * @throws {WorldStateError} If the world has not yet been initialized
-   * @throws {WorldStateError} If the world has already been destroyed
+   * Destroy the World
+   * @returns The World
+   * @throws {WorldStateError} - If the World has not yet been initialized, or has already been destroyed
    */
   async destroy(): Promise<this> {
     if (this.#state === "uninitialized") {
@@ -338,10 +325,9 @@ export class World {
   }
 
   /**
-   * Refresh the world
+   * Run routine maintenance on the World
    * @returns The world
-   * @throws {WorldStateError} If the world has not yet been initialized
-   * @throws {WorldStateError} If the world has already been destroyed
+   * @throws {WorldStateError} - If the World has not yet been initialized, or has already been destroyed
    */
   refresh(): this {
     if (this.#state === "uninitialized") {
@@ -352,21 +338,5 @@ export class World {
     this.#archetypeManager.refresh(this.#queryManager.registry.values());
     this.#componentManager.refresh();
     return this;
-  }
-
-  /**
-   * Serialize the world to a JSON string
-   * @returns The serialized world
-   */
-  stringify(): string {
-    return JSON.stringify({
-      version: World.version,
-      state: this.#state,
-      archetypes: this.#archetypeManager.stringify(),
-      entities: this.#entityManager.stringify(),
-      components: this.#componentManager.stringify(),
-      queries: this.#queryManager.stringify(),
-      systems: this.#systemManager.stringify(),
-    });
   }
 }

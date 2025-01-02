@@ -14,15 +14,6 @@ import { ID_KEY } from "../constants.ts";
 
 /** ArchetypeManager handles creation and allocation of Archetypes */
 export class ArchetypeManager {
-  /**
-   * Create a new ArchetypeManager from a JSON string
-   * @param json The JSON string
-   * @returns a new ArchetypeManager
-   */
-  static fromJSON(json: string): ArchetypeManager {
-    return new ArchetypeManager(JSON.parse(json));
-  }
-
   /** Archetypes by their id */
   readonly registry: Map<string, Archetype>;
 
@@ -49,6 +40,7 @@ export class ArchetypeManager {
   init: () => this;
 
   /**
+   * @internal
    * Update the Archetype associated with an Entity based on its components
    * @param entity The Entity
    * @param components The ComponentInstances

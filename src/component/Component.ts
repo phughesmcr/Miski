@@ -25,7 +25,7 @@ import type { ComponentPrivateMethods, ComponentSpec, Schema, SchemaOrNull } fro
 
 /**
  * Component specification type guard.
- * @param spec the component's specification.
+ * @param spec - The component's specification.
  * @returns `true` if the spec is valid, `false` otherwise
  */
 export function isValidComponentSpec<T extends SchemaOrNull>(spec: unknown): spec is ComponentSpec<T> {
@@ -56,8 +56,8 @@ export class Component<T extends SchemaOrNull> implements ComponentPrivateMethod
 
   /**
    * Create a new component.
-   * @param spec the component's specification.
-   * @throws {TypeError} If the spec is invalid
+   * @param spec - The component's specification.
+   * @throws {TypeError} - If the spec is invalid
    */
   constructor(spec: ComponentSpec<T>) {
     if (isValidComponentSpec(spec) === false) {

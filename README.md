@@ -2,7 +2,7 @@
 
 __Miski__: Quechuan adjective meaning "sweet".
 
-__ECS__: **Entity**-Component-System; a software architecture pattern.
+__ECS__: Entity-Component-System; a software architecture pattern.
 
 __Miski ECS__: A sweet, high-performance ECS library written in Typescript.
 
@@ -60,7 +60,6 @@ Because Miski is designed to be used inside your own projects, we let you config
 * Fast, cache-friendly ArrayBuffer-based component data storage
 * Ability to register more than 32 components in one world
 * Ability to limit the number of entities a component can be added to
-* Basic serialization methods (`world.load` & `world.save`)
 * Define components, systems and queries once, reuse them across multiple worlds
 * `AND`,`OR`,`NOT` operators in Queries
 * `world.getQueryEntered` & `world.getQueryExited` methods
