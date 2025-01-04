@@ -3,184 +3,30 @@
  * @description The World is the central context in which all Entities and Components exist.
  * @copyright   2024 the Miski authors. All rights reserved.
  * @license     MIT
- *
- * @example Create Components
- * ```ts
- * type Vec2 = { x: number; y: number };
- * const positionComponent = new Component<Vec2>({
- *   name: "position",
- *   schema: {
- *     x: Float32Array,
- *     y: Float32Array,
- *   },
- * });
- * ```
- *
- * @example Create a new World
- * ```ts
- * // Create a new World with a capacity of 1024 entities and register the component.
- * const world = new World({
- *   capacity: 1024,      // The maximum number of entities that the world can hold.
- *   components: [ positionComponent ], // The components to register in the world (requires at least one component).
- * });
- * ```
- *
- * @example Destroy a World
- * ```ts
- * // Destroying a World will destroy all Entities and Components within it.
- * // Also calls all System's `destroy` methods.
- * world.destroy();
- * ```
- *
- * @example Initialize a World
- * ```ts
- * // Calls all System's `init` methods.
- * world.init();
- * ```
- *
- * @example Run routine maintenance on the world
- * ```ts
- * // Recommended once per frame (minimum).
- * world.refresh();
- * ```
- *
- * @example Create a new Entity
- * ```ts
- * const entity1: Entity = world.entities.create(); // 0
- * const entity2: Entity = world.entities.create(); // 1
- * const entity3: Entity = world.entities.create(); // 2
- * const entities4to10: Entity[] = world.entities.create(7); // [3, 4, 5, 6, 7, 8, 9]
- * ```
- *
- * @example Destroy an Entity
- * ```ts
- * const wasDestroyed: boolean = world.entities.destroy(entity2); // true
- * ```
- *
- * @example Check if an Entity exists
- * ```ts
- * const exists: boolean = world.entities.exists(entity1); // true
- * const exists2: boolean = world.entities.exists(entity2); // false
- * ```
- *
- * @example
- *
- * @example Add a component to an Entity
- * ```ts
- * // Without setting initial values:
- * world.entities.addComponent(entity1, positionComponent);
- *
- * // With setting initial values:
- * world.entities.addComponent(entity2, positionComponent, { x: 10, y: 20 });
- * ```
- *
- * @example Remove a component from an Entity
- * ```ts
- * world.entities.removeComponent(entity2, positionComponent);
- * ```
- *
- * @example Set an Entity's component values
- * ```ts
- * // Ideally this is done through a System.
- *
- * // First way: type-safe and shows the entity in `world.components.get("position").changed`
- * world.components.set<Vec2>(entity1, positionComponent, { x: 10, y: 20 });
- *
- * // Second way: type-unsafe and does not show the entity in `world.components.get("position").changed`
- * const positionComponentInstance: ComponentInstance<Vec2> = world.components.get("position");
- * positionComponentInstance.data[entity1].x = 10;
- * positionComponentInstance.data[entity1].y = 20;
- *
- * // Third way: Through the component proxy type-safe and shows the entity in `world.components.get("position").changed`
- * const positionComponentInstance: ComponentInstance<Vec2> = world.components.get("position");
- * positionComponentInstance.cursor = entity1;
- * positionComponentInstance.x = 10;
- * positionComponentInstance.y = 20;
- * ```
- *
- * @example Get an Entity's components
- * ```ts
- * const components: Set<ComponentInstance<any>> = world.components.fromEntities(entity1);
- * ```
- *
- * @example Get all the Entities whose properties changed since the last `world.refresh()`
- * ```ts
- * const changedPosition: IterableIterator<Entity> = world.components.get("position").changed;
- * ```
- *
- * @example Query entities by component
- * ```ts
- * const positionQuery = new Query({ all: [positionComponent] });
- * const positionView: IterableIterator<Entity> = world.entities.query(positionQuery);
- * for (const entity of positionView) {
- *   console.log(entity); // Should log only "0", because entity1 is the first entity created.
- * }
- * ```
- *
- * @example Query entities by component (complex)
- * ```ts
- * const renderablePlayerQuery = new Query({
- *   // All entities must have the player component.
- *   all: [playerComponent],
- *   // All entities must have the renderable component or the renderable SFX component.
- *   any: [renderableComponent, renderableSFXComponent],
- *   // All entities must not have the invisibility component.
- *   none: [invisibilityComponent],
- * });
- * ```
- *
- * @example Register a System
- * ```ts
- * const system = new System({
- *   name: "positionSystem",
- *   query: positionQuery,
- *   // optional
- *   init: () => {
- *     // called once on world.init()
- *     console.log("positionSystem initialized");
- *   },
- *   // optional
- *   destroy: () => {
- *     // called once on world.destroy()
- *     console.log("positionSystem destroyed");
- *   },
- *   // required
- *   // The callback to run when the SystemInstance is created (below)
- *   callback: (entities: IterableIterator<Entity>, components: Readonly<Record<string, ComponentInstance<any>>>, ...args: any[]): void => {
- *     console.log(args[0], args[1]); // should log the frametime and "Hello, World!" (see below)
- *     for (const entity of entities) {
- *       console.log(entity);
- *     }
- *   },
- * });
- *
- * const systemInstance: Function = world.systems.create(system);
- *
- * const update = (frametime: number) => {
- *   systemInstance(frametime, "Hello, World!"); // the System's callback is called here
- *   requestAnimationFrame(update);
- * }
- *
- * requestAnimationFrame(update);
- * ```
- *
- * @example Serialize to and from JSON
- * ```ts
- * const json: string = world.stringify();
- * const world2: World = World.fromJSON(json);
- * ```
  */
 
 import { ArchetypeManager } from "../archetype/ArchetypeManager.ts";
-import { isValidComponentArray } from "../component/Component.ts";
+import { type Component, isValidComponentArray } from "../component/Component.ts";
 import { ComponentManager } from "../component/ComponentManager.ts";
 import { VERSION } from "../constants.ts";
 import { EntityManager } from "../entity/EntityManager.ts";
-import { SpecError, WorldStateError } from "../errors.ts";
+import { NotRegisteredError, SpecError, WorldStateError } from "../errors.ts";
 import { QueryManager } from "../query/QueryManager.ts";
 import { SystemManager } from "../system/SystemManager.ts";
 import { isObject, isPositiveUint32 } from "../utils.ts";
-import type { WorldComponentAPI, WorldEntityAPI, WorldSpec, WorldState, WorldSystemAPI } from "../types.ts";
+import type {
+  Entity,
+  SchemaOrNull,
+  WorldAPIResult,
+  WorldArchetypeAPI,
+  WorldComponentAPI,
+  WorldEntityAPI,
+  WorldSpec,
+  WorldState,
+  WorldSystemAPI,
+} from "../types.ts";
+import type { Query } from "../query/Query.ts";
+import type { ComponentInstance } from "../component/ComponentInstance.ts";
 
 /**
  * Test if an object is a valid WorldSpec
@@ -197,6 +43,152 @@ export function isValidWorldSpec(spec: unknown): spec is WorldSpec {
 
 /** The World is the central context in which all Entities and Components exist. */
 export class World {
+  /**
+   * Construct the public APIs for the World
+   * @param world - The World to construct the APIs for
+   * @returns The public APIs for the World
+   */
+  static #constructAPIs(world: World): WorldAPIResult {
+    /**
+     * Convenience function to get a component from a string or Component
+     * @throws {NotRegisteredError} - If the component is not registered
+     */
+    const getComponentByName = <T extends SchemaOrNull>(component: string | Component<T>): Component<T> => {
+      if (typeof component === "string") {
+        component = world.#componentManager.getInstance(component)?.proto as Component<T>;
+        if (!component) {
+          throw new NotRegisteredError(`Component ${component} not registered in world`);
+        }
+      }
+      return component;
+    };
+
+    const queryArchetypeComponents = (query: Query): Record<string, ComponentInstance<any>> => {
+      const queryInstance = world.#queryManager.register(query);
+      const archetypes = world.#archetypeManager.query(queryInstance);
+      if (!archetypes) return {};
+      const components: Record<string, ComponentInstance<any>> = {};
+      for (const archetype of archetypes) {
+        for (const component of archetype.components) {
+          components[component.name] = component;
+        }
+      }
+      return components;
+    };
+
+    const queryArchetypeEntities = (query: Query): Set<Entity> => {
+      const queryInstance = world.#queryManager.register(query);
+      const archetypes = world.#archetypeManager.query(queryInstance);
+      if (!archetypes) return new Set<Entity>();
+      const entities = new Set<Entity>();
+      for (const archetype of archetypes) {
+        // TODO: do this with booleanarray!
+        for (const entity of archetype.getEntities()) {
+          entities.add(entity);
+        }
+      }
+      return entities;
+    };
+
+    const queryArchetypes = (
+      query: Query,
+    ): [components: Record<string, ComponentInstance<any>>, entities: Set<Entity>] => {
+      const queryInstance = world.#queryManager.register(query);
+      const archetypes = world.#archetypeManager.query(queryInstance);
+      if (!archetypes) return [{}, new Set<Entity>()];
+      const components: Record<string, ComponentInstance<any>> = {};
+      const entities = new Set<Entity>();
+      for (const archetype of archetypes) {
+        for (const component of archetype.components) {
+          components[component.name] = component;
+        }
+        // TODO: do this with booleanarray!
+        for (const entity of archetype.getEntities()) {
+          entities.add(entity);
+        }
+      }
+      return [components, entities];
+    };
+
+    /**
+     * Add a component to an entity
+     * @param component - The component to add
+     * @param entity - The entity to add the component to
+     * @param data - The data to set for the component
+     * @throws {NotRegisteredError} - If the component is not registered
+     */
+    const addComponentToEntity = <T extends SchemaOrNull>(
+      component: string | Component<T>,
+      entity: Entity,
+      data?: { [k in keyof T]: number } | undefined,
+    ): void => {
+      component = getComponentByName(component);
+      world.#componentManager.addToEntity(component, entity, data);
+      world.#archetypeManager.update(entity, world.#archetypeManager.getEntityComponents(entity));
+    };
+
+    /**
+     * Remove a component from an entity
+     * @param component - The component to remove
+     * @param entity - The entity to remove the component from
+     * @throws {NotRegisteredError} - If the component is not registered
+     */
+    const removeComponentFromEntity = <T extends SchemaOrNull>(
+      component: string | Component<T>,
+      entity: Entity,
+    ): void => {
+      component = getComponentByName(component);
+      world.#componentManager.removeFromEntity(component, entity);
+      world.#archetypeManager.update(entity, world.#archetypeManager.getEntityComponents(entity));
+    };
+
+    const archetypes: WorldArchetypeAPI = {
+      isEntityInRoot: world.#archetypeManager.isEntityInRoot,
+      query: queryArchetypes,
+      queryComponents: queryArchetypeComponents,
+      queryEntities: queryArchetypeEntities,
+    };
+
+    const components: WorldComponentAPI = {
+      all: world.#componentManager.all,
+      count: world.#componentManager.count,
+      registry: world.#componentManager.registry,
+      addToEntity: addComponentToEntity,
+      entityOwns: world.#componentManager.entityOwns,
+      getChanged: world.#componentManager.getChanged,
+      getEntityData: world.#componentManager.getEntityData,
+      getInstance: world.#componentManager.getInstance,
+      getOwners: world.#componentManager.getOwners,
+      isRegistered: world.#componentManager.isRegistered,
+      query: world.#queryManager.components,
+      removeFromEntity: removeComponentFromEntity,
+      setEntityData: world.#componentManager.setEntityData,
+    };
+
+    const entities: WorldEntityAPI = {
+      capacity: world.#entityManager.capacity,
+      active: world.#entityManager.active,
+      create: world.#entityManager.create,
+      destroy: world.#entityManager.destroy,
+      exists: world.#entityManager.isActive,
+      getActiveCount: world.#entityManager.getActiveCount,
+      getAvailableCount: world.#entityManager.getAvailableCount,
+      isActive: world.#entityManager.isActive,
+      isEntity: world.#entityManager.isEntity,
+      query: world.#queryManager.entities,
+    };
+
+    const systems: WorldSystemAPI = {
+      registry: world.#systemManager.registry,
+      create: world.#systemManager.create.bind(world.#systemManager, world),
+      get: world.#systemManager.get,
+      has: world.#systemManager.has,
+      destroy: world.#systemManager.destroy.bind(world.#systemManager, world),
+    };
+
+    return { archetypes, components, entities, systems };
+  }
+
   /** Miski library version */
   static readonly version: string = VERSION;
 
@@ -217,6 +209,9 @@ export class World {
 
   /** The World's current state */
   #state: WorldState;
+
+  /** Archetype Management API */
+  readonly archetypes: WorldArchetypeAPI;
 
   /** Entity Management API */
   readonly entities: WorldEntityAPI;
@@ -246,42 +241,11 @@ export class World {
     this.#queryManager = new QueryManager(this);
     this.#systemManager = new SystemManager();
 
-    this.components = {
-      all: this.#componentManager.all,
-      count: this.#componentManager.count,
-      registry: this.#componentManager.registry,
-      addToEntity: this.#componentManager.addToEntity,
-      entityOwns: this.#componentManager.entityOwns,
-      getChanged: this.#componentManager.getChanged,
-      getEntityData: this.#componentManager.getEntityData,
-      getInstance: this.#componentManager.getInstance,
-      getOwners: this.#componentManager.getOwners,
-      isRegistered: this.#componentManager.isRegistered,
-      query: this.#queryManager.components,
-      removeFromEntity: this.#componentManager.removeFromEntity,
-      setEntityData: this.#componentManager.setEntityData,
-    };
-
-    this.entities = {
-      capacity: this.#entityManager.capacity,
-      active: this.#entityManager.active,
-      create: this.#entityManager.create,
-      destroy: this.#entityManager.destroy,
-      exists: this.#entityManager.isActive,
-      getActiveCount: this.#entityManager.getActiveCount,
-      getAvailableCount: this.#entityManager.getAvailableCount,
-      isActive: this.#entityManager.isActive,
-      isEntity: this.#entityManager.isEntity,
-      query: this.#queryManager.entities,
-    };
-
-    this.systems = {
-      registry: this.#systemManager.registry,
-      create: this.#systemManager.create.bind(this.#systemManager, this),
-      get: this.#systemManager.get,
-      has: this.#systemManager.has,
-      destroy: this.#systemManager.destroy.bind(this.#systemManager, this),
-    };
+    const APIs: WorldAPIResult = World.#constructAPIs(this);
+    this.archetypes = APIs.archetypes;
+    this.components = APIs.components;
+    this.entities = APIs.entities;
+    this.systems = APIs.systems;
   }
 
   /** The World's current state */
@@ -337,6 +301,7 @@ export class World {
     }
     this.#archetypeManager.refresh(this.#queryManager.registry.values());
     this.#componentManager.refresh();
+    this.#queryManager.invalidate();
     return this;
   }
 }

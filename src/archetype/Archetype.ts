@@ -22,13 +22,13 @@ export class Archetype {
   #components: ComponentInstance<any>[];
 
   /** Entities which have entered this archetype since last refresh */
-  #entered: Set<Entity>;
+  #entered: BooleanArray;
 
   /** Set of Entities which inhabit this Archetype */
-  #entities: Set<Entity>;
+  #entities: BooleanArray;
 
   /** Entities which have exited this archetype since last refresh */
-  #exited: Set<Entity>;
+  #exited: BooleanArray;
 
   /** The Archetype's unique identifier */
   readonly id: string;
@@ -49,9 +49,9 @@ export class Archetype {
     this.#bitfield = bitfield;
     this.#candidateCache = new Map();
     this.#components = components;
-    this.#entered = new Set();
-    this.#entities = new Set();
-    this.#exited = new Set();
+    this.#entered = new BooleanArray(capacity);
+    this.#entities = new BooleanArray(capacity);
+    this.#exited = new BooleanArray(capacity);
   }
 
   /** The maximum id number of the components this Archetype can represent */
@@ -75,9 +75,9 @@ export class Archetype {
    * @returns The Archetype with the Entity added
    */
   addEntity(entity: Entity): Archetype {
-    if (this.#entities.has(entity)) return this;
-    this.#entities.add(entity);
-    this.#entered.add(entity);
+    if (this.#entities.getBool(entity)) return this;
+    this.#entities.setBool(entity, true);
+    this.#entered.setBool(entity, true);
     return this;
   }
 
@@ -94,7 +94,7 @@ export class Archetype {
    * @returns The number of entities in the Archetype
    */
   getOccupancy(): number {
-    return this.#entities.size;
+    return this.#entities.getPopulationCount();
   }
 
   /**
@@ -102,7 +102,7 @@ export class Archetype {
    * @returns An iterator of Entities which have entered the Archetype
    */
   getEntered(): IterableIterator<Entity> {
-    return this.#entered.values();
+    return this.#entered.truthyIndices() as IterableIterator<Entity>;
   }
 
   /**
@@ -110,7 +110,7 @@ export class Archetype {
    * @returns An iterator of Entities which inhabit the Archetype
    */
   getEntities(): IterableIterator<Entity> {
-    return this.#entities.values();
+    return this.#entities.truthyIndices() as IterableIterator<Entity>;
   }
 
   /**
@@ -118,7 +118,7 @@ export class Archetype {
    * @returns An iterator of Entities which have exited the Archetype
    */
   getExited(): IterableIterator<Entity> {
-    return this.#exited.values();
+    return this.#exited.truthyIndices() as IterableIterator<Entity>;
   }
 
   /**
@@ -139,7 +139,7 @@ export class Archetype {
    * @returns `true` if this Archetype is dirty, `false` otherwise
    */
   isDirty(): boolean {
-    return this.#entered.size > 0 || this.#exited.size > 0;
+    return this.#entered.getPopulationCount() > 0 || this.#exited.getPopulationCount() > 0;
   }
 
   /**
@@ -147,7 +147,7 @@ export class Archetype {
    * @returns `true` if this Archetype is empty
    */
   isEmpty(): boolean {
-    return this.#entities.size === 0;
+    return this.#entities.getPopulationCount() === 0;
   }
 
   /**
@@ -166,9 +166,10 @@ export class Archetype {
    * @returns The Archetype with the Entity removed
    */
   removeEntity(entity: Entity): Archetype {
-    this.#entered.delete(entity);
-    this.#entities.delete(entity);
-    this.#exited.add(entity);
+    if (!this.#entities.getBool(entity)) return this;
+    this.#entered.setBool(entity, false);
+    this.#entities.setBool(entity, false);
+    this.#exited.setBool(entity, true);
     return this;
   }
 

@@ -89,15 +89,37 @@ export function createQueryInstance(world: World, query: Query): QueryInstance {
 export const isValidQuerySpec = (spec: unknown): spec is QuerySpec => {
   if (isObject(spec) === false) return false;
   const { all, any, none } = spec as QuerySpec;
+  // ensure at least one of the arrays is defined
   if (all == undefined && any == undefined && none == undefined) return false;
+  // ensure all arrays are valid component arrays
   if (all && isValidComponentArray(all) === false) return false;
   if (any && isValidComponentArray(any) === false) return false;
   if (none && isValidComponentArray(none) === false) return false;
+  // check for presence of component in multiple arrays
+  if (all && any && all.some((c) => any.includes(c))) return false;
+  if (all && none && all.some((c) => none.includes(c))) return false;
+  if (any && all && any.some((c) => all.includes(c))) return false;
+  if (any && none && any.some((c) => none.includes(c))) return false;
+  if (none && all && none.some((c) => all.includes(c))) return false;
+  if (none && any && none.some((c) => any.includes(c))) return false;
   return true;
 };
 
 /** A Query is a collection of Components that can be used to find Entities */
 export class Query {
+  /**
+   * Compose a new Query from an array of Queries
+   * @param queries - The Queries to compose
+   * @returns A new Query object
+   */
+  static compose(queries: Query[]): Query {
+    return new Query({
+      all: queries.flatMap((q) => q.all),
+      any: queries.flatMap((q) => q.any),
+      none: queries.flatMap((q) => q.none),
+    });
+  }
+
   /** `AND` - Gather entities as long as they have all these components */
   readonly all: Readonly<Component<SchemaOrNull>[]>;
 

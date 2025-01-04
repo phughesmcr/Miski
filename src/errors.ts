@@ -39,6 +39,14 @@ export class WorldStateError extends MiskiError {
   }
 }
 
+/** An error thrown when a component is not found */
+export class ComponentNotFoundError extends MiskiError {
+  constructor(message?: string) {
+    super(message ?? "Component not found");
+    this.name = "ComponentNotFoundError";
+  }
+}
+
 /** An error thrown when a query returned no components */
 export class NoComponentsFoundError extends MiskiError {
   constructor(message?: string) {

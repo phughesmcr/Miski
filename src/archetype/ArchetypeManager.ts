@@ -31,25 +31,6 @@ export class ArchetypeManager {
   readonly root: Archetype;
 
   /**
-   * @internal
-   * Called by `world.init()`
-   *
-   * Initialize the ArchetypeManager
-   * @returns this
-   */
-  init: () => this;
-
-  /**
-   * @internal
-   * Update the Archetype associated with an Entity based on its components
-   * @param entity The Entity
-   * @param components The ComponentInstances
-   * @returns The Archetype associated with the Entity
-   */
-  update: (entity: Entity, components: ComponentInstance<any>[]) => Archetype;
-
-  /**
-   * @internal
    * Create a new ArchetypeManager
    * @param capacity The maximum number of entities the manager can manage
    */
@@ -69,18 +50,20 @@ export class ArchetypeManager {
       return this;
     };
 
-    this.update = (entity: Entity, components: ComponentInstance<any>[]): Archetype => {
-      const currentArchetype: Archetype | undefined = this.fromEntity(entity);
+    this.update = (entity: Entity, components: Record<string, ComponentInstance<any>>): Archetype => {
+      const currentArchetype: Archetype | undefined = this.getEntityArchetype(entity);
+
+      const componentsArray = Object.values(components);
 
       // Convert the components to a bitfield
       let nextBitfield: BooleanArray; // TODO: This could be pooled
       if (currentArchetype) {
         nextBitfield = currentArchetype.bitfield.clone();
-        for (const component of components) {
+        for (const component of componentsArray) {
           nextBitfield.toggleBool(component.id);
         }
       } else {
-        nextBitfield = BooleanArray.fromObjects(capacity, ID_KEY, components);
+        nextBitfield = BooleanArray.fromObjects(capacity, ID_KEY, componentsArray);
       }
 
       // Check if the archetype has changed
@@ -114,8 +97,8 @@ export class ArchetypeManager {
    * @param entity - The entity to get the components for
    * @returns A record of component instances
    */
-  entityComponents(entity: Entity): Record<string, ComponentInstance<any>> {
-    const archetype = this.fromEntity(entity);
+  getEntityComponents(entity: Entity): Record<string, ComponentInstance<any>> {
+    const archetype = this.getEntityArchetype(entity);
     if (!archetype) {
       return {};
     }
@@ -145,18 +128,18 @@ export class ArchetypeManager {
    * @param entity The Entity
    * @returns The Archetype associated with the Entity or undefined
    */
-  fromEntity(entity: Entity): Archetype | undefined {
+  getEntityArchetype(entity: Entity): Archetype | undefined {
     return this.entityArchetypes[entity];
   }
 
   /**
-   * Get the Archetypes associated with a QueryInstance
-   * @param query The QueryInstance
-   * @returns An IterableIterator of Archetypes associated with the QueryInstance or undefined
+   * @internal
+   * Called by `world.init()`
+   *
+   * Initialize the ArchetypeManager
+   * @returns this
    */
-  fromQuery(query: QueryInstance): IterableIterator<Archetype> | undefined {
-    return this.queryArchetypes.get(query)?.values();
-  }
+  init: () => this;
 
   /**
    * Check if the ArchetypeManager manages an Archetype
@@ -172,8 +155,17 @@ export class ArchetypeManager {
    * @param entity The Entity
    * @returns `true` if the Entity is in the root archetype, `false` otherwise
    */
-  isInRoot(entity: Entity): boolean {
+  isEntityInRoot(entity: Entity): boolean {
     return this.entityArchetypes[entity] === this.root;
+  }
+
+  /**
+   * Get the Archetypes associated with a QueryInstance
+   * @param query The QueryInstance
+   * @returns An IterableIterator of Archetypes associated with the QueryInstance or undefined
+   */
+  query(query: QueryInstance): IterableIterator<Archetype> | undefined {
+    return this.queryArchetypes.get(query)?.values();
   }
 
   /**
@@ -237,4 +229,13 @@ export class ArchetypeManager {
       }),
     });
   }
+
+  /**
+   * @internal
+   * Update the Archetype associated with an Entity based on its components
+   * @param entity The Entity
+   * @param components The ComponentInstances
+   * @returns The Archetype associated with the Entity
+   */
+  update: (entity: Entity, components: Record<string, ComponentInstance<any>>) => Archetype;
 }

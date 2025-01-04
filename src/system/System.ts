@@ -25,11 +25,12 @@ export function createSystemInstance<
   T extends (components: ComponentRecord, entities: IterableIterator<Entity>, ...args: unknown[]) => ReturnType<T>,
   U extends ParametersExceptFirstTwo<T>,
 >(world: World, system: System<T, U>): SystemInstance<T, U> {
-  const components = world.components.query(system.query);
+  const componentMap = world.components.query(system.query);
+  const components = Object.fromEntries(componentMap);
   if (Object.keys(components).length === 0) {
     throw new NoComponentsFoundError("System query returned no components");
   }
-  const entities = world.entities.query(system.query);
+  const entities = world.entities.query(system.query); // TODO: this isn't right
   const boundCallback = system.callback.bind(null, components, entities);
   return Object.setPrototypeOf(boundCallback, system);
 }
