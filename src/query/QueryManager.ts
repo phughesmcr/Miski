@@ -13,9 +13,15 @@ import { BooleanArray } from "@phughesmcr/booleanarray";
 
 /** Cache for query results */
 class QueryCache {
-  #componentCache = new WeakMap<Query, Record<string, ComponentInstance<SchemaOrNull>>>();
-  #entityCache = new WeakMap<Query, BooleanArray>();
-  #timestamp = 0;
+  #componentCache: WeakMap<Query, Record<string, ComponentInstance<SchemaOrNull>>>;
+  #entityCache: WeakMap<Query, BooleanArray>;
+  #timestamp: number;
+
+  constructor() {
+    this.#componentCache = new WeakMap();
+    this.#entityCache = new WeakMap();
+    this.#timestamp = 0;
+  }
 
   /** Increment timestamp to invalidate all caches */
   invalidate(): void {
@@ -91,7 +97,7 @@ class QueryResultPool {
 /** The QueryManager is responsible for creating, registering, and destroying queries. */
 export class QueryManager {
   /** Cache for query results */
-  #cache = new QueryCache();
+  #cache: QueryCache;
 
   /** Map of registered Queries and their last update timestamp for the cache */
   #lastQueryUpdate: Map<Query, number>;
@@ -112,13 +118,13 @@ export class QueryManager {
    * Create a new QueryManager
    * @param world - The World instance containing the component registry
    */
-  constructor(world: World) {
+  constructor(world: World, capacity: number) {
     this.#cache = new QueryCache();
     this.#lastQueryUpdate = new Map();
-    this.#pool = new QueryResultPool(world.entities.capacity);
+    this.#pool = new QueryResultPool(capacity);
 
     this.registry = new Map();
-    this.#visited = new BooleanArray(world.entities.capacity);
+    this.#visited = new BooleanArray(capacity);
 
     // Setup the registrar
     this.register = (query: Query): QueryInstance => {
@@ -131,57 +137,66 @@ export class QueryManager {
     };
   }
 
-  #computeComponents(query: Query) {
-    const archetypes = this.registry.get(query)!.archetypes;
-    const result: Record<string, ComponentInstance<SchemaOrNull>> = {};
-    for (const archetype of archetypes) {
-      for (const component of archetype.components) {
-        result[component.name] = component;
-      }
-    }
-    return result;
-  }
-
-  *components(query: Query): IterableIterator<[string, ComponentInstance<SchemaOrNull>]> {
+  /** Get components for a query */
+  components = (query: Query): IterableIterator<[string, ComponentInstance<SchemaOrNull>]> => {
     const result = this.#cache.getComponents(
       query,
-      () => this.#computeComponents(query),
+      () => {
+        const instance = createQueryInstance(this.world, query);
+        return instance.components;
+      },
       this.#lastQueryUpdate.get(query) ?? 0,
     );
-    try {
-      yield* Object.entries(result);
-    } finally {
-      this.#pool.releaseComponentMap(result);
-    }
-  }
 
-  #computeEntities(query: Query): BooleanArray {
-    this.#visited.clear();
-    const archetypes = this.registry.get(query)!.archetypes;
-    const result = this.#pool.acquireEntityArray();
-    for (const archetype of archetypes) {
-      for (const entity of archetype.getEntities()) {
-        if (this.#visited.getBool(entity)) continue;
-        result.setBool(entity, true);
-        this.#visited.setBool(entity, true);
-      }
-    }
-    return result;
-  }
+    const entries = Object.entries(result);
+    const cleanup = () => this.#pool.releaseComponentMap(result);
 
-  *entities(query: Query): IterableIterator<Entity> {
+    return {
+      [Symbol.iterator]() {
+        return this;
+      },
+      next: () => {
+        const { done, value } = entries[Symbol.iterator]().next();
+        if (done) cleanup();
+        return { done, value };
+      },
+    };
+  };
+
+  /** Get entities for a query */
+  entities = (query: Query): IterableIterator<Entity> => {
     const entityArray = this.#cache.getEntities(
       query,
-      () => this.#computeEntities(query),
+      () => {
+        const instance = createQueryInstance(this.world, query);
+        this.#visited.clear();
+        const result = this.#pool.acquireEntityArray();
+        for (const archetype of instance.archetypes) {
+          for (const entity of archetype.getEntities()) {
+            if (this.#visited.getBool(entity)) continue;
+            result.setBool(entity, true);
+            this.#visited.setBool(entity, true);
+          }
+        }
+        return result;
+      },
       this.#lastQueryUpdate.get(query) ?? 0,
     );
 
-    try {
-      yield* entityArray.values();
-    } finally {
-      this.#pool.releaseEntityArray(entityArray);
-    }
-  }
+    const iterator = entityArray.values();
+    const cleanup = () => this.#pool.releaseEntityArray(entityArray);
+
+    return {
+      [Symbol.iterator]() {
+        return this;
+      },
+      next: () => {
+        const { done, value } = iterator.next();
+        if (done) cleanup();
+        return { done, value };
+      },
+    };
+  };
 
   /** Mark query as dirty and invalidate caches */
   invalidate(query?: Query): void {

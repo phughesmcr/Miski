@@ -48,7 +48,7 @@ export class World {
    * @param world - The World to construct the APIs for
    * @returns The public APIs for the World
    */
-  static #constructAPIs(world: World): WorldAPIResult {
+  static #constructAPIs(world: World, capacity: number): WorldAPIResult {
     /**
      * Convenience function to get a component from a string or Component
      * @throws {NotRegisteredError} - If the component is not registered
@@ -166,7 +166,7 @@ export class World {
     };
 
     const entities: WorldEntityAPI = {
-      capacity: world.#entityManager.capacity,
+      capacity,
       active: world.#entityManager.active,
       create: world.#entityManager.create,
       destroy: world.#entityManager.destroy,
@@ -238,10 +238,10 @@ export class World {
     this.#archetypeManager = new ArchetypeManager(capacity);
     this.#componentManager = new ComponentManager(capacity, components);
     this.#entityManager = new EntityManager(capacity);
-    this.#queryManager = new QueryManager(this);
+    this.#queryManager = new QueryManager(this, capacity);
     this.#systemManager = new SystemManager();
 
-    const APIs: WorldAPIResult = World.#constructAPIs(this);
+    const APIs: WorldAPIResult = World.#constructAPIs(this, capacity);
     this.archetypes = APIs.archetypes;
     this.components = APIs.components;
     this.entities = APIs.entities;

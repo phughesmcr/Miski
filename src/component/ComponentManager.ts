@@ -33,7 +33,7 @@ export class ComponentManager {
   constructor(capacity: number, components: Component<any>[]) {
     // create the storage buffer
     const size = components.reduce((acc, component) => acc + component.size, 0) * capacity;
-    this.#buffer = new PartitionedBuffer(size, capacity);
+    this.#buffer = new PartitionedBuffer(size * 2, capacity); // TODO * 2 is temporary, we need to fix this
     // create the various registries
     this.#changed = new Map();
     this.#owners = new Map();
