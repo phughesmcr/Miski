@@ -15,15 +15,15 @@ import type {
 import type { Component } from "./Component.ts";
 
 /** A ComponentInstance is the world-local representation of a component */
-export class ComponentInstance<T extends SchemaOrNull> {
+export class ComponentInstance<T extends SchemaOrNull<T>> {
   /** The ComponentInstance's id */
   readonly id: number;
 
   /** The ComponentInstance's proxy */
-  readonly proxy: T extends Schema<infer U> ? StorageProxyWithProperties<U> : null;
+  readonly proxy: T extends Schema<T> ? StorageProxyWithProperties<T> : null;
 
   /** The ComponentInstance's storage */
-  readonly storage: T extends Schema<infer U> ? SchemaStorage<U> : null;
+  readonly storage: T extends Schema<T> ? SchemaStorage<T> : null;
 
   /** The ComponentInstance's prototype */
   readonly proto: Component<T>;
@@ -36,8 +36,8 @@ export class ComponentInstance<T extends SchemaOrNull> {
   constructor(spec: ComponentInstanceSpec<T>) {
     const { id, proxy, storage, type } = spec;
     this.id = id;
-    this.proxy = proxy as T extends Schema<infer U> ? StorageProxyWithProperties<U> : null;
-    this.storage = storage as T extends Schema<infer U> ? SchemaStorage<U> : null;
+    this.proxy = proxy as T extends Schema<T> ? StorageProxyWithProperties<T> : null;
+    this.storage = storage as T extends Schema<T> ? SchemaStorage<T> : null;
     this.proto = type;
     Object.freeze(this);
   }

@@ -5,14 +5,13 @@
  * @license     MIT
  */
 
-import { version } from "../deno.json" with { type: "json" };
 import { randomHexString } from "./utils.ts";
 
 /**
  * @public
  * The version of the library
  */
-export const VERSION = version;
+export const VERSION = "0.1.0" as const;
 
 /**
  * @internal

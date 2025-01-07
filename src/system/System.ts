@@ -11,6 +11,7 @@ import type {
   SystemInstance,
   SystemPrivateMethods,
   SystemSpec,
+  TypedComponentRecord,
 } from "../types.ts";
 import type { World } from "../world/World.ts";
 
@@ -22,7 +23,7 @@ import type { World } from "../world/World.ts";
  * @throws {NoComponentsFoundError} If the system query returned no components
  */
 export function createSystemInstance<
-  T extends (components: ComponentRecord, entities: IterableIterator<Entity>, ...args: unknown[]) => ReturnType<T>,
+  T extends (components: ComponentRecord<any>, entities: IterableIterator<Entity>, ...args: unknown[]) => ReturnType<T>,
   U extends ParametersExceptFirstTwo<T>,
 >(world: World, system: System<T, U>): SystemInstance<T, U> {
   const componentMap = world.components.query(system.query);
@@ -54,7 +55,7 @@ export function isValidSystemSpec(spec: unknown): spec is SystemSpec<any, any> {
 
 /** Systems are behaviours which affect components. */
 export class System<
-  T extends (components: ComponentRecord, entities: IterableIterator<Entity>, ...args: unknown[]) => ReturnType<T>,
+  T extends (components: ComponentRecord<any>, entities: IterableIterator<Entity>, ...args: unknown[]) => ReturnType<T>,
   U extends ParametersExceptFirstTwo<T>,
 > implements SystemPrivateMethods {
   /** The function to call when the system is destroyed. */

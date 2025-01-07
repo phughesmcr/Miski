@@ -5,16 +5,13 @@
  * @license     MIT
  */
 
-import type { Entity, SchemaStorage, StorageProxySpec } from "../types.ts";
+import type { Entity, SchemaOrNull, StorageProxySpec } from "../types.ts";
 import { hasOwnProperty } from "../utils.ts";
 
 /** A StorageProxy is a wrapper around a component's storage */
-export class StorageProxy<T> {
+export class StorageProxy<T extends SchemaOrNull<T>> {
   /** The current entity ID the proxy is pointed at */
   #cursor: Entity = 0 as Entity;
-
-  /** The component's raw storage */
-  readonly storage: SchemaStorage<T>;
 
   /**
    * Create a new StorageProxy
@@ -22,7 +19,6 @@ export class StorageProxy<T> {
    */
   constructor(spec: StorageProxySpec<T>) {
     const { changed, storage } = spec;
-    this.storage = storage;
 
     // Create a getter and setter for each storage property
     for (const key in storage.partitions) {
@@ -53,6 +49,7 @@ export class StorageProxy<T> {
 
   /** Set the current entity ID the proxy is pointed at */
   set cursor(value: Entity) {
+    // TODO: check if the entity is valid
     this.#cursor = value;
   }
 }

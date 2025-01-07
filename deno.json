@@ -1,4 +1,5 @@
 {
+  "lock": false,
   "name": "@phughesmcr/miski",
   "version": "0.1.0",
   "license": "MIT",
@@ -23,7 +24,6 @@
     "strict": true,
     "verbatimModuleSyntax": true
   },
-  "exclude": ["example/**/*.ts"],
   "fmt": {
     "indentWidth": 2,
     "lineWidth": 120,

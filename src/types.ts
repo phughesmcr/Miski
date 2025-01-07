@@ -37,13 +37,13 @@ export type StorageProxySpec<T> = {
  * A StorageProxy with properties
  * @param T The Schema / Partition type of the StorageProxy
  */
-export type StorageProxyWithProperties<T> =
+export type StorageProxyWithProperties<T extends SchemaOrNull<T>> =
+  /** The StorageProxy */
+  & StorageProxy<T>
   & {
     /** The properties of the StorageProxy */
     [key in keyof T]: number;
-  }
-  /** The StorageProxy */
-  & StorageProxy<T>;
+  };
 
 /** The stringified JSON format of an EntityManager */
 export type EntityManagerSerialized = {
@@ -66,14 +66,22 @@ export type ArchetypeSpec = {
 };
 
 /** A Record of ComponentInstances by Component name */
-export type ComponentRecord = Record<string, ComponentInstance<SchemaOrNull>>;
+export type ComponentRecord<T extends SchemaOrNull<T>> = Record<
+  string,
+  T extends Schema<infer U> ? ComponentInstance<U> : ComponentInstance<null>
+>;
+
+/** A type-safe component record for system callbacks */
+export type TypedComponentRecord<T> = {
+  [K in keyof T]: T[K] extends SchemaOrNull ? ComponentInstance<T[K]> : never;
+};
 
 /** A Schema or null (null = tag component) */
 // deno-lint-ignore no-explicit-any
-export type SchemaOrNull = Schema<any> | null;
+export type SchemaOrNull<T = any> = Schema<T> | null;
 
 /** The Component's construct`or specification */
-export type ComponentSpec<T extends SchemaOrNull> =
+export type ComponentSpec<T extends SchemaOrNull = null> =
   & {
     /** The component's label */
     name: string;
@@ -99,7 +107,7 @@ export type ComponentSpec<T extends SchemaOrNull> =
  * @internal
  * The private methods of a Component
  */
-export interface ComponentPrivateMethods<T extends SchemaOrNull> {
+export interface ComponentPrivateMethods<T> {
   /** The Partition object of the Component */
   readonly [$_PARTITION_KEY]: Partition<T>;
 }
@@ -169,9 +177,14 @@ export type ParametersExceptFirstTwo<F> = F extends (arg0: any, arg1: any, ...re
  * the system respectively.
  */
 export type SystemCallback<
-  T extends (components: ComponentRecord, entities: IterableIterator<Entity>, ...args: unknown[]) => ReturnType<T>,
-  U extends ParametersExceptFirstTwo<T>,
-> = (components: ComponentRecord, entities: IterableIterator<Entity>, ...args: U) => ReturnType<T>;
+  TSchema extends ComponentRecord<any>,
+  TReturn = void,
+  TArgs extends unknown[] = [],
+> = (
+  components: TypedComponentRecord<TSchema>,
+  entities: IterableIterator<Entity>,
+  ...args: TArgs
+) => TReturn;
 
 /**
  * The specification for a System.
@@ -179,15 +192,16 @@ export type SystemCallback<
  * @param U The parameters of the callback excluding the first two (which are always the components and entities)
  */
 export type SystemSpec<
-  T extends (components: ComponentRecord, entities: IterableIterator<Entity>, ...args: unknown[]) => ReturnType<T>,
-  U extends ParametersExceptFirstTwo<T>,
+  TSchema extends ComponentRecord<any>,
+  TReturn = void,
+  TArgs extends unknown[] = [],
 > = {
   /** The name of the system */
   name: string;
   /** The query which will provide the components and entities to the system. */
   query: Query;
   /** The core function of the system. Called when this.exec is called. */
-  callback: SystemCallback<T, U>;
+  callback: SystemCallback<TSchema, TReturn, TArgs>;
   /** The function to call when the system is initialized. */
   init?: (world: World) => void | Promise<void>;
   /** The function to call when the system is destroyed. */
@@ -212,9 +226,12 @@ export interface SystemPrivateMethods {
  * @param U The parameters of the callback excluding the first two (which are always the components and entities)
  */
 export type SystemInstance<
-  T extends (components: ComponentRecord, entities: IterableIterator<Entity>, ...args: unknown[]) => ReturnType<T>,
-  U extends ParametersExceptFirstTwo<T>,
-> = (...args: U) => ReturnType<T>;
+  TSchema extends ComponentRecord<any>,
+  TReturn = void,
+  TArgs extends unknown[] = [],
+> = (
+  ...args: TArgs
+) => TReturn;
 
 /** The specification for a World */
 export type WorldSpec = {
@@ -361,24 +378,28 @@ export type WorldSystemAPI = {
   registry: SystemRecord;
   /** Create a system */
   create<
-    T extends (components: ComponentRecord, entities: IterableIterator<Entity>, ...args: unknown[]) => ReturnType<T>,
-    U extends ParametersExceptFirstTwo<T>,
-  >(system: System<T, U>): SystemInstance<T, U>;
+    TSchema extends ComponentRecord<any>,
+    TReturn = void,
+    TArgs extends unknown[] = [],
+  >(system: System<TSchema, TReturn, TArgs>): SystemInstance<TSchema, TReturn, TArgs>;
   /** Get a system instance */
   get<
-    T extends (components: ComponentRecord, entities: IterableIterator<Entity>, ...args: unknown[]) => ReturnType<T>,
-    U extends ParametersExceptFirstTwo<T>,
-  >(system: System<T, U> | string): SystemInstance<T, U> | undefined;
+    TSchema extends Record<string, Schema>,
+    TReturn = void,
+    TArgs extends unknown[] = [],
+  >(system: System<TSchema, TReturn, TArgs> | string): SystemInstance<TSchema, TReturn, TArgs> | undefined;
   /** Check if a system is registered */
   has<
-    T extends (components: ComponentRecord, entities: IterableIterator<Entity>, ...args: unknown[]) => ReturnType<T>,
-    U extends ParametersExceptFirstTwo<T>,
-  >(system: System<T, U> | string): boolean;
+    TSchema extends Record<string, Schema>,
+    TReturn = void,
+    TArgs extends unknown[] = [],
+  >(system: System<TSchema, TReturn, TArgs> | string): boolean;
   /** Destroy a system */
   destroy<
-    T extends (components: ComponentRecord, entities: IterableIterator<Entity>, ...args: unknown[]) => ReturnType<T>,
-    U extends ParametersExceptFirstTwo<T>,
-  >(system: System<T, U> | string): void;
+    TSchema extends Record<string, Schema>,
+    TReturn = void,
+    TArgs extends unknown[] = [],
+  >(system: System<TSchema, TReturn, TArgs> | string): void;
 };
 
 /** The result of a World API constructor */
