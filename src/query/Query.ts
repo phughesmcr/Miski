@@ -26,9 +26,9 @@ export function createQueryInstance(world: World, query: Query): QueryInstance {
   const registry = world.components.registry;
   const size = world.components.count;
 
-  const getInstance = (component: Component<SchemaOrNull>) => registry[component.name];
-  const getInstances = (array: Readonly<Component<SchemaOrNull>[]>): ComponentInstance<SchemaOrNull>[] => {
-    return array.map(getInstance).filter(Boolean) as ComponentInstance<SchemaOrNull>[];
+  const getInstance = (component: Component<SchemaOrNull<any>>) => registry[component.name];
+  const getInstances = (array: Readonly<Component<SchemaOrNull<any>>[]>): ComponentInstance<SchemaOrNull<any>>[] => {
+    return array.map(getInstance).filter(Boolean) as ComponentInstance<SchemaOrNull<any>>[];
   };
 
   // Create AND bit array - marks required components
@@ -53,7 +53,7 @@ export function createQueryInstance(world: World, query: Query): QueryInstance {
   }
 
   // Build lookup table for quick component access
-  const components: Record<string, ComponentInstance<SchemaOrNull>> = {};
+  const components: Record<string, ComponentInstance<SchemaOrNull<any>>> = {};
   for (const instance of [...andInstances, ...orInstances]) {
     components[instance.name] = instance;
   }
@@ -121,13 +121,13 @@ export class Query {
   }
 
   /** `AND` - Gather entities as long as they have all these components */
-  readonly all: Readonly<Component<SchemaOrNull>[]>;
+  readonly all: Readonly<Component<SchemaOrNull<any>>[]>;
 
   /** `OR` - Gather entities as long as they have 0...* of these components */
-  readonly any: Readonly<Component<SchemaOrNull>[]>;
+  readonly any: Readonly<Component<SchemaOrNull<any>>[]>;
 
   /** `NOT` - Gather entities as long as they don't have these components */
-  readonly none: Readonly<Component<SchemaOrNull>[]>;
+  readonly none: Readonly<Component<SchemaOrNull<any>>[]>;
 
   /**
    * Create a new Query

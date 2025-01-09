@@ -76,7 +76,7 @@ export class ComponentManager {
    * @param data - Optional data to set for the component
    * @returns The component manager
    */
-  addToEntity<T extends SchemaOrNull>(
+  addToEntity<T extends SchemaOrNull<T>>(
     component: Component<T> | string,
     entity: Entity,
     data?: { [k in keyof T]: number },
@@ -111,7 +111,7 @@ export class ComponentManager {
    * @param entity - The entity to check for the component on
    * @returns `true` if the entity has the component, `false` otherwise
    */
-  entityOwns<T extends SchemaOrNull>(component: Component<T> | string, entity: Entity): boolean {
+  entityOwns<T extends SchemaOrNull<T>>(component: Component<T> | string, entity: Entity): boolean {
     let proto;
     if (typeof component === "string") {
       proto = this.getInstance(component)?.proto;
@@ -126,7 +126,7 @@ export class ComponentManager {
    * @param component - The component to get the instance of
    * @returns The component instance or `undefined` if the component is not registered
    */
-  getInstance<T extends SchemaOrNull>(component: Component<T> | string): ComponentInstance<T> | undefined {
+  getInstance<T extends SchemaOrNull<T>>(component: Component<T> | string): ComponentInstance<T> | undefined {
     if (typeof component === "string") {
       const proto = this.#registry.keys().find((key) => key.name === component);
       if (proto === undefined) return;
@@ -140,7 +140,7 @@ export class ComponentManager {
    * @param component The component to get changed entities for
    * @returns An iterable of entities or `undefined` if the component is not registered
    */
-  getChanged<T extends SchemaOrNull>(component: Component<T> | string): IterableIterator<Entity> | undefined {
+  getChanged<T extends SchemaOrNull<T>>(component: Component<T> | string): IterableIterator<Entity> | undefined {
     let proto;
     if (typeof component === "string") {
       proto = this.#registry.keys().find((key) => key.name === component);
@@ -156,7 +156,7 @@ export class ComponentManager {
    * @param component The component to get entities for
    * @returns An iterable of entities or `undefined` if the component is not registered
    */
-  getOwners<T extends SchemaOrNull>(component: Component<T> | string): IterableIterator<Entity> | undefined {
+  getOwners<T extends SchemaOrNull<T>>(component: Component<T> | string): IterableIterator<Entity> | undefined {
     let proto;
     if (typeof component === "string") {
       proto = this.#registry.keys().find((key) => key.name === component);
@@ -173,7 +173,7 @@ export class ComponentManager {
    * @param entity - The entity to get the data for
    * @returns The data for the component or `undefined` if the component is not registered
    */
-  getEntityData<T extends SchemaOrNull>(
+  getEntityData<T extends SchemaOrNull<T>>(
     component: Component<T> | string,
     entity: Entity,
   ): Record<keyof T, number> | undefined {
@@ -218,7 +218,7 @@ export class ComponentManager {
    * @param entity - The entity to remove the component from
    * @returns The component manager
    */
-  removeFromEntity<T extends SchemaOrNull>(component: Component<T>, entity: Entity): ComponentManager {
+  removeFromEntity<T extends SchemaOrNull<T>>(component: Component<T>, entity: Entity): ComponentManager {
     const instance = this.getInstance(component);
     if (!instance) {
       return this;
@@ -238,7 +238,11 @@ export class ComponentManager {
    * @param entity - The entity to set the data for
    * @param value - The data to set for the component
    */
-  setEntityData<T extends SchemaOrNull>(component: Component<T>, entity: Entity, value: Record<keyof T, number>): this {
+  setEntityData<T extends SchemaOrNull<T>>(
+    component: Component<T>,
+    entity: Entity,
+    value: Record<keyof T, number>,
+  ): this {
     const instance = this.getInstance(component);
     if (!instance || !value) {
       return this;

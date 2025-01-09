@@ -172,7 +172,7 @@
  */
 
 export { Component, isValidComponentSpec } from "./src/component/Component.ts";
-export { EntityNotFoundError, MiskiError, SpecError, WorldStateError } from "./src/errors.ts";
+export { EntityNotFoundError, isMiskiError, MiskiError, SpecError, WorldStateError } from "./src/errors.ts";
 export { isValidQuerySpec, Query } from "./src/query/Query.ts";
 export { isValidSystemSpec, System } from "./src/system/System.ts";
 export { isValidWorldSpec, World } from "./src/world/World.ts";

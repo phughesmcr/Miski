@@ -8,91 +8,79 @@
 import { $_SYSTEM_DESTROY_KEY, $_SYSTEM_INIT_KEY } from "../constants.ts";
 import { createSystemInstance, type System } from "./System.ts";
 import { NotRegisteredError } from "../errors.ts";
-import type { ComponentRecord, Entity, ParametersExceptFirstTwo, SystemInstance } from "../types.ts";
+import type { SystemCallback, SystemInstance } from "../types.ts";
 import type { World } from "../world/World.ts";
 
 /** The SystemManager is responsible for creating, registering, initializing, and destroying systems. */
 export class SystemManager {
   // deno-lint-ignore no-explicit-any
-  registry: Record<string, SystemInstance<any, any>>;
+  registry: Record<string, SystemInstance<any>>;
 
   /**
    * Create a new SystemManager
+   * @param world The world to create the system manager in
    */
-  constructor() {
+  constructor(world: World) {
     this.registry = {};
-  }
 
-  /**
-   * Initialize all systems
-   * @param world The world to initialize the systems in
-   */
-  async init(world: World): Promise<void> {
-    for (const instance of Object.values(this.registry)) {
-      // deno-lint-ignore no-explicit-any
-      const system: System<any, any> = Object.getPrototypeOf(instance);
-      await system[$_SYSTEM_INIT_KEY](world);
-    }
+    this.create = <T extends SystemCallback>(system: System<T>): SystemInstance<T> => {
+      const existing = this.get(system);
+      if (existing) {
+        return existing;
+      }
+      const instance = createSystemInstance(world, system);
+      this.registry[system.name] = instance;
+      return instance;
+    };
+
+    this.destroy = async <T extends SystemCallback>(
+      system: System<T> | string,
+      throwOnNotFound = true,
+    ): Promise<void> => {
+      const instance = this.get(system);
+      if (instance === undefined) {
+        if (throwOnNotFound === false) return;
+        const name = typeof system === "string" ? system : system.name;
+        throw new NotRegisteredError(`System "${name}" is not registered in the world`);
+      }
+      const proto = Object.getPrototypeOf(instance);
+      await proto[$_SYSTEM_DESTROY_KEY](world);
+      delete this.registry[proto.name];
+    };
+
+    this.destroyAll = async (): Promise<void> => {
+      for (const instance of Object.values(this.registry)) {
+        await this.destroy(instance.name);
+      }
+    };
   }
 
   /**
    * Create a system instance
-   * @param world The world to create the system instance in
    * @param system The system to create the instance of
    * @returns The created system instance
    * @throws {NoComponentsFoundError} If the system query returns no components
    */
-  create<
-    T extends (components: ComponentRecord, entities: IterableIterator<Entity>, ...args: unknown[]) => ReturnType<T>,
-    U extends ParametersExceptFirstTwo<T>,
-  >(world: World, system: System<T, U>): SystemInstance<T, U> {
-    const existing = this.get(system);
-    if (existing) {
-      return existing;
-    }
-    const instance = createSystemInstance(world, system);
-    this.registry[system.name] = instance;
-    return instance;
-  }
+  create: <T extends SystemCallback>(system: System<T>) => SystemInstance<T>;
 
   /**
    * Destroy a system instance
    * @param system The system to destroy
    */
-  async destroy<
-    T extends (components: ComponentRecord, entities: IterableIterator<Entity>, ...args: unknown[]) => ReturnType<T>,
-    U extends ParametersExceptFirstTwo<T>,
-  >(world: World, system: System<T, U> | string, throwOnNotFound = true): Promise<void> {
-    const instance = this.get(system);
-    if (instance === undefined) {
-      if (throwOnNotFound === false) return;
-      const name = typeof system === "string" ? system : system.name;
-      throw new NotRegisteredError(`System "${name}" is not registered in the world`);
-    }
-    const proto = Object.getPrototypeOf(instance);
-    await proto[$_SYSTEM_DESTROY_KEY](world);
-    delete this.registry[proto.name];
-  }
+  destroy: <T extends SystemCallback>(system: System<T> | string, throwOnNotFound?: boolean) => Promise<void>;
 
   /**
    * Destroy all systems
    * @param world The world to destroy the systems in
    */
-  async destroyAll(world: World): Promise<void> {
-    for (const instance of Object.values(this.registry)) {
-      await this.destroy(world, instance.name);
-    }
-  }
+  destroyAll: (world: World) => Promise<void>;
 
   /**
    * Get a system instance
    * @param system The system to get the instance of
    * @returns The system instance
    */
-  get<
-    T extends (components: ComponentRecord, entities: IterableIterator<Entity>, ...args: unknown[]) => ReturnType<T>,
-    U extends ParametersExceptFirstTwo<T>,
-  >(system: string | System<T, U>): SystemInstance<T, U> | undefined {
+  get<T extends SystemCallback>(system: string | System<T>): SystemInstance<T> | undefined {
     if (typeof system === "string") {
       return this.registry[system];
     }
@@ -108,11 +96,20 @@ export class SystemManager {
    * @param system The system to check
    * @returns Whether the system is registered
    */
-  has<
-    T extends (components: ComponentRecord, entities: IterableIterator<Entity>, ...args: unknown[]) => ReturnType<T>,
-    U extends ParametersExceptFirstTwo<T>,
-  >(system: string | System<T, U>): boolean {
+  has<T extends SystemCallback>(system: string | System<T>): boolean {
     return this.get(system) !== undefined;
+  }
+
+  /**
+   * Initialize all systems
+   * @param world The world to initialize the systems in
+   */
+  async init(world: World): Promise<void> {
+    for (const instance of Object.values(this.registry)) {
+      // deno-lint-ignore no-explicit-any
+      const system: System<any> = Object.getPrototypeOf(instance);
+      await system[$_SYSTEM_INIT_KEY](world);
+    }
   }
 
   /**

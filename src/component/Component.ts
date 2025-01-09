@@ -28,7 +28,7 @@ import type { ComponentPrivateMethods, ComponentSpec, Schema, SchemaOrNull } fro
  * @param spec - The component's specification.
  * @returns `true` if the spec is valid, `false` otherwise
  */
-export function isValidComponentSpec<T extends SchemaOrNull>(spec: unknown): spec is ComponentSpec<T> {
+export function isValidComponentSpec<T extends SchemaOrNull<T>>(spec: unknown): spec is ComponentSpec<T> {
   const { maxEntities, name, schema } = spec as ComponentSpec<T>;
   if (isValidName(name) === false) return false;
   if (maxEntities && !isPositiveUint32(maxEntities)) return false;
@@ -37,17 +37,17 @@ export function isValidComponentSpec<T extends SchemaOrNull>(spec: unknown): spe
 }
 
 /** Component type guard */
-export function isComponent(component: unknown): component is Component<SchemaOrNull> {
+export function isComponent(component: unknown): component is Component<SchemaOrNull<any>> {
   return component instanceof Component;
 }
 
 /** Checks if a value is an array of Components */
-export function isValidComponentArray(array: unknown): array is Array<Component<SchemaOrNull>> {
+export function isValidComponentArray(array: unknown): array is Array<Component<SchemaOrNull<any>>> {
   return Array.isArray(array) && array.every(isComponent);
 }
 
 /** A Component is a collection of properties that are stored in a world */
-export class Component<T extends SchemaOrNull> implements ComponentPrivateMethods<T> {
+export class Component<T extends SchemaOrNull<T>> implements ComponentPrivateMethods<T> {
   /** The component's storage partition */
   readonly [$_PARTITION_KEY]: Partition<T>;
 

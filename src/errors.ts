@@ -15,6 +15,15 @@ export class MiskiError extends Error {
   }
 }
 
+/**
+ * Checks if an error is a MiskiError
+ * @param error The error to check
+ * @returns Whether the error is a MiskiError
+ */
+export function isMiskiError(error: unknown): error is MiskiError {
+  return error instanceof MiskiError;
+}
+
 /** An error thrown when a spec object is invalid */
 export class SpecError extends MiskiError {
   constructor(message?: string) {

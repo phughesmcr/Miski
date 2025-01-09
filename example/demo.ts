@@ -7,16 +7,7 @@
  */
 
 // The only imports we need:
-import {
-  Component,
-  type ComponentInstance,
-  type ComponentRecord,
-  type Entity,
-  Query,
-  System,
-  type,
-  World,
-} from "../mod.ts";
+import { Component, type ComponentInstance, type ComponentRecord, type Entity, Query, System, World } from "../mod.ts";
 
 // ############################################################################
 // MISC
@@ -92,10 +83,16 @@ const world = new World({
 // Systems are executed in the order they are added to the world.
 
 const movementSystem = new System({
+  name: "movement",
   query: new Query({ all: [velocity, position] }),
-  callback: (components: ComponentRecord<any>, entities: IterableIterator<number>, dt: number) => {
-    const { proxy: position }: ComponentInstance<Vec2> = components["position"]!;
-    const { proxy: velocity }: ComponentInstance<Vec2> = components["velocity"]!;
+  callback: function movement(
+    components: ComponentRecord<any>,
+    entities: IterableIterator<number>,
+    ...args: unknown[]
+  ) {
+    const dt = args[0] as number;
+    const { proxy: position }: ComponentInstance<Vec2> = components["position"] as ComponentInstance<Vec2>;
+    const { proxy: velocity }: ComponentInstance<Vec2> = components["velocity"] as ComponentInstance<Vec2>;
     for (const entity of entities) {
       // set the cursors to the entity
       position.cursor = entity;
@@ -125,7 +122,7 @@ const movementSystem = new System({
   },
 });
 
-world.systems.create<Record<(movementSystem);
+world.systems.create < Record < movementSystem;
 
 const findClosest = (components: ComponentRecord<any>, entities: IterableIterator<Entity>, dt: number) => {
 };

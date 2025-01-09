@@ -6,9 +6,9 @@
  */
 
 import { BitPool } from "@phughesmcr/bitpool";
+import { EntityNotFoundError } from "../errors.ts";
 import { isPositiveUint32, isUint32, numberArrayFromString } from "../utils.ts";
 import type { Entity, EntityManagerSerialized } from "../types.ts";
-import { EntityNotFoundError } from "../errors.ts";
 
 /** An EntityManager is responsible for creating and destroying entities */
 export class EntityManager {

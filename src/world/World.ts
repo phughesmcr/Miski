@@ -53,7 +53,7 @@ export class World {
      * Convenience function to get a component from a string or Component
      * @throws {NotRegisteredError} - If the component is not registered
      */
-    const getComponentByName = <T extends SchemaOrNull>(component: string | Component<T>): Component<T> => {
+    const getComponentByName = <T extends SchemaOrNull<T>>(component: string | Component<T>): Component<T> => {
       if (typeof component === "string") {
         component = world.#componentManager.getInstance(component)?.proto as Component<T>;
         if (!component) {
@@ -117,7 +117,7 @@ export class World {
      * @param data - The data to set for the component
      * @throws {NotRegisteredError} - If the component is not registered
      */
-    const addComponentToEntity = <T extends SchemaOrNull>(
+    const addComponentToEntity = <T extends SchemaOrNull<T>>(
       component: string | Component<T>,
       entity: Entity,
       data?: { [k in keyof T]: number } | undefined,
@@ -133,7 +133,7 @@ export class World {
      * @param entity - The entity to remove the component from
      * @throws {NotRegisteredError} - If the component is not registered
      */
-    const removeComponentFromEntity = <T extends SchemaOrNull>(
+    const removeComponentFromEntity = <T extends SchemaOrNull<T>>(
       component: string | Component<T>,
       entity: Entity,
     ): void => {
@@ -180,10 +180,10 @@ export class World {
 
     const systems: WorldSystemAPI = {
       registry: world.#systemManager.registry,
-      create: world.#systemManager.create.bind(world.#systemManager, world),
+      create: world.#systemManager.create,
       get: world.#systemManager.get,
       has: world.#systemManager.has,
-      destroy: world.#systemManager.destroy.bind(world.#systemManager, world),
+      destroy: world.#systemManager.destroy,
     };
 
     return { archetypes, components, entities, systems };
@@ -239,7 +239,7 @@ export class World {
     this.#componentManager = new ComponentManager(capacity, components);
     this.#entityManager = new EntityManager(capacity);
     this.#queryManager = new QueryManager(this);
-    this.#systemManager = new SystemManager();
+    this.#systemManager = new SystemManager(this);
 
     const APIs: WorldAPIResult = World.#constructAPIs(this);
     this.archetypes = APIs.archetypes;

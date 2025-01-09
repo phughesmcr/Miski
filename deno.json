@@ -39,6 +39,7 @@
     "@phughesmcr/partitionedbuffer": "jsr:@phughesmcr/partitionedbuffer@^0.2.7"
   },
   "lint": {
+    "exclude": ["example/**/*.ts"],
     "rules": {
       "exclude": ["no-explicit-any"]
     }

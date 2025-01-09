@@ -13,7 +13,7 @@ import { BooleanArray } from "@phughesmcr/booleanarray";
 
 /** Cache for query results */
 class QueryCache {
-  #componentCache = new WeakMap<Query, Record<string, ComponentInstance<SchemaOrNull>>>();
+  #componentCache = new WeakMap<Query, Record<string, ComponentInstance<SchemaOrNull<any>>>>();
   #entityCache = new WeakMap<Query, BooleanArray>();
   #timestamp = 0;
 
@@ -25,9 +25,9 @@ class QueryCache {
   /** Get cached components or compute and cache them */
   getComponents(
     query: Query,
-    compute: () => Record<string, ComponentInstance<SchemaOrNull>>,
+    compute: () => Record<string, ComponentInstance<SchemaOrNull<any>>>,
     lastUpdate: number,
-  ): Record<string, ComponentInstance<SchemaOrNull>> {
+  ): Record<string, ComponentInstance<SchemaOrNull<any>>> {
     if (lastUpdate < this.#timestamp) {
       this.#componentCache.delete(query);
     }
@@ -60,7 +60,7 @@ class QueryCache {
 /** Pool for reusing query result objects */
 class QueryResultPool {
   #entityArrays: BooleanArray[] = [];
-  #componentMaps: Record<string, ComponentInstance<SchemaOrNull>>[] = [];
+  #componentMaps: Record<string, ComponentInstance<SchemaOrNull<any>>>[] = [];
   #size: number;
 
   constructor(size: number) {
@@ -78,11 +78,11 @@ class QueryResultPool {
     this.#entityArrays.push(array);
   }
 
-  acquireComponentMap(): Record<string, ComponentInstance<SchemaOrNull>> {
+  acquireComponentMap(): Record<string, ComponentInstance<SchemaOrNull<any>>> {
     return this.#componentMaps.pop() ?? {};
   }
 
-  releaseComponentMap(map: Record<string, ComponentInstance<SchemaOrNull>>): void {
+  releaseComponentMap(map: Record<string, ComponentInstance<SchemaOrNull<any>>>): void {
     Object.keys(map).forEach((key) => delete map[key]);
     this.#componentMaps.push(map);
   }
@@ -133,7 +133,7 @@ export class QueryManager {
 
   #computeComponents(query: Query) {
     const archetypes = this.registry.get(query)!.archetypes;
-    const result: Record<string, ComponentInstance<SchemaOrNull>> = {};
+    const result: Record<string, ComponentInstance<SchemaOrNull<any>>> = {};
     for (const archetype of archetypes) {
       for (const component of archetype.components) {
         result[component.name] = component;
@@ -142,7 +142,7 @@ export class QueryManager {
     return result;
   }
 
-  *components(query: Query): IterableIterator<[string, ComponentInstance<SchemaOrNull>]> {
+  *components(query: Query): IterableIterator<[string, ComponentInstance<SchemaOrNull<any>>]> {
     const result = this.#cache.getComponents(
       query,
       () => this.#computeComponents(query),

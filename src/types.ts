@@ -113,7 +113,7 @@ export interface ComponentPrivateMethods<T> {
 }
 
 /** The specification for a ComponentInstance */
-export type ComponentInstanceSpec<T extends SchemaOrNull> = {
+export type ComponentInstanceSpec<T extends SchemaOrNull<T>> = {
   /** The unique identifier of the ComponentInstance */
   id: number;
   /** The StorageProxy of the ComponentInstance */
@@ -127,11 +127,11 @@ export type ComponentInstanceSpec<T extends SchemaOrNull> = {
 /** The Query constructor specification */
 export type QuerySpec = {
   /** `AND` - Gather entities as long as they have all these components */
-  all?: Component<SchemaOrNull>[];
+  all?: Component<SchemaOrNull<any>>[];
   /** `OR` - Gather entities as long as they have 0...* of these components */
-  any?: Component<SchemaOrNull>[];
+  any?: Component<SchemaOrNull<any>>[];
   /** `NOT` - Gather entities as long as they don't have these components */
-  none?: Component<SchemaOrNull>[];
+  none?: Component<SchemaOrNull<any>>[];
 };
 
 export type QueryInstance = {
@@ -176,32 +176,30 @@ export type ParametersExceptFirstTwo<F> = F extends (arg0: any, arg1: any, ...re
  * are the components and entities available to
  * the system respectively.
  */
-export type SystemCallback<
-  TSchema extends ComponentRecord<any>,
-  TReturn = void,
-  TArgs extends unknown[] = [],
-> = (
-  components: TypedComponentRecord<TSchema>,
+export type SystemCallback = (
+  components: ComponentRecord<any>,
   entities: IterableIterator<Entity>,
-  ...args: TArgs
-) => TReturn;
+  ...args: unknown[]
+) => void | Promise<void>;
+
+/**
+ * The parameters of a SystemCallback excluding the first two parameters
+ * which are always the components and entities
+ */
+export type SystemFunctionArgs<T extends SystemCallback> = ParametersExceptFirstTwo<T>;
 
 /**
  * The specification for a System.
  * @param T The callback's type
  * @param U The parameters of the callback excluding the first two (which are always the components and entities)
  */
-export type SystemSpec<
-  TSchema extends ComponentRecord<any>,
-  TReturn = void,
-  TArgs extends unknown[] = [],
-> = {
+export type SystemSpec<T extends SystemCallback> = {
   /** The name of the system */
   name: string;
   /** The query which will provide the components and entities to the system. */
   query: Query;
   /** The core function of the system. Called when this.exec is called. */
-  callback: SystemCallback<TSchema, TReturn, TArgs>;
+  callback: T;
   /** The function to call when the system is initialized. */
   init?: (world: World) => void | Promise<void>;
   /** The function to call when the system is destroyed. */
@@ -226,7 +224,6 @@ export interface SystemPrivateMethods {
  * @param U The parameters of the callback excluding the first two (which are always the components and entities)
  */
 export type SystemInstance<
-  TSchema extends ComponentRecord<any>,
   TReturn = void,
   TArgs extends unknown[] = [],
 > = (
@@ -238,7 +235,7 @@ export type WorldSpec = {
   /** The maximum capacity of any World */
   capacity: number;
   /** The components to register in the World */
-  components: Component<SchemaOrNull>[];
+  components: Component<SchemaOrNull<any>>[];
 };
 
 /** The state of a World */
@@ -294,7 +291,7 @@ export type WorldComponentAPI = {
    * @param data - The data to set for the component
    * @throws {ComponentNotFoundError} - If the component is not registered
    */
-  addToEntity<T extends SchemaOrNull>(
+  addToEntity<T extends SchemaOrNull<T>>(
     component: Component<T> | string,
     entity: Entity,
     data?: { [k in keyof T]: number },
@@ -306,14 +303,14 @@ export type WorldComponentAPI = {
    * @returns `true` if the entity has the component, `false` otherwise
    * @throws {ComponentNotFoundError} - If the component is not registered
    */
-  entityOwns<T extends SchemaOrNull>(component: Component<T> | string, entity: Entity): boolean;
+  entityOwns<T extends SchemaOrNull<T>>(component: Component<T> | string, entity: Entity): boolean;
   /**
    * Get an iterable of all entities with one or more changed properties for a given component
    * @param component - The component to get changed entities for
    * @returns An iterable of entities or `undefined` if the component is not registered
    * @throws {ComponentNotFoundError} - If the component is not registered
    */
-  getChanged<T extends SchemaOrNull>(component: Component<T> | string): IterableIterator<Entity> | undefined;
+  getChanged<T extends SchemaOrNull<T>>(component: Component<T> | string): IterableIterator<Entity> | undefined;
   /**
    * Get the data of a component from an entity
    * @param component - The component to get the data for
@@ -321,7 +318,7 @@ export type WorldComponentAPI = {
    * @returns The data for the component or `undefined` if the component is not registered
    * @throws {ComponentNotFoundError} - If the component is not registered
    */
-  getEntityData<T extends SchemaOrNull>(
+  getEntityData<T extends SchemaOrNull<T>>(
     component: Component<T> | string,
     entity: Entity,
   ): Record<keyof T, number> | undefined;
@@ -330,34 +327,34 @@ export type WorldComponentAPI = {
    * @param component - The component to check
    * @returns `true` if the component is registered, `false` otherwise
    */
-  isRegistered<T extends SchemaOrNull>(component: Component<T> | string): boolean;
+  isRegistered<T extends SchemaOrNull<T>>(component: Component<T> | string): boolean;
   /**
    * Get the registered instance of a given component
    * @param component - The component to get the instance for
    * @returns The registered instance of the component or `undefined` if the component is not registered
    * @throws {ComponentNotFoundError} - If the component is not registered
    */
-  getInstance<T extends SchemaOrNull>(component: Component<T> | string): ComponentInstance<T> | undefined;
+  getInstance<T extends SchemaOrNull<T>>(component: Component<T> | string): ComponentInstance<T> | undefined;
   /**
    * Get an iterable of all entities with a given component
    * @param component - The component to get entities for
    * @returns An iterable of entities or `undefined` if the component is not registered
    * @throws {ComponentNotFoundError} - If the component is not registered
    */
-  getOwners<T extends SchemaOrNull>(component: Component<T> | string): IterableIterator<Entity> | undefined;
+  getOwners<T extends SchemaOrNull<T>>(component: Component<T> | string): IterableIterator<Entity> | undefined;
   /**
    * Query for components
    * @param query - The query to use
    * @returns A Record of ComponentInstances by Component name
    */
-  query(query: Query): IterableIterator<[string, ComponentInstance<SchemaOrNull>]>;
+  query(query: Query): IterableIterator<[string, ComponentInstance<SchemaOrNull<any>>]>;
   /**
    * Remove a component from an entity
    * @param component - The component to remove
    * @param entity - The entity to remove the component from
    * @throws {ComponentNotFoundError} - If the component is not registered
    */
-  removeFromEntity<T extends SchemaOrNull>(component: Component<T> | string, entity: Entity): void;
+  removeFromEntity<T extends SchemaOrNull<T>>(component: Component<T> | string, entity: Entity): void;
   /**
    * Set the data of a component for an entity
    * @param component - The component to set the data for
@@ -365,7 +362,7 @@ export type WorldComponentAPI = {
    * @param value - The data to set
    * @throws {ComponentNotFoundError} - If the component is not registered
    */
-  setEntityData<T extends SchemaOrNull>(
+  setEntityData<T extends SchemaOrNull<T>>(
     component: Component<T> | string,
     entity: Entity,
     value?: Record<keyof T, number>,
@@ -377,29 +374,13 @@ export type WorldSystemAPI = {
   /** The systems by name */
   registry: SystemRecord;
   /** Create a system */
-  create<
-    TSchema extends ComponentRecord<any>,
-    TReturn = void,
-    TArgs extends unknown[] = [],
-  >(system: System<TSchema, TReturn, TArgs>): SystemInstance<TSchema, TReturn, TArgs>;
+  create<T extends SystemCallback>(system: System<T>): SystemInstance<T>;
   /** Get a system instance */
-  get<
-    TSchema extends Record<string, Schema>,
-    TReturn = void,
-    TArgs extends unknown[] = [],
-  >(system: System<TSchema, TReturn, TArgs> | string): SystemInstance<TSchema, TReturn, TArgs> | undefined;
+  get<T extends SystemCallback>(system: System<T> | string): SystemInstance<T> | undefined;
   /** Check if a system is registered */
-  has<
-    TSchema extends Record<string, Schema>,
-    TReturn = void,
-    TArgs extends unknown[] = [],
-  >(system: System<TSchema, TReturn, TArgs> | string): boolean;
+  has<T extends SystemCallback>(system: System<T> | string): boolean;
   /** Destroy a system */
-  destroy<
-    TSchema extends Record<string, Schema>,
-    TReturn = void,
-    TArgs extends unknown[] = [],
-  >(system: System<TSchema, TReturn, TArgs> | string): void;
+  destroy<T extends SystemCallback>(system: System<T> | string): void;
 };
 
 /** The result of a World API constructor */
