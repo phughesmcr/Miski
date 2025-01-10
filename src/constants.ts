@@ -48,3 +48,14 @@ export const $_SYSTEM_INIT_KEY: unique symbol = Symbol(`$_SYSTEM_INIT_KEY_${rand
  * The symbol used to store the system's destroy function
  */
 export const $_SYSTEM_DESTROY_KEY: unique symbol = Symbol(`$_SYSTEM_DESTROY_KEY_${randomHexString()}`);
+
+/**
+ * @internal
+ * The list of invalid names
+ */
+export const INVALID_NAMES: string[] = [
+  "id",
+  "$_PARTITION_KEY",
+  "$_SYSTEM_INIT_KEY",
+  "$_SYSTEM_DESTROY_KEY",
+];

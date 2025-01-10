@@ -145,16 +145,16 @@ Components can be created once and used across multiple worlds.
 For example, to create a 2d position component:
 
 ```typescript
-type Vec2 = { x: number, y: number }; // defines what input we want (number or bigint only)
+type Vec2 = { x: number, y: number }; // defines what input we want (number only)
 
 const positionComponent = new Component<Vec2>({
   // ⚠️ There are some names you cannot use for components or their schema properties. 
-  // You can use `isValidName` to check if a name is valid.
+  // You can use `isValidName()` to check if a name is valid.
   name: "position",
 
   // The schema relates to the input type above, in this case Vec2.
-  // It defines how we want to store the expected datatype (number or bigint).
-  // Below we want to store it in a Float32Array, but any (non-bigint in this case) TypedArray will work.
+  // It defines how we want to store the expected datatype (number).
+  // Below we want to store it in a Float32Array, but any TypedArray will work.
   schema: {
     x: Float32Array,
     y: Float32Array,

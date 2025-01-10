@@ -5,7 +5,8 @@
  * @license     MIT
  */
 
-import { MAX_UINT32, MIN_UINT32 } from "./constants.ts";
+import { INVALID_NAMES, MAX_UINT32, MIN_UINT32 } from "./constants.ts";
+import { isValidName as isValidNamePartitionedBuffer } from "@phughesmcr/partitionedbuffer";
 
 /** @returns a random hex string */
 export function randomHexString(): string {
@@ -68,4 +69,14 @@ export function noop(..._args: unknown[]): void {}
  */
 export function intersectBits(a: number, b: number): number {
   return a & b;
+}
+
+/**
+ * Test if a name is valid
+ * @param name The name to test
+ * @returns `true` if the name is valid
+ */
+export function isValidName(name: string): boolean {
+  const initial = isValidNamePartitionedBuffer(name);
+  return initial && !INVALID_NAMES.includes(name);
 }
