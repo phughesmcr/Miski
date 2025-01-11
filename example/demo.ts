@@ -63,22 +63,21 @@ const world = new World({
 // Initialize the world before use
 await world.init();
 
-console.dir(world);
-
 // Create and setup WebView window
 const window = new Webview(true, {
-  width: 800,
-  height: 600,
-  hint: SizeHint.FIXED,
+  width: 800 * 2,
+  height: 600 * 2,
+  hint: SizeHint.NONE,
 });
 window.title = "🍬 Miski Demo";
 
 // Get canvas context from WebView
-let ctx: CanvasRenderingContext2D;
+let ctx: CanvasRenderingContext2D | null = null;
 window.bind("getContext", (canvas: HTMLCanvasElement) => {
   ctx = canvas.getContext("2d")!;
   return ctx;
 });
+window.bind("getWorld", () => world);
 
 // Spawn initial entities
 function spawnPredator(x: number, y: number) {
@@ -308,12 +307,18 @@ const HTML = `
         body { 
             overflow: hidden;
             background: black;
+            height: 100vh;
+            width: 100vw;
+            position: relative;
             display: flex;
             justify-content: center;
             align-items: center;
         }
         canvas {
-            background: transparent;
+            background: #111;
+            display: block;
+            height: 600px;
+            width: 800px;
         }
     </style>
 </head>
@@ -322,23 +327,11 @@ const HTML = `
     <script>
         const canvas = document.querySelector('canvas');
         const ctx = canvas.getContext('2d');
-        
-        // Expose canvas context to main thread
-        globalThis.ctx = ctx;
-        
-        // Handle window resize
-        function resizeCanvas() {
-            const scale = Math.min(
-                window.innerWidth / 800,
-                window.innerHeight / 600
-            );
-            canvas.style.transform = \`scale(\${scale})\`;
-        }
-        window.addEventListener('resize', resizeCanvas);
-        resizeCanvas();
-        setTimeout(() => {
-            getContext(canvas);
-        }, 1000);
+       
+        window.addEventListener('load', () => {
+          globalThis.ctx = ctx;
+          getContext(canvas);
+        });
     </script>
 </body>
 </html>
@@ -365,18 +358,20 @@ async function gameLoop(timestamp: number) {
   ai();
   collision();
   render(ctx);
-
-  if (running) {
-    // Schedule next frame through WebView
-    window.eval(`requestAnimationFrame(${gameLoop.toString()})`);
-  }
 }
 
+window.bind("frame", (timestamp: number) => {
+  if (!ctx) return;
+  gameLoop(timestamp);
+  window.eval(`requestAnimationFrame(frame)`);
+});
+
 // Show the window and start the event loop
-window.eval(`requestAnimationFrame(${gameLoop.toString()})`);
 window.navigate(`data:text/html,${encodeURIComponent(HTML)}`);
 window.run();
 
 // Cleanup when window closes
-//window.destroy();
-//running = false;
+window.destroy();
+running = false;
+
+console.dir(world);

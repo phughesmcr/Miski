@@ -267,7 +267,7 @@ export class World {
     this.#queryManager = new QueryManager(this, capacity);
     this.#systemManager = new SystemManager(this);
 
-    const APIs: WorldAPIResult = World.#constructAPIs.bind(this)(this, capacity);
+    const APIs: WorldAPIResult = World.#constructAPIs(this, capacity);
     this.archetypes = APIs.archetypes;
     this.components = APIs.components;
     this.entities = APIs.entities;

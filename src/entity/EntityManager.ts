@@ -56,7 +56,7 @@ export class EntityManager {
       );
     }
     this.pool = pool;
-    this.getActive = this.pool.truthyIndices.bind(this.pool);
+    this.getActive = this.pool.truthyIndices;
   }
 
   /** @returns the maximum number of entities allowed in the pool (inclusive) */
