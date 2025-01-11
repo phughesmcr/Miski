@@ -60,7 +60,7 @@ export class ArchetypeManager {
       if (currentArchetype) {
         nextBitfield = currentArchetype.bitfield.clone();
         for (const component of componentsArray) {
-          nextBitfield.toggleBool(component.id);
+          nextBitfield.setBool(component.id, true);
         }
       } else {
         nextBitfield = BooleanArray.fromObjects(capacity, ID_KEY, componentsArray);
