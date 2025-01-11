@@ -97,7 +97,7 @@ export class ArchetypeManager {
    * @param entity - The entity to get the components for
    * @returns A record of component instances
    */
-  getEntityComponents(entity: Entity): Record<string, ComponentInstance<any>> {
+  getEntityComponents = (entity: Entity): Record<string, ComponentInstance<any>> => {
     const archetype = this.getEntityArchetype(entity);
     if (!archetype) {
       return {};
@@ -107,7 +107,7 @@ export class ArchetypeManager {
       components[component.name] = component;
     }
     return components;
-  }
+  };
 
   /**
    * @internal
@@ -116,12 +116,12 @@ export class ArchetypeManager {
    * Destroy the ArchetypeManager
    * @returns this
    */
-  destroy(): this {
+  destroy = (): this => {
     this.registry.clear();
     this.entityArchetypes.length = 0;
     this.queryArchetypes.clear();
     return this;
-  }
+  };
 
   /**
    * Get the Archetype associated with an Entity
@@ -146,33 +146,33 @@ export class ArchetypeManager {
    * @param archetype The Archetype
    * @returns `true` if the ArchetypeManager manages the Archetype, `false` otherwise
    */
-  has(archetype: Archetype): boolean {
+  has = (archetype: Archetype): boolean => {
     return this.registry.has(archetype.id);
-  }
+  };
 
   /**
    * Check if an Entity is in the root archetype
    * @param entity The Entity
    * @returns `true` if the Entity is in the root archetype, `false` otherwise
    */
-  isEntityInRoot(entity: Entity): boolean {
+  isEntityInRoot = (entity: Entity): boolean => {
     return this.entityArchetypes[entity] === this.root;
-  }
+  };
 
   /**
    * Get the Archetypes associated with a QueryInstance
    * @param query The QueryInstance
    * @returns An IterableIterator of Archetypes associated with the QueryInstance or undefined
    */
-  query(query: QueryInstance): IterableIterator<Archetype> | undefined {
+  query = (query: QueryInstance): IterableIterator<Archetype> | undefined => {
     return this.queryArchetypes.get(query)?.values();
-  }
+  };
 
   /**
    * Run routine maintenance on the ArchetypeManager
    * @returns this
    */
-  refresh(queries: IterableIterator<QueryInstance>): this {
+  refresh = (queries: IterableIterator<QueryInstance>): this => {
     for (const archetype of this.registry.values()) {
       if (archetype.isEmpty() === false) {
         for (const instance of queries) {
@@ -184,17 +184,17 @@ export class ArchetypeManager {
       archetype.refresh();
     }
     return this;
-  }
+  };
 
   /**
    * Reset an Entity to the root archetype
    * @param entity The Entity
    * @returns this
    */
-  reset(entity: Entity): this {
+  reset = (entity: Entity): this => {
     this.set(this.root, entity);
     return this;
-  }
+  };
 
   /**
    * Set the Archetype associated with an Entity
@@ -203,24 +203,23 @@ export class ArchetypeManager {
    * @returns this
    * @throws {NotRegisteredError} If the Archetype is not registered
    */
-  set(archetype: Archetype, entity: Entity): Archetype {
+  set = (archetype: Archetype, entity: Entity): Archetype => {
     if (this.has(archetype) === false) throw new NotRegisteredError("Invalid archetype.");
     if (this.entityArchetypes[entity] === archetype) return archetype;
     if (entity >= this.entityArchetypes.length || entity < 0) {
       throw new RangeError("Invalid entity.");
     }
-    const current = this.entityArchetypes[entity]!;
-    current.removeEntity(entity);
+    this.entityArchetypes[entity]?.removeEntity(entity);
     this.entityArchetypes[entity] = archetype;
     archetype.addEntity(entity);
     return archetype;
-  }
+  };
 
   /**
    * Stringify the ArchetypeManager
    * @returns The JSON string
    */
-  stringify(): string {
+  stringify = (): string => {
     return JSON.stringify({
       registry: [...this.registry.values()].map((archetype) => archetype.stringify()),
       entityArchetypes: this.entityArchetypes,
@@ -228,7 +227,7 @@ export class ArchetypeManager {
         return [query.id, [...archetypes].map((archetype) => archetype.id)];
       }),
     });
-  }
+  };
 
   /**
    * @internal

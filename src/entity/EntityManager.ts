@@ -16,7 +16,10 @@ export class EntityManager {
   static readonly MAX_CAPACITY = BitPool.MAX_SAFE_SIZE;
 
   /** The entity ID pool */
-  #pool: BitPool;
+  pool: BitPool;
+
+  /** @returns an iterable of all active entities */
+  getActive: (startEntity?: Entity, endEntity?: Entity) => IterableIterator<Entity>;
 
   /**
    * Create a new EntityManager from a JSON string
@@ -52,66 +55,63 @@ export class EntityManager {
         `EntityManager capacity must be a positive integer, above 0 and below ${EntityManager.MAX_CAPACITY}`,
       );
     }
-    this.#pool = pool;
-    this.active = this.#pool.truthyIndices;
+    this.pool = pool;
+    this.getActive = this.pool.truthyIndices.bind(this.pool);
   }
 
   /** @returns the maximum number of entities allowed in the pool (inclusive) */
   get capacity(): number {
-    return this.#pool.size;
+    return this.pool.size;
   }
-
-  /** @returns an iterable of all active entities */
-  active: (startEntity?: Entity, endEntity?: Entity) => IterableIterator<Entity>;
 
   /**
    * Create a new entity
    * @returns The new `Entity`, or `undefined` if the pool is full
    */
-  create(): Entity | undefined {
-    const entity = this.#pool.acquire() as Entity;
+  create = (): Entity | undefined => {
+    const entity = this.pool.acquire() as Entity;
     if (entity === -1) {
       return undefined;
     }
     return entity;
-  }
+  };
 
   /**
    * Destroy an entity
    * @param entity - The entity to destroy
    * @throws {EntityNotFoundError} - If the entity is not found
    */
-  destroy(entity: Entity): void {
+  destroy = (entity: Entity): void => {
     if (this.isEntity(entity) === false) {
       throw new EntityNotFoundError(entity);
     }
-    this.#pool.release(entity);
-  }
+    this.pool.release(entity);
+  };
 
   /** @returns the number of active entities */
-  getActiveCount(): number {
+  getActiveCount = (): number => {
     const size = this.capacity;
-    const population = this.#pool.getPopulationCount();
+    const population = this.pool.getPopulationCount();
     const active = size - population;
     if (active > this.capacity) {
       return this.capacity;
     }
     return active;
-  }
+  };
 
   /** @returns the number of available entities */
-  getAvailableCount(): number {
+  getAvailableCount = (): number => {
     return this.capacity - this.getActiveCount();
-  }
+  };
 
   /**
    * Check if an entity exists (i.e., is valid && is active)
    * @param entity - The entity to check
    * @returns `true` if the entity exists, `false` otherwise
    */
-  isActive(entity: Entity): boolean {
-    return this.isEntity(entity) && this.#pool.isOccupied(entity);
-  }
+  isActive = (entity: Entity): boolean => {
+    return this.isEntity(entity) && this.pool.isOccupied(entity);
+  };
 
   /**
    * Check if an entity is valid for this pool
@@ -119,7 +119,7 @@ export class EntityManager {
    * @returns `true` if the entity is valid, `false` otherwise
    * @see EntityManager.exists to check if an entity is valid and resident
    */
-  isEntity(entity: Entity): entity is Entity {
+  isEntity = (entity: Entity): entity is Entity => {
     if (isPositiveUint32(entity) === false) {
       return false;
     }
@@ -127,20 +127,20 @@ export class EntityManager {
       return false;
     }
     return true;
-  }
+  };
 
   /**
    * Serialize the entity manager to a JSON string
    * @returns a JSON string representation of the entity manager
    * @see {@link https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/JSON/stringify|MDN}
    */
-  stringify(): string {
+  stringify = (): string => {
     return JSON.stringify(
       {
         MAX_CAPACITY: EntityManager.MAX_CAPACITY,
-        capacity: this.#pool.size,
-        entities: this.#pool.toString(),
+        capacity: this.pool.size,
+        entities: this.pool.toString(),
       },
     );
-  }
+  };
 }

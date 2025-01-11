@@ -31,7 +31,7 @@ export class Archetype {
   #exited: BooleanArray;
 
   /** The Archetype's unique identifier */
-  readonly id: string;
+  #id: string;
 
   /**
    * Creates a new Archetype
@@ -45,7 +45,7 @@ export class Archetype {
     components: ComponentInstance<any>[],
     bitfield: BooleanArray = BooleanArray.fromObjects(capacity, ID_KEY, components),
   ) {
-    this.id = bitfield.toString();
+    this.#id = bitfield.toString();
     this.#bitfield = bitfield;
     this.#candidateCache = new Map();
     this.#components = components;
@@ -66,7 +66,12 @@ export class Archetype {
 
   /** A copy of the Archetype's Component Bitfield */
   get bitfield(): BooleanArray {
-    return this.#bitfield.slice(0) as BooleanArray;
+    return this.#bitfield;
+  }
+
+  /** The Archetype's unique identifier */
+  get id(): string {
+    return this.#id;
   }
 
   /**
@@ -93,7 +98,7 @@ export class Archetype {
    * Get the number of entities currently associated with this Archetype
    * @returns The number of entities in the Archetype
    */
-  getOccupancy(): number {
+  getPopulationCount(): number {
     return this.#entities.getPopulationCount();
   }
 

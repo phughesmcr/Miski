@@ -1,20 +1,16 @@
 /// <reference lib="dom" />
 /**
- * @module shooter
- * @description A simple vertical shooter game using Miski and Canvas2D.
+ * @module demo
+ * @description A predator-prey simulation using Miski and Canvas2D.
  * @copyright 2024 the Miski authors. All rights reserved.
  * @license MIT
  */
 
-// The only imports we need:
-import { Component, type Entity, Query, type Schema, System, World } from "../mod.ts";
-import { Webview } from "jsr:@webview/webview";
+// The only Miski imports we need:
+import { Component, type ComponentInstance, type Entity, Query, type Schema, System, World } from "../mod.ts";
 
-// ############################################################################
-// MISC
-// ############################################################################
-
-const sprites: Map<number, HTMLImageElement> = new Map();
+// Import Webview to display the simulation in a window
+import { SizeHint, Webview } from "jsr:@webview/webview";
 
 // ############################################################################
 // COMPONENTS
@@ -64,6 +60,60 @@ const world = new World({
   ],
 });
 
+// Initialize the world before use
+await world.init();
+
+console.dir(world);
+
+// Create and setup WebView window
+const window = new Webview(true, {
+  width: 800,
+  height: 600,
+  hint: SizeHint.FIXED,
+});
+window.title = "🍬 Miski Demo";
+
+// Get canvas context from WebView
+let ctx: CanvasRenderingContext2D;
+window.bind("getContext", (canvas: HTMLCanvasElement) => {
+  ctx = canvas.getContext("2d")!;
+  return ctx;
+});
+
+// Spawn initial entities
+function spawnPredator(x: number, y: number) {
+  const entity = world.entities.create();
+  if (entity === undefined) return;
+
+  world.components.addToEntity(position, entity, { x, y });
+  world.components.addToEntity(velocity, entity, { x: 0, y: 0 });
+  world.components.addToEntity(predator, entity);
+}
+
+function spawnPrey(x: number, y: number) {
+  const entity = world.entities.create();
+  if (entity === undefined) return;
+
+  world.components.addToEntity(position, entity, { x, y });
+  world.components.addToEntity(velocity, entity, { x: 0, y: 0 });
+  world.components.addToEntity(prey, entity);
+}
+
+// Initial spawn
+for (let i = 0; i < 3; i++) {
+  spawnPredator(
+    Math.random() * 800,
+    Math.random() * 600,
+  );
+}
+
+for (let i = 0; i < 10; i++) {
+  spawnPrey(
+    Math.random() * 800,
+    Math.random() * 600,
+  );
+}
+
 // ############################################################################
 // SYSTEMS
 // ############################################################################
@@ -80,8 +130,8 @@ const movementSystem = new System({
   name: "movement",
   query: new Query({ all: [velocity, position] }),
   callback: (components, entities, dt: number) => {
-    const { proxy: position }: ComponentInstance<Vec2> = components["position"]!;
-    const { proxy: velocity }: ComponentInstance<Vec2> = components["velocity"]!;
+    const { proxy: position } = components["position"] as ComponentInstance<Vec2>;
+    const { proxy: velocity } = components["velocity"] as ComponentInstance<Vec2>;
 
     for (const entity of entities) {
       position.cursor = entity;
@@ -114,8 +164,8 @@ const aiSystem = new System({
   name: "ai",
   query: new Query({ all: [position, velocity], any: [predator, prey] }),
   callback: (components, entities) => {
-    const { proxy: position }: ComponentInstance<Vec2> = components["position"]!;
-    const { proxy: velocity }: ComponentInstance<Vec2> = components["velocity"]!;
+    const { proxy: position } = components["position"] as ComponentInstance<Vec2>;
+    const { proxy: velocity } = components["velocity"] as ComponentInstance<Vec2>;
 
     // Store all positions first for performance
     const positions = new Map<Entity, [number, number, boolean]>();
@@ -179,7 +229,7 @@ const collisionSystem = new System({
   name: "collision",
   query: new Query({ all: [position], any: [predator, prey] }),
   callback: (components, entities) => {
-    const { proxy: position }: ComponentInstance<Vec2> = components["position"]!;
+    const { proxy: position } = components["position"] as ComponentInstance<Vec2>;
 
     const positions = new Map<Entity, [number, number, boolean]>();
 
@@ -219,7 +269,7 @@ const renderSystem = new System({
   name: "render",
   query: new Query({ all: [position], any: [predator, prey] }),
   callback: (components, entities, ctx: CanvasRenderingContext2D) => {
-    const { proxy: position }: ComponentInstance<Vec2> = components["position"]!;
+    const { proxy: position } = components["position"] as ComponentInstance<Vec2>;
 
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
@@ -245,14 +295,17 @@ const renderSystem = new System({
 // SETUP
 // ############################################################################
 
-// Remove direct DOM manipulation and replace with WebView setup
 const HTML = `
 <!DOCTYPE html>
 <html>
 <head>
     <style>
-        body { 
+        * {
             margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body { 
             overflow: hidden;
             background: black;
             display: flex;
@@ -260,7 +313,7 @@ const HTML = `
             align-items: center;
         }
         canvas {
-            background: #111;
+            background: transparent;
         }
     </style>
 </head>
@@ -271,7 +324,7 @@ const HTML = `
         const ctx = canvas.getContext('2d');
         
         // Expose canvas context to main thread
-        window.ctx = ctx;
+        globalThis.ctx = ctx;
         
         // Handle window resize
         function resizeCanvas() {
@@ -283,63 +336,19 @@ const HTML = `
         }
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
+        setTimeout(() => {
+            getContext(canvas);
+        }, 1000);
     </script>
 </body>
 </html>
 `;
 
-// Create and setup WebView window
-const window = new Webview();
-
-// Initialize the window with our HTML
-window.navigate(`data:text/html,${encodeURIComponent(HTML)}`);
-
-// Get canvas context from WebView
-let ctx: CanvasRenderingContext2D;
-window.bind("getContext", () => {
-  return window.eval("ctx");
-});
-ctx = (await window.eval("ctx")) as unknown as CanvasRenderingContext2D;
-
-// Create system instances
+// Create system instances AFTER entities exist
 const movement = world.systems.create(movementSystem);
 const ai = world.systems.create(aiSystem);
 const collision = world.systems.create(collisionSystem);
 const render = world.systems.create(renderSystem);
-
-// Spawn initial entities
-function spawnPredator(x: number, y: number) {
-  const entity = world.entities.create();
-  if (entity === undefined) return;
-
-  world.components.addToEntity(position, entity, { x, y });
-  world.components.addToEntity(velocity, entity, { x: 0, y: 0 });
-  world.components.addToEntity(predator, entity);
-}
-
-function spawnPrey(x: number, y: number) {
-  const entity = world.entities.create();
-  if (entity === undefined) return;
-
-  world.components.addToEntity(position, entity, { x, y });
-  world.components.addToEntity(velocity, entity, { x: 0, y: 0 });
-  world.components.addToEntity(prey, entity);
-}
-
-// Initial spawn
-for (let i = 0; i < 3; i++) {
-  spawnPredator(
-    Math.random() * canvas.width,
-    Math.random() * canvas.height,
-  );
-}
-
-for (let i = 0; i < 10; i++) {
-  spawnPrey(
-    Math.random() * canvas.width,
-    Math.random() * canvas.height,
-  );
-}
 
 // ############################################################################
 // GAME LOOP
@@ -363,13 +372,11 @@ async function gameLoop(timestamp: number) {
   }
 }
 
-// Start the game loop
-window.eval(`requestAnimationFrame(${gameLoop.toString()})`);
-
 // Show the window and start the event loop
-window.show();
+window.eval(`requestAnimationFrame(${gameLoop.toString()})`);
+window.navigate(`data:text/html,${encodeURIComponent(HTML)}`);
 window.run();
 
 // Cleanup when window closes
-// window.destroy();
-// running = false;
+//window.destroy();
+//running = false;

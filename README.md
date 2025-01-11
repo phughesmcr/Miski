@@ -20,24 +20,24 @@ See [jsr.io/@phughesmcr/miski](https://jsr.io/@phughesmcr/miski) for complete do
 
 ## Purpose
 
-Miski's purpose is to provide a performant, stable, developer-friendly ECS architecture for modern Javascript projects.
+Miski's purpose is to provide a performant, stable, developer-friendly ECS architecture for modern web projects.
 
 Since ECS libraries are primarily used in games and other performance-critical applications, performant here means:
 
 * Miski aims to minimize garbage collection and memory allocation pressure, reducing the risk of dropped frames.
-* Miski takes advantage of web standards like `ArrayBuffer` and `Uint32Array` to provide fast, cache-friendly component storage, querying, and iteration.
+* Miski takes advantage of web standards like `ArrayBuffer` and `WeakMap` to provide fast, cache-friendly component storage, querying, and iteration.
 
 Stable here means:
 
-* The API will not change meaningfully
-* The results produced by the library are predictable and consistent
-* No 3rd-party dependencies
+* The API will not change meaningfully.
+* The results produced by the library are predictable and consistent.
+* No 3rd-party dependencies.
 
 Developer-friendly here means:
 
-* The library is well-documented, self-documenting, and has a clean, readable codebase
-* The library is easy to understand, learn, and use
-* The library is easy to extend, customize, and integrate into existing projects
+* The library is well-documented, self-documenting, and has a clean, readable codebase.
+* The library is easy to understand, learn, and use.
+* The library is easy to extend, customize, and integrate into existing projects.
 
 ### Goals
 
@@ -55,9 +55,9 @@ Because Miski is designed to be used inside your own projects, we let you config
 
 ## Features
 
-* Simple, developer-friendly, human-readable API
 * Modern modular ES2022 data-oriented Typescript codebase
 * Fast, cache-friendly ArrayBuffer-based component data storage
+* Simple, developer-friendly, human-readable API
 * Ability to register more than 32 components in one world
 * Ability to limit the number of entities a component can be added to
 * Define components, systems and queries once, reuse them across multiple worlds
@@ -76,7 +76,7 @@ npx jsr add @phughesmcr/miski
 ```
 
 ```ts
-import { } from "@phughesmcr/miski";
+import { World, ... } from "@phughesmcr/miski";
 ```
 
 ### Deno
@@ -86,7 +86,7 @@ deno add jsr:@phughesmcr/miski
 ```
 
 ```ts
-import { } from "@phughesmcr/miski";
+import { World, ... } from "@phughesmcr/miski";
 ```
 
 ### Bun
@@ -96,7 +96,7 @@ bunx jsr add @phughesmcr/miski
 ```
 
 ```ts
-import { } from "@phughesmcr/miski";
+import { World, ... } from "@phughesmcr/miski";
 ```
 
 ## Quick Start API Reference
@@ -145,7 +145,8 @@ Components can be created once and used across multiple worlds.
 For example, to create a 2d position component:
 
 ```typescript
-type Vec2 = { x: number, y: number }; // defines what input we want (number only)
+// Optional schema:
+type Vec2 = { x: Float32ArrayConstructor, y: Float32ArrayConstructor }; // defines what input we want (number only)
 
 const positionComponent = new Component<Vec2>({
   // ⚠️ There are some names you cannot use for components or their schema properties. 
@@ -154,7 +155,7 @@ const positionComponent = new Component<Vec2>({
 
   // The schema relates to the input type above, in this case Vec2.
   // It defines how we want to store the expected datatype (number).
-  // Below we want to store it in a Float32Array, but any TypedArray will work.
+  // Since we know a Vec2 requires X and Y to be Float32Array, we can define the schema like so:
   schema: {
     x: Float32Array,
     y: Float32Array,
@@ -164,7 +165,7 @@ const positionComponent = new Component<Vec2>({
 
 #### Tags
 
-We can create a tag component by omitting the schema object and providing a null type:
+We can create a tag component by omitting the schema object and (optionally) providing a null type:
 
 ```typescript
 const activeComponent = new Component<null>({
@@ -352,7 +353,7 @@ Once created a system can be initialized into worlds which helps with caching et
 const positionSystem = positionSystemPrefab.init(world);
 ```
 
-Once initialized, systems are then used just like normal fuctions:
+Once initialized, systems are then used just like normal functions:
 
 ```typescript
 positionSystem();

@@ -32,7 +32,6 @@ export function createSystemInstance<T extends SystemCallback>(
  * @param spec The object to test
  * @returns `true` if the object is a valid system specification, `false` otherwise
  */
-// deno-lint-ignore no-explicit-any
 export function isValidSystemSpec(spec: unknown): spec is SystemSpec<any> {
   if (isObject(spec) === false) return false;
   const { name, query, callback, destroy, init } = spec;

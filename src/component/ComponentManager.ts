@@ -66,7 +66,11 @@ export class ComponentManager {
   }
 
   get registry(): Record<string, ComponentInstance<any>> {
-    return Object.fromEntries(this.#registry.entries());
+    const result: Record<string, ComponentInstance<any>> = {};
+    for (const [component, instance] of this.#registry.entries()) {
+      result[component.name] = instance;
+    }
+    return result;
   }
 
   /**
@@ -76,11 +80,11 @@ export class ComponentManager {
    * @param data - Optional data to set for the component
    * @returns The component manager
    */
-  addToEntity<T extends SchemaOrNull<T>>(
+  addToEntity = <T extends SchemaOrNull<T>>(
     component: Component<T> | string,
     entity: Entity,
     data?: { [k in keyof T]: number },
-  ): this {
+  ): this => {
     const instance = this.getInstance(component);
     if (!instance) {
       throw new Error(`Component ${typeof component === "string" ? `"${component}"` : component.name} not registered.`);
@@ -103,7 +107,7 @@ export class ComponentManager {
       }
     }
     return this;
-  }
+  };
 
   /**
    * Check if an entity has a component
@@ -111,7 +115,7 @@ export class ComponentManager {
    * @param entity - The entity to check for the component on
    * @returns `true` if the entity has the component, `false` otherwise
    */
-  entityOwns<T extends SchemaOrNull<T>>(component: Component<T> | string, entity: Entity): boolean {
+  entityOwns = <T extends SchemaOrNull<T>>(component: Component<T> | string, entity: Entity): boolean => {
     let proto;
     if (typeof component === "string") {
       proto = this.getInstance(component)?.proto;
@@ -119,28 +123,28 @@ export class ComponentManager {
       proto = component;
     }
     return proto ? this.#owners.get(proto)?.getBool(entity) ?? false : false;
-  }
+  };
 
   /**
    * Get a component instance
    * @param component - The component to get the instance of
    * @returns The component instance or `undefined` if the component is not registered
    */
-  getInstance<T extends SchemaOrNull<T>>(component: Component<T> | string): ComponentInstance<T> | undefined {
+  getInstance = <T extends SchemaOrNull<T>>(component: Component<T> | string): ComponentInstance<T> | undefined => {
     if (typeof component === "string") {
       const proto = this.#registry.keys().find((key) => key.name === component);
       if (proto === undefined) return;
       return this.#registry.get(proto);
     }
     return this.#registry.get(component);
-  }
+  };
 
   /**
    * Get an iterable of all entities with one or more changed properties for a given component
    * @param component The component to get changed entities for
    * @returns An iterable of entities or `undefined` if the component is not registered
    */
-  getChanged<T extends SchemaOrNull<T>>(component: Component<T> | string): IterableIterator<Entity> | undefined {
+  getChanged = <T extends SchemaOrNull<T>>(component: Component<T> | string): IterableIterator<Entity> | undefined => {
     let proto;
     if (typeof component === "string") {
       proto = this.#registry.keys().find((key) => key.name === component);
@@ -149,14 +153,14 @@ export class ComponentManager {
       proto = component;
     }
     return this.#changed.get(proto)?.truthyIndices() as IterableIterator<Entity> | undefined;
-  }
+  };
 
   /**
    * Get an iterable of all entities with a given component
    * @param component The component to get entities for
    * @returns An iterable of entities or `undefined` if the component is not registered
    */
-  getOwners<T extends SchemaOrNull<T>>(component: Component<T> | string): IterableIterator<Entity> | undefined {
+  getOwners = <T extends SchemaOrNull<T>>(component: Component<T> | string): IterableIterator<Entity> | undefined => {
     let proto;
     if (typeof component === "string") {
       proto = this.#registry.keys().find((key) => key.name === component);
@@ -165,7 +169,7 @@ export class ComponentManager {
       proto = component;
     }
     return this.#owners.get(proto)?.truthyIndices() as IterableIterator<Entity> | undefined;
-  }
+  };
 
   /**
    * Get the data for a component on an entity
@@ -173,10 +177,10 @@ export class ComponentManager {
    * @param entity - The entity to get the data for
    * @returns The data for the component or `undefined` if the component is not registered
    */
-  getEntityData<T extends SchemaOrNull<T>>(
+  getEntityData = <T extends SchemaOrNull<T>>(
     component: Component<T> | string,
     entity: Entity,
-  ): Record<keyof T, number> | undefined {
+  ): Record<keyof T, number> | undefined => {
     const instance = this.getInstance(component);
     if (!instance) {
       return undefined;
@@ -190,27 +194,27 @@ export class ComponentManager {
       result[key] = storage[key][entity] ?? Number.NaN;
     }
     return result;
-  }
+  };
 
   /**
    * Check if a component is registered
    * @param component - The component to check for
    * @returns `true` if the component is registered, `false` otherwise
    */
-  isRegistered(component: Component<any> | string): boolean {
+  isRegistered = (component: Component<any> | string): boolean => {
     return this.getInstance(component) !== undefined;
-  }
+  };
 
   /**
    * Run routine maintenance on the component manager
    * @returns The component manager
    */
-  refresh(): ComponentManager {
+  refresh = (): ComponentManager => {
     for (const changed of this.#changed.values()) {
       changed.fill(0);
     }
     return this;
-  }
+  };
 
   /**
    * Remove a component from an entity
@@ -218,7 +222,7 @@ export class ComponentManager {
    * @param entity - The entity to remove the component from
    * @returns The component manager
    */
-  removeFromEntity<T extends SchemaOrNull<T>>(component: Component<T>, entity: Entity): ComponentManager {
+  removeFromEntity = <T extends SchemaOrNull<T>>(component: Component<T>, entity: Entity): ComponentManager => {
     const instance = this.getInstance(component);
     if (!instance) {
       return this;
@@ -230,7 +234,7 @@ export class ComponentManager {
     ownerState.setBool(entity, false);
     this.#changed.get(component)?.setBool(entity, false);
     return this;
-  }
+  };
 
   /**
    * Set the data for a component on an entity
@@ -238,11 +242,11 @@ export class ComponentManager {
    * @param entity - The entity to set the data for
    * @param value - The data to set for the component
    */
-  setEntityData<T extends SchemaOrNull<T>>(
+  setEntityData = <T extends SchemaOrNull<T>>(
     component: Component<T>,
     entity: Entity,
     value: Record<keyof T, number>,
-  ): this {
+  ): this => {
     const instance = this.getInstance(component);
     if (!instance || !value) {
       return this;
@@ -257,18 +261,18 @@ export class ComponentManager {
       }
     }
     return this;
-  }
+  };
 
   /**
    * Stringify the component manager
    * @returns A string representation of the component manager
    */
-  stringify(): string {
+  stringify = (): string => {
     return JSON.stringify(
       {
         buffer: this.#buffer.toString(),
         // TODO: serialise changed, owners, registry
       },
     );
-  }
+  };
 }

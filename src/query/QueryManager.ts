@@ -135,79 +135,90 @@ export class QueryManager {
       this.registry.set(query, instance);
       return instance;
     };
+
+    this.components = (query: Query): IterableIterator<[string, ComponentInstance<SchemaOrNull>]> => {
+      const result = this.#cache.getComponents(
+        query,
+        () => {
+          const instance = createQueryInstance(world, query);
+          return instance.components;
+        },
+        this.#lastQueryUpdate.get(query) ?? 0,
+      );
+
+      const entries = Object.entries(result);
+      const cleanup = () => this.#pool.releaseComponentMap(result);
+      let i = 0;
+
+      return {
+        [Symbol.iterator]() {
+          return this;
+        },
+        next: () => {
+          const result = entries[i++];
+          if (result === undefined) {
+            cleanup();
+            return { done: true as const, value: undefined };
+          }
+          return { done: false as const, value: result };
+        },
+      };
+    };
+
+    this.entities = (query: Query): IterableIterator<Entity> => {
+      const entityArray = this.#cache.getEntities(
+        query,
+        () => {
+          const instance = createQueryInstance(world, query);
+          this.#visited.clear();
+          const result = this.#pool.acquireEntityArray();
+          for (const archetype of instance.archetypes) {
+            for (const entity of archetype.getEntities()) {
+              if (this.#visited.getBool(entity)) continue;
+              result.setBool(entity, true);
+              this.#visited.setBool(entity, true);
+            }
+          }
+          return result;
+        },
+        this.#lastQueryUpdate.get(query) ?? 0,
+      );
+
+      const iterator = entityArray.truthyIndices();
+      const cleanup = () => this.#pool.releaseEntityArray(entityArray);
+
+      return {
+        [Symbol.iterator]() {
+          return this;
+        },
+        next: () => {
+          const result = iterator.next();
+          if (result.done) {
+            cleanup();
+            return { done: true as const, value: undefined };
+          }
+          return { done: false as const, value: result.value };
+        },
+      };
+    };
   }
 
   /** Get components for a query */
-  components = (query: Query): IterableIterator<[string, ComponentInstance<SchemaOrNull>]> => {
-    const result = this.#cache.getComponents(
-      query,
-      () => {
-        const instance = createQueryInstance(this.world, query);
-        return instance.components;
-      },
-      this.#lastQueryUpdate.get(query) ?? 0,
-    );
-
-    const entries = Object.entries(result);
-    const cleanup = () => this.#pool.releaseComponentMap(result);
-
-    return {
-      [Symbol.iterator]() {
-        return this;
-      },
-      next: () => {
-        const { done, value } = entries[Symbol.iterator]().next();
-        if (done) cleanup();
-        return { done, value };
-      },
-    };
-  };
+  components: (query: Query) => IterableIterator<[string, ComponentInstance<SchemaOrNull>]>;
 
   /** Get entities for a query */
-  entities = (query: Query): IterableIterator<Entity> => {
-    const entityArray = this.#cache.getEntities(
-      query,
-      () => {
-        const instance = createQueryInstance(this.world, query);
-        this.#visited.clear();
-        const result = this.#pool.acquireEntityArray();
-        for (const archetype of instance.archetypes) {
-          for (const entity of archetype.getEntities()) {
-            if (this.#visited.getBool(entity)) continue;
-            result.setBool(entity, true);
-            this.#visited.setBool(entity, true);
-          }
-        }
-        return result;
-      },
-      this.#lastQueryUpdate.get(query) ?? 0,
-    );
-
-    const iterator = entityArray.values();
-    const cleanup = () => this.#pool.releaseEntityArray(entityArray);
-
-    return {
-      [Symbol.iterator]() {
-        return this;
-      },
-      next: () => {
-        const { done, value } = iterator.next();
-        if (done) cleanup();
-        return { done, value };
-      },
-    };
-  };
+  entities: (query: Query) => IterableIterator<Entity>;
 
   /** Mark query as dirty and invalidate caches */
-  invalidate(query?: Query): void {
+  invalidate = (query?: Query): void => {
     if (query) {
       this.#lastQueryUpdate.set(query, Date.now());
     } else {
       this.#cache.invalidate();
     }
-  }
+  };
 
-  stringify(): string {
+  stringify = (): string => {
     return "";
-  }
+  };
 }

@@ -45,6 +45,10 @@
     }
   },
   "tasks": {
+    "demo": {
+      "description": "Run the demo",
+      "command": "deno run -Ar --unstable example/demo.ts"
+    },
     "prep": {
       "description": "Format, lint, and check the codebase",
       "command": "deno fmt && deno lint && deno check mod.ts src/**/*.ts"

@@ -27,6 +27,7 @@ import type {
 } from "../types.ts";
 import type { Query } from "../query/Query.ts";
 import type { ComponentInstance } from "../component/ComponentInstance.ts";
+import { BooleanArray } from "@phughesmcr/booleanarray";
 
 /**
  * Test if an object is a valid WorldSpec
@@ -41,6 +42,24 @@ export function isValidWorldSpec(spec: unknown): spec is WorldSpec {
   return true;
 }
 
+/**
+ * Assert that the World is in the correct state
+ * @param target - The target state
+ * @param current - The current state
+ * @throws {WorldStateError} - If the World is not in the correct state
+ */
+export function assertWorldState(target: WorldState, current: WorldState): void {
+  if (current === target) return;
+  switch (current) {
+    case "uninitialized":
+      throw new WorldStateError("World has not been initialized");
+    case "initialized":
+      throw new WorldStateError("World has already been initialized");
+    case "destroyed":
+      throw new WorldStateError("World has already been destroyed");
+  }
+}
+
 /** The World is the central context in which all Entities and Components exist. */
 export class World {
   /**
@@ -49,6 +68,58 @@ export class World {
    * @returns The public APIs for the World
    */
   static #constructAPIs(world: World, capacity: number): WorldAPIResult {
+    // ARCHETYPES API
+
+    /** Cache of components for each query */
+    const queryArchetypeComponentsCache = new Map<Query, Record<string, ComponentInstance<any>>>();
+
+    /** Cache of entities visited by queryArchetypeEntities */
+    const visitedArchetypeEntities = new BooleanArray(world.#entityManager.capacity);
+
+    /**
+     * Get the components for a query
+     * @param query - The query to get the components for
+     * @returns The components for the query
+     */
+    const queryArchetypeComponents = (query: Query): Record<string, ComponentInstance<any>> => {
+      if (queryArchetypeComponentsCache.has(query)) return queryArchetypeComponentsCache.get(query)!;
+      const queryInstance = world.#queryManager.register(query);
+      const archetypes = world.#archetypeManager.query(queryInstance);
+      const components: Record<string, ComponentInstance<any>> = {};
+      if (archetypes === undefined) return components;
+      for (const archetype of archetypes) {
+        for (const component of archetype.components) {
+          components[component.name] = component;
+        }
+      }
+      queryArchetypeComponentsCache.set(query, components);
+      return components;
+    };
+
+    /**
+     * Get the entities for a query
+     * @param query - The query to get the entities for
+     * @returns The entities for the query
+     */
+    const queryArchetypeEntities = (function* (query: Query): IterableIterator<Entity> {
+      const queryInstance = world.#queryManager.register(query);
+      const archetypes = world.#archetypeManager.query(queryInstance);
+      if (archetypes === undefined) {
+        yield* visitedArchetypeEntities.truthyIndices();
+        return;
+      }
+      for (const archetype of archetypes) {
+        for (const entity of archetype.getEntities()) {
+          if (visitedArchetypeEntities.getBool(entity)) continue;
+          visitedArchetypeEntities.setBool(entity, true);
+          yield entity;
+        }
+      }
+      visitedArchetypeEntities.clear();
+    }).bind(world);
+
+    // COMPONENTS API
+
     /**
      * Convenience function to get a component from a string or Component
      * @throws {NotRegisteredError} - If the component is not registered
@@ -56,58 +127,11 @@ export class World {
     const getComponentByName = <T extends SchemaOrNull<T>>(component: string | Component<T>): Component<T> => {
       if (typeof component === "string") {
         component = world.#componentManager.getInstance(component)?.proto as Component<T>;
-        if (!component) {
+        if (component === undefined) {
           throw new NotRegisteredError(`Component ${component} not registered in world`);
         }
       }
       return component;
-    };
-
-    const queryArchetypeComponents = (query: Query): Record<string, ComponentInstance<any>> => {
-      const queryInstance = world.#queryManager.register(query);
-      const archetypes = world.#archetypeManager.query(queryInstance);
-      if (!archetypes) return {};
-      const components: Record<string, ComponentInstance<any>> = {};
-      for (const archetype of archetypes) {
-        for (const component of archetype.components) {
-          components[component.name] = component;
-        }
-      }
-      return components;
-    };
-
-    const queryArchetypeEntities = (query: Query): Set<Entity> => {
-      const queryInstance = world.#queryManager.register(query);
-      const archetypes = world.#archetypeManager.query(queryInstance);
-      if (!archetypes) return new Set<Entity>();
-      const entities = new Set<Entity>();
-      for (const archetype of archetypes) {
-        // TODO: do this with booleanarray!
-        for (const entity of archetype.getEntities()) {
-          entities.add(entity);
-        }
-      }
-      return entities;
-    };
-
-    const queryArchetypes = (
-      query: Query,
-    ): [components: Record<string, ComponentInstance<any>>, entities: Set<Entity>] => {
-      const queryInstance = world.#queryManager.register(query);
-      const archetypes = world.#archetypeManager.query(queryInstance);
-      if (!archetypes) return [{}, new Set<Entity>()];
-      const components: Record<string, ComponentInstance<any>> = {};
-      const entities = new Set<Entity>();
-      for (const archetype of archetypes) {
-        for (const component of archetype.components) {
-          components[component.name] = component;
-        }
-        // TODO: do this with booleanarray!
-        for (const entity of archetype.getEntities()) {
-          entities.add(entity);
-        }
-      }
-      return [components, entities];
     };
 
     /**
@@ -142,9 +166,10 @@ export class World {
       world.#archetypeManager.update(entity, world.#archetypeManager.getEntityComponents(entity));
     };
 
+    // MAIN
+
     const archetypes: WorldArchetypeAPI = {
       isEntityInRoot: world.#archetypeManager.isEntityInRoot,
-      query: queryArchetypes,
       queryComponents: queryArchetypeComponents,
       queryEntities: queryArchetypeEntities,
     };
@@ -167,10 +192,9 @@ export class World {
 
     const entities: WorldEntityAPI = {
       capacity,
-      active: world.#entityManager.active,
       create: world.#entityManager.create,
       destroy: world.#entityManager.destroy,
-      exists: world.#entityManager.isActive,
+      getActive: world.#entityManager.getActive,
       getActiveCount: world.#entityManager.getActiveCount,
       getAvailableCount: world.#entityManager.getAvailableCount,
       isActive: world.#entityManager.isActive,
@@ -243,7 +267,7 @@ export class World {
     this.#queryManager = new QueryManager(this, capacity);
     this.#systemManager = new SystemManager(this);
 
-    const APIs: WorldAPIResult = World.#constructAPIs(this, capacity);
+    const APIs: WorldAPIResult = World.#constructAPIs.bind(this)(this, capacity);
     this.archetypes = APIs.archetypes;
     this.components = APIs.components;
     this.entities = APIs.entities;
@@ -261,11 +285,7 @@ export class World {
    * @throws {WorldStateError} - If the World is already initialized, or has already been destroyed
    */
   async init(): Promise<this> {
-    if (this.#state === "initialized") {
-      throw new WorldStateError("World has already been initialized");
-    } else if (this.#state === "destroyed") {
-      throw new WorldStateError("World has already been destroyed");
-    }
+    assertWorldState("uninitialized", this.#state);
     // TODO: ensure everything is in its correct initial state - however, fromJSON world's shouldn't set everything to initial??
     this.#archetypeManager.init();
     await this.#systemManager.init(this);
@@ -279,11 +299,7 @@ export class World {
    * @throws {WorldStateError} - If the World has not yet been initialized, or has already been destroyed
    */
   async destroy(): Promise<this> {
-    if (this.#state === "uninitialized") {
-      throw new WorldStateError("World has not been initialized");
-    } else if (this.#state === "destroyed") {
-      throw new WorldStateError("World has already been destroyed");
-    }
+    assertWorldState("initialized", this.#state);
     // TODO: destroy everything and clearing up memory
     await this.#systemManager.destroyAll(this);
     this.#state = "destroyed";
@@ -296,11 +312,7 @@ export class World {
    * @throws {WorldStateError} - If the World has not yet been initialized, or has already been destroyed
    */
   refresh(): this {
-    if (this.#state === "uninitialized") {
-      throw new WorldStateError("World has not been initialized");
-    } else if (this.#state === "destroyed") {
-      throw new WorldStateError("World has already been destroyed");
-    }
+    assertWorldState("initialized", this.#state);
     this.#archetypeManager.refresh(this.#queryManager.registry.values());
     this.#componentManager.refresh();
     this.#queryManager.invalidate();

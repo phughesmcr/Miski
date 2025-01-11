@@ -66,7 +66,7 @@ export type ArchetypeSpec = {
 };
 
 /** A Record of ComponentInstances by Component name */
-export type ComponentRecord<T extends SchemaOrNull<T>> = Record<
+export type ComponentRecord<T extends SchemaOrNull> = Record<
   string,
   T extends Schema<infer U> ? ComponentInstance<U> : ComponentInstance<null>
 >;
@@ -77,7 +77,6 @@ export type TypedComponentRecord<T> = {
 };
 
 /** A Schema or null (null = tag component) */
-// deno-lint-ignore no-explicit-any
 export type SchemaOrNull<T = any> = Schema<T> | null;
 
 /** The Component's construct`or specification */
@@ -93,7 +92,6 @@ export type ComponentSpec<T extends SchemaOrNull = null> =
      */
     maxEntities?: number | null;
   }
-  // deno-lint-ignore no-explicit-any
   & (T extends Schema<any> ? {
       /** The component's property definitions */
       schema: Schema<T>;
@@ -140,7 +138,6 @@ export type QueryInstance = {
   /** The archetypes which match this query */
   archetypes: Set<Archetype>;
   /** The components which match this query */
-  // deno-lint-ignore no-explicit-any
   components: Readonly<Record<string, ComponentInstance<any>>>;
   /** The QueryInstance's unique identifier */
   id: string;
@@ -179,7 +176,7 @@ export type ParametersExceptFirstTwo<F> = F extends (arg0: any, arg1: any, ...re
 export type SystemCallback = (
   components: ComponentRecord<any>,
   entities: IterableIterator<Entity>,
-  ...args: unknown[]
+  ...args: any[]
 ) => void | Promise<void>;
 
 /**
@@ -224,8 +221,9 @@ export interface SystemPrivateMethods {
  * @param U The parameters of the callback excluding the first two (which are always the components and entities)
  */
 export type SystemInstance<
+  T extends SystemCallback,
   TReturn = void,
-  TArgs extends unknown[] = [],
+  TArgs extends ParametersExceptFirstTwo<T> = ParametersExceptFirstTwo<T>,
 > = (
   ...args: TArgs
 ) => TReturn;
@@ -244,26 +242,22 @@ export type WorldState = "uninitialized" | "initialized" | "destroyed";
 export type WorldArchetypeAPI = {
   /** Check if an entity is in the root (empty) archetype */
   isEntityInRoot(entity: Entity): boolean;
-  /** Get the components and entities associated with a QueryInstance */
-  query(query: Query): [components: Record<string, ComponentInstance<any>>, entities: Set<Entity>];
   /** Get the components associated with a QueryInstance */
   queryComponents(query: Query): Record<string, ComponentInstance<any>> | undefined;
   /** Get the entities associated with a QueryInstance */
-  queryEntities(query: Query): Set<Entity> | undefined;
+  queryEntities(query: Query): IterableIterator<Entity> | undefined;
 };
 
 /** The public Entity management API */
 export type WorldEntityAPI = {
   /** The capacity of the EntityManager */
   capacity: number;
-  /** Get an iterable of all active entities */
-  active(startEntity?: Entity, endEntity?: Entity): IterableIterator<Entity>;
   /** Create an entity */
   create(): Entity | undefined;
   /** Destroy an entity */
   destroy(entity: Entity): void;
-  /** Check if an entity exists */
-  exists(entity: Entity): boolean;
+  /** Get an iterable of all active entities */
+  getActive(startEntity?: Entity, endEntity?: Entity): IterableIterator<Entity>;
   /** Get the number of active entities */
   getActiveCount(): number;
   /** Get the number of available entities */
