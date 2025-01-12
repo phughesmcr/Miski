@@ -47,7 +47,7 @@ export function isValidComponentArray(array: unknown): array is Array<Component<
 }
 
 /** A Component is a collection of properties that are stored in a world */
-export class Component<T extends SchemaOrNull<T>> implements ComponentPrivateMethods<T> {
+export class Component<T extends SchemaOrNull<T> = null> implements ComponentPrivateMethods<T> {
   /** The component's storage partition */
   readonly [$_PARTITION_KEY]: Partition<T>;
 
