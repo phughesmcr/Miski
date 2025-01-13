@@ -13,7 +13,7 @@ import type { ComponentInstance } from "./component/ComponentInstance.ts";
 import type { BooleanArray } from "@phughesmcr/booleanarray";
 import type { Archetype } from "./archetype/Archetype.ts";
 import type { StorageProxy } from "./component/StorageProxy.ts";
-import type { $_PARTITION_KEY, $_SYSTEM_DESTROY_KEY, $_SYSTEM_INIT_KEY } from "./constants.ts";
+import type { $_ARCHETYPE_KEY, $_PARTITION_KEY, $_SYSTEM_DESTROY_KEY, $_SYSTEM_INIT_KEY } from "./constants.ts";
 
 import type { Partition, Schema, TypedArray, TypedArrayConstructor } from "@phughesmcr/partitionedbuffer";
 import type { SchemaStorage } from "@phughesmcr/partitionedbuffer";
@@ -240,6 +240,10 @@ export type WorldSpec = {
 export type WorldState = "uninitialized" | "initialized" | "destroyed";
 
 export type WorldArchetypeAPI = {
+  /** Get the archetype ID of an entity */
+  [$_ARCHETYPE_KEY]: (id: string) => Archetype | undefined;
+  /** Get the archetype ID of an entity */
+  getEntityArchetype: (entity: Entity) => string | undefined;
   /** Check if an entity is in the root (empty) archetype */
   isEntityInRoot(entity: Entity): boolean;
   /** Get the components associated with a QueryInstance */
@@ -341,7 +345,7 @@ export type WorldComponentAPI = {
    * @param query - The query to use
    * @returns A Record of ComponentInstances by Component name
    */
-  query(query: Query): IterableIterator<[string, ComponentInstance<SchemaOrNull<any>>]>;
+  query(query: Query): Record<string, ComponentInstance<SchemaOrNull<any>>>;
   /**
    * Remove a component from an entity
    * @param component - The component to remove

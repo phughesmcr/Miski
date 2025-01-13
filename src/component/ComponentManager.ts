@@ -13,6 +13,7 @@ import { isObject } from "../utils.ts";
 import { StorageProxy } from "./StorageProxy.ts";
 import type { Component } from "./Component.ts";
 import type { Entity, SchemaOrNull, TypedArray } from "../types.ts";
+import { NotRegisteredError } from "../errors.ts";
 
 /** A component manager is responsible for managing the components of a world. */
 export class ComponentManager {
@@ -84,29 +85,39 @@ export class ComponentManager {
     component: Component<T> | string,
     entity: Entity,
     data?: { [k in keyof T]: number },
-  ): this => {
+  ): ComponentInstance<any>[] => {
     const instance = this.getInstance(component);
     if (!instance) {
-      throw new Error(`Component ${typeof component === "string" ? `"${component}"` : component.name} not registered.`);
+      throw new NotRegisteredError(
+        `Component ${typeof component === "string" ? `"${component}"` : component.name} not registered.`,
+      );
     }
     const { proto } = instance;
+
+    // Set ownership
     const ownerState = this.#owners.get(proto)?.setBool(entity, true);
     if (ownerState === undefined) {
-      throw new Error(`Error setting owner state for component "${proto.name}".`);
+      throw new Error(`Failed to set ownership for component ${proto.name} on entity ${entity}.`);
     }
+
+    // Set changed
     const changedState = this.#changed.get(proto)?.setBool(entity, true);
     if (changedState === undefined) {
-      throw new Error(`Error setting changed state for component "${proto.name}".`);
+      throw new Error(`Failed to set changed state for component ${proto.name} on entity ${entity}.`);
     }
-    const storage = instance.storage?.partitions as Record<keyof T, TypedArray>;
-    if (storage && isObject(data)) {
+
+    // Set data if provided
+    if (isObject(data) && instance.storage !== null) {
+      const storage = instance.storage?.partitions as Record<keyof T, TypedArray>;
       for (const key in data) {
         if (key in storage) {
           storage[key][entity] = data[key];
         }
       }
     }
-    return this;
+
+    // Important: Update archetype after modifying component
+    return this.getEntityComponents(entity);
   };
 
   /**
@@ -172,6 +183,21 @@ export class ComponentManager {
   };
 
   /**
+   * Get all components for an entity
+   * @param entity The entity to get components for
+   * @returns An array of component instances
+   */
+  getEntityComponents(entity: Entity): ComponentInstance<any>[] {
+    const components: ComponentInstance<any>[] = []; // TODO: this could be pooled
+    for (const [proto, instance] of this.#registry) {
+      if (this.#owners.get(proto)?.getBool(entity)) {
+        components.push(instance);
+      }
+    }
+    return components;
+  }
+
+  /**
    * Get the data for a component on an entity
    * @param component - The component to get the data for
    * @param entity - The entity to get the data for
@@ -222,18 +248,16 @@ export class ComponentManager {
    * @param entity - The entity to remove the component from
    * @returns The component manager
    */
-  removeFromEntity = <T extends SchemaOrNull<T>>(component: Component<T>, entity: Entity): ComponentManager => {
+  removeFromEntity = <T extends SchemaOrNull<T>>(
+    component: string | Component<T>,
+    entity: Entity,
+  ): ComponentInstance<any>[] => {
     const instance = this.getInstance(component);
-    if (!instance) {
-      return this;
-    }
-    const ownerState = this.#owners.get(component);
-    if (!ownerState?.getBool(entity)) {
-      return this;
-    }
-    ownerState.setBool(entity, false);
-    this.#changed.get(component)?.setBool(entity, false);
-    return this;
+    if (!instance) return this.getEntityComponents(entity);
+    const { proto } = instance;
+    this.#owners.get(proto)?.setBool(entity, false);
+    this.#changed.get(proto)?.setBool(entity, false);
+    return this.getEntityComponents(entity);
   };
 
   /**

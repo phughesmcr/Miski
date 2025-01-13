@@ -8,7 +8,7 @@
 import { ArchetypeManager } from "../archetype/ArchetypeManager.ts";
 import { type Component, isValidComponentArray } from "../component/Component.ts";
 import { ComponentManager } from "../component/ComponentManager.ts";
-import { VERSION } from "../constants.ts";
+import { $_ARCHETYPE_KEY, $_QUERY_KEY, VERSION } from "../constants.ts";
 import { EntityManager } from "../entity/EntityManager.ts";
 import { NotRegisteredError, SpecError, WorldStateError } from "../errors.ts";
 import { QueryManager } from "../query/QueryManager.ts";
@@ -16,6 +16,7 @@ import { SystemManager } from "../system/SystemManager.ts";
 import { isObject, isPositiveUint32 } from "../utils.ts";
 import type {
   Entity,
+  QueryInstance,
   SchemaOrNull,
   WorldAPIResult,
   WorldArchetypeAPI,
@@ -142,13 +143,15 @@ export class World {
      * @throws {NotRegisteredError} - If the component is not registered
      */
     const addComponentToEntity = <T extends SchemaOrNull<T>>(
-      component: string | Component<T>,
+      component: Component<T> | string,
       entity: Entity,
       data?: { [k in keyof T]: number } | undefined,
     ): void => {
       component = getComponentByName(component);
-      world.#componentManager.addToEntity(component, entity, data);
-      world.#archetypeManager.update(entity, world.#archetypeManager.getEntityComponents(entity));
+      const instances = world.#componentManager.addToEntity(component, entity, data);
+      world.#archetypeManager.update(entity, instances);
+      world.#archetypeManager.refresh(world[$_QUERY_KEY]());
+      world.#queryManager.invalidate();
     };
 
     /**
@@ -162,13 +165,19 @@ export class World {
       entity: Entity,
     ): void => {
       component = getComponentByName(component);
-      world.#componentManager.removeFromEntity(component, entity);
-      world.#archetypeManager.update(entity, world.#archetypeManager.getEntityComponents(entity));
+      const instances = world.#componentManager.removeFromEntity(component, entity);
+      world.#archetypeManager.update(entity, instances);
+      // After updating archetype, refresh queries
+      world.#archetypeManager.refresh(world[$_QUERY_KEY]());
+      // Invalidate query cache
+      world.#queryManager.invalidate();
     };
 
     // MAIN
 
     const archetypes: WorldArchetypeAPI = {
+      [$_ARCHETYPE_KEY]: (id: string) => world.#archetypeManager.registry.get(id),
+      getEntityArchetype: (entity: Entity) => world.#archetypeManager.getEntityArchetype(entity)?.id,
       isEntityInRoot: world.#archetypeManager.isEntityInRoot,
       queryComponents: queryArchetypeComponents,
       queryEntities: queryArchetypeEntities,
@@ -246,6 +255,9 @@ export class World {
   /** System Management API */
   readonly systems: WorldSystemAPI;
 
+  /** The queries for the World */
+  [$_QUERY_KEY]: () => IterableIterator<QueryInstance>;
+
   /**
    * Create a new World
    * @param spec - The specification to create the World with
@@ -259,7 +271,7 @@ export class World {
     this.#state = "uninitialized";
 
     const { capacity, components } = spec;
-    this.#archetypeManager = new ArchetypeManager(capacity);
+    this.#archetypeManager = new ArchetypeManager(this, capacity);
     this.#componentManager = new ComponentManager(capacity, components);
     this.#entityManager = new EntityManager(capacity);
     this.#queryManager = new QueryManager(this, capacity);
@@ -272,6 +284,8 @@ export class World {
     this.components = APIs.components;
     this.entities = APIs.entities;
     this.systems = APIs.systems;
+
+    this[$_QUERY_KEY] = () => this.#queryManager.instancesByID.values();
   }
 
   /** The World's current state */
@@ -290,6 +304,7 @@ export class World {
     this.#archetypeManager.init();
     await this.#systemManager.init(this);
     this.#state = "initialized";
+    this.refresh();
     return this;
   }
 
@@ -313,7 +328,7 @@ export class World {
    */
   refresh(): this {
     assertWorldState("initialized", this.#state);
-    this.#archetypeManager.refresh(this.#queryManager.registry.values());
+    this.#archetypeManager.refresh(this[$_QUERY_KEY]());
     this.#componentManager.refresh();
     this.#queryManager.invalidate();
     return this;

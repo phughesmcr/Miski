@@ -63,22 +63,6 @@ const world = new World({
 // Initialize the world before use
 await world.init();
 
-// Create and setup WebView window
-const window = new Webview(true, {
-  width: 800 * 2,
-  height: 600 * 2,
-  hint: SizeHint.NONE,
-});
-window.title = "🍬 Miski Demo";
-
-// Get canvas context from WebView
-let ctx: CanvasRenderingContext2D | null = null;
-window.bind("getContext", (canvas: HTMLCanvasElement) => {
-  ctx = canvas.getContext("2d")!;
-  return ctx;
-});
-window.bind("getWorld", () => world);
-
 // Spawn initial entities
 function spawnPredator(x: number, y: number) {
   const entity = world.entities.create();
@@ -337,11 +321,27 @@ const HTML = `
 </html>
 `;
 
+// Create and setup WebView window
+const window = new Webview(true, {
+  width: 800 * 2,
+  height: 600 * 2,
+  hint: SizeHint.NONE,
+});
+window.title = "🍬 Miski Demo";
+
+// Get canvas context from WebView
+let ctx: CanvasRenderingContext2D | null = null;
+window.bind("getContext", (canvas: HTMLCanvasElement) => {
+  ctx = canvas.getContext("2d")!;
+  return ctx;
+});
+window.bind("getWorld", () => world);
+
 // Create system instances AFTER entities exist
-const movement = world.systems.create(movementSystem);
+/* const movement = world.systems.create(movementSystem);
 const ai = world.systems.create(aiSystem);
 const collision = world.systems.create(collisionSystem);
-const render = world.systems.create(renderSystem);
+const render = world.systems.create(renderSystem); */
 
 // ############################################################################
 // GAME LOOP
@@ -354,10 +354,7 @@ async function gameLoop(timestamp: number) {
   const dt = (timestamp - lastTime) / 1000;
   lastTime = timestamp;
 
-  movement(dt);
-  ai();
-  collision();
-  render(ctx);
+  console.log(dt);
 }
 
 window.bind("frame", (timestamp: number) => {
