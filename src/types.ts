@@ -31,6 +31,8 @@ export type StorageProxySpec<T> = {
   changed: BooleanArray;
   /** The Partition data of the StorageProxy */
   storage: SchemaStorage<T>;
+  /** The capacity of the World */
+  capacity: number;
 };
 
 /**

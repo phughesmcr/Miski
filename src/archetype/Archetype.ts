@@ -12,14 +12,8 @@ import type { Entity, QueryInstance } from "../types.ts";
 
 /** An Archetype is a collection of ComponentInstances which define the schema of an Entity. */
 export class Archetype {
-  /** The Archetype's Component Bitfield */
-  #bitfield: BooleanArray;
-
   /** QueryInstances and their candidacy status */
   #candidateCache: Map<QueryInstance, boolean>;
-
-  /** The components associated with this archetype */
-  #components: ComponentInstance<any>[];
 
   /** Entities which have entered this archetype since last refresh */
   #entered: BooleanArray;
@@ -30,8 +24,14 @@ export class Archetype {
   /** Entities which have exited this archetype since last refresh */
   #exited: BooleanArray;
 
+  /** The Archetype's Component Bitfield */
+  readonly bitfield: BooleanArray;
+
+  /** The components associated with this archetype */
+  readonly components: ComponentInstance<any>[];
+
   /** The Archetype's unique identifier */
-  #id: string;
+  readonly id: string;
 
   /**
    * Creates a new Archetype
@@ -45,10 +45,11 @@ export class Archetype {
     components: ComponentInstance<any>[],
     bitfield: BooleanArray = BooleanArray.fromObjects(capacity, ID_KEY, components),
   ) {
-    this.#id = bitfield.toString();
-    this.#bitfield = bitfield;
+    this.bitfield = bitfield;
+    this.id = bitfield.toString();
+    this.components = components;
+
     this.#candidateCache = new Map();
-    this.#components = components;
     this.#entered = new BooleanArray(capacity);
     this.#entities = new BooleanArray(capacity);
     this.#exited = new BooleanArray(capacity);
@@ -56,22 +57,7 @@ export class Archetype {
 
   /** The maximum id number of the components this Archetype can represent */
   get capacity(): number {
-    return this.#bitfield.size;
-  }
-
-  /** The components associated with this Archetype */
-  get components(): Readonly<ComponentInstance<any>[]> {
-    return this.#components;
-  }
-
-  /** A copy of the Archetype's Component Bitfield */
-  get bitfield(): BooleanArray {
-    return this.#bitfield;
-  }
-
-  /** The Archetype's unique identifier */
-  get id(): string {
-    return this.#id;
+    return this.bitfield.size;
   }
 
   /**
@@ -91,7 +77,7 @@ export class Archetype {
    * @returns A new Archetype
    */
   clone(): Archetype {
-    return new Archetype(this.capacity, this.#components, this.#bitfield.clone());
+    return new Archetype(this.capacity, this.components, this.bitfield.clone());
   }
 
   /**
@@ -134,9 +120,17 @@ export class Archetype {
   isCandidate(query: QueryInstance): boolean {
     const cached = this.#candidateCache.get(query);
     if (cached !== undefined) return cached;
-    const status = this.#bitfield.every((target, idx) => query.isCandidate(target, idx));
-    this.#candidateCache.set(query, status);
-    return status;
+
+    const bf = this.bitfield;
+    const len = bf.length;
+    for (let i = 0; i < len; i++) {
+      if (!query.isCandidate(bf[i] ?? 0, i)) {
+        this.#candidateCache.set(query, false);
+        return false;
+      }
+    }
+    this.#candidateCache.set(query, true);
+    return true;
   }
 
   /**
@@ -186,7 +180,7 @@ export class Archetype {
     return JSON.stringify(
       {
         id: this.id,
-        components: this.#components.map((instance) => instance.id),
+        components: this.components.map((instance) => instance.id),
         entities: [...this.#entities.values()],
       },
     );

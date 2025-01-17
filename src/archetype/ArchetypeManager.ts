@@ -7,10 +7,11 @@
 
 import { Archetype } from "./Archetype.ts";
 import { BooleanArray } from "@phughesmcr/booleanarray";
-import { ID_KEY } from "../constants.ts";
+import { $_QUERY_KEY } from "../constants.ts";
 import { NotRegisteredError } from "../errors.ts";
 import type { ComponentInstance } from "../component/ComponentInstance.ts";
 import type { Entity, QueryInstance } from "../types.ts";
+import type { World } from "../world/World.ts";
 
 /** ArchetypeManager handles creation and allocation of Archetypes */
 export class ArchetypeManager {
@@ -34,7 +35,7 @@ export class ArchetypeManager {
    * Create a new ArchetypeManager
    * @param capacity The maximum number of entities the manager can manage
    */
-  constructor(capacity: number) {
+  constructor(world: World, capacity: number) {
     this.registry = new Map();
     this.entityArchetypes = new Array(capacity);
     this.queryArchetypes = new Map();
@@ -42,6 +43,7 @@ export class ArchetypeManager {
     this.root = new Archetype(capacity, []);
     this.registry.set(this.root.id, this.root);
 
+    // Created here to avoid dependency on providing `capacity`
     this.init = () => {
       this.entityArchetypes.length = capacity;
       for (let i = 0; i < capacity; i++) {
@@ -50,46 +52,39 @@ export class ArchetypeManager {
       return this;
     };
 
-    this.update = (entity: Entity, components: Record<string, ComponentInstance<any>>): Archetype => {
-      const currentArchetype: Archetype | undefined = this.getEntityArchetype(entity);
+    // Created here to avoid dependency on providing `capacity` and `world`
+    this.update = (() => {
+      const bitfield = new BooleanArray(capacity);
 
-      const componentsArray = Object.values(components);
+      return (entity: Entity, components: ComponentInstance<any>[]): Archetype => {
+        const oldArchetype = this.entityArchetypes[entity];
 
-      // Convert the components to a bitfield
-      let nextBitfield: BooleanArray; // TODO: This could be pooled
-      if (currentArchetype) {
-        nextBitfield = currentArchetype.bitfield.clone();
-        for (const component of componentsArray) {
-          nextBitfield.setBool(component.id, true);
+        // Reset and update bitfield
+        bitfield.clear();
+        for (let i = 0; i < components.length; i++) {
+          bitfield.setBool(components[i]!.id, true);
         }
-      } else {
-        nextBitfield = BooleanArray.fromObjects(capacity, ID_KEY, componentsArray);
-      }
 
-      // Check if the archetype has changed
-      const nextId = nextBitfield.toString();
-      if (nextId === currentArchetype?.id) {
-        return currentArchetype;
-      }
+        // Get or create archetype for these components
+        const archetypeId = bitfield.toString();
+        if (oldArchetype?.id === archetypeId) return oldArchetype;
 
-      // Remove the entity from the previous archetype
-      if (currentArchetype !== undefined) {
-        currentArchetype.removeEntity(entity);
-      }
+        let archetype = this.registry.get(archetypeId);
+        if (!archetype) {
+          archetype = new Archetype(capacity, components, bitfield.clone());
+          this.registry.set(archetypeId, archetype);
+        }
 
-      // Get the existing archetype or create a new one
-      const existing = this.registry.get(nextId);
-      const nextArchetype = existing ?? new Archetype(capacity, [], nextBitfield);
+        // Move entity to new archetype
+        oldArchetype?.removeEntity(entity);
+        archetype.addEntity(entity);
+        this.entityArchetypes[entity] = archetype;
 
-      // Register the new archetype if it doesn't already exist
-      if (this.registry.has(nextId) === false) {
-        this.registry.set(nextId, nextArchetype);
-      }
-
-      // Update the entity's archetype
-      this.set(nextArchetype, entity); // NOTE: this has to come after the registry is updated
-      return nextArchetype;
-    };
+        // Important: Refresh queries after archetype changes
+        this.refresh(world[$_QUERY_KEY]());
+        return archetype;
+      };
+    })();
   }
 
   /**
@@ -97,20 +92,32 @@ export class ArchetypeManager {
    * @param entity - The entity to get the components for
    * @returns A record of component instances
    */
-  getEntityComponents = (entity: Entity): Record<string, ComponentInstance<any>> => {
-    const archetype = this.getEntityArchetype(entity);
-    if (!archetype) {
-      return {};
-    }
-    const components: Record<string, ComponentInstance<any>> = {};
-    for (const component of archetype.components) {
-      components[component.name] = component;
-    }
-    return components;
-  };
+  getEntityComponents = (() => {
+    const componentCache: Record<string, ComponentInstance<any>> = {};
+
+    return (entity: Entity): Record<string, ComponentInstance<any>> => {
+      const archetype = this.entityArchetypes[entity];
+      if (!archetype) return {};
+
+      // Clear cache
+      for (const key in componentCache) {
+        delete componentCache[key];
+      }
+
+      // Reuse cache object
+      const components = archetype.components;
+      const len = components.length;
+      for (let i = 0; i < len; i++) {
+        const component = components[i];
+        if (component) {
+          componentCache[component.name] = component;
+        }
+      }
+      return componentCache;
+    };
+  })();
 
   /**
-   * @internal
    * Called by `world.destroy()`
    *
    * Destroy the ArchetypeManager
@@ -133,7 +140,6 @@ export class ArchetypeManager {
   }
 
   /**
-   * @internal
    * Called by `world.init()`
    *
    * Initialize the ArchetypeManager
@@ -204,12 +210,17 @@ export class ArchetypeManager {
    * @throws {NotRegisteredError} If the Archetype is not registered
    */
   set = (archetype: Archetype, entity: Entity): Archetype => {
-    if (this.has(archetype) === false) throw new NotRegisteredError("Invalid archetype.");
-    if (this.entityArchetypes[entity] === archetype) return archetype;
+    if (!this.registry.has(archetype.id)) {
+      throw new NotRegisteredError("Invalid archetype.");
+    }
     if (entity >= this.entityArchetypes.length || entity < 0) {
       throw new RangeError("Invalid entity.");
     }
-    this.entityArchetypes[entity]?.removeEntity(entity);
+
+    const currentArchetype = this.entityArchetypes[entity];
+    if (currentArchetype === archetype) return archetype;
+
+    currentArchetype?.removeEntity(entity);
     this.entityArchetypes[entity] = archetype;
     archetype.addEntity(entity);
     return archetype;
@@ -236,5 +247,5 @@ export class ArchetypeManager {
    * @param components The ComponentInstances
    * @returns The Archetype associated with the Entity
    */
-  update: (entity: Entity, components: Record<string, ComponentInstance<any>>) => Archetype;
+  update: (entity: Entity, components: ComponentInstance<any>[]) => Archetype;
 }

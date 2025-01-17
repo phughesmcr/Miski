@@ -29,30 +29,35 @@ import type { ComponentPrivateMethods, ComponentSpec, Schema, SchemaOrNull } fro
  * @returns `true` if the spec is valid, `false` otherwise
  */
 export function isValidComponentSpec<T extends SchemaOrNull<T>>(spec: unknown): spec is ComponentSpec<T> {
-  const { maxEntities, name, schema } = spec as ComponentSpec<T>;
-  if (isValidName(name) === false) return false;
-  if (maxEntities && !isPositiveUint32(maxEntities)) return false;
-  if (schema && !isSchema(schema)) return false;
+  if (!spec || typeof spec !== "object") return false;
+  const s = spec as ComponentSpec<T>;
+  if (!isValidName(s.name)) return false;
+  if (s.maxEntities && !isPositiveUint32(s.maxEntities)) return false;
+  if (s.schema && !isSchema(s.schema)) return false;
   return true;
 }
 
 /** Component type guard */
 export function isComponent(component: unknown): component is Component<SchemaOrNull<any>> {
-  return component instanceof Component;
+  return !!(component && component instanceof Component);
 }
 
 /** Checks if a value is an array of Components */
 export function isValidComponentArray(array: unknown): array is Array<Component<SchemaOrNull<any>>> {
-  return Array.isArray(array) && array.every(isComponent);
+  if (!Array.isArray(array)) return false;
+  for (let i = 0; i < array.length; i++) {
+    if (!isComponent(array[i])) return false;
+  }
+  return true;
 }
 
 /** A Component is a collection of properties that are stored in a world */
 export class Component<T extends SchemaOrNull<T> = null> implements ComponentPrivateMethods<T> {
   /** The component's storage partition */
-  readonly [$_PARTITION_KEY]: Partition<T>;
+  readonly #partition: Partition<T>;
 
   /** `true` if the component has no schema */
-  readonly isTag: boolean;
+  readonly #isTag: boolean;
 
   /**
    * Create a new component.
@@ -60,37 +65,48 @@ export class Component<T extends SchemaOrNull<T> = null> implements ComponentPri
    * @throws {TypeError} - If the spec is invalid
    */
   constructor(spec: ComponentSpec<T>) {
-    if (isValidComponentSpec(spec) === false) {
+    if (!isValidComponentSpec(spec)) {
       throw new TypeError("Invalid component specification.");
     }
-    const { name, schema, maxEntities = null } = spec;
-    this[$_PARTITION_KEY] = new Partition<T>(
-      {
-        name,
-        schema: schema as Schema<T> | null,
-        maxOwners: maxEntities as number | null,
-      } as unknown as PartitionSpec<T>,
-    );
-    this.isTag = !schema;
+
+    this.#partition = new Partition<T>({
+      name: spec.name,
+      schema: spec.schema as Schema<T> | null,
+      maxOwners: spec.maxEntities ?? null,
+    } as unknown as PartitionSpec<T>);
+
+    this.#isTag = !spec.schema;
   }
 
   /** The maximum number of entities able to equip this component per world */
   get maxEntities(): number | null {
-    return this[$_PARTITION_KEY].maxOwners;
+    return this.#partition.maxOwners;
   }
 
   /** The component's label */
   get name(): string {
-    return this[$_PARTITION_KEY].name;
+    return this.#partition.name;
   }
 
   /** The component's property definitions */
   get schema(): Schema<T> | null {
-    return this[$_PARTITION_KEY].schema as Schema<T> | null;
+    return this.#partition.schema as Schema<T> | null;
   }
 
   /** The component's size in bytes for a single entity */
   get size(): number {
-    return this[$_PARTITION_KEY].size;
+    return this.#partition.size;
+  }
+
+  get isTag(): boolean {
+    return this.#isTag;
+  }
+
+  get [Symbol.toStringTag](): string {
+    return "Component";
+  }
+
+  get [$_PARTITION_KEY](): Partition<T> {
+    return this.#partition;
   }
 }

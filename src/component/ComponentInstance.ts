@@ -46,4 +46,8 @@ export class ComponentInstance<T extends SchemaOrNull<T>> {
   get name(): string {
     return this.proto.name;
   }
+
+  get [Symbol.toStringTag](): string {
+    return "ComponentInstance";
+  }
 }

@@ -49,7 +49,7 @@ export class ComponentManager {
       this.#changed.set(component, instanceChanged);
       // instance storage
       const storage = this.#buffer.addPartition(component[$_PARTITION_KEY]);
-      const proxy = storage ? new StorageProxy({ storage, changed: instanceChanged }) : null;
+      const proxy = storage ? new StorageProxy({ storage, changed: instanceChanged, capacity }) : null;
       // register component instance
       const instance = new ComponentInstance({ id: this.#registry.size, proxy, storage, type: component });
       this.#registry.set(component, instance);
