@@ -323,9 +323,7 @@ async function gameLoop(currentTime: number = performance.now()): Promise<void> 
   renderPrey(alpha);
 
   // print screen to console
-  // printScreen();
-
-  console.log([...world.entities.query(predatorQuery)]);
+  printScreen();
 }
 
 world.onReady().then(() => {
