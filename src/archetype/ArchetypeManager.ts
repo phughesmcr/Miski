@@ -7,11 +7,9 @@
 
 import { Archetype } from "./Archetype.ts";
 import { BooleanArray } from "@phughesmcr/booleanarray";
-import { $_QUERY_KEY } from "../constants.ts";
 import { NotRegisteredError } from "../errors.ts";
 import type { ComponentInstance } from "../component/ComponentInstance.ts";
 import type { Entity, QueryInstance } from "../types.ts";
-import type { World } from "../world/World.ts";
 
 /** ArchetypeManager handles creation and allocation of Archetypes */
 export class ArchetypeManager {
@@ -24,18 +22,14 @@ export class ArchetypeManager {
   /** Archetypes associated with a QueryInstance */
   readonly queryArchetypes: Map<QueryInstance, Set<Archetype>>;
 
-  /**
-   * The root/base archetype.
-   *
-   * Entities in this archetype have no components.
-   */
+  /** Entities in this archetype have no components */
   readonly root: Archetype;
 
   /**
    * Create a new ArchetypeManager
-   * @param capacity The maximum number of entities the manager can manage
+   * @param capacity - The maximum number of entities this manager can handle
    */
-  constructor(world: World, capacity: number) {
+  constructor(capacity: number) {
     this.registry = new Map();
     this.entityArchetypes = new Array(capacity);
     this.queryArchetypes = new Map();
@@ -52,7 +46,7 @@ export class ArchetypeManager {
       return this;
     };
 
-    // Created here to avoid dependency on providing `capacity` and `world`
+    // Created here to avoid dependency on providing `capacity`
     this.update = (() => {
       const bitfield = new BooleanArray(capacity);
 
@@ -80,8 +74,6 @@ export class ArchetypeManager {
         archetype.addEntity(entity);
         this.entityArchetypes[entity] = archetype;
 
-        // Important: Refresh queries after archetype changes
-        this.refresh(world[$_QUERY_KEY]());
         return archetype;
       };
     })();
@@ -95,14 +87,14 @@ export class ArchetypeManager {
   getEntityComponents = (() => {
     const componentCache: Record<string, ComponentInstance<any>> = {};
 
-    return (entity: Entity): Record<string, ComponentInstance<any>> => {
-      const archetype = this.entityArchetypes[entity];
-      if (!archetype) return {};
-
+    return (entity: Entity): Readonly<Record<string, ComponentInstance<any>>> => {
       // Clear cache
       for (const key in componentCache) {
         delete componentCache[key];
       }
+
+      const archetype = this.entityArchetypes[entity];
+      if (!archetype) return componentCache;
 
       // Reuse cache object
       const components = archetype.components;
@@ -178,13 +170,30 @@ export class ArchetypeManager {
    * Run routine maintenance on the ArchetypeManager
    * @returns this
    */
-  refresh = (queries: IterableIterator<QueryInstance>): this => {
+  refresh = (queries: MapIterator<QueryInstance>): this => {
+    // Clear existing query archetype mappings
+    this.queryArchetypes.clear();
+
+    // Convert queries iterator to array to avoid exhaustion
+    const queryArray = [...queries];
+
+    // Initialize query archetype sets
+    for (const query of queryArray) {
+      this.queryArchetypes.set(query, new Set());
+      query.archetypes.clear(); // Clear the QueryInstance's archetypes set
+    }
+
+    // For each archetype
     for (const archetype of this.registry.values()) {
-      if (archetype.isEmpty() === false) {
-        for (const instance of queries) {
-          if (this.queryArchetypes.has(instance)) continue;
-          if (archetype.isCandidate(instance) === false) continue;
-          this.queryArchetypes.set(instance, new Set([archetype]));
+      // Check against each query
+      for (const query of queryArray) {
+        if (archetype.isCandidate(query)) {
+          const archetypeSet = this.queryArchetypes.get(query)!;
+          // Only add if it has entities TODO: is this right?
+          if (archetype.getPopulationCount() > 0) {
+            archetypeSet.add(archetype);
+            query.archetypes.add(archetype); // Update the QueryInstance's archetypes set
+          }
         }
       }
       archetype.refresh();

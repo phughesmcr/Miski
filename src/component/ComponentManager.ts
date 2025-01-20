@@ -25,6 +25,8 @@ export class ComponentManager {
   #owners: Map<Component<any>, BooleanArray>;
   /** The registry of component instances */
   #registry: Map<Component<any>, ComponentInstance<any>>;
+  /** The registry of component instances by name */
+  #registryByName: Record<string, ComponentInstance<any>>;
 
   /**
    * Create a new component manager.
@@ -39,6 +41,7 @@ export class ComponentManager {
     this.#changed = new Map();
     this.#owners = new Map();
     this.#registry = new Map();
+    this.#registryByName = {};
     // register each component
     for (const component of components) {
       // instance owner entity tracking
@@ -53,12 +56,8 @@ export class ComponentManager {
       // register component instance
       const instance = new ComponentInstance({ id: this.#registry.size, proxy, storage, type: component });
       this.#registry.set(component, instance);
+      this.#registryByName[component.name] = instance;
     }
-  }
-
-  /** @returns an iterable of all component instances */
-  get all(): IterableIterator<ComponentInstance<any>> {
-    return this.#registry.values();
   }
 
   /** @returns the number of components registered */
@@ -66,12 +65,9 @@ export class ComponentManager {
     return this.#registry.size;
   }
 
+  /** @returns a record of all component instances by name */
   get registry(): Record<string, ComponentInstance<any>> {
-    const result: Record<string, ComponentInstance<any>> = {};
-    for (const [component, instance] of this.#registry.entries()) {
-      result[component.name] = instance;
-    }
-    return result;
+    return this.#registryByName;
   }
 
   /**
@@ -143,11 +139,18 @@ export class ComponentManager {
    */
   getInstance = <T extends SchemaOrNull<T>>(component: Component<T> | string): ComponentInstance<T> | undefined => {
     if (typeof component === "string") {
-      const proto = this.#registry.keys().find((key) => key.name === component);
-      if (proto === undefined) return;
-      return this.#registry.get(proto);
+      return this.#registryByName[component];
     }
     return this.#registry.get(component);
+  };
+
+  /**
+   * Get instances for an array of components
+   * @param array - The array of components to get instances for
+   * @returns An array of component instances
+   */
+  getInstances = (array: Component<SchemaOrNull<any>>[]): (ComponentInstance<SchemaOrNull<any>> | undefined)[] => {
+    return array.map(this.getInstance);
   };
 
   /**
@@ -156,14 +159,9 @@ export class ComponentManager {
    * @returns An iterable of entities or `undefined` if the component is not registered
    */
   getChanged = <T extends SchemaOrNull<T>>(component: Component<T> | string): IterableIterator<Entity> | undefined => {
-    let proto;
-    if (typeof component === "string") {
-      proto = this.#registry.keys().find((key) => key.name === component);
-      if (proto === undefined) return;
-    } else {
-      proto = component;
-    }
-    return this.#changed.get(proto)?.truthyIndices() as IterableIterator<Entity> | undefined;
+    const instance = this.getInstance(component);
+    if (!instance) return;
+    return this.#changed.get(instance.proto)?.truthyIndices() as IterableIterator<Entity> | undefined;
   };
 
   /**
@@ -172,14 +170,9 @@ export class ComponentManager {
    * @returns An iterable of entities or `undefined` if the component is not registered
    */
   getOwners = <T extends SchemaOrNull<T>>(component: Component<T> | string): IterableIterator<Entity> | undefined => {
-    let proto;
-    if (typeof component === "string") {
-      proto = this.#registry.keys().find((key) => key.name === component);
-      if (proto === undefined) return;
-    } else {
-      proto = component;
-    }
-    return this.#owners.get(proto)?.truthyIndices() as IterableIterator<Entity> | undefined;
+    const instance = this.getInstance(component);
+    if (!instance) return;
+    return this.#owners.get(instance.proto)?.truthyIndices() as IterableIterator<Entity> | undefined;
   };
 
   /**

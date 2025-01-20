@@ -5,81 +5,10 @@
  * @license     MIT
  */
 
-import { BooleanArray } from "@phughesmcr/booleanarray";
 import { isObject } from "../utils.ts";
 import { SpecError } from "../errors.ts";
 import { type Component, isValidComponentArray } from "../component/Component.ts";
-import type { Archetype } from "../archetype/Archetype.ts";
-import type { ComponentInstance } from "../component/ComponentInstance.ts";
-import type { QueryInstance, QuerySpec, SchemaOrNull } from "../types.ts";
-import type { World } from "../world/World.ts";
-
-/**
- * @internal
- * Creates a runtime instance of a Query for efficient entity matching
- * @param world - The World instance containing the component registry
- * @param query - The Query definition specifying component requirements
- * @returns A QueryInstance.
- */
-export function createQueryInstance(world: World, query: Query): QueryInstance {
-  // Get component registry and size for bit array creation
-  const registry = world.components.registry;
-  const size = world.components.count;
-
-  const getInstance = (component: Component<SchemaOrNull<any>>) => registry[component.name];
-  const getInstances = (array: Readonly<Component<SchemaOrNull<any>>[]>): ComponentInstance<SchemaOrNull<any>>[] => {
-    return array.map(getInstance).filter(Boolean) as ComponentInstance<SchemaOrNull<any>>[];
-  };
-
-  // Create AND bit array - marks required components
-  const andInstances = getInstances(query.all);
-  const and = new BooleanArray(size);
-  for (const instance of andInstances) {
-    and.setBool(instance.id, true);
-  }
-
-  // Create OR bit array - marks optional components (need at least one)
-  const orInstances = getInstances(query.any);
-  const or = new BooleanArray(size);
-  for (const instance of orInstances) {
-    or.setBool(instance.id, true);
-  }
-
-  // Create NOT bit array - marks forbidden components
-  const notInstances = getInstances(query.none);
-  const not = new BooleanArray(size);
-  for (const instance of notInstances) {
-    not.setBool(instance.id, true);
-  }
-
-  // Build lookup table for quick component access
-  const components: Record<string, ComponentInstance<SchemaOrNull<any>>> = {};
-  for (const instance of [...andInstances, ...orInstances]) {
-    components[instance.name] = instance;
-  }
-
-  // Initialize empty set for matching archetypes
-  const archetypes = new Set<Archetype>();
-
-  // Optimized candidacy check using bitwise operations
-  const isCandidate = (target: number, idx: number): boolean => {
-    // Check OR first for early exit
-    const OR = or[idx] === 0 || (target & or[idx]!) !== 0;
-    if (!OR) return false;
-
-    // Verify all required components are present
-    const AND = (target & and[idx]!) === and[idx];
-    if (!AND) return false;
-
-    // Ensure no forbidden components exist
-    return (target & not[idx]!) === 0;
-  };
-
-  // turn the three arrays into a string
-  const id = `${and.toString()}:${or.toString()}:${not.toString()}`;
-
-  return { and, or, not, archetypes, isCandidate, components, isDirty: true, id };
-}
+import type { QuerySpec, SchemaOrNull } from "../types.ts";
 
 /**
  * Type guard for QuerySpec

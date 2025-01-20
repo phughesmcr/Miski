@@ -5,39 +5,46 @@
  * @license     MIT
  */
 
-import { $_ARCHETYPE_KEY } from "../constants.ts";
 import { BooleanArray } from "@phughesmcr/booleanarray";
-import { createQueryInstance, type Query } from "./Query.ts";
 import { QueryCache } from "./QueryCache.ts";
 import { QueryResultPool } from "./QueryPool.ts";
+import type { Archetype } from "../archetype/Archetype.ts";
 import type { ComponentInstance } from "../component/ComponentInstance.ts";
-import type { Entity, QueryInstance, SchemaOrNull } from "../types.ts";
+import type { ComponentInstanceGetter, Entity, QueryInstance, SchemaOrNull } from "../types.ts";
+import type { Query } from "./Query.ts";
 import type { World } from "../world/World.ts";
 
+/**
+ * @internal
+ * Get components for a query
+ * @param query - The Query to get components for
+ * @returns A record of components
+ */
 function getComponentsFromQuery(this: QueryManager, query: Query): Record<string, ComponentInstance<SchemaOrNull>> {
   const instance = this.register(query);
   const queryId = instance.id;
-
-  const result = this.cache.getComponents(
+  return this.cache.getComponents(
     queryId,
     () => instance.components,
     this.lastQueryUpdate.get(queryId) ?? 0,
   );
-
-  return result;
 }
 
+/**
+ * @internal
+ * Get entities for a query
+ * @param query - The Query to get entities for
+ * @returns An iterable iterator of entities
+ */
 function getEntitiesFromQuery(this: QueryManager, query: Query): IterableIterator<Entity> {
   const instance = this.register(query);
   const queryId = instance.id;
-
   const result = this.cache.getEntities(
     queryId,
     () => {
       this.visited.clear();
       const result = this.pool.acquireEntityArray();
       result.clear();
-
       for (const archetype of instance.archetypes) {
         for (const entity of archetype.getEntities()) {
           if (this.visited.getBool(entity)) continue;
@@ -45,15 +52,68 @@ function getEntitiesFromQuery(this: QueryManager, query: Query): IterableIterato
           this.visited.setBool(entity, true);
         }
       }
-
       return result;
     },
     this.lastQueryUpdate.get(queryId) ?? 0,
   );
-
   this.visited.clear();
-
   return result.truthyIndices();
+}
+
+/**
+ * @internal
+ * Creates a runtime instance of a Query for efficient entity matching
+ * @param getInstances - The function to get instances for an array of components
+ * @param size - The size of the query
+ * @param query - The Query definition specifying component requirements
+ * @returns A QueryInstance.
+ */
+function createQueryInstance(getInstances: ComponentInstanceGetter, size: number, query: Query): QueryInstance {
+  // Create AND bit array - marks required components
+  const andInstances = getInstances(query.all).filter(Boolean) as ComponentInstance<SchemaOrNull<any>>[];
+  const and = new BooleanArray(size);
+  for (const instance of andInstances) {
+    and.setBool(instance.id, true);
+  }
+
+  // Create OR bit array - marks optional components (need at least one)
+  const orInstances = getInstances(query.any).filter(Boolean) as ComponentInstance<SchemaOrNull<any>>[];
+  const or = new BooleanArray(size);
+  for (const instance of orInstances) {
+    or.setBool(instance.id, true);
+  }
+
+  // Create NOT bit array - marks forbidden components
+  const notInstances = getInstances(query.none).filter(Boolean) as ComponentInstance<SchemaOrNull<any>>[];
+  const not = new BooleanArray(size);
+  for (const instance of notInstances) {
+    not.setBool(instance.id, true);
+  }
+
+  // Build lookup table for quick component access
+  const components: Record<string, ComponentInstance<SchemaOrNull<any>>> = {};
+  for (const instance of [...andInstances, ...orInstances]) {
+    components[instance.name] = instance;
+  }
+  Object.freeze(components);
+
+  // Initialize empty set for matching archetypes
+  const archetypes = new Set<Archetype>();
+
+  // Check if a component is a candidate for the query
+  const isCandidate = (target: number, idx: number): boolean => {
+    // AND
+    if (!((target & and[idx]!) === and[idx])) return false;
+    // OR
+    if (or[idx] !== 0 && (target & or[idx]!) === 0) return false;
+    // NOT
+    return (target & not[idx]!) === 0;
+  };
+
+  // turn the three arrays into a string
+  const id = `${and.toString()}:${or.toString()}:${not.toString()}`;
+
+  return { and, or, not, archetypes, isCandidate, components, isDirty: true, id };
 }
 
 /** The QueryManager is responsible for creating, registering, and destroying queries. */
@@ -97,39 +157,25 @@ export class QueryManager {
       // Check if we already have an ID for this query
       let queryId = this.idsByQuery.get(query);
 
+      // Return existing instance if we have one
       if (queryId && this.instancesByID.has(queryId)) {
-        // Return existing instance if we have one
         return this.instancesByID.get(queryId)!;
       }
 
       // Create new instance
-      const instance: QueryInstance = createQueryInstance(world, query);
+      const instance: QueryInstance = createQueryInstance(
+        world.components.getInstances,
+        world.components.count,
+        query,
+      );
       queryId = instance.id;
 
       // Store mappings
       this.idsByQuery.set(query, queryId);
       this.instancesByID.set(queryId, instance);
 
-      // Get matching components and populate instance
-      const matchingComponents = world.archetypes.queryComponents(query);
-      if (matchingComponents) {
-        // Add components to instance
-        Object.assign(instance.components, matchingComponents);
-
-        // Add matching archetypes
-        const entities = world.archetypes.queryEntities(query);
-        if (entities) {
-          for (const entity of entities) {
-            const archetypeId = world.archetypes.getEntityArchetype(entity);
-            if (archetypeId) {
-              const archetype = world.archetypes[$_ARCHETYPE_KEY](archetypeId);
-              if (archetype) {
-                instance.archetypes.add(archetype);
-              }
-            }
-          }
-        }
-      }
+      // Refresh archetypes after query registration to update mappings
+      world.refresh(true);
 
       return instance;
     }.bind(this);

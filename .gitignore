@@ -26,3 +26,6 @@ ehthumbs.db
 Thumbs.db
 
 *.dll
+
+bun.lockb
+.npmrc

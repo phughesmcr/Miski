@@ -1,4 +1,5 @@
 /// <reference lib="dom" />
+
 /**
  * @module demo
  * @description A predator-prey simulation using Miski and Canvas2D.
@@ -14,13 +15,13 @@ import { Component, type ComponentInstance, Query, type Schema, System, World } 
 // ############################################################################
 
 const CAPACITY = 1024;
-const PREDATOR_SPAWN_COUNT = 3;
-const PREY_SPAWN_COUNT = 128;
+const PREDATOR_SPAWN_COUNT = 1;
+const PREY_SPAWN_COUNT = 1;
 const WIDTH = 100;
 const HEIGHT = 100;
 const VELOCITY_SCALAR = 10;
 
-const FIXED_TIMESTEP = 1000 / 60; // 60 FPS in ms
+const FIXED_TIME_STEP = 1000 / 60; // 60 FPS in ms
 const MAX_UPDATES = 5;
 
 const QUIET = false;
@@ -30,7 +31,7 @@ const VERBOSE = !QUIET && false;
 // GRID - not Miski specific
 // ############################################################################
 
-const grid: string[][] = Array(HEIGHT).fill(0).map(() => Array(WIDTH).fill(" "));
+const grid: string[][] = Array(HEIGHT).fill(0).map(() => Array(WIDTH).fill("."));
 
 const clearGrid = () => {
   for (let y = 0; y < HEIGHT; y++) {
@@ -42,10 +43,22 @@ const clearGrid = () => {
 const placeOnGrid = (x: number, y: number, char: string) => {
   const gridX = Math.min(Math.floor(x), WIDTH - 1);
   const gridY = Math.min(Math.floor(y), HEIGHT - 1);
-  console.log(`Placing ${char} at (${gridX}, ${gridY})`);
+  if (VERBOSE) {
+    console.log(`Placing ${char} at (${gridX}, ${gridY})`);
+  }
   if (gridX >= 0 && gridY >= 0) {
     grid[gridY]![gridX] = char;
   }
+};
+
+const printScreen = () => {
+  console.clear();
+  const border = "-".repeat(WIDTH + 2);
+  console.log(border);
+  console.log(
+    grid.map((row) => `|${row.join("")}|`).join("\n"),
+  );
+  console.log(border);
 };
 
 // ############################################################################
@@ -166,8 +179,16 @@ for (let i = 0; i < PREY_SPAWN_COUNT; i++) {
 // Queries are used to select entities that have certain components.
 // They are defined by the `Query` class.
 
-const predatorQuery = new Query({ all: [position, velocity, predator] });
-const preyQuery = new Query({ all: [position, velocity, prey] });
+const movementQuery = new Query({
+  all: [position, velocity],
+});
+
+const previousPositionQuery = new Query({
+  all: [position, previousPosition],
+});
+
+const predatorQuery = new Query({ all: [position, velocity, previousPosition, predator] });
+const preyQuery = new Query({ all: [position, velocity, previousPosition, prey] });
 
 // ############################################################################
 // SYSTEMS
@@ -179,7 +200,7 @@ const preyQuery = new Query({ all: [position, velocity, prey] });
 
 const movementSystem = new System({
   name: "movement",
-  query: new Query({ all: [position, velocity] }),
+  query: movementQuery,
   callback: (components, entities, dt: number) => {
     const { proxy: position } = components["position"] as ComponentInstance<Vec2>;
     const { proxy: velocity } = components["velocity"] as ComponentInstance<Vec2>;
@@ -215,9 +236,9 @@ const renderPredatorSystem = new System({
   name: "renderPredator",
   query: predatorQuery,
   callback: (components, entities, alpha: number) => {
+    const { proxy: position } = components["position"] as ComponentInstance<Vec2>;
+    const { proxy: previousPosition } = components["previousPosition"] as ComponentInstance<Vec2>;
     for (const entity of entities) {
-      const { proxy: position } = components["position"] as ComponentInstance<Vec2>;
-      const { proxy: previousPosition } = components["previousPosition"] as ComponentInstance<Vec2>;
       position.cursor = entity;
       previousPosition.cursor = entity;
       placeOnGrid(
@@ -233,9 +254,9 @@ const renderPreySystem = new System({
   name: "renderPrey",
   query: preyQuery,
   callback: (components, entities, alpha: number) => {
+    const { proxy: position } = components["position"] as ComponentInstance<Vec2>;
+    const { proxy: previousPosition } = components["previousPosition"] as ComponentInstance<Vec2>;
     for (const entity of entities) {
-      const { proxy: position } = components["position"] as ComponentInstance<Vec2>;
-      const { proxy: previousPosition } = components["previousPosition"] as ComponentInstance<Vec2>;
       position.cursor = entity;
       previousPosition.cursor = entity;
       placeOnGrid(
@@ -249,11 +270,11 @@ const renderPreySystem = new System({
 
 const updatePreviousPositionSystem = new System({
   name: "updatePreviousPosition",
-  query: new Query({ all: [position, velocity] }),
+  query: previousPositionQuery,
   callback: (components, entities) => {
+    const { proxy: position } = components["position"] as ComponentInstance<Vec2>;
+    const { proxy: previousPosition } = components["previousPosition"] as ComponentInstance<Vec2>;
     for (const entity of entities) {
-      const { proxy: position } = components["position"] as ComponentInstance<Vec2>;
-      const { proxy: previousPosition } = components["previousPosition"] as ComponentInstance<Vec2>;
       position.cursor = entity;
       previousPosition.cursor = entity;
       previousPosition.x = position.x;
@@ -276,7 +297,7 @@ let running = true;
 let lastTime = 0;
 let accumulator = 0;
 
-async function gameLoop(currentTime: number): Promise<void> {
+async function gameLoop(currentTime: number = performance.now()): Promise<void> {
   if (!running) return;
 
   const deltaTime = currentTime - lastTime;
@@ -284,30 +305,30 @@ async function gameLoop(currentTime: number): Promise<void> {
   accumulator += deltaTime;
 
   let updates = 0;
-  while (accumulator >= FIXED_TIMESTEP && updates < MAX_UPDATES) {
+  while (accumulator >= FIXED_TIME_STEP && updates < MAX_UPDATES) {
     updatePreviousPosition();
-    movement(FIXED_TIMESTEP);
-    accumulator -= FIXED_TIMESTEP;
+    movement(FIXED_TIME_STEP);
+    accumulator -= FIXED_TIME_STEP;
     updates++;
   }
-
-  // Calculate interpolation factor
-  const alpha = accumulator / FIXED_TIMESTEP;
 
   // Clear game grid
   clearGrid();
 
+  // Calculate interpolation factor
+  const alpha = accumulator / FIXED_TIME_STEP;
+
+  // Call render systems
   renderPredator(alpha);
   renderPrey(alpha);
 
-  // Clear screen and display game grid
-  console.clear();
-  const border = "-".repeat(WIDTH + 2);
-  console.log(border);
-  console.log(
-    grid.map((row) => `|${row.join("")}|`).join("\n"),
-  );
-  console.log(border);
+  // print screen to console
+  // printScreen();
+
+  console.log([...world.entities.query(predatorQuery)]);
 }
 
-gameLoop(performance.now());
+world.onReady().then(() => {
+  // setInterval(gameLoop, FIXED_TIME_STEP);
+  gameLoop(performance.now());
+});

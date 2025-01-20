@@ -43,7 +43,7 @@ export class Archetype {
   constructor(
     capacity: number,
     components: ComponentInstance<any>[],
-    bitfield: BooleanArray = BooleanArray.fromObjects(capacity, ID_KEY, components),
+    bitfield: BooleanArray = BooleanArray.fromObjects(components.length, ID_KEY, components),
   ) {
     this.bitfield = bitfield;
     this.id = bitfield.toString();
@@ -117,21 +117,56 @@ export class Archetype {
    * @param query - The QueryInstance to test
    * @returns `true` if the QueryInstance is a match, `false` otherwise
    */
-  isCandidate(query: QueryInstance): boolean {
+  isCandidate = (query: QueryInstance): boolean => {
     const cached = this.#candidateCache.get(query);
     if (cached !== undefined) return cached;
 
-    const bf = this.bitfield;
-    const len = bf.length;
-    for (let i = 0; i < len; i++) {
-      if (!query.isCandidate(bf[i] ?? 0, i)) {
+    // Empty archetypes should never match
+    if (this.bitfield.getPopulationCount() === 0) {
+      this.#candidateCache.set(query, false);
+      return false;
+    }
+
+    // Check AND components - all required bits must be present
+    for (let i = 0; i < this.bitfield.length; i++) {
+      const target = this.bitfield[i] ?? 0;
+      const and = query.and[i] ?? 0;
+      if ((target & and) !== and) {
         this.#candidateCache.set(query, false);
         return false;
       }
     }
+
+    // Check NOT components - no forbidden bits should be present
+    for (let i = 0; i < this.bitfield.length; i++) {
+      const target = this.bitfield[i] ?? 0;
+      const not = query.not[i] ?? 0;
+      if ((target & not) !== 0) {
+        this.#candidateCache.set(query, false);
+        return false;
+      }
+    }
+
+    // Check OR components - at least one of the bits must be present
+    if (query.or.getPopulationCount() > 0) {
+      let hasOr = false;
+      for (let i = 0; i < this.bitfield.length; i++) {
+        const target = this.bitfield[i] ?? 0;
+        const or = query.or[i] ?? 0;
+        if ((target & or) !== 0) {
+          hasOr = true;
+          break;
+        }
+      }
+      if (!hasOr) {
+        this.#candidateCache.set(query, false);
+        return false;
+      }
+    }
+
     this.#candidateCache.set(query, true);
     return true;
-  }
+  };
 
   /**
    * Check if this Archetype has entities which have entered/exited since last refresh

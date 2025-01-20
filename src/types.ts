@@ -13,7 +13,7 @@ import type { ComponentInstance } from "./component/ComponentInstance.ts";
 import type { BooleanArray } from "@phughesmcr/booleanarray";
 import type { Archetype } from "./archetype/Archetype.ts";
 import type { StorageProxy } from "./component/StorageProxy.ts";
-import type { $_ARCHETYPE_KEY, $_PARTITION_KEY, $_SYSTEM_DESTROY_KEY, $_SYSTEM_INIT_KEY } from "./constants.ts";
+import type { $_PARTITION_KEY, $_SYSTEM_DESTROY_KEY, $_SYSTEM_INIT_KEY } from "./constants.ts";
 
 import type { Partition, Schema, TypedArray, TypedArrayConstructor } from "@phughesmcr/partitionedbuffer";
 import type { SchemaStorage } from "@phughesmcr/partitionedbuffer";
@@ -239,11 +239,9 @@ export type WorldSpec = {
 };
 
 /** The state of a World */
-export type WorldState = "uninitialized" | "initialized" | "destroyed";
+export type WorldState = "uninitialized" | "initialized" | "destroyed" | "error";
 
 export type WorldArchetypeAPI = {
-  /** Get the archetype ID of an entity */
-  [$_ARCHETYPE_KEY]: (id: string) => Archetype | undefined;
   /** Get the archetype ID of an entity */
   getEntityArchetype: (entity: Entity) => string | undefined;
   /** Check if an entity is in the root (empty) archetype */
@@ -257,7 +255,7 @@ export type WorldArchetypeAPI = {
 /** The public Entity management API */
 export type WorldEntityAPI = {
   /** The capacity of the EntityManager */
-  capacity: number;
+  readonly capacity: number;
   /** Create an entity */
   create(): Entity | undefined;
   /** Destroy an entity */
@@ -278,12 +276,10 @@ export type WorldEntityAPI = {
 
 /** The public Component management API */
 export type WorldComponentAPI = {
-  /** An iterable of all ComponentInstances registered */
-  all: IterableIterator<ComponentInstance<any>>;
   /** The number of components registered */
-  count: number;
+  readonly count: number;
   /** A Record of ComponentInstances by Component name */
-  registry: Record<string, ComponentInstance<any>>;
+  readonly registry: Record<string, ComponentInstance<any>>;
   /**
    * Add a component to an entity
    * @param component - The component to add
@@ -336,6 +332,14 @@ export type WorldComponentAPI = {
    */
   getInstance<T extends SchemaOrNull<T>>(component: Component<T> | string): ComponentInstance<T> | undefined;
   /**
+   * Get instances for an array of components
+   * @param array - The array of components to get instances for
+   * @returns An array of component instances
+   */
+  getInstances(
+    array: Component<SchemaOrNull<any>>[] | Readonly<Component<SchemaOrNull<any>>[]>,
+  ): (ComponentInstance<SchemaOrNull<any>> | undefined)[];
+  /**
    * Get an iterable of all entities with a given component
    * @param component - The component to get entities for
    * @returns An iterable of entities or `undefined` if the component is not registered
@@ -369,10 +373,13 @@ export type WorldComponentAPI = {
   ): void;
 };
 
+/** A function that gets ComponentInstances from an array of Components */
+export type ComponentInstanceGetter = WorldComponentAPI["getInstances"];
+
 /** The public System management API */
 export type WorldSystemAPI = {
   /** The systems by name */
-  registry: SystemRecord;
+  readonly registry: SystemRecord;
   /** Create a system */
   create<T extends SystemCallback>(system: System<T>): SystemInstance<T>;
   /** Get a system instance */
