@@ -52,7 +52,7 @@ export class StorageProxy<T extends SchemaOrNull<T>> {
   /** Set the current entity ID the proxy is pointed at */
   set cursor(value: Entity) {
     if (value < 0 || value >= this.#capacity) {
-      throw new EntityNotFoundError(value);
+      throw new EntityNotFoundError(`Entity ${value} not found`);
     }
     this.#cursor = value;
   }

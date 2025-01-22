@@ -5,8 +5,6 @@
  * @license     MIT
  */
 
-import type { Entity } from "./types.ts";
-
 /** The base error class for all Miski errors */
 export class MiskiError extends Error {
   constructor(message?: string) {
@@ -24,50 +22,36 @@ export function isMiskiError(error: unknown): error is MiskiError {
   return error instanceof MiskiError;
 }
 
-/** An error thrown when a spec object is invalid */
-export class SpecError extends MiskiError {
-  constructor(message?: string) {
-    super(message ?? "Spec is invalid");
-    this.name = "SpecError";
-  }
+/** Creates a new error class extending MiskiError */
+function createErrorClass(name: string, defaultMessage: string): typeof MiskiError {
+  return class extends MiskiError {
+    constructor(message?: string) {
+      super(message ?? defaultMessage);
+      this.name = name;
+    }
+  };
 }
+
+/** An error thrown when a spec object is invalid */
+export const SpecError: typeof MiskiError = createErrorClass("SpecError", "Spec is invalid");
 
 /** An error thrown when an entity is not found */
-export class EntityNotFoundError extends MiskiError {
-  constructor(entity: Entity) {
-    super(`Entity ${entity} not found`);
-    this.name = "EntityNotFoundError";
-  }
-}
+export const EntityNotFoundError: typeof MiskiError = createErrorClass("EntityNotFoundError", "Entity not found");
 
 /** An error thrown when the world is in an invalid state */
-export class WorldStateError extends MiskiError {
-  constructor(message?: string) {
-    super(message ?? "World is in an invalid state");
-    this.name = "WorldStateError";
-  }
-}
+export const WorldStateError: typeof MiskiError = createErrorClass("WorldStateError", "World is in an invalid state");
 
 /** An error thrown when a component is not found */
-export class ComponentNotFoundError extends MiskiError {
-  constructor(message?: string) {
-    super(message ?? "Component not found");
-    this.name = "ComponentNotFoundError";
-  }
-}
+export const ComponentNotFoundError: typeof MiskiError = createErrorClass(
+  "ComponentNotFoundError",
+  "Component not found",
+);
 
 /** An error thrown when a query returned no components */
-export class NoComponentsFoundError extends MiskiError {
-  constructor(message?: string) {
-    super(message ?? "Query returned no components");
-    this.name = "NoComponentsFoundError";
-  }
-}
+export const NoComponentsFoundError: typeof MiskiError = createErrorClass(
+  "NoComponentsFoundError",
+  "Query returned no components",
+);
 
 /** An error thrown when something is not registered */
-export class NotRegisteredError extends MiskiError {
-  constructor(message: string) {
-    super(message);
-    this.name = "NotRegisteredError";
-  }
-}
+export const NotRegisteredError: typeof MiskiError = createErrorClass("NotRegisteredError", "Not registered");

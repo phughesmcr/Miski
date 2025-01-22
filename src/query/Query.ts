@@ -8,7 +8,8 @@
 import { isObject } from "../utils.ts";
 import { SpecError } from "../errors.ts";
 import { type Component, isValidComponentArray } from "../component/Component.ts";
-import type { QuerySpec, SchemaOrNull } from "../types.ts";
+import type { BooleanArray } from "@phughesmcr/booleanarray";
+import type { QueryInstance, QuerySpec, SchemaOrNull } from "../types.ts";
 
 /**
  * Type guard for QuerySpec
@@ -75,4 +76,45 @@ export class Query {
     this.any = Object.freeze([...new Set(spec.any ?? [])]);
     this.none = Object.freeze([...new Set(spec.none ?? [])]);
   }
+}
+
+/**
+ * Check if a target bitfield matches query requirements
+ * @param target The target bitfield to check
+ * @param query The query instance to match against
+ * @returns true if the target matches the query requirements
+ */
+export function isQueryMatch(target: BooleanArray, query: QueryInstance): boolean {
+  // Empty targets should never match
+  if (target.getPopulationCount() === 0) return false;
+
+  // Check AND components
+  for (let i = 0; i < target.length; i++) {
+    const t = target[i] ?? 0;
+    const and = query.and[i] ?? 0;
+    if ((t & and) !== and) return false;
+  }
+
+  // Check NOT components
+  for (let i = 0; i < target.length; i++) {
+    const t = target[i] ?? 0;
+    const not = query.not[i] ?? 0;
+    if ((t & not) !== 0) return false;
+  }
+
+  // Check OR components
+  if (query.or.getPopulationCount() > 0) {
+    let hasOr = false;
+    for (let i = 0; i < target.length; i++) {
+      const t = target[i] ?? 0;
+      const or = query.or[i] ?? 0;
+      if ((t & or) !== 0) {
+        hasOr = true;
+        break;
+      }
+    }
+    if (!hasOr) return false;
+  }
+
+  return true;
 }
