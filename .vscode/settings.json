@@ -18,6 +18,7 @@
     "BooleanArray",
     "CODEOWNERS",
     "codepaths",
+    "COOLDOWN",
     "Deno",
     "devtool",
     "dotfiles",

@@ -8,9 +8,11 @@
     "include": ["bench/**/*.bench.ts"]
   },
   "compilerOptions": {
+    "erasableSyntaxOnly": true,
     "allowUnreachableCode": false,
     "allowUnusedLabels": false,
     "lib": ["esnext"],
+    "module": "esnext",
     "noErrorTruncation": true,
     "noFallthroughCasesInSwitch": true,
     "noImplicitAny": true,
@@ -25,13 +27,14 @@
     "verbatimModuleSyntax": true
   },
   "fmt": {
+    "newLineKind": "lf",
     "indentWidth": 2,
     "lineWidth": 120,
     "semiColons": true,
     "singleQuote": false,
     "proseWrap": "always",
     "useTabs": false,
-    "exclude": ["*/.*", "*.md", "LICENSE"]
+    "exclude": ["*/.*", "**/*.md", "LICENSE"]
   },
   "imports": {
     "@/": "./src/",
@@ -42,7 +45,8 @@
   "lint": {
     "exclude": ["example/**/*.ts"],
     "rules": {
-      "exclude": ["no-explicit-any"]
+      "exclude": ["no-explicit-any"],
+      "tags": ["recommended", "jsr"]
     }
   },
   "tasks": {
