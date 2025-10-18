@@ -1,31 +1,39 @@
 import type { BooleanArray } from "@phughesmcr/booleanarray";
 import type { ComponentInstance } from "../component/ComponentInstance.ts";
 import type { SchemaOrNull } from "../types.ts";
+import type { QueryResultPool } from "./QueryPool.ts";
 
 /** Cache for query results */
 export class QueryCache {
   #componentCache: Map<string, Record<string, ComponentInstance<SchemaOrNull>>>;
   #entityCache: Map<string, BooleanArray>;
-  #timestamp: number;
+  #globalVersion: number;
+  #pool?: QueryResultPool;
 
-  constructor() {
+  constructor(pool?: QueryResultPool) {
     this.#componentCache = new Map();
     this.#entityCache = new Map();
-    this.#timestamp = 0;
+    this.#globalVersion = 0;
+    this.#pool = pool;
   }
 
-  /** Increment timestamp to invalidate all caches */
+  /** Get the current global version */
+  get version(): number {
+    return this.#globalVersion;
+  }
+
+  /** Increment global version to invalidate all caches */
   invalidate(): void {
-    this.#timestamp++;
+    this.#globalVersion++;
   }
 
   /** Get cached components or compute and cache them */
   getComponents(
     queryId: string,
     compute: () => Record<string, ComponentInstance<SchemaOrNull<any>>>,
-    lastUpdate: number,
+    lastVersion: number,
   ): Record<string, ComponentInstance<SchemaOrNull<any>>> {
-    if (lastUpdate < this.#timestamp) {
+    if (lastVersion < this.#globalVersion) {
       this.#componentCache.delete(queryId);
     }
 
@@ -40,9 +48,14 @@ export class QueryCache {
   getEntities(
     queryId: string,
     compute: () => BooleanArray,
-    lastUpdate: number,
+    lastVersion: number,
   ): BooleanArray {
-    if (lastUpdate < this.#timestamp) {
+    if (lastVersion < this.#globalVersion) {
+      // Release the old array back to the pool before removing
+      const oldArray = this.#entityCache.get(queryId);
+      if (oldArray && this.#pool) {
+        this.#pool.releaseEntityArray(oldArray);
+      }
       this.#entityCache.delete(queryId);
     }
 
@@ -51,5 +64,17 @@ export class QueryCache {
     }
 
     return this.#entityCache.get(queryId)!;
+  }
+
+  /** Clear all caches and release pooled resources */
+  clear(): void {
+    // Release all entity arrays back to pool
+    if (this.#pool) {
+      for (const array of this.#entityCache.values()) {
+        this.#pool.releaseEntityArray(array);
+      }
+    }
+    this.#entityCache.clear();
+    this.#componentCache.clear();
   }
 }

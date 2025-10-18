@@ -5,19 +5,20 @@
  * @license     MIT
  */
 
+import type { Partition, Schema, TypedArray, TypedArrayConstructor } from "@phughesmcr/partitionedbuffer";
+import type { PartitionStorage } from "@phughesmcr/partitionedbuffer";
+import type { BooleanArray } from "@phughesmcr/booleanarray";
+
 import type { Component } from "./component/Component.ts";
 import type { Query } from "./query/Query.ts";
 import type { World } from "./world/World.ts";
 import type { System } from "./system/System.ts";
 import type { ComponentInstance } from "./component/ComponentInstance.ts";
-import type { BooleanArray } from "@phughesmcr/booleanarray";
 import type { Archetype } from "./archetype/Archetype.ts";
 import type { StorageProxy } from "./component/StorageProxy.ts";
 import type { $_PARTITION_KEY, $_SYSTEM_DESTROY_KEY, $_SYSTEM_INIT_KEY } from "./constants.ts";
 
-import type { Partition, Schema, TypedArray, TypedArrayConstructor } from "@phughesmcr/partitionedbuffer";
-import type { SchemaStorage } from "@phughesmcr/partitionedbuffer";
-export type { Schema, SchemaStorage, TypedArray, TypedArrayConstructor };
+export type { PartitionStorage, Schema, TypedArray, TypedArrayConstructor };
 
 /** An Entity is essentially just an ID number / pointer */
 export type Entity = number;
@@ -30,7 +31,7 @@ export type StorageProxySpec<T> = {
   /** The BooleanArray of changed values */
   changed: BooleanArray;
   /** The Partition data of the StorageProxy */
-  storage: SchemaStorage<T>;
+  storage: PartitionStorage<T>;
   /** The capacity of the World */
   capacity: number;
 };
@@ -117,9 +118,9 @@ export type ComponentInstanceSpec<T extends SchemaOrNull<T>> = {
   /** The unique identifier of the ComponentInstance */
   id: number;
   /** The StorageProxy of the ComponentInstance */
-  proxy: any; // T extends Schema<infer U> ? StorageProxyWithProperties<U> : null;
+  proxy: T extends Schema<infer U> ? StorageProxyWithProperties<U> : null;
   /** The storage of the ComponentInstance */
-  storage: T extends Schema<infer U> ? SchemaStorage<U> : null;
+  storage: T extends Schema<infer U> ? PartitionStorage<U> : null;
   /** The Component of the ComponentInstance */
   type: Component<T>;
 };
@@ -247,9 +248,13 @@ export type WorldArchetypeAPI = {
   /** Check if an entity is in the root (empty) archetype */
   isEntityInRoot(entity: Entity): boolean;
   /** Get the components associated with a QueryInstance */
-  queryComponents(query: Query): Record<string, ComponentInstance<any>> | undefined;
+  queryComponents(query: Query): Record<string, ComponentInstance<any>>;
   /** Get the entities associated with a QueryInstance */
-  queryEntities(query: Query): IterableIterator<Entity> | undefined;
+  queryEntities(query: Query): IterableIterator<Entity>;
+  /** Get entities that entered a query since last refresh */
+  queryEntered(query: Query): IterableIterator<Entity>;
+  /** Get entities that exited a query since last refresh */
+  queryExited(query: Query): IterableIterator<Entity>;
 };
 
 /** The public Entity management API */
@@ -285,7 +290,7 @@ export type WorldComponentAPI = {
    * @param component - The component to add
    * @param entity - The entity to add the component to
    * @param data - The data to set for the component
-   * @throws {ComponentNotFoundError} - If the component is not registered
+   * @throws {NotRegisteredError} - If the component is not registered
    */
   addToEntity<T extends SchemaOrNull<T>>(
     component: Component<T> | string,
@@ -297,14 +302,12 @@ export type WorldComponentAPI = {
    * @param component - The component to check for
    * @param entity - The entity to check
    * @returns `true` if the entity has the component, `false` otherwise
-   * @throws {ComponentNotFoundError} - If the component is not registered
    */
   entityOwns<T extends SchemaOrNull<T>>(component: Component<T> | string, entity: Entity): boolean;
   /**
    * Get an iterable of all entities with one or more changed properties for a given component
    * @param component - The component to get changed entities for
    * @returns An iterable of entities or `undefined` if the component is not registered
-   * @throws {ComponentNotFoundError} - If the component is not registered
    */
   getChanged<T extends SchemaOrNull<T>>(component: Component<T> | string): IterableIterator<Entity> | undefined;
   /**
@@ -312,7 +315,6 @@ export type WorldComponentAPI = {
    * @param component - The component to get the data for
    * @param entity - The entity to get the data for
    * @returns The data for the component or `undefined` if the component is not registered
-   * @throws {ComponentNotFoundError} - If the component is not registered
    */
   getEntityData<T extends SchemaOrNull<T>>(
     component: Component<T> | string,
@@ -328,7 +330,6 @@ export type WorldComponentAPI = {
    * Get the registered instance of a given component
    * @param component - The component to get the instance for
    * @returns The registered instance of the component or `undefined` if the component is not registered
-   * @throws {ComponentNotFoundError} - If the component is not registered
    */
   getInstance<T extends SchemaOrNull<T>>(component: Component<T> | string): ComponentInstance<T> | undefined;
   /**
@@ -343,7 +344,6 @@ export type WorldComponentAPI = {
    * Get an iterable of all entities with a given component
    * @param component - The component to get entities for
    * @returns An iterable of entities or `undefined` if the component is not registered
-   * @throws {ComponentNotFoundError} - If the component is not registered
    */
   getOwners<T extends SchemaOrNull<T>>(component: Component<T> | string): IterableIterator<Entity> | undefined;
   /**
@@ -356,7 +356,7 @@ export type WorldComponentAPI = {
    * Remove a component from an entity
    * @param component - The component to remove
    * @param entity - The entity to remove the component from
-   * @throws {ComponentNotFoundError} - If the component is not registered
+   * @throws {NotRegisteredError} - If the component is not registered
    */
   removeFromEntity<T extends SchemaOrNull<T>>(component: Component<T> | string, entity: Entity): void;
   /**
@@ -364,7 +364,6 @@ export type WorldComponentAPI = {
    * @param component - The component to set the data for
    * @param entity - The entity to set the data for
    * @param value - The data to set
-   * @throws {ComponentNotFoundError} - If the component is not registered
    */
   setEntityData<T extends SchemaOrNull<T>>(
     component: Component<T> | string,
@@ -387,7 +386,7 @@ export type WorldSystemAPI = {
   /** Check if a system is registered */
   has<T extends SystemCallback>(system: System<T> | string): boolean;
   /** Destroy a system */
-  destroy<T extends SystemCallback>(system: System<T> | string): void;
+  destroy<T extends SystemCallback>(system: System<T> | string): Promise<void>;
 };
 
 /** The result of a World API constructor */

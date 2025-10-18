@@ -49,7 +49,8 @@ export class SystemManager {
 
     this.destroyAll = async (): Promise<void> => {
       for (const instance of Object.values(this.registry)) {
-        await this.destroy(instance.name);
+        const proto = Object.getPrototypeOf(instance);
+        await this.destroy(proto.name);
       }
     };
   }
@@ -70,9 +71,8 @@ export class SystemManager {
 
   /**
    * Destroy all systems
-   * @param world The world to destroy the systems in
    */
-  destroyAll: (world: World) => Promise<void>;
+  destroyAll: () => Promise<void>;
 
   /**
    * Get a system instance

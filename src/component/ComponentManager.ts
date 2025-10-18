@@ -7,6 +7,7 @@
 
 import { BooleanArray } from "@phughesmcr/booleanarray";
 import { PartitionedBuffer } from "@phughesmcr/partitionedbuffer";
+
 import { $_PARTITION_KEY } from "../constants.ts";
 import { ComponentInstance } from "./ComponentInstance.ts";
 import { isObject } from "../utils.ts";
@@ -14,6 +15,7 @@ import { StorageProxy } from "./StorageProxy.ts";
 import type { Component } from "./Component.ts";
 import type { Entity, SchemaOrNull, TypedArray } from "../types.ts";
 import { NotRegisteredError } from "../errors.ts";
+import type { ArchetypeManager } from "../archetype/ArchetypeManager.ts";
 
 /** A component manager is responsible for managing the components of a world. */
 export class ComponentManager {
@@ -27,6 +29,8 @@ export class ComponentManager {
   #registry: Map<Component<any>, ComponentInstance<any>>;
   /** The registry of component instances by name */
   #registryByName: Record<string, ComponentInstance<any>>;
+  /** Optional archetype manager for optimized entity component lookup */
+  #archetypeManager?: ArchetypeManager | undefined;
 
   /**
    * Create a new component manager.
@@ -36,7 +40,7 @@ export class ComponentManager {
   constructor(capacity: number, components: Component<any>[]) {
     // create the storage buffer
     const size = components.reduce((acc, component) => acc + component.size, 0) * capacity;
-    this.#buffer = new PartitionedBuffer(size * 2, capacity); // TODO * 2 is temporary, we need to fix this
+    this.#buffer = new PartitionedBuffer(size, capacity);
     // create the various registries
     this.#changed = new Map();
     this.#owners = new Map();
@@ -75,7 +79,7 @@ export class ComponentManager {
    * @param component - The component to add to the entity
    * @param entity - The entity to add the component to
    * @param data - Optional data to set for the component
-   * @returns The component manager
+   * @returns The component instances for this entity
    */
   addToEntity = <T extends SchemaOrNull<T>>(
     component: Component<T> | string,
@@ -91,13 +95,13 @@ export class ComponentManager {
     const { proto } = instance;
 
     // Set ownership
-    const ownerState = this.#owners.get(proto)?.setBool(entity, true);
+    const ownerState = this.#owners.get(proto)?.set(entity, true);
     if (ownerState === undefined) {
       throw new Error(`Failed to set ownership for component ${proto.name} on entity ${entity}.`);
     }
 
     // Set changed
-    const changedState = this.#changed.get(proto)?.setBool(entity, true);
+    const changedState = this.#changed.get(proto)?.set(entity, true);
     if (changedState === undefined) {
       throw new Error(`Failed to set changed state for component ${proto.name} on entity ${entity}.`);
     }
@@ -112,8 +116,8 @@ export class ComponentManager {
       }
     }
 
-    // Important: Update archetype after modifying component
-    return this.getEntityComponents(entity);
+    // Build component list directly from ownership (don't use archetype-dependent getEntityComponents)
+    return this.#getEntityComponentsDirect(entity);
   };
 
   /**
@@ -129,7 +133,7 @@ export class ComponentManager {
     } else {
       proto = component;
     }
-    return proto ? this.#owners.get(proto)?.getBool(entity) ?? false : false;
+    return proto ? this.#owners.get(proto)?.get(entity) ?? false : false;
   };
 
   /**
@@ -176,18 +180,46 @@ export class ComponentManager {
   };
 
   /**
+   * Set the archetype manager for optimized component lookups
+   * @param archetypeManager The archetype manager to use
+   */
+  setArchetypeManager(archetypeManager: ArchetypeManager): void {
+    this.#archetypeManager = archetypeManager;
+  }
+
+  /**
+   * Get all components for an entity directly from ownership tracking
+   * This is used internally to avoid circular dependencies with the archetype system
+   * @param entity The entity to get components for
+   * @returns An array of component instances
+   */
+  #getEntityComponentsDirect(entity: Entity): ComponentInstance<any>[] {
+    const components: ComponentInstance<any>[] = [];
+    for (const [proto, instance] of this.#registry) {
+      if (this.#owners.get(proto)?.get(entity)) {
+        components.push(instance);
+      }
+    }
+    return components;
+  }
+
+  /**
    * Get all components for an entity
    * @param entity The entity to get components for
    * @returns An array of component instances
    */
   getEntityComponents(entity: Entity): ComponentInstance<any>[] {
-    const components: ComponentInstance<any>[] = []; // TODO: this could be pooled
-    for (const [proto, instance] of this.#registry) {
-      if (this.#owners.get(proto)?.getBool(entity)) {
-        components.push(instance);
+    // Fast path: use archetype if available
+    if (this.#archetypeManager) {
+      const archetype = this.#archetypeManager.getEntityArchetype(entity);
+      if (archetype) {
+        return archetype.components;
       }
+      return [];
     }
-    return components;
+
+    // Fallback: scan all components (slower)
+    return this.#getEntityComponentsDirect(entity);
   }
 
   /**
@@ -230,7 +262,7 @@ export class ComponentManager {
    */
   refresh = (): ComponentManager => {
     for (const changed of this.#changed.values()) {
-      changed.fill(0);
+      changed.clear();
     }
     return this;
   };
@@ -239,18 +271,18 @@ export class ComponentManager {
    * Remove a component from an entity
    * @param component - The component to remove from the entity
    * @param entity - The entity to remove the component from
-   * @returns The component manager
+   * @returns The component instances for this entity
    */
   removeFromEntity = <T extends SchemaOrNull<T>>(
     component: string | Component<T>,
     entity: Entity,
   ): ComponentInstance<any>[] => {
     const instance = this.getInstance(component);
-    if (!instance) return this.getEntityComponents(entity);
+    if (!instance) return this.#getEntityComponentsDirect(entity);
     const { proto } = instance;
-    this.#owners.get(proto)?.setBool(entity, false);
-    this.#changed.get(proto)?.setBool(entity, false);
-    return this.getEntityComponents(entity);
+    this.#owners.get(proto)?.set(entity, false);
+    this.#changed.get(proto)?.set(entity, false);
+    return this.#getEntityComponentsDirect(entity);
   };
 
   /**
@@ -260,7 +292,7 @@ export class ComponentManager {
    * @param value - The data to set for the component
    */
   setEntityData = <T extends SchemaOrNull<T>>(
-    component: Component<T>,
+    component: Component<T> | string,
     entity: Entity,
     value: Record<keyof T, number>,
   ): this => {
@@ -288,7 +320,7 @@ export class ComponentManager {
     return JSON.stringify(
       {
         buffer: this.#buffer.toString(),
-        // TODO: serialise changed, owners, registry
+        // TODO: serialize changed, owners, registry
       },
     );
   };

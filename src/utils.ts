@@ -5,8 +5,9 @@
  * @license     MIT
  */
 
-import { INVALID_NAMES, MAX_UINT32, MIN_UINT32 } from "./constants.ts";
 import { isValidName as isValidNamePartitionedBuffer } from "@phughesmcr/partitionedbuffer";
+
+import { INVALID_NAMES, MAX_UINT32, MIN_UINT32 } from "./constants.ts";
 
 /** @returns a random hex string */
 export function randomHexString(): string {
@@ -35,7 +36,7 @@ export function isPositiveUint32(n: unknown): n is number {
 
 /** Test if an object is a valid Record  */
 export function isObject<T extends Record<string, unknown>>(object: unknown): object is T {
-  return (typeof object === "object" && !Array.isArray(object));
+  return (typeof object === "object" && object !== null && !Array.isArray(object));
 }
 
 /**

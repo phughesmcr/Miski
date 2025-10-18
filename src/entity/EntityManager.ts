@@ -35,7 +35,7 @@ export class EntityManager {
       );
     }
     const arr = numberArrayFromString(entities);
-    const pool = BitPool.fromArray(arr, capacity);
+    const pool = BitPool.fromArray(capacity, arr);
     return new EntityManager(capacity, pool);
   }
 
@@ -56,7 +56,7 @@ export class EntityManager {
       );
     }
     this.pool = pool;
-    this.getActive = this.pool.truthyIndices;
+    this.getActive = this.pool.occupiedIndices.bind(this.pool);
   }
 
   /** @returns the maximum number of entities allowed in the pool (inclusive) */
@@ -90,18 +90,12 @@ export class EntityManager {
 
   /** @returns the number of active entities */
   getActiveCount = (): number => {
-    const size = this.capacity;
-    const population = this.pool.getPopulationCount();
-    const active = size - population;
-    if (active > this.capacity) {
-      return this.capacity;
-    }
-    return active;
+    return this.pool.occupiedCount;
   };
 
   /** @returns the number of available entities */
   getAvailableCount = (): number => {
-    return this.capacity - this.getActiveCount();
+    return this.capacity - this.pool.occupiedCount;
   };
 
   /**
@@ -120,13 +114,7 @@ export class EntityManager {
    * @see EntityManager.exists to check if an entity is valid and resident
    */
   isEntity = (entity: Entity): entity is Entity => {
-    if (isPositiveUint32(entity) === false) {
-      return false;
-    }
-    if (entity > this.capacity) {
-      return false;
-    }
-    return true;
+    return (entity === 0 || isPositiveUint32(entity)) && entity < this.capacity;
   };
 
   /**

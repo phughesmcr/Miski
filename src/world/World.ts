@@ -5,19 +5,19 @@
  * @license     MIT
  */
 
-import { $_ARCHETYPE_KEY, $_QUERY_KEY, VERSION } from "../constants.ts";
-import { ArchetypeManager } from "../archetype/ArchetypeManager.ts";
-import { ComponentManager } from "../component/ComponentManager.ts";
-import { EntityManager } from "../entity/EntityManager.ts";
-import { isObject, isPositiveUint32 } from "../utils.ts";
-import { NotRegisteredError, SpecError, WorldStateError } from "../errors.ts";
-import { QueryManager } from "../query/QueryManager.ts";
-import { SystemManager } from "../system/SystemManager.ts";
-import { type Component, isValidComponentArray } from "../component/Component.ts";
 import { BooleanArray } from "@phughesmcr/booleanarray";
-import type { Archetype } from "../archetype/Archetype.ts";
-import type { ComponentInstance } from "../component/ComponentInstance.ts";
-import type { Query } from "../query/Query.ts";
+
+import { $_ARCHETYPE_KEY, $_QUERY_KEY, VERSION } from "@/constants.ts";
+import { ArchetypeManager } from "@/archetype/ArchetypeManager.ts";
+import { ComponentManager } from "@/component/ComponentManager.ts";
+import { EntityManager } from "@/entity/EntityManager.ts";
+import { NotRegisteredError, SpecError, WorldStateError } from "@/errors.ts";
+import { QueryManager } from "@/query/QueryManager.ts";
+import { SystemManager } from "@/system/SystemManager.ts";
+import type { Component } from "@/component/Component.ts";
+import type { Archetype } from "@/archetype/Archetype.ts";
+import type { ComponentInstance } from "@/component/ComponentInstance.ts";
+import type { Query } from "@/query/Query.ts";
 import type {
   Entity,
   QueryInstance,
@@ -29,40 +29,8 @@ import type {
   WorldSpec,
   WorldState,
   WorldSystemAPI,
-} from "../types.ts";
-
-/**
- * Test if an object is a valid WorldSpec
- * @param spec The object to test
- * @returns `true` if the object is a valid WorldSpec, `false` otherwise
- */
-export function isValidWorldSpec(spec: unknown): spec is WorldSpec {
-  if (isObject(spec) === false) return false;
-  const { capacity, components } = spec;
-  if (isPositiveUint32(capacity) === false) return false;
-  if (isValidComponentArray(components) === false) return false;
-  return true;
-}
-
-/**
- * Assert that the World is in the correct state
- * @param target - The target state
- * @param current - The current state
- * @throws {WorldStateError} - If the World is not in the correct state
- */
-export function assertWorldState(target: WorldState, current: WorldState): void {
-  if (current === target) return;
-  switch (current) {
-    case "uninitialized":
-      throw new WorldStateError("World has not been initialized");
-    case "initialized":
-      throw new WorldStateError("World has already been initialized");
-    case "destroyed":
-      throw new WorldStateError("World has already been destroyed");
-    case "error":
-      throw new WorldStateError("World has encountered an error");
-  }
-}
+} from "@/types.ts";
+import { assertWorldState, isValidWorldSpec } from "./utils.ts";
 
 /** The World is the central context in which all Entities and Components exist. */
 export class World {
@@ -116,8 +84,8 @@ export class World {
       }
       for (const archetype of archetypes) {
         for (const entity of archetype.getEntities()) {
-          if (visitedArchetypeEntities.getBool(entity)) continue;
-          visitedArchetypeEntities.setBool(entity, true);
+          if (visitedArchetypeEntities.get(entity)) continue;
+          visitedArchetypeEntities.set(entity, true);
           yield entity;
         }
       }
@@ -155,7 +123,9 @@ export class World {
       component = getComponentByName(component);
       const instances = world.#componentManager.addToEntity(component, entity, data);
       world.#archetypeManager.update(entity, instances);
-      world.refresh(true);
+      if (world.#state === "initialized") {
+        world.refresh(true);
+      }
     };
 
     /**
@@ -171,16 +141,64 @@ export class World {
       component = getComponentByName(component);
       const instances = world.#componentManager.removeFromEntity(component, entity);
       world.#archetypeManager.update(entity, instances);
-      world.refresh(true);
+      if (world.#state === "initialized") {
+        world.refresh(true);
+      }
     };
 
     // MAIN
+
+    /**
+     * Get entities that entered a query since last refresh
+     * @param query - The query to check
+     * @returns An iterable iterator of entities
+     */
+    const queryEnteredEntities = (function* (query: Query): IterableIterator<Entity> {
+      visitedArchetypeEntities.clear();
+      const queryInstance = world.#queryManager.register(query);
+      const archetypes = world.#archetypeManager.query(queryInstance);
+      if (archetypes === undefined) {
+        return;
+      }
+      for (const archetype of archetypes) {
+        for (const entity of archetype.getEntered()) {
+          if (visitedArchetypeEntities.get(entity)) continue;
+          visitedArchetypeEntities.set(entity, true);
+          yield entity;
+        }
+      }
+      visitedArchetypeEntities.clear();
+    }).bind(world);
+
+    /**
+     * Get entities that exited a query since last refresh
+     * @param query - The query to check
+     * @returns An iterable iterator of entities
+     */
+    const queryExitedEntities = (function* (query: Query): IterableIterator<Entity> {
+      visitedArchetypeEntities.clear();
+      const queryInstance = world.#queryManager.register(query);
+      const archetypes = world.#archetypeManager.query(queryInstance);
+      if (archetypes === undefined) {
+        return;
+      }
+      for (const archetype of archetypes) {
+        for (const entity of archetype.getExited()) {
+          if (visitedArchetypeEntities.get(entity)) continue;
+          visitedArchetypeEntities.set(entity, true);
+          yield entity;
+        }
+      }
+      visitedArchetypeEntities.clear();
+    }).bind(world);
 
     const archetypes: WorldArchetypeAPI = {
       getEntityArchetype: (entity: Entity) => world.#archetypeManager.getEntityArchetype(entity)?.id,
       isEntityInRoot: world.#archetypeManager.isEntityInRoot,
       queryComponents: queryArchetypeComponents,
       queryEntities: queryArchetypeEntities,
+      queryEntered: queryEnteredEntities,
+      queryExited: queryExitedEntities,
     };
 
     const components: WorldComponentAPI = {
@@ -199,10 +217,31 @@ export class World {
       setEntityData: world.#componentManager.setEntityData,
     };
 
+    /**
+     * Destroy an entity and clean up its components and archetype
+     * @param entity - The entity to destroy
+     */
+    const destroyEntity = (entity: Entity): void => {
+      // Get all components for this entity before destroying
+      const archetype = world.#archetypeManager.getEntityArchetype(entity);
+      if (archetype) {
+        // Remove all components from the entity
+        for (const componentInstance of archetype.components) {
+          world.#componentManager.removeFromEntity(componentInstance.proto, entity);
+        }
+      }
+      // Reset the entity to the root archetype
+      world.#archetypeManager.reset(entity);
+      // Destroy the entity itself
+      world.#entityManager.destroy(entity);
+      // Invalidate query caches
+      world.#queryManager.invalidate();
+    };
+
     const entities: WorldEntityAPI = {
       capacity: world.#entityManager.capacity,
       create: world.#entityManager.create,
-      destroy: world.#entityManager.destroy,
+      destroy: destroyEntity,
       getActive: world.#entityManager.getActive,
       getActiveCount: world.#entityManager.getActiveCount,
       getAvailableCount: world.#entityManager.getAvailableCount,
@@ -246,6 +285,9 @@ export class World {
   /** The promise that resolves when the World is ready */
   #initPromise: Promise<WorldState>;
 
+  /** Resolver for the init promise */
+  #initResolver?: (value: WorldState) => void;
+
   /** Archetype Management API */
   readonly archetypes: WorldArchetypeAPI;
 
@@ -275,15 +317,20 @@ export class World {
     }
 
     this.#state = "uninitialized";
-    this.#initPromise = new Promise((resolve) => resolve("initialized"));
+    this.#initPromise = new Promise((resolve) => {
+      this.#initResolver = resolve;
+    });
 
     // Internal managers
     const { capacity, components } = spec;
     this.#entityManager = new EntityManager(capacity);
     this.#componentManager = new ComponentManager(capacity, components);
 
-    this.#archetypeManager = new ArchetypeManager(capacity);
+    this.#archetypeManager = new ArchetypeManager(capacity, components.length);
     this[$_ARCHETYPE_KEY] = (id: string) => this.#archetypeManager.registry.get(id);
+
+    // Wire up archetype manager for optimized component lookups
+    this.#componentManager.setArchetypeManager(this.#archetypeManager);
 
     this.#queryManager = new QueryManager(this, capacity);
     this[$_QUERY_KEY] = () => [...this.#queryManager.instancesByID.values()];
@@ -313,11 +360,13 @@ export class World {
     try {
       this.#archetypeManager.init();
       await this.#systemManager.init(this);
-      this.#state = await this.#initPromise;
+      this.#state = "initialized";
+      this.#initResolver?.("initialized");
       this.refresh();
       assertWorldState("initialized", this.#state);
     } catch (error) {
       this.#state = "error";
+      this.#initResolver?.("error");
       throw error;
     }
   }
@@ -329,7 +378,7 @@ export class World {
   async destroy(): Promise<void> {
     assertWorldState("initialized", this.#state);
     try {
-      await this.#systemManager.destroyAll(this);
+      await this.#systemManager.destroyAll();
       this.#state = "destroyed";
     } catch (error) {
       this.#state = "error";
@@ -342,8 +391,10 @@ export class World {
    * @throws {WorldStateError} - If the World has already been destroyed or has encountered an error
    */
   async onReady(): Promise<void> {
-    await this.#initPromise;
-    assertWorldState("initialized", this.#state);
+    const state = await this.#initPromise;
+    if (state !== "initialized") {
+      throw new WorldStateError(`World failed to initialize: state is "${state}"`);
+    }
   }
 
   /**

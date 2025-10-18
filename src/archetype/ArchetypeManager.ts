@@ -25,16 +25,23 @@ export class ArchetypeManager {
   /** Entities in this archetype have no components */
   readonly root: Archetype;
 
+  /** The number of components registered in the world */
+  #componentCount: number = 0;
+
   /**
    * Create a new ArchetypeManager
    * @param capacity - The maximum number of entities this manager can handle
+   * @param componentCount - The number of components registered in the world
    */
-  constructor(capacity: number) {
+  constructor(capacity: number, componentCount: number) {
     this.registry = new Map();
     this.entityArchetypes = new Array(capacity);
     this.queryArchetypes = new Map();
+    this.#componentCount = componentCount;
 
-    this.root = new Archetype(capacity, []);
+    // Create root archetype with properly sized bitfield for components
+    const rootBitfield = new BooleanArray(componentCount);
+    this.root = new Archetype(capacity, [], rootBitfield);
     this.registry.set(this.root.id, this.root);
 
     // Created here to avoid dependency on providing `capacity`
@@ -46,9 +53,9 @@ export class ArchetypeManager {
       return this;
     };
 
-    // Created here to avoid dependency on providing `capacity`
+    // Created here to avoid dependency on providing `capacity` and `componentCount`
     this.update = (() => {
-      const bitfield = new BooleanArray(capacity);
+      const bitfield = new BooleanArray(this.#componentCount);
 
       return (entity: Entity, components: ComponentInstance<any>[]): Archetype => {
         const oldArchetype = this.entityArchetypes[entity];
@@ -56,11 +63,11 @@ export class ArchetypeManager {
         // Reset and update bitfield
         bitfield.clear();
         for (let i = 0; i < components.length; i++) {
-          bitfield.setBool(components[i]!.id, true);
+          bitfield.set(components[i]!.id, true);
         }
 
         // Get or create archetype for these components
-        const archetypeId = bitfield.toString();
+        const archetypeId = bitfield.buffer.toString();
         if (oldArchetype?.id === archetypeId) return oldArchetype;
 
         let archetype = this.registry.get(archetypeId);

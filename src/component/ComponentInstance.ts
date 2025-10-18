@@ -7,9 +7,9 @@
 
 import type {
   ComponentInstanceSpec,
+  PartitionStorage,
   Schema,
   SchemaOrNull,
-  SchemaStorage,
   StorageProxyWithProperties,
 } from "../types.ts";
 import type { Component } from "./Component.ts";
@@ -23,7 +23,7 @@ export class ComponentInstance<T extends SchemaOrNull<T>> {
   readonly proxy: T extends Schema<T> ? StorageProxyWithProperties<T> : null;
 
   /** The ComponentInstance's storage */
-  readonly storage: T extends Schema<T> ? SchemaStorage<T> : null;
+  readonly storage: T extends Schema<T> ? PartitionStorage<T> : null;
 
   /** The ComponentInstance's prototype */
   readonly proto: Component<T>;
@@ -37,7 +37,7 @@ export class ComponentInstance<T extends SchemaOrNull<T>> {
     const { id, proxy, storage, type } = spec;
     this.id = id;
     this.proxy = proxy as T extends Schema<T> ? StorageProxyWithProperties<T> : null;
-    this.storage = storage as T extends Schema<T> ? SchemaStorage<T> : null;
+    this.storage = storage as T extends Schema<T> ? PartitionStorage<T> : null;
     this.proto = type;
     Object.freeze(this);
   }

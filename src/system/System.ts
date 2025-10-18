@@ -18,14 +18,16 @@ export function createSystemInstance<T extends SystemCallback>(
   system: System<T>,
 ): SystemInstance<T> {
   // Collect all entries from the iterator into an array first
-  const components = world.components.query(system.query);
+  const components = world.components.query(system.query) as Parameters<T>[0];
 
   if (Object.keys(components).length === 0) {
     throw new NoComponentsFoundError("System query returned no components");
   }
 
-  // Bind the callback with components and a function that returns fresh entities
-  const boundCallback = system.callback.bind(null, components, world.entities.query(system.query));
+  // Bind the callback with components and a getter that returns fresh entities on each call
+  const boundCallback = ((...args: any[]) => {
+    return system.callback(components, world.entities.query(system.query), ...args);
+  }) as SystemInstance<T>;
   return Object.setPrototypeOf(boundCallback, system);
 }
 

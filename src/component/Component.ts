@@ -32,7 +32,7 @@ export function isValidComponentSpec<T extends SchemaOrNull<T>>(spec: unknown): 
   if (!spec || typeof spec !== "object") return false;
   const s = spec as ComponentSpec<T>;
   if (!isValidName(s.name)) return false;
-  if (s.maxEntities && !isPositiveUint32(s.maxEntities)) return false;
+  if (s.maxEntities != null && (!isPositiveUint32(s.maxEntities) || s.maxEntities === 0)) return false;
   if (s.schema && !isSchema(s.schema)) return false;
   return true;
 }

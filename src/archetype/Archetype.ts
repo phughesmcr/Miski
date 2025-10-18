@@ -44,12 +44,15 @@ export class Archetype {
   constructor(
     capacity: number,
     components: ComponentInstance<any>[],
-    bitfield: BooleanArray = BooleanArray.fromObjects(components.length, ID_KEY, components),
+    bitfield?: BooleanArray,
   ) {
+    bitfield = bitfield ??
+      (components.length > 0
+        ? BooleanArray.fromObjects(components.length, ID_KEY, components)
+        : new BooleanArray(capacity));
     this.bitfield = bitfield;
-    this.id = bitfield.toString();
+    this.id = bitfield.buffer.toString();
     this.components = components;
-
     this.#candidateCache = new Map();
     this.#entered = new BooleanArray(capacity);
     this.#entities = new BooleanArray(capacity);
@@ -67,9 +70,9 @@ export class Archetype {
    * @returns The Archetype with the Entity added
    */
   addEntity(entity: Entity): Archetype {
-    if (this.#entities.getBool(entity)) return this;
-    this.#entities.setBool(entity, true);
-    this.#entered.setBool(entity, true);
+    if (this.#entities.get(entity)) return this;
+    this.#entities.set(entity, true);
+    this.#entered.set(entity, true);
     return this;
   }
 
@@ -86,7 +89,7 @@ export class Archetype {
    * @returns The number of entities in the Archetype
    */
   getPopulationCount(): number {
-    return this.#entities.getPopulationCount();
+    return this.#entities.getTruthyCount();
   }
 
   /**
@@ -132,7 +135,7 @@ export class Archetype {
    * @returns `true` if this Archetype is dirty, `false` otherwise
    */
   isDirty(): boolean {
-    return this.#entered.getPopulationCount() > 0 || this.#exited.getPopulationCount() > 0;
+    return this.#entered.getTruthyCount() > 0 || this.#exited.getTruthyCount() > 0;
   }
 
   /**
@@ -140,7 +143,7 @@ export class Archetype {
    * @returns `true` if this Archetype is empty
    */
   isEmpty(): boolean {
-    return this.#entities.getPopulationCount() === 0;
+    return this.#entities.getTruthyCount() === 0;
   }
 
   /**
@@ -159,10 +162,10 @@ export class Archetype {
    * @returns The Archetype with the Entity removed
    */
   removeEntity(entity: Entity): Archetype {
-    if (!this.#entities.getBool(entity)) return this;
-    this.#entered.setBool(entity, false);
-    this.#entities.setBool(entity, false);
-    this.#exited.setBool(entity, true);
+    if (!this.#entities.get(entity)) return this;
+    this.#entered.set(entity, false);
+    this.#entities.set(entity, false);
+    this.#exited.set(entity, true);
     return this;
   }
 

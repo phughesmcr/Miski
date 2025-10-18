@@ -26,7 +26,7 @@ function getComponentsFromQuery(this: QueryManager, query: Query): Record<string
   return this.cache.getComponents(
     queryId,
     () => instance.components,
-    this.lastQueryUpdate.get(queryId) ?? 0,
+    this.lastQueryVersion.get(queryId) ?? 0,
   );
 }
 
@@ -39,6 +39,7 @@ function getComponentsFromQuery(this: QueryManager, query: Query): Record<string
 function getEntitiesFromQuery(this: QueryManager, query: Query): IterableIterator<Entity> {
   const instance = this.register(query);
   const queryId = instance.id;
+
   const result = this.cache.getEntities(
     queryId,
     () => {
@@ -47,16 +48,21 @@ function getEntitiesFromQuery(this: QueryManager, query: Query): IterableIterato
       result.clear();
       for (const archetype of instance.archetypes) {
         for (const entity of archetype.getEntities()) {
-          if (this.visited.getBool(entity)) continue;
-          result.setBool(entity, true);
-          this.visited.setBool(entity, true);
+          if (this.visited.get(entity)) continue;
+          result.set(entity, true);
+          this.visited.set(entity, true);
         }
       }
+      this.visited.clear();
       return result;
     },
-    this.lastQueryUpdate.get(queryId) ?? 0,
+    this.lastQueryVersion.get(queryId) ?? 0,
   );
-  this.visited.clear();
+
+  // If we just recomputed, the old cached array is still in the cache
+  // We only release if cache was invalidated and we're creating a new one
+  // The actual release happens when cache evicts the old entry
+
   return result.truthyIndices();
 }
 
@@ -73,21 +79,21 @@ function createQueryInstance(getInstances: ComponentInstanceGetter, size: number
   const andInstances = getInstances(query.all).filter(Boolean) as ComponentInstance<SchemaOrNull<any>>[];
   const and = new BooleanArray(size);
   for (const instance of andInstances) {
-    and.setBool(instance.id, true);
+    and.set(instance.id, true);
   }
 
   // Create OR bit array - marks optional components (need at least one)
   const orInstances = getInstances(query.any).filter(Boolean) as ComponentInstance<SchemaOrNull<any>>[];
   const or = new BooleanArray(size);
   for (const instance of orInstances) {
-    or.setBool(instance.id, true);
+    or.set(instance.id, true);
   }
 
   // Create NOT bit array - marks forbidden components
   const notInstances = getInstances(query.none).filter(Boolean) as ComponentInstance<SchemaOrNull<any>>[];
   const not = new BooleanArray(size);
   for (const instance of notInstances) {
-    not.setBool(instance.id, true);
+    not.set(instance.id, true);
   }
 
   // Build lookup table for quick component access
@@ -103,11 +109,11 @@ function createQueryInstance(getInstances: ComponentInstanceGetter, size: number
   // Check if a component is a candidate for the query
   const isCandidate = (target: number, idx: number): boolean => {
     // AND
-    if (!((target & and[idx]!) === and[idx])) return false;
+    if (!((target & and.buffer[idx]!) === and.buffer[idx])) return false;
     // OR
-    if (or[idx] !== 0 && (target & or[idx]!) === 0) return false;
+    if (or.buffer[idx] !== 0 && (target & or.buffer[idx]!) === 0) return false;
     // NOT
-    return (target & not[idx]!) === 0;
+    return (target & not.buffer[idx]!) === 0;
   };
 
   // turn the three arrays into a string
@@ -121,8 +127,8 @@ export class QueryManager {
   /** Cache for query results */
   readonly cache: QueryCache;
 
-  /** Map of registered Queries and their last update timestamp for the cache */
-  readonly lastQueryUpdate: Map<string, number>;
+  /** Map of registered Queries and their last update version for the cache */
+  readonly lastQueryVersion: Map<string, number>;
 
   /** Pool for reusing query result objects */
   readonly pool: QueryResultPool;
@@ -141,9 +147,9 @@ export class QueryManager {
    * @param world - The World instance containing the component registry
    */
   constructor(world: World, capacity: number) {
-    this.cache = new QueryCache();
-    this.lastQueryUpdate = new Map();
     this.pool = new QueryResultPool(capacity);
+    this.cache = new QueryCache(this.pool);
+    this.lastQueryVersion = new Map();
     this.instancesByID = new Map();
     this.idsByQuery = new Map();
     this.visited = new BooleanArray(capacity);
@@ -175,7 +181,9 @@ export class QueryManager {
       this.instancesByID.set(queryId, instance);
 
       // Refresh archetypes after query registration to update mappings
-      world.refresh(true);
+      if (world.state === "initialized") {
+        world.refresh(true);
+      }
 
       return instance;
     }.bind(this);
@@ -195,7 +203,7 @@ export class QueryManager {
     if (query) {
       const queryId = this.idsByQuery.get(query);
       if (queryId) {
-        this.lastQueryUpdate.set(queryId, Date.now());
+        this.lastQueryVersion.set(queryId, this.cache.version);
       }
     } else {
       this.cache.invalidate();

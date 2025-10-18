@@ -6,13 +6,13 @@
  */
 
 import { EntityNotFoundError } from "../errors.ts";
-import type { Entity, SchemaOrNull, StorageProxySpec } from "../types.ts";
+import type { Entity, SchemaOrNull, StorageProxySpec, TypedArray } from "../types.ts";
 import { hasOwnProperty } from "../utils.ts";
 
 /** A StorageProxy is a wrapper around a component's storage */
 export class StorageProxy<T extends SchemaOrNull<T>> {
   /** The current entity ID the proxy is pointed at */
-  #cursor: Entity = 0 as Entity;
+  #entity: Entity = 0 as Entity;
 
   /** The capacity of the StorageProxy */
   #capacity: number;
@@ -27,15 +27,15 @@ export class StorageProxy<T extends SchemaOrNull<T>> {
     this.#capacity = capacity;
 
     // Create a getter and setter for each storage property
-    for (const key in storage.partitions) {
-      if (!hasOwnProperty(storage, key)) continue;
+    for (const key in storage?.partitions) {
+      if (!hasOwnProperty(storage?.partitions, key)) continue;
       Object.defineProperty(this, key, {
-        get: () => storage.partitions[key as keyof T][this.#cursor],
+        get: () => storage?.partitions[key as keyof T][this.#entity],
         set: (value: number) => {
-          const store = storage.partitions[key as keyof T];
-          if (store[this.#cursor] !== value) {
-            store[this.#cursor] = value;
-            changed.setBool(this.#cursor, true);
+          const store = storage.partitions[key as keyof T] as TypedArray;
+          if (store[this.#entity] !== value) {
+            store[this.#entity] = value;
+            changed.set(this.#entity, true);
           }
         },
         enumerable: true,
@@ -45,15 +45,15 @@ export class StorageProxy<T extends SchemaOrNull<T>> {
   }
 
   /** The current entity ID the proxy is pointed at */
-  get cursor(): Entity {
-    return this.#cursor;
+  get entity(): Entity {
+    return this.#entity;
   }
 
   /** Set the current entity ID the proxy is pointed at */
-  set cursor(value: Entity) {
+  set entity(value: Entity) {
     if (value < 0 || value >= this.#capacity) {
       throw new EntityNotFoundError(`Entity ${value} not found`);
     }
-    this.#cursor = value;
+    this.#entity = value;
   }
 }

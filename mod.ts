@@ -83,29 +83,24 @@
  * ```ts
  * // Ideally this is done through a System.
  *
- * // First way: type-safe and shows the entity in `world.components.get("position").changed`
- * world.components.set<Vec2>(entity1, positionComponent, { x: 10, y: 20 });
+ * // First way: type-safe and shows the entity in changed tracking
+ * world.components.setEntityData<Vec2>(positionComponent, entity1, { x: 10, y: 20 });
  *
- * // Second way: type-unsafe and does not show the entity in `world.components.get("position").changed`
- * const positionComponentInstance: ComponentInstance<Vec2> = world.components.get("position");
- * positionComponentInstance.data[entity1].x = 10;
- * positionComponentInstance.data[entity1].y = 20;
+ * // Second way: type-unsafe and does not show the entity in changed tracking
+ * const positionComponentInstance: ComponentInstance<Vec2> = world.components.getInstance("position");
+ * positionComponentInstance.storage.partitions.x[entity1] = 10;
+ * positionComponentInstance.storage.partitions.y[entity1] = 20;
  *
- * // Third way: Through the component proxy type-safe and shows the entity in `world.components.get("position").changed`
- * const positionComponentInstance: ComponentInstance<Vec2> = world.components.get("position");
- * positionComponentInstance.cursor = entity1;
- * positionComponentInstance.x = 10;
- * positionComponentInstance.y = 20;
- * ```
- *
- * @example Get an Entity's components
- * ```ts
- * const components: Set<ComponentInstance<any>> = world.components.fromEntities(entity1);
+ * // Third way: Through the component proxy - type-safe and shows the entity in changed tracking
+ * const positionComponentInstance: ComponentInstance<Vec2> = world.components.getInstance("position");
+ * positionComponentInstance.proxy.entity = entity1;
+ * positionComponentInstance.proxy.x = 10;
+ * positionComponentInstance.proxy.y = 20;
  * ```
  *
  * @example Get all the Entities whose properties changed since the last `world.refresh()`
  * ```ts
- * const changedPosition: IterableIterator<Entity> = world.components.get("position").changed;
+ * const changedPosition: IterableIterator<Entity> = world.components.getChanged(positionComponent);
  * ```
  *
  * @example Query entities by component
@@ -145,8 +140,8 @@
  *     console.log("positionSystem destroyed");
  *   },
  *   // required
- *   // The callback to run when the SystemInstance is created (below)
- *   callback: (entities: IterableIterator<Entity>, components: Readonly<Record<string, ComponentInstance<any>>>, ...args: any[]): void => {
+ *   // The callback to run when the SystemInstance is called
+ *   callback: (components: Readonly<Record<string, ComponentInstance<any>>>, entities: IterableIterator<Entity>, ...args: any[]): void => {
  *     console.log(args[0], args[1]); // should log the frametime and "Hello, World!" (see below)
  *     for (const entity of entities) {
  *       console.log(entity);
@@ -163,19 +158,14 @@
  *
  * requestAnimationFrame(update);
  * ```
- *
- * @example Serialize to and from JSON
- * ```ts
- * const json: string = world.stringify();
- * const world2: World = World.fromJSON(json);
- * ```
  */
 
-export { Component, isValidComponentSpec } from "./src/component/Component.ts";
-export { EntityNotFoundError, isMiskiError, MiskiError, SpecError, WorldStateError } from "./src/errors.ts";
-export { isValidQuerySpec, Query } from "./src/query/Query.ts";
-export { isValidSystemSpec, System } from "./src/system/System.ts";
-export { isValidWorldSpec, World } from "./src/world/World.ts";
-export { isValidName } from "./src/utils.ts";
-export type { ComponentInstance } from "./src/component/ComponentInstance.ts";
-export type { ComponentRecord, ComponentSpec, Entity, QuerySpec, Schema, SystemSpec, WorldState } from "./src/types.ts";
+export { Component, isValidComponentSpec } from "@/component/Component.ts";
+export { EntityNotFoundError, isMiskiError, MiskiError, SpecError, WorldStateError } from "@/errors.ts";
+export { isValidQuerySpec, Query } from "@/query/Query.ts";
+export { isValidSystemSpec, System } from "@/system/System.ts";
+export { World } from "@/world/World.ts";
+export { isValidWorldSpec } from "@/world/utils.ts";
+export { isValidName } from "@/utils.ts";
+export type { ComponentInstance } from "@/component/ComponentInstance.ts";
+export type { ComponentRecord, ComponentSpec, Entity, QuerySpec, Schema, SystemSpec, WorldState } from "@/types.ts";
