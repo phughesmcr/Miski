@@ -52,7 +52,7 @@
   "tasks": {
     "bundle": {
       "description": "Bundle the codebase using Bun",
-      "command": "bun build ./mod.ts --outdir ./build --sourcemap=linked --minify"
+      "command": "bun build ./mod.ts --outdir ./dist --sourcemap=linked --minify"
     },
     "demo": {
       "description": "Run the demo",
