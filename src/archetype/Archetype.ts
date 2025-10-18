@@ -25,6 +25,9 @@ export class Archetype {
   /** Entities which have exited this archetype since last refresh */
   #exited: BooleanArray;
 
+  /** The world's entity capacity (used for entity tracking arrays) */
+  #entityCapacity: number;
+
   /** The Archetype's Component Bitfield */
   readonly bitfield: BooleanArray;
 
@@ -36,7 +39,7 @@ export class Archetype {
 
   /**
    * Creates a new Archetype
-   * @param capacity - The maximum number of components this Archetype can represent
+   * @param capacity - The maximum number of entities in the world (world capacity)
    * @param components - The components associated with this Archetype
    * @param bitfield - Optional BooleanArray to use as the Archetype's Component Bitfield
    * @returns a new Archetype object
@@ -46,6 +49,7 @@ export class Archetype {
     components: ComponentInstance<any>[],
     bitfield?: BooleanArray,
   ) {
+    this.#entityCapacity = capacity;
     bitfield = bitfield ??
       (components.length > 0
         ? BooleanArray.fromObjects(components.length, ID_KEY, components)
@@ -62,6 +66,11 @@ export class Archetype {
   /** The maximum id number of the components this Archetype can represent */
   get capacity(): number {
     return this.bitfield.size;
+  }
+
+  /** The world's entity capacity */
+  get entityCapacity(): number {
+    return this.#entityCapacity;
   }
 
   /**
@@ -81,7 +90,7 @@ export class Archetype {
    * @returns A new Archetype
    */
   clone(): Archetype {
-    return new Archetype(this.capacity, this.components, this.bitfield.clone());
+    return new Archetype(this.#entityCapacity, this.components, this.bitfield.clone());
   }
 
   /**

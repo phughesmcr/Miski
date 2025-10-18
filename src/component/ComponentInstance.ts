@@ -26,7 +26,7 @@ export class ComponentInstance<T extends SchemaOrNull<T>> {
   readonly storage: T extends Schema<T> ? PartitionStorage<T> : null;
 
   /** The ComponentInstance's prototype */
-  readonly proto: Component<T>;
+  readonly type: Component<T>;
 
   /**
    * Create a new ComponentInstance
@@ -38,13 +38,13 @@ export class ComponentInstance<T extends SchemaOrNull<T>> {
     this.id = id;
     this.proxy = proxy as T extends Schema<T> ? StorageProxyWithProperties<T> : null;
     this.storage = storage as T extends Schema<T> ? PartitionStorage<T> : null;
-    this.proto = type;
+    this.type = type;
     Object.freeze(this);
   }
 
   /** The ComponentInstance's name */
   get name(): string {
-    return this.proto.name;
+    return this.type.name;
   }
 
   get [Symbol.toStringTag](): string {

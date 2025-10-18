@@ -189,19 +189,16 @@ const player = new Component<null>({
 We can add and remove components from entities like so:
 
 ```typescript
-// Create the adder factory:
-const addPositionToEntity = world.addComponentsToEntity(positionComponent); // you can provide multiple components here.
-
 // Add the component to an entity:
-addPositionToEntity(entity);
+world.components.addToEntity(positionComponent, entity);
+
+// Add with initial data:
+world.components.addToEntity(positionComponent, entity, { x: 10, y: 20 });
 ```
 
 ```typescript
-// Create the remover factory:
-const removePositionFromEntity = world.removeComponentFromEntity(positionComponent) // you can provide multiple components here.
-
 // Remove the component from an entity:
-removePositionFromEntity(entity);
+world.components.removeFromEntity(positionComponent, entity);
 ```
 
 #### Test for Component presence
@@ -209,11 +206,8 @@ removePositionFromEntity(entity);
 We can also test if entities have components:
 
 ```typescript
-// Has a single component?
-const hasPosition: boolean = world.hasComponent(positionComponent)(entity);
-
-// Has multiple components?
-const hasXYZ: boolean[] = world.hasComponents(positionComponent, ...)(entity);
+// Check if an entity has a component
+const hasPosition: boolean = world.components.entityHas(positionComponent, entity);
 ```
 
 #### Modifying an Entity's Component properties
@@ -222,10 +216,10 @@ To access the component's data from a specific world, we have to get the Compone
 
 ```typescript
 // returns ComponentInstance<T> or undefined
-const positionInstance = world.getComponentInstance(positionComponent);
+const positionInstance = world.components.getInstance(positionComponent);
 
-// For multiple components: (ComponentInstance<unknown> | undefined)[]
-const instances = world.getComponentInstances(positionComponent, ...);
+// For multiple components:
+const instances = world.components.getInstances([positionComponent, ...]);
 ```
 
 <span style="background-color: #1000aa; color: #ffffff; padding: 4px; border-radius: 4px;">
@@ -238,34 +232,40 @@ Once we have the component instance we can modify entity properties.
 
 There are two ways to do this:
 
-The first is quick but unsafe:
+The first is quick but unsafe (no change tracking):
 
 ```typescript
-positionInstance.x[entity] = 1;
+positionInstance.storage.partitions.x[entity] = 1;
 ```
 
-The second is slower but safer:
+The second is slower but safer (with change tracking and type guards):
 
 ```typescript
 positionInstance.proxy.entity = entity;
 positionInstance.proxy.x = 1;
 ```
 
-The second way, using `.proxy` has the advantage of also adding the entity to the `.changed` array as well as performing some basic typeguarding.
+The second way, using `.proxy` has the advantage of also adding the entity to the changed tracking as well as performing some basic typeguarding.
 
 For example:
 
 ```typescript
-positionInstance.x[101] = 1;
+// Direct storage access - no change tracking
+positionInstance.storage.partitions.x[101] = 1;
 
+// Proxy access - with change tracking
 positionInstance.proxy.entity = 444;
 positionInstance.proxy.x = 1;
 
-[...positionInstance.changed] = [444] // does not include entity 101
+// Only entity 444 appears in changed tracking
+const changed = world.components.getChanged(positionComponent);
+for (const entity of changed) {
+  console.log(entity); // 444 only, not 101
+}
 ```
 
 <span style="background-color: #1000aa; color: #ffffff; padding: 4px; border-radius: 4px;">
-ℹ️  The `changed` array is reset with every `world.refresh()`.
+ℹ️  The `changed` tracking is reset with every `world.refresh()`.
 </span>
 
 &nbsp;
@@ -273,7 +273,7 @@ positionInstance.proxy.x = 1;
 You can also access the changed entities of a component like so:
 
 ```typescript
-const changed = world.getChangedFromComponents(positionComponent);
+const changed = world.components.getChanged(positionComponent);
 ```
 
 ### Entities
@@ -282,19 +282,17 @@ Entities are just integers. They are essentially indexes or pointers into variou
 
 ```typescript
 // Create (will return undefined if no entities are available)
-const entity = world.createEntity();
+const entity = world.entities.create();
 // Destroy
-world.destroyEntity(entity);
+world.entities.destroy(entity);
 // Test if entity is active in the world
-world.isEntityActive(entity);
+world.entities.isActive(entity);
 // Test if an entity is valid in the world
-world.isValidEntity(4235); // will return false if the world capacity is 1000 as above
+world.entities.isEntity(4235); // will return false if the world capacity is 1000 as above
 // Get the number of active entities in a world
-const active = world.residents;
+const active = world.entities.getActiveCount();
 // Get the number of remaining available entities in a world
-const available = world.available;
-// Get all the component properties for an entity in a world
-const props = world.getEntityProperties(entity);
+const available = world.entities.getAvailableCount();
 ```
 
 ### Queries
@@ -312,20 +310,17 @@ const positionQuery = new Query({
 We can then access the entities and components which match our query:
 
 ```typescript
-const components = world.getQueryComponents(positionQuery);
-const entities = world.getQueryEntities(positionQuery);
+const components = world.components.query(positionQuery);
+const entities = world.entities.query(positionQuery);
 ```
 
 We can also access entities which have entered or exited the query since the last `world.refresh()`:
 
 ```typescript
-const entered = world.getQueryEntered(positionQuery);
-const exited = world.getQueryExited(positionQuery);
+const entered = world.archetypes.queryEntered(positionQuery);
+const exited = world.archetypes.queryExited(positionQuery);
 ```
 
-<span style="background-color: #1000aa; color: #ffffff; padding: 4px; border-radius: 4px;">
-ℹ️ `getQueryEntities`, `getQueryEntered`, and `getQueryExited` optionally take an array as a second argument to avoid creating a new underlying array each time, reducing GC cost.
-</span>
 
 ### Systems
 
@@ -334,11 +329,12 @@ Systems are functions which use queries to modify entity properties.
 It is recommended (but not necessary) that all data mutation take place inside a system.
 
 ```typescript
-const positionSystemPrefab = new System({
+const positionSystem = new System({
+  name: "positionSystem",
   query: positionQuery,
-  system: (components, entities) => {
+  callback: (components, entities) => {
     const { position } = components;
-    const { x, y } = position;
+    const { x, y } = position.storage.partitions;
     for (const entity of entities) {
       x[entity] += 1;
       y[entity] += 1;
@@ -347,28 +343,18 @@ const positionSystemPrefab = new System({
 });
 ```
 
-Once created a system can be initialized into worlds which helps with caching etc.:
+Once created a system can be registered with the world:
 
 ```typescript
-const positionSystem = positionSystemPrefab.init(world);
+const systemInstance = world.systems.create(positionSystem);
 ```
 
-Once initialized, systems are then used just like normal functions:
+Once registered, systems are then called like normal functions:
 
 ```typescript
-positionSystem();
+systemInstance();
 ```
 
-## Benchmarks
-
-`deno bench` will run a benchmark suite.
-
-* Runtime: Deno 2.1.4 (x86_64-pc-windows-msvc)
-* CPU: AMD Ryzen 9 9900X
-
-```text
-Coming soon.
-```
 
 ## Contributing
 

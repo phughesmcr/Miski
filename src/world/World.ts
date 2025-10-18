@@ -42,9 +42,6 @@ export class World {
   static #constructAPIs(world: World): WorldAPIResult {
     // ARCHETYPES API
 
-    /** Cache of components for each query */
-    const queryArchetypeComponentsCache = new Map<Query, Record<string, ComponentInstance<any>>>();
-
     /** Cache of entities visited by queryArchetypeEntities */
     const visitedArchetypeEntities = new BooleanArray(world.#entityManager.capacity);
 
@@ -54,18 +51,8 @@ export class World {
      * @returns The components for the query
      */
     const queryArchetypeComponents = (query: Query): Record<string, ComponentInstance<any>> => {
-      if (queryArchetypeComponentsCache.has(query)) return queryArchetypeComponentsCache.get(query)!;
-      const queryInstance = world.#queryManager.register(query);
-      const archetypes = world.#archetypeManager.query(queryInstance);
-      const components: Record<string, ComponentInstance<any>> = {};
-      if (archetypes === undefined) return components;
-      for (const archetype of archetypes) {
-        for (const component of archetype.components) {
-          components[component.name] = component;
-        }
-      }
-      queryArchetypeComponentsCache.set(query, components);
-      return components;
+      // Delegate to QueryManager which handles caching properly
+      return world.#queryManager.components(query);
     };
 
     /**
@@ -76,8 +63,6 @@ export class World {
     const queryArchetypeEntities = (function* (query: Query): IterableIterator<Entity> {
       visitedArchetypeEntities.clear();
       const queryInstance = world.#queryManager.register(query);
-      // Refresh archetypes after query registration to update mappings
-      world.#archetypeManager.refresh(world.#queryManager.instancesByID.values());
       const archetypes = world.#archetypeManager.query(queryInstance);
       if (archetypes === undefined) {
         return;
@@ -100,7 +85,7 @@ export class World {
      */
     const getComponentByName = <T extends SchemaOrNull<T>>(component: string | Component<T>): Component<T> => {
       if (typeof component === "string") {
-        component = world.#componentManager.getInstance(component)?.proto as Component<T>;
+        component = world.#componentManager.getInstance(component)?.type as Component<T>;
         if (component === undefined) {
           throw new NotRegisteredError(`Component ${component} not registered in world`);
         }
@@ -205,7 +190,7 @@ export class World {
       count: world.#componentManager.count,
       registry: world.#componentManager.registry,
       addToEntity: addComponentToEntity,
-      entityOwns: world.#componentManager.entityOwns,
+      entityHas: world.#componentManager.entityHas,
       getChanged: world.#componentManager.getChanged,
       getEntityData: world.#componentManager.getEntityData,
       getInstance: world.#componentManager.getInstance,
@@ -227,7 +212,7 @@ export class World {
       if (archetype) {
         // Remove all components from the entity
         for (const componentInstance of archetype.components) {
-          world.#componentManager.removeFromEntity(componentInstance.proto, entity);
+          world.#componentManager.removeFromEntity(componentInstance.type, entity);
         }
       }
       // Reset the entity to the root archetype

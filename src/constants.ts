@@ -5,7 +5,7 @@
  * @license     MIT
  */
 
-import { randomHexString } from "./utils.ts";
+import { randomString } from "./utils.ts";
 
 /**
  * @public
@@ -35,31 +35,31 @@ export const ID_KEY = "id" as const;
  * @internal
  * The key used to store the Entity's archetype
  */
-export const $_ARCHETYPE_KEY: unique symbol = Symbol(`$_ARCHETYPE_KEY_${randomHexString()}`);
+export const $_ARCHETYPE_KEY: unique symbol = Symbol(`$_ARCHETYPE_KEY_${randomString()}`);
 
 /**
  * @internal
  * The symbol used to store the component's partition
  */
-export const $_PARTITION_KEY: unique symbol = Symbol(`$_PARTITION_KEY_${randomHexString()}`);
+export const $_PARTITION_KEY: unique symbol = Symbol(`$_PARTITION_KEY_${randomString()}`);
 
 /**
  * @internal
  * The symbol used to store the query's instances
  */
-export const $_QUERY_KEY: unique symbol = Symbol(`$_QUERY_KEY_${randomHexString()}`);
+export const $_QUERY_KEY: unique symbol = Symbol(`$_QUERY_KEY_${randomString()}`);
 
 /**
  * @internal
  * The symbol used to store the system's init function
  */
-export const $_SYSTEM_INIT_KEY: unique symbol = Symbol(`$_SYSTEM_INIT_KEY_${randomHexString()}`);
+export const $_SYSTEM_INIT_KEY: unique symbol = Symbol(`$_SYSTEM_INIT_KEY_${randomString()}`);
 
 /**
  * @internal
  * The symbol used to store the system's destroy function
  */
-export const $_SYSTEM_DESTROY_KEY: unique symbol = Symbol(`$_SYSTEM_DESTROY_KEY_${randomHexString()}`);
+export const $_SYSTEM_DESTROY_KEY: unique symbol = Symbol(`$_SYSTEM_DESTROY_KEY_${randomString()}`);
 
 /**
  * @internal

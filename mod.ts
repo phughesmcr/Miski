@@ -46,21 +46,26 @@
  *
  * @example Create a new Entity
  * ```ts
- * const entity1: Entity = world.entities.create(); // 0
- * const entity2: Entity = world.entities.create(); // 1
- * const entity3: Entity = world.entities.create(); // 2
- * const entities4to10: Entity[] = world.entities.create(7); // [3, 4, 5, 6, 7, 8, 9]
+ * const entity1: Entity | undefined = world.entities.create(); // 0
+ * const entity2: Entity | undefined = world.entities.create(); // 1
+ * const entity3: Entity | undefined = world.entities.create(); // 2
+ * // To create multiple entities, call create() in a loop
+ * const entities: Entity[] = [];
+ * for (let i = 0; i < 7; i++) {
+ *   const entity = world.entities.create();
+ *   if (entity !== undefined) entities.push(entity);
+ * }
  * ```
  *
  * @example Destroy an Entity
  * ```ts
- * const wasDestroyed: boolean = world.entities.destroy(entity2); // true
+ * world.entities.destroy(entity2);
  * ```
  *
- * @example Check if an Entity exists
+ * @example Check if an Entity is active
  * ```ts
- * const exists: boolean = world.entities.exists(entity1); // true
- * const exists2: boolean = world.entities.exists(entity2); // false
+ * const isActive: boolean = world.entities.isActive(entity1); // true
+ * const isActive2: boolean = world.entities.isActive(entity2); // false (destroyed)
  * ```
  *
  * @example
@@ -68,15 +73,15 @@
  * @example Add a component to an Entity
  * ```ts
  * // Without setting initial values:
- * world.entities.addComponent(entity1, positionComponent);
+ * world.components.addToEntity(positionComponent, entity1);
  *
  * // With setting initial values:
- * world.entities.addComponent(entity2, positionComponent, { x: 10, y: 20 });
+ * world.components.addToEntity(positionComponent, entity2, { x: 10, y: 20 });
  * ```
  *
  * @example Remove a component from an Entity
  * ```ts
- * world.entities.removeComponent(entity2, positionComponent);
+ * world.components.removeFromEntity(positionComponent, entity2);
  * ```
  *
  * @example Set an Entity's component values
@@ -100,7 +105,12 @@
  *
  * @example Get all the Entities whose properties changed since the last `world.refresh()`
  * ```ts
- * const changedPosition: IterableIterator<Entity> = world.components.getChanged(positionComponent);
+ * const changedPosition: IterableIterator<Entity> | undefined = world.components.getChanged(positionComponent);
+ * if (changedPosition) {
+ *   for (const entity of changedPosition) {
+ *     console.log(entity);
+ *   }
+ * }
  * ```
  *
  * @example Query entities by component
@@ -108,7 +118,7 @@
  * const positionQuery = new Query({ all: [positionComponent] });
  * const positionView: IterableIterator<Entity> = world.entities.query(positionQuery);
  * for (const entity of positionView) {
- *   console.log(entity); // Should log only "0", because entity1 is the first entity created.
+ *   console.log(entity);
  * }
  * ```
  *
@@ -126,16 +136,16 @@
  *
  * @example Register a System
  * ```ts
- * const system = new System({
+ * const positionSystem = new System({
  *   name: "positionSystem",
  *   query: positionQuery,
  *   // optional
- *   init: () => {
+ *   init: (world: World) => {
  *     // called once on world.init()
  *     console.log("positionSystem initialized");
  *   },
  *   // optional
- *   destroy: () => {
+ *   destroy: (world: World) => {
  *     // called once on world.destroy()
  *     console.log("positionSystem destroyed");
  *   },
@@ -149,7 +159,7 @@
  *   },
  * });
  *
- * const systemInstance: Function = world.systems.create(system);
+ * const systemInstance = world.systems.create(positionSystem);
  *
  * const update = (frametime: number) => {
  *   systemInstance(frametime, "Hello, World!"); // the System's callback is called here

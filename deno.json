@@ -46,6 +46,7 @@
     "exclude": ["example/**/*.ts"],
     "rules": {
       "exclude": ["no-explicit-any"],
+      "include": ["use-isnan"],
       "tags": ["recommended", "jsr"]
     }
   },

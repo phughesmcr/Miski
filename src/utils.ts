@@ -9,8 +9,8 @@ import { isValidName as isValidNamePartitionedBuffer } from "@phughesmcr/partiti
 
 import { INVALID_NAMES, MAX_UINT32, MIN_UINT32 } from "./constants.ts";
 
-/** @returns a random hex string */
-export function randomHexString(): string {
+/** @returns a random string (base-36) */
+export function randomString(): string {
   return Math.random().toString(36).substring(2, 15);
 }
 

@@ -303,7 +303,7 @@ export type WorldComponentAPI = {
    * @param entity - The entity to check
    * @returns `true` if the entity has the component, `false` otherwise
    */
-  entityOwns<T extends SchemaOrNull<T>>(component: Component<T> | string, entity: Entity): boolean;
+  entityHas<T extends SchemaOrNull<T>>(component: Component<T> | string, entity: Entity): boolean;
   /**
    * Get an iterable of all entities with one or more changed properties for a given component
    * @param component - The component to get changed entities for

@@ -92,18 +92,18 @@ export class ComponentManager {
         `Component ${typeof component === "string" ? `"${component}"` : component.name} not registered.`,
       );
     }
-    const { proto } = instance;
+    const { type } = instance;
 
     // Set ownership
-    const ownerState = this.#owners.get(proto)?.set(entity, true);
+    const ownerState = this.#owners.get(type)?.set(entity, true);
     if (ownerState === undefined) {
-      throw new Error(`Failed to set ownership for component ${proto.name} on entity ${entity}.`);
+      throw new Error(`Failed to set ownership for component ${type.name} on entity ${entity}.`);
     }
 
     // Set changed
-    const changedState = this.#changed.get(proto)?.set(entity, true);
+    const changedState = this.#changed.get(type)?.set(entity, true);
     if (changedState === undefined) {
-      throw new Error(`Failed to set changed state for component ${proto.name} on entity ${entity}.`);
+      throw new Error(`Failed to set changed state for component ${type.name} on entity ${entity}.`);
     }
 
     // Set data if provided
@@ -126,10 +126,10 @@ export class ComponentManager {
    * @param entity - The entity to check for the component on
    * @returns `true` if the entity has the component, `false` otherwise
    */
-  entityOwns = <T extends SchemaOrNull<T>>(component: Component<T> | string, entity: Entity): boolean => {
+  entityHas = <T extends SchemaOrNull<T>>(component: Component<T> | string, entity: Entity): boolean => {
     let proto;
     if (typeof component === "string") {
-      proto = this.getInstance(component)?.proto;
+      proto = this.getInstance(component)?.type;
     } else {
       proto = component;
     }
@@ -165,7 +165,7 @@ export class ComponentManager {
   getChanged = <T extends SchemaOrNull<T>>(component: Component<T> | string): IterableIterator<Entity> | undefined => {
     const instance = this.getInstance(component);
     if (!instance) return;
-    return this.#changed.get(instance.proto)?.truthyIndices() as IterableIterator<Entity> | undefined;
+    return this.#changed.get(instance.type)?.truthyIndices() as IterableIterator<Entity> | undefined;
   };
 
   /**
@@ -176,7 +176,7 @@ export class ComponentManager {
   getOwners = <T extends SchemaOrNull<T>>(component: Component<T> | string): IterableIterator<Entity> | undefined => {
     const instance = this.getInstance(component);
     if (!instance) return;
-    return this.#owners.get(instance.proto)?.truthyIndices() as IterableIterator<Entity> | undefined;
+    return this.#owners.get(instance.type)?.truthyIndices() as IterableIterator<Entity> | undefined;
   };
 
   /**
@@ -279,9 +279,9 @@ export class ComponentManager {
   ): ComponentInstance<any>[] => {
     const instance = this.getInstance(component);
     if (!instance) return this.#getEntityComponentsDirect(entity);
-    const { proto } = instance;
-    this.#owners.get(proto)?.set(entity, false);
-    this.#changed.get(proto)?.set(entity, false);
+    const { type } = instance;
+    this.#owners.get(type)?.set(entity, false);
+    this.#changed.get(type)?.set(entity, false);
     return this.#getEntityComponentsDirect(entity);
   };
 

@@ -23,11 +23,14 @@ import type { World } from "../world/World.ts";
 function getComponentsFromQuery(this: QueryManager, query: Query): Record<string, ComponentInstance<SchemaOrNull>> {
   const instance = this.register(query);
   const queryId = instance.id;
-  return this.cache.getComponents(
+  const result = this.cache.getComponents(
     queryId,
     () => instance.components,
     this.lastQueryVersion.get(queryId) ?? 0,
   );
+  // Update last seen version after computing
+  this.lastQueryVersion.set(queryId, this.cache.version);
+  return result;
 }
 
 /**
@@ -59,9 +62,8 @@ function getEntitiesFromQuery(this: QueryManager, query: Query): IterableIterato
     this.lastQueryVersion.get(queryId) ?? 0,
   );
 
-  // If we just recomputed, the old cached array is still in the cache
-  // We only release if cache was invalidated and we're creating a new one
-  // The actual release happens when cache evicts the old entry
+  // Update last seen version after computing
+  this.lastQueryVersion.set(queryId, this.cache.version);
 
   return result.truthyIndices();
 }
@@ -208,9 +210,5 @@ export class QueryManager {
     } else {
       this.cache.invalidate();
     }
-  };
-
-  stringify = (): string => {
-    return "";
   };
 }

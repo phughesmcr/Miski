@@ -109,12 +109,4 @@ export class SystemManager {
       await system[$_SYSTEM_INIT_KEY](world);
     }
   };
-
-  /**
-   * Serialize the system manager to a JSON string
-   * @returns The serialized system manager
-   */
-  stringify = (): string => {
-    return "";
-  };
 }
