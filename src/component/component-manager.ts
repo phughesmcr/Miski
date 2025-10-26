@@ -91,6 +91,14 @@ export class ComponentManager {
       );
     }
     const { type } = instance;
+    // Enforce maxEntities if configured
+    const limit = type.maxEntities;
+    if (limit !== null) {
+      const currentOwners = owners.getTruthyCount();
+      if (currentOwners >= limit) {
+        throw new RangeError(`Component ${type.name} exceeded maxEntities (${limit}).`);
+      }
+    }
 
     // Set ownership
     const ownerState = this.#owners.get(type)?.set(entity, true);
