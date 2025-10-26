@@ -91,6 +91,16 @@ export class ComponentManager {
       );
     }
     const { type } = instance;
+
+    // Idempotency: if already owned, no-op (do not mark changed, ignore data)
+    const owners = this.#owners.get(type);
+    if (!owners) {
+      throw new Error(`Failed to read ownership for component ${type.name}.`);
+    }
+    if (owners.get(entity)) {
+      return this.#getEntityComponentsDirect(entity);
+    }
+
     // Enforce maxEntities if configured
     const limit = type.maxEntities;
     if (limit !== null) {
