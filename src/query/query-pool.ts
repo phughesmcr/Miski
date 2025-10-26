@@ -1,4 +1,4 @@
-import { BooleanArray } from "@phughesmcr/booleanarray";
+import { BooleanArray } from "@/shared/deps.ts";
 
 /** Pool for reusing query result objects */
 export class QueryResultPool {

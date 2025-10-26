@@ -5,14 +5,14 @@
  * @license     MIT
  */
 
+import type { Component } from "@/component/component.ts";
 import type {
   ComponentInstanceSpec,
   PartitionStorage,
   Schema,
   SchemaOrNull,
   StorageProxyWithProperties,
-} from "../types.ts";
-import type { Component } from "./component.ts";
+} from "@/shared/types.ts";
 
 /** A ComponentInstance is the world-local representation of a component */
 export class ComponentInstance<T extends SchemaOrNull<T>> {

@@ -1,7 +1,7 @@
 import { isValidComponentArray } from "@/component/component.ts";
-import { WorldStateError } from "@/errors.ts";
-import type { WorldSpec, WorldState } from "@/types.ts";
-import { isObject, isPositiveUint32 } from "@/utils.ts";
+import { WorldStateError } from "@/shared/errors.ts";
+import type { WorldSpec, WorldState } from "@/shared/types.ts";
+import { isObject, isPositiveUint32 } from "@/shared/utils.ts";
 
 /**
  * Test if an object is a valid WorldSpec

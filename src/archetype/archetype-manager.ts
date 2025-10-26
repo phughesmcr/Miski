@@ -5,12 +5,11 @@
  * @license     MIT
  */
 
-import { BooleanArray } from "@phughesmcr/booleanarray";
-
-import type { ComponentInstance } from "../component/component-instance.ts";
-import { NotRegisteredError } from "../errors.ts";
-import type { Entity, QueryInstance } from "../types.ts";
-import { Archetype } from "./archetype.ts";
+import { Archetype } from "@/archetype/archetype.ts";
+import type { ComponentInstance } from "@/component/component-instance.ts";
+import { BooleanArray } from "@/shared/deps.ts";
+import { NotRegisteredError } from "@/shared/errors.ts";
+import type { Entity, QueryInstance } from "@/shared/types.ts";
 
 /** ArchetypeManager handles creation and allocation of Archetypes */
 export class ArchetypeManager {
@@ -113,7 +112,7 @@ export class ArchetypeManager {
           componentCache[component.name] = component;
         }
       }
-      return componentCache;
+      return { ...componentCache };
     };
   })();
 
@@ -183,6 +182,7 @@ export class ArchetypeManager {
     this.queryArchetypes.clear();
 
     // Convert queries iterator to array to avoid exhaustion
+    // TODO: avoid object creation if possible
     const queryArray = [...queries];
 
     // Initialize query archetype sets
@@ -197,7 +197,8 @@ export class ArchetypeManager {
       for (const query of queryArray) {
         if (archetype.isCandidate(query)) {
           const archetypeSet = this.queryArchetypes.get(query)!;
-          // Only add if it has entities TODO: is this right?
+          // Only add if it has entities
+          // TODO: is this right?
           if (archetype.getPopulationCount() > 0) {
             archetypeSet.add(archetype);
             query.archetypes.add(archetype); // Update the QueryInstance's archetypes set
@@ -225,6 +226,7 @@ export class ArchetypeManager {
    * @param entity The Entity
    * @returns this
    * @throws {NotRegisteredError} If the Archetype is not registered
+   * @throws {RangeError} If the entity is out of range
    */
   set = (archetype: Archetype, entity: Entity): Archetype => {
     if (!this.registry.has(archetype.id)) {

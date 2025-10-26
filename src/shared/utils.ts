@@ -5,9 +5,8 @@
  * @license     MIT
  */
 
-import { isValidName as isValidNamePartitionedBuffer } from "@phughesmcr/partitionedbuffer";
-
-import { INVALID_NAMES, MAX_UINT32, MIN_UINT32 } from "./constants.ts";
+import { INVALID_NAMES, MAX_UINT32, MIN_UINT32 } from "@/shared/constants.ts";
+import { isValidName as isValidNamePartitionedBuffer } from "@/shared/deps.ts";
 
 /** @returns a random string (base-36) */
 export function randomString(): string {

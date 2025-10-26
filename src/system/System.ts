@@ -1,10 +1,9 @@
-import { isValidName } from "@phughesmcr/partitionedbuffer";
-
-import { $_SYSTEM_DESTROY_KEY, $_SYSTEM_INIT_KEY } from "@/constants.ts";
-import { isObject, noop } from "@/utils.ts";
 import { Query } from "@/query/query.ts";
-import { NoComponentsFoundError, SpecError } from "@/errors.ts";
-import type { SystemCallback, SystemInstance, SystemPrivateMethods, SystemSpec } from "@/types.ts";
+import { $_SYSTEM_DESTROY_KEY, $_SYSTEM_INIT_KEY } from "@/shared/constants.ts";
+import { isValidName } from "@/shared/deps.ts";
+import { NoComponentsFoundError, SpecError } from "@/shared/errors.ts";
+import type { SystemCallback, SystemInstance, SystemPrivateMethods, SystemSpec } from "@/shared/types.ts";
+import { isObject, noop } from "@/shared/utils.ts";
 import type { World } from "@/world/world.ts";
 
 /**
@@ -48,7 +47,7 @@ export function isValidSystemSpec(spec: unknown): spec is SystemSpec<any> {
   return true;
 }
 
-/** Systems are behaviours which affect components. */
+/** Systems are behaviors which affect components. */
 export class System<T extends SystemCallback> implements SystemPrivateMethods {
   /** The function to call when the system is destroyed. */
   readonly [$_SYSTEM_DESTROY_KEY]: (world: World) => void | Promise<void>;
@@ -68,7 +67,7 @@ export class System<T extends SystemCallback> implements SystemPrivateMethods {
   /**
    * Creates a new system.
    *
-   * Systems are the behaviours which affect components.
+   * Systems are the behaviors which affect components.
    *
    * @param spec the system's specification object
    * @throws {SpecError} If the system specification is invalid

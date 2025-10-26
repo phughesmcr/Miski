@@ -5,7 +5,7 @@
  * @license     MIT
  */
 
-import { randomString } from "./utils.ts";
+import { randomString } from "@/shared/utils.ts";
 
 /**
  * @public

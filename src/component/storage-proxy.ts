@@ -5,9 +5,9 @@
  * @license     MIT
  */
 
-import { EntityNotFoundError } from "../errors.ts";
-import type { Entity, SchemaOrNull, StorageProxySpec, TypedArray } from "../types.ts";
-import { hasOwnProperty } from "../utils.ts";
+import { EntityNotFoundError } from "@/shared/errors.ts";
+import type { Entity, SchemaOrNull, StorageProxySpec, TypedArray } from "@/shared/types.ts";
+import { hasOwnProperty } from "@/shared/utils.ts";
 
 /** A StorageProxy is a wrapper around a component's storage */
 export class StorageProxy<T extends SchemaOrNull<T>> {

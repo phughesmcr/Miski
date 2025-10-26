@@ -18,11 +18,10 @@
  * ```
  */
 
-import { isSchema, isValidName, Partition, type PartitionSpec } from "@phughesmcr/partitionedbuffer";
-
-import { $_PARTITION_KEY } from "../constants.ts";
-import type { ComponentPrivateMethods, ComponentSpec, Schema, SchemaOrNull } from "../types.ts";
-import { isPositiveUint32 } from "../utils.ts";
+import { $_PARTITION_KEY } from "@/shared/constants.ts";
+import { isSchema, isValidName, Partition, type PartitionSpec } from "@/shared/deps.ts";
+import type { ComponentPrivateMethods, ComponentSpec, Schema, SchemaOrNull } from "@/shared/types.ts";
+import { isPositiveUint32 } from "@/shared/utils.ts";
 
 /**
  * Component specification type guard.

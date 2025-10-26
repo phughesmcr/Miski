@@ -5,23 +5,23 @@
  * @license     MIT
  */
 
-import type { BooleanArray } from "@phughesmcr/booleanarray";
 import type {
+  BooleanArray,
   Partition,
   PartitionStorage,
   Schema,
   TypedArray,
   TypedArrayConstructor,
-} from "@phughesmcr/partitionedbuffer";
+} from "@/shared/deps.ts";
 
-import type { Archetype } from "./archetype/archetype.ts";
-import type { ComponentInstance } from "./component/component-instance.ts";
-import type { Component } from "./component/component.ts";
-import type { StorageProxy } from "./component/storage-proxy.ts";
-import type { $_PARTITION_KEY, $_SYSTEM_DESTROY_KEY, $_SYSTEM_INIT_KEY } from "./constants.ts";
-import type { Query } from "./query/query.ts";
-import type { System } from "./system/system.ts";
-import type { World } from "./world/world.ts";
+import type { Archetype } from "@/archetype/archetype.ts";
+import type { ComponentInstance } from "@/component/component-instance.ts";
+import type { Component } from "@/component/component.ts";
+import type { StorageProxy } from "@/component/storage-proxy.ts";
+import type { Query } from "@/query/query.ts";
+import type { $_PARTITION_KEY, $_SYSTEM_DESTROY_KEY, $_SYSTEM_INIT_KEY } from "@/shared/constants.ts";
+import type { System } from "@/system/system.ts";
+import type { World } from "@/world/world.ts";
 
 export type { PartitionStorage, Schema, TypedArray, TypedArrayConstructor };
 

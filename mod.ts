@@ -170,12 +170,29 @@
  * ```
  */
 
-export { Component, isValidComponentSpec } from "@/component/component.ts";
-export { EntityNotFoundError, isMiskiError, MiskiError, SpecError, WorldStateError } from "@/errors.ts";
-export { isValidQuerySpec, Query } from "@/query/query.ts";
-export { isValidSystemSpec, System } from "@/system/system.ts";
-export { World } from "@/world/world.ts";
-export { isValidWorldSpec } from "@/world/utils.ts";
-export { isValidName } from "@/utils.ts";
 export type { ComponentInstance } from "@/component/component-instance.ts";
-export type { ComponentRecord, ComponentSpec, Entity, QuerySpec, Schema, SystemSpec, WorldState } from "@/types.ts";
+export { Component, isComponent, isValidComponentSpec } from "@/component/component.ts";
+export { isValidQuerySpec, Query } from "@/query/query.ts";
+export {
+  ComponentNotFoundError,
+  EntityNotFoundError,
+  isMiskiError,
+  MiskiError,
+  NoComponentsFoundError,
+  NotRegisteredError,
+  SpecError,
+  WorldStateError,
+} from "@/shared/errors.ts";
+export type {
+  ComponentRecord,
+  ComponentSpec,
+  Entity,
+  QuerySpec,
+  Schema,
+  SystemSpec,
+  WorldState,
+} from "@/shared/types.ts";
+export { isValidName } from "@/shared/utils.ts";
+export { isValidSystemSpec, System } from "@/system/system.ts";
+export { assertWorldState, isValidWorldSpec } from "@/world/utils.ts";
+export { World } from "@/world/world.ts";

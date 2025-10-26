@@ -5,12 +5,11 @@
  * @license     MIT
  */
 
-import { BooleanArray } from "@phughesmcr/booleanarray";
-
-import type { ComponentInstance } from "../component/component-instance.ts";
-import { ID_KEY } from "../constants.ts";
-import { isQueryMatch } from "../query/query.ts";
-import type { Entity, QueryInstance } from "../types.ts";
+import type { ComponentInstance } from "@/component/component-instance.ts";
+import { isQueryMatch } from "@/query/query.ts";
+import { ID_KEY } from "@/shared/constants.ts";
+import { BooleanArray } from "@/shared/deps.ts";
+import type { Entity, QueryInstance } from "@/shared/types.ts";
 
 /** An Archetype is a collection of ComponentInstances which define the schema of an Entity. */
 export class Archetype {

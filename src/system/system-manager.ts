@@ -5,11 +5,11 @@
  * @license     MIT
  */
 
-import { $_SYSTEM_DESTROY_KEY, $_SYSTEM_INIT_KEY } from "../constants.ts";
-import { NotRegisteredError } from "../errors.ts";
-import type { SystemCallback, SystemInstance } from "../types.ts";
-import type { World } from "../world/world.ts";
-import { createSystemInstance, type System } from "./system.ts";
+import { $_SYSTEM_DESTROY_KEY, $_SYSTEM_INIT_KEY } from "@/shared/constants.ts";
+import { NotRegisteredError } from "@/shared/errors.ts";
+import type { SystemCallback, SystemInstance } from "@/shared/types.ts";
+import { createSystemInstance, type System } from "@/system/system.ts";
+import type { World } from "@/world/world.ts";
 
 /** The SystemManager is responsible for creating, registering, initializing, and destroying systems. */
 export class SystemManager {

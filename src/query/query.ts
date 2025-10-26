@@ -5,12 +5,11 @@
  * @license     MIT
  */
 
-import type { BooleanArray } from "@phughesmcr/booleanarray";
-
-import { type Component, isValidComponentArray } from "../component/component.ts";
-import { SpecError } from "../errors.ts";
-import type { QueryInstance, QuerySpec, SchemaOrNull } from "../types.ts";
-import { isObject } from "../utils.ts";
+import { type Component, isValidComponentArray } from "@/component/component.ts";
+import type { BooleanArray } from "@/shared/deps.ts";
+import { SpecError } from "@/shared/errors.ts";
+import type { QueryInstance, QuerySpec, SchemaOrNull } from "@/shared/types.ts";
+import { isObject } from "@/shared/utils.ts";
 
 /**
  * Type guard for QuerySpec

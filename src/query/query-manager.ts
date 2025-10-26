@@ -5,15 +5,14 @@
  * @license     MIT
  */
 
-import { BooleanArray } from "@phughesmcr/booleanarray";
-
-import type { Archetype } from "../archetype/archetype.ts";
-import type { ComponentInstance } from "../component/component-instance.ts";
-import type { ComponentInstanceGetter, Entity, QueryInstance, SchemaOrNull } from "../types.ts";
-import type { World } from "../world/world.ts";
-import { QueryCache } from "./query-cache.ts";
-import { QueryResultPool } from "./query-pool.ts";
-import type { Query } from "./query.ts";
+import type { Archetype } from "@/archetype/archetype.ts";
+import type { ComponentInstance } from "@/component/component-instance.ts";
+import { QueryCache } from "@/query/query-cache.ts";
+import { QueryResultPool } from "@/query/query-pool.ts";
+import type { Query } from "@/query/query.ts";
+import { BooleanArray } from "@/shared/deps.ts";
+import type { ComponentInstanceGetter, Entity, QueryInstance, SchemaOrNull } from "@/shared/types.ts";
+import type { World } from "@/world/world.ts";
 
 /**
  * @internal

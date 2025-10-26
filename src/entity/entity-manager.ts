@@ -5,11 +5,10 @@
  * @license     MIT
  */
 
-import { BitPool } from "@phughesmcr/bitpool";
-
-import { EntityNotFoundError } from "../errors.ts";
-import type { Entity, EntityManagerSerialized } from "../types.ts";
-import { isPositiveUint32, isUint32, numberArrayFromString } from "../utils.ts";
+import { BitPool } from "@/shared/deps.ts";
+import { EntityNotFoundError } from "@/shared/errors.ts";
+import type { Entity, EntityManagerSerialized } from "@/shared/types.ts";
+import { isPositiveUint32, isUint32, numberArrayFromString } from "@/shared/utils.ts";
 
 /** An EntityManager is responsible for creating and destroying entities */
 export class EntityManager {

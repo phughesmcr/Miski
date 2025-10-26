@@ -1,8 +1,7 @@
-import type { BooleanArray } from "@phughesmcr/booleanarray";
-
-import type { ComponentInstance } from "../component/component-instance.ts";
-import type { SchemaOrNull } from "../types.ts";
-import type { QueryResultPool } from "./query-pool.ts";
+import type { ComponentInstance } from "@/component/component-instance.ts";
+import type { QueryResultPool } from "@/query/query-pool.ts";
+import type { BooleanArray } from "@/shared/deps.ts";
+import type { SchemaOrNull } from "@/shared/types.ts";
 
 /** Cache for query results */
 export class QueryCache {

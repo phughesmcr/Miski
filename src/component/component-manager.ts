@@ -5,17 +5,15 @@
  * @license     MIT
  */
 
-import { BooleanArray } from "@phughesmcr/booleanarray";
-import { PartitionedBuffer } from "@phughesmcr/partitionedbuffer";
-
 import type { ArchetypeManager } from "@/archetype/archetype-manager.ts";
-import { $_PARTITION_KEY } from "@/constants.ts";
-import { NotRegisteredError } from "@/errors.ts";
-import type { Entity, SchemaOrNull, TypedArray } from "@/types.ts";
-import { isObject } from "@/utils.ts";
-import { ComponentInstance } from "./component-instance.ts";
-import type { Component } from "./component.ts";
-import { StorageProxy } from "./storage-proxy.ts";
+import { ComponentInstance } from "@/component/component-instance.ts";
+import type { Component } from "@/component/component.ts";
+import { StorageProxy } from "@/component/storage-proxy.ts";
+import { $_PARTITION_KEY } from "@/shared/constants.ts";
+import { BooleanArray, PartitionedBuffer } from "@/shared/deps.ts";
+import { NotRegisteredError } from "@/shared/errors.ts";
+import type { Entity, SchemaOrNull, TypedArray } from "@/shared/types.ts";
+import { isObject } from "@/shared/utils.ts";
 
 /** A component manager is responsible for managing the components of a world. */
 export class ComponentManager {
