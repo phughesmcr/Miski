@@ -123,7 +123,7 @@ export class ComponentManager {
     }
 
     // Set data if provided
-    if (isObject(data) && instance.storage !== null) {
+    if (data !== undefined && isObject(data) && instance.storage !== null) {
       const storage = instance.storage?.partitions as Record<keyof T, TypedArray>;
       for (const key in data) {
         if (key in storage) {
