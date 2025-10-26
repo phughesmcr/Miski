@@ -52,8 +52,8 @@
   },
   "tasks": {
     "bundle": {
-      "description": "Bundle the codebase using Bun",
-      "command": "bun build ./mod.ts --outdir ./dist --sourcemap=linked --minify"
+      "description": "Bundle the codebase using Deno",
+      "command": "deno bundle ./mod.ts --outdir ./dist --sourcemap=linked --minify --platform browser"
     },
     "demo": {
       "description": "Run the demo",
