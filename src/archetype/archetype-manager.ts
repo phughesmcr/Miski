@@ -197,9 +197,8 @@ export class ArchetypeManager {
       for (const query of queryArray) {
         if (archetype.isCandidate(query)) {
           const archetypeSet = this.queryArchetypes.get(query)!;
-          // Only add if it has entities
-          // TODO: is this right?
-          if (archetype.getPopulationCount() > 0) {
+          // Include archetypes that have entities or are dirty (to surface entered/exited)
+          if (archetype.getPopulationCount() > 0 || archetype.isDirty()) {
             archetypeSet.add(archetype);
             query.archetypes.add(archetype); // Update the QueryInstance's archetypes set
           }
@@ -224,7 +223,7 @@ export class ArchetypeManager {
    * Set the Archetype associated with an Entity
    * @param archetype The Archetype
    * @param entity The Entity
-   * @returns this
+   * @returns The Archetype associated with the Entity
    * @throws {NotRegisteredError} If the Archetype is not registered
    * @throws {RangeError} If the entity is out of range
    */
