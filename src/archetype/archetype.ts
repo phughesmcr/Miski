@@ -59,9 +59,7 @@ export class Archetype {
   ) {
     this.#entityCapacity = capacity;
     bitfield = bitfield ??
-      (components.length > 0
-        ? BooleanArray.fromObjects(components.length, ID_KEY, components)
-        : new BooleanArray(capacity));
+      (components.length > 0 ? BooleanArray.fromObjects(capacity, ID_KEY, components) : new BooleanArray(capacity));
     this.bitfield = bitfield;
     this.id = bitfield.buffer.toString();
     this.components = components;
