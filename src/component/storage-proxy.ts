@@ -33,20 +33,22 @@ export class StorageProxy<T extends SchemaOrNull<T>> {
     this.#capacity = capacity;
 
     // Create a getter and setter for each storage property
-    for (const key in storage?.partitions) {
-      if (!hasOwnProperty(storage?.partitions, key)) continue;
-      Object.defineProperty(this, key, {
-        get: () => storage?.partitions[key as keyof T][this.#entity],
-        set: (value: number) => {
-          const store = storage.partitions[key as keyof T] as TypedArray;
-          if (store[this.#entity] !== value) {
-            store[this.#entity] = value;
-            changed.set(this.#entity, true);
-          }
-        },
-        enumerable: true,
-        configurable: false,
-      });
+    if (storage) {
+      for (const key in storage.partitions) {
+        if (!hasOwnProperty(storage.partitions, key)) continue;
+        Object.defineProperty(this, key, {
+          get: () => storage.partitions[key as keyof T][this.#entity],
+          set: (value: number) => {
+            const store = storage.partitions[key as keyof T] as TypedArray;
+            if (store[this.#entity] !== value) {
+              store[this.#entity] = value;
+              changed.set(this.#entity, true);
+            }
+          },
+          enumerable: true,
+          configurable: false,
+        });
+      }
     }
   }
 
