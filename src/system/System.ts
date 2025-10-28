@@ -1,7 +1,7 @@
 import { Query } from "@/query/query.ts";
 import { $_SYSTEM_DESTROY_KEY, $_SYSTEM_INIT_KEY } from "@/shared/constants.ts";
 import { isValidName } from "@/shared/deps.ts";
-import { NoComponentsFoundError, SpecError } from "@/shared/errors.ts";
+import { SpecError } from "@/shared/errors.ts";
 import type { SystemCallback, SystemInstance, SystemPrivateMethods, SystemSpec } from "@/shared/types.ts";
 import { isObject, noop } from "@/shared/utils.ts";
 import type { World } from "@/world/world.ts";
@@ -19,10 +19,6 @@ export function createSystemInstance<T extends SystemCallback>(
 ): SystemInstance<T> {
   // Collect all entries from the iterator into an array first
   const components = world.components.query(system.query) as Parameters<T>[0];
-
-  if (Object.keys(components).length === 0) {
-    throw new NoComponentsFoundError("System query returned no components");
-  }
 
   // Bind the callback with components and a getter that returns fresh entities on each call
   const boundCallback = ((...args: any[]) => {
@@ -62,7 +58,7 @@ export class System<T extends SystemCallback> implements SystemPrivateMethods {
   readonly query: Query;
 
   /** The core function of the system. Called when this.exec is called. */
-  readonly callback: SystemCallback;
+  readonly callback: T;
 
   /**
    * Creates a new system.

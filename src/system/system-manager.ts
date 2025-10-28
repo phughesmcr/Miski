@@ -24,6 +24,11 @@ export class SystemManager {
 
     this.create = <T extends SystemCallback>(system: System<T>): SystemInstance<T> => {
       const existing = this.get(system);
+      // Guard against same-name different-definition systems
+      const existingByName = this.registry[system.name];
+      if (existingByName && Object.getPrototypeOf(existingByName) !== system) {
+        throw new Error(`System "${system.name}" already registered with a different definition`);
+      }
       if (existing) {
         return existing;
       }

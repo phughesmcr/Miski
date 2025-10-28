@@ -168,7 +168,7 @@ export type QueryInstance = {
 };
 
 /** A Record of SystemInstances by System name */
-export type SystemRecord = Record<string, SystemInstance<any, any>>;
+export type SystemRecord = Record<string, SystemInstance<any>>;
 
 /**
  * The parameters of a function omitting the first two parameters
@@ -228,13 +228,9 @@ export interface SystemPrivateMethods {
  * @param T The callback's type
  * @param U The parameters of the callback excluding the first two (which are always the components and entities)
  */
-export type SystemInstance<
-  T extends SystemCallback,
-  TReturn = void,
-  TArgs extends ParametersExceptFirstTwo<T> = ParametersExceptFirstTwo<T>,
-> = (
-  ...args: TArgs
-) => TReturn;
+export type SystemInstance<T extends SystemCallback> = (
+  ...args: ParametersExceptFirstTwo<T>
+) => ReturnType<T>;
 
 /** The specification for a World */
 export type WorldSpec = {
