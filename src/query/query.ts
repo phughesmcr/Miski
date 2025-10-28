@@ -28,10 +28,7 @@ export const isValidQuerySpec = (spec: unknown): spec is QuerySpec => {
   // check for presence of component in multiple arrays
   if (all && any && all.some((c) => any.includes(c))) return false;
   if (all && none && all.some((c) => none.includes(c))) return false;
-  if (any && all && any.some((c) => all.includes(c))) return false;
   if (any && none && any.some((c) => none.includes(c))) return false;
-  if (none && all && none.some((c) => all.includes(c))) return false;
-  if (none && any && none.some((c) => any.includes(c))) return false;
   return true;
 };
 
@@ -85,9 +82,6 @@ export class Query {
  * @returns true if the target matches the query requirements
  */
 export function isQueryMatch(target: BooleanArray, query: QueryInstance): boolean {
-  // Empty targets should never match
-  if (target.getTruthyCount() === 0) return false;
-
   // Check AND components
   for (let i = 0; i < target.length; i++) {
     const t = target.buffer[i] ?? 0;

@@ -60,6 +60,8 @@ export class World {
      * @returns The entities for the query
      */
     const queryArchetypeEntities = (function* (query: Query): IterableIterator<Entity> {
+      // Note: This iterator is ephemeral and only valid until the next world refresh
+      // or mutation that invalidates query caches. Consume immediately; do not store.
       visitedArchetypeEntities.clear();
       const queryInstance = world.#queryManager.register(query);
       const archetypes = world.#archetypeManager.query(queryInstance);
@@ -145,6 +147,8 @@ export class World {
      * @returns An iterable iterator of entities
      */
     const queryEnteredEntities = (function* (query: Query): IterableIterator<Entity> {
+      // Note: This iterator is ephemeral and only valid until the next world refresh
+      // or mutation that invalidates query caches. Consume immediately; do not store.
       visitedArchetypeEntities.clear();
       const queryInstance = world.#queryManager.register(query);
       const archetypes = world.#archetypeManager.query(queryInstance);
@@ -167,6 +171,8 @@ export class World {
      * @returns An iterable iterator of entities
      */
     const queryExitedEntities = (function* (query: Query): IterableIterator<Entity> {
+      // Note: This iterator is ephemeral and only valid until the next world refresh
+      // or mutation that invalidates query caches. Consume immediately; do not store.
       visitedArchetypeEntities.clear();
       const queryInstance = world.#queryManager.register(query);
       const archetypes = world.#archetypeManager.query(queryInstance);

@@ -199,7 +199,12 @@ export class QueryManager {
   /** Get components for a query */
   components: (query: Query) => Record<string, ComponentInstance<SchemaOrNull>>;
 
-  /** Get entities for a query */
+  /**
+   * Get entities for a query
+   *
+   * Note: The returned iterator is ephemeral and only valid until the next world refresh
+   * or mutation that invalidates query caches. Consume immediately; do not store.
+   */
   entities: (query: Query) => IterableIterator<Entity>;
 
   /** Register a query */
@@ -210,7 +215,8 @@ export class QueryManager {
     if (query) {
       const queryId = this.idsByQuery.get(query);
       if (queryId) {
-        this.lastQueryVersion.set(queryId, this.cache.version);
+        // Force eviction on next access by making last seen version older than cache version
+        this.lastQueryVersion.set(queryId, -1);
       }
     } else {
       this.cache.invalidate();
