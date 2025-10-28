@@ -69,6 +69,7 @@ export class World {
       for (const archetype of archetypes) {
         for (const entity of archetype.getEntities()) {
           if (visitedArchetypeEntities.get(entity)) continue;
+          if (!world.#entityManager.isActive(entity)) continue;
           visitedArchetypeEntities.set(entity, true);
           yield entity;
         }
@@ -104,6 +105,9 @@ export class World {
       entity: Entity,
       data?: { [k in keyof T]: number } | undefined,
     ): void => {
+      if (!world.#entityManager.isActive(entity)) {
+        throw new NotRegisteredError(`Entity ${entity} not active`);
+      }
       component = getComponentByName(component);
       const instances = world.#componentManager.addToEntity(component, entity, data);
       world.#archetypeManager.update(entity, instances);
@@ -122,6 +126,9 @@ export class World {
       component: string | Component<T>,
       entity: Entity,
     ): void => {
+      if (!world.#entityManager.isActive(entity)) {
+        throw new NotRegisteredError(`Entity ${entity} not active`);
+      }
       component = getComponentByName(component);
       const instances = world.#componentManager.removeFromEntity(component, entity);
       world.#archetypeManager.update(entity, instances);
@@ -185,6 +192,17 @@ export class World {
       queryExited: queryExitedEntities,
     };
 
+    const guardedSetEntityData = function <T extends SchemaOrNull<T>>(
+      component: Component<T> | string,
+      entity: Entity,
+      value?: Record<keyof T, number>,
+    ): void {
+      if (!world.#entityManager.isActive(entity)) {
+        throw new NotRegisteredError(`Entity ${entity} not active`);
+      }
+      world.#componentManager.setEntityData(component, entity, value as any);
+    };
+
     const components: WorldComponentAPI = {
       count: world.#componentManager.count,
       registry: world.#componentManager.registry,
@@ -198,7 +216,7 @@ export class World {
       isRegistered: world.#componentManager.isRegistered,
       query: world.#queryManager.components,
       removeFromEntity: removeComponentFromEntity,
-      setEntityData: world.#componentManager.setEntityData,
+      setEntityData: guardedSetEntityData,
     };
 
     /**
@@ -316,7 +334,7 @@ export class World {
     // Wire up archetype manager for optimized component lookups
     this.#componentManager.setArchetypeManager(this.#archetypeManager);
 
-    this.#queryManager = new QueryManager(this, capacity);
+    this.#queryManager = new QueryManager(this, capacity, (entity: Entity) => this.#entityManager.isActive(entity));
     this[$_QUERY_KEY] = () => [...this.#queryManager.instancesByID.values()];
 
     this.#systemManager = new SystemManager(this);

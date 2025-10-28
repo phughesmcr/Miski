@@ -49,10 +49,12 @@ export function isObject<T extends Record<string, unknown>>(object: unknown): ob
  * ```
  */
 export function numberArrayFromString(str: string): number[] {
-  return str
-    .replaceAll(/[\[\]]/g, "")
+  const cleaned = str.replaceAll(/[\[\]\s]/g, "");
+  if (cleaned.length === 0) return [];
+  return cleaned
     .split(",")
-    .map((n) => parseInt(n, 10));
+    .filter((s) => s.length > 0)
+    .map((n) => Number.parseInt(n, 10));
 }
 
 /**

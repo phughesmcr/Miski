@@ -52,6 +52,7 @@ function getEntitiesFromQuery(this: QueryManager, query: Query): IterableIterato
       for (const archetype of instance.archetypes) {
         for (const entity of archetype.getEntities()) {
           if (this.visited.get(entity)) continue;
+          if (!this.isActive(entity)) continue;
           result.set(entity, true);
           this.visited.set(entity, true);
         }
@@ -144,17 +145,21 @@ export class QueryManager {
   /** Boolean array for visited entities */
   readonly visited: BooleanArray;
 
+  /** Predicate to test if an entity is active */
+  readonly isActive: (entity: Entity) => boolean;
+
   /**
    * Create a new QueryManager
    * @param world - The World instance containing the component registry
    */
-  constructor(world: World, capacity: number) {
+  constructor(world: World, capacity: number, isActive: (entity: Entity) => boolean) {
     this.pool = new QueryResultPool(capacity);
     this.cache = new QueryCache(this.pool);
     this.lastQueryVersion = new Map();
     this.instancesByID = new Map();
     this.idsByQuery = new Map();
     this.visited = new BooleanArray(capacity);
+    this.isActive = isActive;
 
     this.components = getComponentsFromQuery.bind(this);
 

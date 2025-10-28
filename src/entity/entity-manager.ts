@@ -82,8 +82,8 @@ export class EntityManager {
    * @throws {EntityNotFoundError} - If the entity is not found
    */
   destroy = (entity: Entity): void => {
-    if (this.isEntity(entity) === false) {
-      throw new EntityNotFoundError(entity);
+    if (this.isActive(entity) === false) {
+      throw new EntityNotFoundError(`${entity}`);
     }
     this.pool.release(entity);
   };
