@@ -177,7 +177,7 @@ export class ArchetypeManager {
    * Run routine maintenance on the ArchetypeManager
    * @returns this
    */
-  refresh = (queries: MapIterator<QueryInstance>): this => {
+  refresh = (queries: MapIterator<QueryInstance>, clearDeltas: boolean = true): this => {
     // Clear existing query archetype mappings
     this.queryArchetypes.clear();
 
@@ -204,7 +204,9 @@ export class ArchetypeManager {
           }
         }
       }
-      archetype.refresh();
+      if (clearDeltas) {
+        archetype.refresh();
+      }
     }
     return this;
   };

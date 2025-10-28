@@ -87,10 +87,11 @@ export class World {
      */
     const getComponentByName = <T extends SchemaOrNull<T>>(component: string | Component<T>): Component<T> => {
       if (typeof component === "string") {
-        component = world.#componentManager.getInstance(component)?.type as Component<T>;
-        if (component === undefined) {
-          throw new NotRegisteredError(`Component ${component} not registered in world`);
+        const resolved = world.#componentManager.getInstance(component)?.type as Component<T> | undefined;
+        if (resolved === undefined) {
+          throw new NotRegisteredError(`Component "${component}" not registered in world`);
         }
+        return resolved;
       }
       return component;
     };
@@ -387,6 +388,23 @@ export class World {
     assertWorldState("initialized", this.#state);
     try {
       await this.#systemManager.destroyAll();
+
+      // Fully clean up entities and components
+      const activeEntities = [...this.#entityManager.getActive()];
+      for (const entity of activeEntities) {
+        const archetype = this.#archetypeManager.getEntityArchetype(entity);
+        if (archetype) {
+          for (const componentInstance of archetype.components) {
+            this.#componentManager.removeFromEntity(componentInstance.type, entity);
+          }
+        }
+        this.#archetypeManager.reset(entity);
+        this.#entityManager.destroy(entity);
+      }
+
+      // Invalidate query caches after cleanup
+      this.#queryManager.invalidate();
+
       this.#state = "destroyed";
     } catch (error) {
       this.#state = "error";
@@ -407,14 +425,19 @@ export class World {
 
   /**
    * Run routine maintenance on the World
-   * @param retainChanged - skip component refresh if true
+   * @param retainChanged - if true, do not clear component "changed" flags
+   * @param retainDeltas - if true, do not clear archetype entered/exited deltas (defaults to retainChanged)
    * @throws {WorldStateError} - If the World has not yet been initialized, or has already been destroyed
    */
-  refresh(retainChanged: boolean = false): void {
+  refresh(retainChanged: boolean = false, retainDeltas: boolean = false): void {
     assertWorldState("initialized", this.#state);
     try {
-      this.#archetypeManager.refresh(this.#queryManager.instancesByID.values());
+      const retainArchetypeDeltas = arguments.length >= 2 ? retainDeltas : retainChanged;
+      // Clear archetype deltas unless we are explicitly retaining them
+      this.#archetypeManager.refresh(this.#queryManager.instancesByID.values(), !retainArchetypeDeltas);
+      // Clear component changed flags unless we are explicitly retaining them
       if (!retainChanged) this.#componentManager.refresh();
+      // Invalidate query caches regardless
       this.#queryManager.invalidate();
     } catch (error) {
       this.#state = "error";
