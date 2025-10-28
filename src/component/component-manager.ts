@@ -177,7 +177,9 @@ export class ComponentManager {
    * @param array - The array of components to get instances for
    * @returns An array of component instances
    */
-  getInstances = (array: Component<SchemaOrNull<any>>[]): (ComponentInstance<SchemaOrNull<any>> | undefined)[] => {
+  getInstances = (
+    array: Component<SchemaOrNull<any>>[] | Readonly<Component<SchemaOrNull<any>>[]>,
+  ): (ComponentInstance<SchemaOrNull<any>> | undefined)[] => {
     return array.map(this.getInstance);
   };
 
@@ -330,9 +332,15 @@ export class ComponentManager {
     if (!storage) {
       return this;
     }
+    const changed = this.#changed.get(instance.type);
     for (const key in value) {
       if (key in storage) {
-        storage[key][entity] = value[key];
+        const store = storage[key] as TypedArray;
+        const next = value[key] as unknown as number;
+        if (store[entity] !== next) {
+          store[entity] = next;
+          changed?.set(entity, true);
+        }
       }
     }
     return this;
