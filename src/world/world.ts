@@ -213,7 +213,9 @@ export class World {
       if (!world.#entityManager.isActive(entity)) {
         throw new NotRegisteredError(`Entity ${entity} not active`);
       }
-      world.#componentManager.setEntityData(component, entity, value as any);
+      if (value !== undefined) {
+        world.#componentManager.setEntityData(component, entity, value);
+      }
     };
 
     const components: WorldComponentAPI = {
