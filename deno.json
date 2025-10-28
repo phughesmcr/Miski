@@ -4,6 +4,23 @@
   "version": "0.2.1",
   "license": "MIT",
   "exports": "./mod.ts",
+  "publish": {
+    "exclude": [
+      "example/**/*.ts",
+      "bench/**/*.bench.ts",
+      "test/**/*.test.ts",
+      ".cursor/**/*",
+      ".vscode/**/*",
+      ".github/**/*",
+      ".cursorignore",
+      ".gitignore",
+      ".gitattributes",
+      ".editorconfig",
+      ".prettierignore",
+      ".prettierrc",
+      ".prettierignore"
+    ]
+  },
   "bench": {
     "include": ["bench/**/*.bench.ts"]
   },
