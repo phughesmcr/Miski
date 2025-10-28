@@ -9,7 +9,13 @@ import { EntityNotFoundError } from "@/shared/errors.ts";
 import type { Entity, SchemaOrNull, StorageProxySpec, TypedArray } from "@/shared/types.ts";
 import { hasOwnProperty } from "@/shared/utils.ts";
 
-/** A StorageProxy is a wrapper around a component's storage */
+/**
+ * Wrapper around component storage providing property access and change tracking.
+ *
+ * @remarks
+ * - Dynamically defines getters/setters for each schema property that read/write the current `entity` row.
+ * - On writes, marks the per-component `changed` bitset for that entity when the value differs.
+ */
 export class StorageProxy<T extends SchemaOrNull<T>> {
   /** The current entity ID the proxy is pointed at */
   #entity: Entity = 0 as Entity;
@@ -18,8 +24,8 @@ export class StorageProxy<T extends SchemaOrNull<T>> {
   #capacity: number;
 
   /**
-   * Create a new StorageProxy
-   * @param spec - The specification for the StorageProxy
+   * Create a new StorageProxy.
+   * @param spec - The specification for the StorageProxy.
    */
   constructor(spec: StorageProxySpec<T>) {
     const { capacity, changed, storage } = spec;

@@ -32,7 +32,12 @@ export const isValidQuerySpec = (spec: unknown): spec is QuerySpec => {
   return true;
 };
 
-/** A Query is a collection of Components that can be used to find Entities */
+/**
+ * Declarative filter describing required, optional, and excluded components.
+ *
+ * @remarks
+ * - Instances are immutable; arrays are de-duplicated and frozen.
+ */
 export class Query {
   /**
    * Compose a new Query from an array of Queries
@@ -69,17 +74,17 @@ export class Query {
     if (isValidQuerySpec(spec) === false) {
       throw new SpecError("Query specification object is invalid.");
     }
-    this.all = Object.freeze([...new Set(spec.all ?? [])]);
-    this.any = Object.freeze([...new Set(spec.any ?? [])]);
-    this.none = Object.freeze([...new Set(spec.none ?? [])]);
+    this.all = [...new Set(spec.all ?? [])];
+    this.any = [...new Set(spec.any ?? [])];
+    this.none = [...new Set(spec.none ?? [])];
   }
 }
 
 /**
- * Check if a target bitfield matches query requirements
- * @param target The target bitfield to check
- * @param query The query instance to match against
- * @returns true if the target matches the query requirements
+ * Check if a target bitfield matches query requirements.
+ * @param target - The target component bitfield to test.
+ * @param query - The query instance to match against.
+ * @returns `true` if all AND bits are present, no NOT bits are present, and at least one OR bit is present when any OR bits are set; otherwise `false`.
  */
 export function isQueryMatch(target: BooleanArray, query: QueryInstance): boolean {
   // Check AND components

@@ -3,7 +3,13 @@ import type { QueryResultPool } from "@/query/query-pool.ts";
 import type { BooleanArray } from "@/shared/deps.ts";
 import type { SchemaOrNull } from "@/shared/types.ts";
 
-/** Cache for query results */
+/**
+ * Cache for query component maps and entity result sets.
+ *
+ * @remarks
+ * - Uses a monotonically increasing `version` to invalidate per-query caches lazily.
+ * - When a {@link QueryResultPool} is provided, releases prior entity arrays back to the pool on eviction.
+ */
 export class QueryCache {
   #componentCache: Map<string, Record<string, ComponentInstance<SchemaOrNull>>>;
   #entityCache: Map<string, BooleanArray>;
@@ -27,7 +33,12 @@ export class QueryCache {
     this.#globalVersion++;
   }
 
-  /** Get cached components or compute and cache them */
+  /**
+   * Get cached components or compute and cache them.
+   * @param queryId - The unique id of the query.
+   * @param compute - Function that produces the component map when missing or invalid.
+   * @param lastVersion - The caller's last observed cache version for this query.
+   */
   getComponents(
     queryId: string,
     compute: () => Record<string, ComponentInstance<SchemaOrNull<any>>>,
@@ -44,7 +55,12 @@ export class QueryCache {
     return this.#componentCache.get(queryId)!;
   }
 
-  /** Get cached entities or compute and cache them */
+  /**
+   * Get cached entities or compute and cache them.
+   * @param queryId - The unique id of the query.
+   * @param compute - Function that produces the entity BooleanArray when missing or invalid.
+   * @param lastVersion - The caller's last observed cache version for this query.
+   */
   getEntities(
     queryId: string,
     compute: () => BooleanArray,

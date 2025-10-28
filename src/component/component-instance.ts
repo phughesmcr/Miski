@@ -14,7 +14,13 @@ import type {
   StorageProxyWithProperties,
 } from "@/shared/types.ts";
 
-/** A ComponentInstance is the world-local representation of a component */
+/**
+ * World-local handle to a {@link Component} definition, including storage and proxy access.
+ *
+ * @remarks
+ * - For tag components (no schema), `proxy` and `storage` are `null`.
+ * - Instances are immutable after construction.
+ */
 export class ComponentInstance<T extends SchemaOrNull<T>> {
   /** The ComponentInstance's id */
   readonly id: number;
@@ -29,9 +35,9 @@ export class ComponentInstance<T extends SchemaOrNull<T>> {
   readonly type: Component<T>;
 
   /**
-   * Create a new ComponentInstance
-   * @param spec The ComponentInstance's specification
-   * @throws {TypeError} If the spec is invalid
+   * Create a new ComponentInstance.
+   * @param spec - The ComponentInstance's specification.
+   * @throws {TypeError} If the spec is invalid.
    */
   constructor(spec: ComponentInstanceSpec<T>) {
     const { id, proxy, storage, type } = spec;

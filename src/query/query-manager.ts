@@ -104,7 +104,6 @@ function createQueryInstance(getInstances: ComponentInstanceGetter, size: number
   for (const instance of [...andInstances, ...orInstances]) {
     components[instance.name] = instance;
   }
-  Object.freeze(components);
 
   // Initialize empty set for matching archetypes
   const archetypes = new Set<Archetype>();
@@ -125,7 +124,13 @@ function createQueryInstance(getInstances: ComponentInstanceGetter, size: number
   return { and, or, not, archetypes, isCandidate, components, isDirty: true, id };
 }
 
-/** The QueryManager is responsible for creating, registering, and destroying queries. */
+/**
+ * Creates, registers, and executes Queries, caching results and pooling temporaries.
+ *
+ * @remarks
+ * - Per-query caches are versioned; `invalidate()` bumps global or per-query versions.
+ * - Entity results use pooled BooleanArrays; iterators are ephemeral and should be consumed immediately.
+ */
 export class QueryManager {
   /** Cache for query results */
   readonly cache: QueryCache;
@@ -149,8 +154,10 @@ export class QueryManager {
   readonly isActive: (entity: Entity) => boolean;
 
   /**
-   * Create a new QueryManager
-   * @param world - The World instance containing the component registry
+   * Create a new QueryManager.
+   * @param world - The World with registered components.
+   * @param capacity - World entity capacity for internal arrays.
+   * @param isActive - Predicate to test whether an entity is considered active.
    */
   constructor(world: World, capacity: number, isActive: (entity: Entity) => boolean) {
     this.pool = new QueryResultPool(capacity);
@@ -210,7 +217,10 @@ export class QueryManager {
   /** Register a query */
   register: (query: Query) => QueryInstance;
 
-  /** Mark query as dirty and invalidate caches */
+  /**
+   * Invalidate caches, either for a specific query or globally.
+   * @param query - When provided, only evicts that query on next access; otherwise bumps global version.
+   */
   invalidate = (query?: Query): void => {
     if (query) {
       const queryId = this.idsByQuery.get(query);

@@ -11,7 +11,15 @@ import { ID_KEY } from "@/shared/constants.ts";
 import { BooleanArray } from "@/shared/deps.ts";
 import type { Entity, QueryInstance } from "@/shared/types.ts";
 
-/** An Archetype is a collection of ComponentInstances which define the schema of an Entity. */
+/**
+ * Represents a set of components (encoded as a bitfield) that defines an Entity shape.
+ * Tracks entity membership and entry/exit deltas between refresh cycles.
+ *
+ * @remarks
+ * - `bitfield` encodes component presence by id; it is immutable for a given Archetype.
+ * - `#entered`/`#exited` are cleared by {@link Archetype.refresh} and surface per-cycle deltas.
+ * - `id` is derived from the bitfield buffer and uniquely identifies the Archetype in a world.
+ */
 export class Archetype {
   /** QueryInstances and their candidacy status */
   #candidateCache: Map<QueryInstance, boolean>;
@@ -38,11 +46,11 @@ export class Archetype {
   readonly id: string;
 
   /**
-   * Creates a new Archetype
-   * @param capacity - The maximum number of entities in the world (world capacity)
-   * @param components - The components associated with this Archetype
-   * @param bitfield - Optional BooleanArray to use as the Archetype's Component Bitfield
-   * @returns a new Archetype object
+   * Create an Archetype.
+   * @param capacity - World entity capacity used to size internal tracking arrays.
+   * @param components - Component instances included in this Archetype.
+   * @param bitfield - Optional component bitfield; if omitted, one is derived from `components`.
+   * @returns A new Archetype instance.
    */
   constructor(
     capacity: number,
@@ -74,9 +82,10 @@ export class Archetype {
   }
 
   /**
-   * Add an Entity to the Archetype
-   * @param entity - The Entity to add
-   * @returns The Archetype with the Entity added
+   * Add an Entity to this Archetype.
+   * @param entity - The Entity to add.
+   * @returns This Archetype.
+   * @remarks Idempotent. Marks the entity as `entered` on first add within the current cycle.
    */
   addEntity(entity: Entity): Archetype {
     if (this.#entities.get(entity)) return this;
@@ -86,8 +95,10 @@ export class Archetype {
   }
 
   /**
-   * Create a new Archetype from an existing Archetype
-   * @returns A new Archetype
+   * Create a new Archetype from this Archetype.
+   * @returns A new Archetype.
+   * @remarks The new Archetype reuses the same `components` array reference, clones the bitfield,
+   * and starts with empty entity tracking arrays.
    */
   clone(): Archetype {
     return new Archetype(this.#entityCapacity, this.components, this.bitfield.clone());
@@ -126,9 +137,10 @@ export class Archetype {
   }
 
   /**
-   * Test this Archetype matches a given QueryInstance
-   * @param query - The QueryInstance to test
-   * @returns `true` if the QueryInstance is a match, `false` otherwise
+   * Test whether this Archetype satisfies a QueryInstance.
+   * @param query - The QueryInstance to test.
+   * @returns `true` if the QueryInstance is a match, `false` otherwise.
+   * @remarks Results are cached per `query` instance for this Archetype.
    */
   isCandidate = (query: QueryInstance): boolean => {
     const cached = this.#candidateCache.get(query);
@@ -156,8 +168,9 @@ export class Archetype {
   }
 
   /**
-   * Clear entered/exited entities from a given Archetype
-   * @returns The refreshed Archetype
+   * Clear entered/exited deltas for this Archetype.
+   * @returns This Archetype.
+   * @remarks Does not modify current membership; only clears per-cycle deltas.
    */
   refresh(): Archetype {
     this.#entered.clear();
@@ -166,9 +179,10 @@ export class Archetype {
   }
 
   /**
-   * Remove an Entity from an Archetype
-   * @param entity - The Entity to remove
-   * @returns The Archetype with the Entity removed
+   * Remove an Entity from this Archetype.
+   * @param entity - The Entity to remove.
+   * @returns This Archetype.
+   * @remarks Idempotent. Marks the entity as `exited` on first remove within the current cycle.
    */
   removeEntity(entity: Entity): Archetype {
     if (!this.#entities.get(entity)) return this;
@@ -179,8 +193,8 @@ export class Archetype {
   }
 
   /**
-   * Serialize the Archetype to a string
-   * @returns The serialized Archetype
+   * Serialize this Archetype to JSON.
+   * @returns The JSON string.
    */
   stringify(): string {
     return JSON.stringify(

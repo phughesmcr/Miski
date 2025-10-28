@@ -7,11 +7,12 @@ import { isObject, noop } from "@/shared/utils.ts";
 import type { World } from "@/world/world.ts";
 
 /**
- * Create a system instance
- * @param world The world to create the system instance in
- * @param system The system to create the instance of
- * @returns The created system instance
- * @throws {NoComponentsFoundError} If the system query returned no components
+ * Create a world-bound callable system instance.
+ * @param world - The world to bind the system instance to.
+ * @param system - The system definition.
+ * @returns A function with the system prototype which invokes the system callback when called.
+ * @throws {NoComponentsFoundError} If the system query returned no components.
+ * @remarks The returned function closes over the world and supplies live entity iterators on each call.
  */
 export function createSystemInstance<T extends SystemCallback>(
   world: World,
@@ -43,7 +44,9 @@ export function isValidSystemSpec(spec: unknown): spec is SystemSpec<any> {
   return true;
 }
 
-/** Systems are behaviors which affect components. */
+/**
+ * Behavior that operates over entities/components selected by a {@link Query}.
+ */
 export class System<T extends SystemCallback> implements SystemPrivateMethods {
   /** The function to call when the system is destroyed. */
   readonly [$_SYSTEM_DESTROY_KEY]: (world: World) => void | Promise<void>;
@@ -61,12 +64,9 @@ export class System<T extends SystemCallback> implements SystemPrivateMethods {
   readonly callback: T;
 
   /**
-   * Creates a new system.
-   *
-   * Systems are the behaviors which affect components.
-   *
-   * @param spec the system's specification object
-   * @throws {SpecError} If the system specification is invalid
+   * Create a new System definition.
+   * @param spec - The system's specification object.
+   * @throws {SpecError} If the system specification is invalid.
    */
   constructor(spec: SystemSpec<T>) {
     if (isValidSystemSpec(spec) === false) {

@@ -11,13 +11,19 @@ import type { SystemCallback, SystemInstance } from "@/shared/types.ts";
 import { createSystemInstance, type System } from "@/system/system.ts";
 import type { World } from "@/world/world.ts";
 
-/** The SystemManager is responsible for creating, registering, initializing, and destroying systems. */
+/**
+ * Creates, registers, initializes, and destroys systems.
+ *
+ * @remarks
+ * - Enforces uniqueness by system name; conflicting definitions by the same name are rejected.
+ * - Stores world-bound system instances keyed by system name.
+ */
 export class SystemManager {
   registry: Record<string, SystemInstance<any>>;
 
   /**
-   * Create a new SystemManager
-   * @param world The world to create the system manager in
+   * Create a new SystemManager.
+   * @param world - The world that owns the manager.
    */
   constructor(world: World) {
     this.registry = {};
@@ -69,20 +75,19 @@ export class SystemManager {
   create: <T extends SystemCallback>(system: System<T>) => SystemInstance<T>;
 
   /**
-   * Destroy a system instance
-   * @param system The system to destroy
+   * Destroy a system instance.
+   * @param system - The system instance or name to destroy.
+   * @param throwOnNotFound - When `false`, missing systems are ignored.
    */
   destroy: <T extends SystemCallback>(system: System<T> | string, throwOnNotFound?: boolean) => Promise<void>;
 
-  /**
-   * Destroy all systems
-   */
+  /** Destroy all systems */
   destroyAll: () => Promise<void>;
 
   /**
-   * Get a system instance
-   * @param system The system to get the instance of
-   * @returns The system instance
+   * Get a system instance.
+   * @param system - System or system name.
+   * @returns The system instance, or `undefined` when not registered or definition mismatch by name.
    */
   get = <T extends SystemCallback>(system: string | System<T>): SystemInstance<T> | undefined => {
     if (typeof system === "string") {
@@ -96,17 +101,17 @@ export class SystemManager {
   };
 
   /**
-   * Check if a system is registered
-   * @param system The system to check
-   * @returns Whether the system is registered
+   * Check if a system is registered.
+   * @param system - System or system name.
+   * @returns Whether the system is registered.
    */
   has = <T extends SystemCallback>(system: string | System<T>): boolean => {
     return this.get(system) !== undefined;
   };
 
   /**
-   * Initialize all systems
-   * @param world The world to initialize the systems in
+   * Initialize all systems.
+   * @param world - The world to initialize the systems in.
    */
   init = async (world: World): Promise<void> => {
     for (const instance of Object.values(this.registry)) {

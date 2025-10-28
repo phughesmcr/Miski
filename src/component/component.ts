@@ -51,7 +51,13 @@ export function isValidComponentArray(array: unknown): array is Array<Component<
   return true;
 }
 
-/** A Component is a collection of properties that are stored in a world */
+/**
+ * A collection of typed properties stored per-entity within a world.
+ *
+ * @remarks
+ * - Backed by a storage `Partition`; `maxEntities` limits concurrent owners when non-null.
+ * - When `schema` is omitted, the component is a tag (`isTag === true`) with no per-entity data.
+ */
 export class Component<T extends SchemaOrNull<T> = null> implements ComponentPrivateMethods<T> {
   /** The component's storage partition */
   readonly #partition: Partition<T>;
@@ -98,6 +104,7 @@ export class Component<T extends SchemaOrNull<T> = null> implements ComponentPri
     return this.#partition.size;
   }
 
+  /** `true` when the component has no schema (tag component) */
   get isTag(): boolean {
     return this.#isTag;
   }

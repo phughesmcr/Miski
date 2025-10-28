@@ -11,7 +11,15 @@ import { BooleanArray } from "@/shared/deps.ts";
 import { NotRegisteredError } from "@/shared/errors.ts";
 import type { Entity, QueryInstance } from "@/shared/types.ts";
 
-/** ArchetypeManager handles creation and allocation of Archetypes */
+/**
+ * Manages Archetype creation, registration, and entity assignment.
+ * Also maintains query-to-archetype mappings and coordinates refresh cycles.
+ *
+ * @remarks
+ * - A root Archetype (no components) is created to house entities with no components.
+ * - `registry` is keyed by archetype id (bitfield buffer string).
+ * - `entityArchetypes[entity]` always points to the entity's current Archetype.
+ */
 export class ArchetypeManager {
   /** Archetypes by their id */
   readonly registry: Map<string, Archetype>;
@@ -29,9 +37,9 @@ export class ArchetypeManager {
   #componentCount: number = 0;
 
   /**
-   * Create a new ArchetypeManager
-   * @param capacity - The maximum number of entities this manager can handle
-   * @param componentCount - The number of components registered in the world
+   * Create a new ArchetypeManager.
+   * @param capacity - World entity capacity used to size `entityArchetypes` and archetype internals.
+   * @param componentCount - Number of registered components; sizes the root archetype bitfield.
    */
   constructor(capacity: number, componentCount: number) {
     this.registry = new Map();
@@ -87,9 +95,10 @@ export class ArchetypeManager {
   }
 
   /**
-   * Get the components associated with an entity
-   * @param entity - The entity to get the components for
-   * @returns A record of component instances
+   * Get the components associated with an Entity.
+   * @param entity - The entity to inspect.
+   * @returns A new read-only record of component instances keyed by component name.
+   * @remarks Uses an internal cache object to reduce allocations, then returns a shallow copy for safety.
    */
   getEntityComponents = (() => {
     const componentCache: Record<string, ComponentInstance<any>> = {};
@@ -174,8 +183,11 @@ export class ArchetypeManager {
   };
 
   /**
-   * Run routine maintenance on the ArchetypeManager
+   * Recompute query-to-archetype mappings and optionally clear archetype deltas.
+   * @param queries - Iterator of QueryInstances to evaluate against all registered Archetypes.
+   * @param clearDeltas - When `true` (default), calls {@link Archetype.refresh} on each Archetype.
    * @returns this
+   * @remarks Only archetypes with population or pending deltas are associated to queries to surface changes.
    */
   refresh = (queries: MapIterator<QueryInstance>, clearDeltas: boolean = true): this => {
     // Clear existing query archetype mappings
@@ -262,10 +274,10 @@ export class ArchetypeManager {
 
   /**
    * @internal
-   * Update the Archetype associated with an Entity based on its components
-   * @param entity The Entity
-   * @param components The ComponentInstances
-   * @returns The Archetype associated with the Entity
+   * Update the Archetype associated with an Entity based on its components.
+   * @param entity - The Entity.
+   * @param components - The ComponentInstances currently present on the entity.
+   * @returns The entity's current Archetype (existing or newly created and registered).
    */
   update: (entity: Entity, components: ComponentInstance<any>[]) => Archetype;
 }

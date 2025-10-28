@@ -31,7 +31,13 @@ import type {
 import { SystemManager } from "@/system/system-manager.ts";
 import { assertWorldState, isValidWorldSpec } from "@/world/utils.ts";
 
-/** The World is the central context in which all Entities and Components exist. */
+/**
+ * Central runtime context that owns entities, components, archetypes, queries, and systems.
+ *
+ * @remarks
+ * - Exposes high-level APIs grouped under `archetypes`, `components`, `entities`, and `systems`.
+ * - Most iterators returned by query-related APIs are ephemeral; consume them immediately.
+ */
 export class World {
   /**
    * Construct the public APIs for the World
@@ -316,9 +322,9 @@ export class World {
   readonly [$_QUERY_KEY]: () => QueryInstance[];
 
   /**
-   * Create a new World
-   * @param spec - The specification to create the World with
-   * @throws {SpecError} - If the provided spec object is invalid
+   * Create a new World.
+   * @param spec - The world specification, including `capacity` and `components`.
+   * @throws {SpecError} - If the provided spec object is invalid.
    */
   constructor(spec: WorldSpec) {
     if (isValidWorldSpec(spec) === false) {
@@ -360,8 +366,8 @@ export class World {
   }
 
   /**
-   * Initialize the World
-   * @throws {WorldStateError} - If the World is already initialized, or has already been destroyed
+   * Initialize the World.
+   * @throws {WorldStateError} - If the World is already initialized, or has already been destroyed.
    */
   async init(): Promise<void> {
     assertWorldState("uninitialized", this.#state);
@@ -381,8 +387,8 @@ export class World {
   }
 
   /**
-   * Destroy the World
-   * @throws {WorldStateError} - If the World has not yet been initialized, or has already been destroyed
+   * Destroy the World.
+   * @throws {WorldStateError} - If the World has not yet been initialized, or has already been destroyed.
    */
   async destroy(): Promise<void> {
     assertWorldState("initialized", this.#state);
@@ -413,8 +419,8 @@ export class World {
   }
 
   /**
-   * Wait for the World to be ready
-   * @throws {WorldStateError} - If the World has already been destroyed or has encountered an error
+   * Wait for the World to be ready.
+   * @throws {WorldStateError} - If the World has already been destroyed or has encountered an error.
    */
   async onReady(): Promise<void> {
     const state = await this.#initPromise;
@@ -424,10 +430,11 @@ export class World {
   }
 
   /**
-   * Run routine maintenance on the World
-   * @param retainChanged - if true, do not clear component "changed" flags
-   * @param retainDeltas - if true, do not clear archetype entered/exited deltas (defaults to retainChanged)
-   * @throws {WorldStateError} - If the World has not yet been initialized, or has already been destroyed
+   * Run routine maintenance on the World.
+   * @param retainChanged - When `true`, preserves component "changed" flags.
+   * @param retainDeltas - When `true`, preserves archetype entered/exited deltas.
+   * Defaults to `retainChanged` when omitted.
+   * @throws {WorldStateError} - If the World has not yet been initialized, or has already been destroyed.
    */
   refresh(retainChanged: boolean = false, retainDeltas: boolean = false): void {
     assertWorldState("initialized", this.#state);

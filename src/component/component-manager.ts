@@ -15,7 +15,14 @@ import { NotRegisteredError } from "@/shared/errors.ts";
 import type { Entity, SchemaOrNull, TypedArray } from "@/shared/types.ts";
 import { isObject } from "@/shared/utils.ts";
 
-/** A component manager is responsible for managing the components of a world. */
+/**
+ * Manages component registration, per-entity ownership, storage access, and change tracking.
+ *
+ * @remarks
+ * - Each component has per-entity `owners` and `changed` bitsets for fast queries.
+ * - `registry` maps component definitions to world-local {@link ComponentInstance} objects.
+ * - When connected to an {@link ArchetypeManager}, `getEntityComponents` can return in O(1) via archetypes.
+ */
 export class ComponentManager {
   /** The storage buffer for the component manager */
   #buffer: PartitionedBuffer;
@@ -73,11 +80,12 @@ export class ComponentManager {
   }
 
   /**
-   * Add a component to an entity
-   * @param component - The component to add to the entity
-   * @param entity - The entity to add the component to
-   * @param data - Optional data to set for the component
-   * @returns The component instances for this entity
+   * Add a component to an entity.
+   * @param component - The component to add to the entity.
+   * @param entity - The entity to add the component to.
+   * @param data - Optional initial data for the component's properties.
+   * @returns The component instances for this entity.
+   * @remarks Idempotent: if already owned, this is a no-op and does not mark changed or write data.
    */
   addToEntity = <T extends SchemaOrNull<T>>(
     component: Component<T> | string,
@@ -174,9 +182,9 @@ export class ComponentManager {
   };
 
   /**
-   * Get an iterable of all entities with one or more changed properties for a given component
-   * @param component The component to get changed entities for
-   * @returns An iterable of entities or `undefined` if the component is not registered
+   * Get entities whose values changed for a component since the last refresh.
+   * @param component - The component to inspect.
+   * @returns An iterator of entities, or `undefined` if the component is not registered.
    */
   getChanged = <T extends SchemaOrNull<T>>(component: Component<T> | string): IterableIterator<Entity> | undefined => {
     const instance = this.getInstance(component);
@@ -185,9 +193,9 @@ export class ComponentManager {
   };
 
   /**
-   * Get an iterable of all entities with a given component
-   * @param component The component to get entities for
-   * @returns An iterable of entities or `undefined` if the component is not registered
+   * Get entities that currently own a component.
+   * @param component - The component to inspect.
+   * @returns An iterator of entities, or `undefined` if the component is not registered.
    */
   getOwners = <T extends SchemaOrNull<T>>(component: Component<T> | string): IterableIterator<Entity> | undefined => {
     const instance = this.getInstance(component);
@@ -204,10 +212,10 @@ export class ComponentManager {
   }
 
   /**
-   * Get all components for an entity directly from ownership tracking
-   * This is used internally to avoid circular dependencies with the archetype system
-   * @param entity The entity to get components for
-   * @returns An array of component instances
+   * Get all components for an entity directly from ownership tracking.
+   * Used internally to avoid archetype dependency.
+   * @param entity - The entity to inspect.
+   * @returns An array of component instances.
    */
   #getEntityComponentsDirect(entity: Entity): ComponentInstance<any>[] {
     const components: ComponentInstance<any>[] = [];
@@ -220,9 +228,10 @@ export class ComponentManager {
   }
 
   /**
-   * Get all components for an entity
-   * @param entity The entity to get components for
-   * @returns An array of component instances
+   * Get all components for an entity.
+   * @param entity - The entity to inspect.
+   * @returns An array of component instances.
+   * @remarks Fast path via archetypes when available; falls back to scanning ownership.
    */
   getEntityComponents(entity: Entity): ComponentInstance<any>[] {
     // Fast path: use archetype if available
@@ -273,8 +282,8 @@ export class ComponentManager {
   };
 
   /**
-   * Run routine maintenance on the component manager
-   * @returns The component manager
+   * Clear all per-component `changed` flags.
+   * @returns This ComponentManager.
    */
   refresh = (): ComponentManager => {
     for (const changed of this.#changed.values()) {
@@ -284,10 +293,11 @@ export class ComponentManager {
   };
 
   /**
-   * Remove a component from an entity
-   * @param component - The component to remove from the entity
-   * @param entity - The entity to remove the component from
-   * @returns The component instances for this entity
+   * Remove a component from an entity.
+   * @param component - The component to remove.
+   * @param entity - The target entity.
+   * @returns The component instances for this entity.
+   * @remarks Idempotent: if not owned, this is a no-op.
    */
   removeFromEntity = <T extends SchemaOrNull<T>>(
     component: string | Component<T>,
