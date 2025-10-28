@@ -33,5 +33,3 @@ Deno.test("world.destroy() cleans up entities and components", async () => {
   assert(!world.entities.isActive(a), "entity a should be inactive");
   assert(!world.entities.isActive(b), "entity b should be inactive");
 });
-
-

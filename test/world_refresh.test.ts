@@ -41,7 +41,11 @@ Deno.test("world.refresh() clears both changed flags and deltas", async () => {
   // Default refresh clears both
   world.refresh();
   assertEquals(iterToArray(world.archetypes.queryEntered(q)).length, 0, "entered should be cleared by default refresh");
-  assertEquals(iterToArray(world.components.getChanged(position)).length, 0, "changed should be cleared by default refresh");
+  assertEquals(
+    iterToArray(world.components.getChanged(position)).length,
+    0,
+    "changed should be cleared by default refresh",
+  );
 });
 
 Deno.test("world.refresh(true) retains both changed flags and deltas", async () => {
@@ -53,8 +57,14 @@ Deno.test("world.refresh(true) retains both changed flags and deltas", async () 
   world.components.addToEntity(position, e, { x: 1, y: 2 });
 
   world.refresh(true);
-  assert(iterToArray(world.archetypes.queryEntered(q)).includes(e), "entered should be retained when retainDeltas=true");
-  assert(iterToArray(world.components.getChanged(position)).includes(e), "changed should be retained when retainChanged=true");
+  assert(
+    iterToArray(world.archetypes.queryEntered(q)).includes(e),
+    "entered should be retained when retainDeltas=true",
+  );
+  assert(
+    iterToArray(world.components.getChanged(position)).includes(e),
+    "changed should be retained when retainChanged=true",
+  );
 
   // Cleanup
   world.refresh();
@@ -69,8 +79,15 @@ Deno.test("world.refresh(true, false) clears deltas, retains changed", async () 
   world.components.addToEntity(position, e, { x: 1, y: 2 });
 
   world.refresh(true, false);
-  assertEquals(iterToArray(world.archetypes.queryEntered(q)).length, 0, "entered should be cleared when retainDeltas=false");
-  assert(iterToArray(world.components.getChanged(position)).includes(e), "changed should be retained when retainChanged=true");
+  assertEquals(
+    iterToArray(world.archetypes.queryEntered(q)).length,
+    0,
+    "entered should be cleared when retainDeltas=false",
+  );
+  assert(
+    iterToArray(world.components.getChanged(position)).includes(e),
+    "changed should be retained when retainChanged=true",
+  );
 
   // Cleanup
   world.refresh();
@@ -85,11 +102,16 @@ Deno.test("world.refresh(false, true) retains deltas, clears changed", async () 
   world.components.addToEntity(position, e, { x: 1, y: 2 });
 
   world.refresh(false, true);
-  assert(iterToArray(world.archetypes.queryEntered(q)).includes(e), "entered should be retained when retainDeltas=true");
-  assertEquals(iterToArray(world.components.getChanged(position)).length, 0, "changed should be cleared when retainChanged=false");
+  assert(
+    iterToArray(world.archetypes.queryEntered(q)).includes(e),
+    "entered should be retained when retainDeltas=true",
+  );
+  assertEquals(
+    iterToArray(world.components.getChanged(position)).length,
+    0,
+    "changed should be cleared when retainChanged=false",
+  );
 
   // Cleanup
   world.refresh();
 });
-
-

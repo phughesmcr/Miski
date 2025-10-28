@@ -1,4 +1,5 @@
 /// <reference lib="deno.ns" />
+// deno-lint-ignore no-unversioned-import
 import { assertEquals, assertThrows } from "jsr:@std/assert";
 
 import { Component } from "@/component/component.ts";
