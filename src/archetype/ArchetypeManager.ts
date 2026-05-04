@@ -7,6 +7,7 @@
 
 import { Archetype } from "./Archetype.ts";
 import { BooleanArray } from "@phughesmcr/booleanarray";
+import { ID_KEY } from "../constants.ts";
 import { NotRegisteredError } from "../errors.ts";
 import type { ComponentInstance } from "../component/ComponentInstance.ts";
 import type { Entity, QueryInstance } from "../types.ts";
@@ -62,9 +63,7 @@ export class ArchetypeManager {
 
         // Reset and update bitfield
         bitfield.clear();
-        for (let i = 0; i < components.length; i++) {
-          bitfield.set(components[i]!.id, true);
-        }
+        bitfield.setFromObjects(ID_KEY, components, true);
 
         // Get or create archetype for these components
         const archetypeId = bitfield.buffer.toString();

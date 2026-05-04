@@ -6,6 +6,7 @@
  */
 
 import { BitPool } from "@phughesmcr/bitpool";
+import { BooleanArray } from "@phughesmcr/booleanarray";
 import { EntityNotFoundError } from "../errors.ts";
 import { isPositiveUint32, isUint32, numberArrayFromString } from "../utils.ts";
 import type { Entity, EntityManagerSerialized } from "../types.ts";
@@ -35,7 +36,7 @@ export class EntityManager {
       );
     }
     const arr = numberArrayFromString(entities);
-    const pool = BitPool.fromArray(capacity, arr);
+    const pool = new BitPool(BooleanArray.fromUint32Array(capacity, arr));
     return new EntityManager(capacity, pool);
   }
 
@@ -127,7 +128,7 @@ export class EntityManager {
       {
         MAX_CAPACITY: EntityManager.MAX_CAPACITY,
         capacity: this.pool.size,
-        entities: this.pool.toString(),
+        entities: this.pool.toUint32Array().toString(),
       },
     );
   };

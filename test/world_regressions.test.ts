@@ -1,6 +1,7 @@
 /// <reference lib="deno.ns" />
 
 import { Component, EntityNotFoundError, Query, World } from "../mod.ts";
+import { EntityManager } from "../src/entity/EntityManager.ts";
 import { NotRegisteredError } from "../src/errors.ts";
 
 type Vec2 = { x: Float32ArrayConstructor; y: Float32ArrayConstructor };
@@ -122,6 +123,34 @@ Deno.test("queries reject components that are not registered in the world", asyn
   );
 });
 
+Deno.test("query any and none clauses match through component bitfields", async () => {
+  const position = new Component<Vec2>({ name: "position", schema: { x: Float32Array, y: Float32Array } });
+  const velocity = new Component<Vec2>({ name: "velocity", schema: { x: Float32Array, y: Float32Array } });
+  const disabled = new Component<null>({ name: "disabled" });
+  const world = new World({ capacity: 8, components: [position, velocity, disabled] });
+  await world.init();
+
+  const positionEntity = world.entities.create();
+  const velocityEntity = world.entities.create();
+  const disabledEntity = world.entities.create();
+  assert(positionEntity !== undefined, "Expected position entity to be created");
+  assert(velocityEntity !== undefined, "Expected velocity entity to be created");
+  assert(disabledEntity !== undefined, "Expected disabled entity to be created");
+
+  world.components.addToEntity(position, positionEntity);
+  world.components.addToEntity(velocity, velocityEntity);
+  world.components.addToEntity(position, disabledEntity);
+  world.components.addToEntity(disabled, disabledEntity);
+
+  const movable = new Query({ any: [position, velocity], none: [disabled] });
+
+  assertEquals(
+    ids(world.entities.query(movable)),
+    [positionEntity, velocityEntity],
+    "Expected any/none query to include matching entities and exclude disabled entities",
+  );
+});
+
 Deno.test("components cannot be added to inactive entities", async () => {
   const position = new Component<Vec2>({ name: "position", schema: { x: Float32Array, y: Float32Array } });
   const world = new World({ capacity: 8, components: [position] });
@@ -135,4 +164,16 @@ Deno.test("components cannot be added to inactive entities", async () => {
   );
 
   assertEquals(ids(world.entities.query(new Query({ all: [position] }))), [], "Expected inactive entity to not match");
+});
+
+Deno.test("entity manager serializes and restores BitPool state", () => {
+  const manager = new EntityManager(8);
+  const first = manager.create();
+  const second = manager.create();
+  assert(first !== undefined && second !== undefined, "Expected entities to be created");
+
+  const restored = EntityManager.fromJSON(manager.stringify());
+
+  assertEquals(ids(restored.getActive()), [first, second], "Expected active entities to survive serialization");
+  assertEquals(restored.getAvailableCount(), 6, "Expected available count to survive serialization");
 });

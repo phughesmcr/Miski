@@ -85,36 +85,8 @@ export class Query {
  * @returns true if the target matches the query requirements
  */
 export function isQueryMatch(target: BooleanArray, query: QueryInstance): boolean {
-  // Empty targets should never match
-  if (target.getTruthyCount() === 0) return false;
-
-  // Check AND components
-  for (let i = 0; i < target.length; i++) {
-    const t = target.buffer[i] ?? 0;
-    const and = query.and.buffer[i] ?? 0;
-    if ((t & and) !== and) return false;
-  }
-
-  // Check NOT components
-  for (let i = 0; i < target.length; i++) {
-    const t = target.buffer[i] ?? 0;
-    const not = query.not.buffer[i] ?? 0;
-    if ((t & not) !== 0) return false;
-  }
-
-  // Check OR components
-  if (query.or.getTruthyCount() > 0) {
-    let hasOr = false;
-    for (let i = 0; i < target.length; i++) {
-      const t = target.buffer[i] ?? 0;
-      const or = query.or.buffer[i] ?? 0;
-      if ((t & or) !== 0) {
-        hasOr = true;
-        break;
-      }
-    }
-    if (!hasOr) return false;
-  }
-
-  return true;
+  if (target.isEmpty()) return false;
+  if (!target.containsAll(query.and)) return false;
+  if (target.intersects(query.not)) return false;
+  return query.or.isEmpty() || target.intersects(query.or);
 }

@@ -38,9 +38,9 @@
   },
   "imports": {
     "@/": "./src/",
-    "@phughesmcr/bitpool": "jsr:@phughesmcr/bitpool@^0.6.1",
-    "@phughesmcr/booleanarray": "jsr:@phughesmcr/booleanarray@^0.9.0",
-    "@phughesmcr/partitionedbuffer": "jsr:@phughesmcr/partitionedbuffer@^0.3.0"
+    "@phughesmcr/bitpool": "jsr:@phughesmcr/bitpool@^0.8.0",
+    "@phughesmcr/booleanarray": "jsr:@phughesmcr/booleanarray@^0.12.0",
+    "@phughesmcr/partitionedbuffer": "jsr:@phughesmcr/partitionedbuffer@^0.4.0"
   },
   "lint": {
     "exclude": ["example/**/*.ts"],

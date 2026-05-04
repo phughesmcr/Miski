@@ -98,7 +98,7 @@ export class Archetype {
    * @returns The number of entities in the Archetype
    */
   getPopulationCount(): number {
-    return this.#entities.getTruthyCount();
+    return this.#entities.getCount(true);
   }
 
   /**
@@ -115,6 +115,36 @@ export class Archetype {
    */
   getEntities(): IterableIterator<Entity> {
     return this.#entities.truthyIndices() as IterableIterator<Entity>;
+  }
+
+  /**
+   * Add this archetype's entities to a result bitfield, optionally skipping entities already seen.
+   * @param out - The destination bitfield to update
+   * @param visited - Optional bitfield used to deduplicate entities across archetypes
+   * @returns The destination bitfield
+   */
+  writeEntitiesInto(out: BooleanArray, visited?: BooleanArray): BooleanArray {
+    if (visited) {
+      for (
+        let entity = this.#entities.nextTruthyIndex();
+        entity !== -1;
+        entity = this.#entities.nextTruthyIndex(entity + 1)
+      ) {
+        if (visited.get(entity)) continue;
+        out.set(entity, true);
+        visited.set(entity, true);
+      }
+      return out;
+    }
+
+    for (
+      let entity = this.#entities.nextTruthyIndex();
+      entity !== -1;
+      entity = this.#entities.nextTruthyIndex(entity + 1)
+    ) {
+      out.set(entity, true);
+    }
+    return out;
   }
 
   /**
@@ -144,7 +174,7 @@ export class Archetype {
    * @returns `true` if this Archetype is dirty, `false` otherwise
    */
   isDirty(): boolean {
-    return this.#entered.getTruthyCount() > 0 || this.#exited.getTruthyCount() > 0;
+    return !this.#entered.isEmpty() || !this.#exited.isEmpty();
   }
 
   /**
@@ -152,7 +182,7 @@ export class Archetype {
    * @returns `true` if this Archetype is empty
    */
   isEmpty(): boolean {
-    return this.#entities.getTruthyCount() === 0;
+    return this.#entities.isEmpty();
   }
 
   /**

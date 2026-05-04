@@ -145,12 +145,6 @@ export type QueryInstance = {
   /** The QueryInstance's unique identifier */
   id: string;
   /**
-   * @param target
-   * @param idx
-   * @returns
-   */
-  isCandidate: (target: number, idx: number) => boolean;
-  /**
    * `true` if the object is in a dirty state
    *
    * A query becomes dirty when an archetype is added or removed

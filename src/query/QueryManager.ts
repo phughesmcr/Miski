@@ -6,6 +6,7 @@
  */
 
 import { BooleanArray } from "@phughesmcr/booleanarray";
+import { ID_KEY } from "../constants.ts";
 import { QueryCache } from "./QueryCache.ts";
 import { QueryResultPool } from "./QueryPool.ts";
 import type { Archetype } from "../archetype/Archetype.ts";
@@ -51,11 +52,7 @@ function getEntitiesFromQuery(this: QueryManager, query: Query): IterableIterato
       const result = this.pool.acquireEntityArray();
       result.clear();
       for (const archetype of instance.archetypes) {
-        for (const entity of archetype.getEntities()) {
-          if (this.visited.get(entity)) continue;
-          result.set(entity, true);
-          this.visited.set(entity, true);
-        }
+        archetype.writeEntitiesInto(result, this.visited);
       }
       this.visited.clear();
       return result;
@@ -94,24 +91,15 @@ function createQueryInstance(getInstances: ComponentInstanceGetter, size: number
 
   // Create AND bit array - marks required components
   const andInstances = getRegisteredInstances(query.all);
-  const and = new BooleanArray(size);
-  for (const instance of andInstances) {
-    and.set(instance.id, true);
-  }
+  const and = new BooleanArray(size).setFromObjects(ID_KEY, andInstances, true);
 
   // Create OR bit array - marks optional components (need at least one)
   const orInstances = getRegisteredInstances(query.any);
-  const or = new BooleanArray(size);
-  for (const instance of orInstances) {
-    or.set(instance.id, true);
-  }
+  const or = new BooleanArray(size).setFromObjects(ID_KEY, orInstances, true);
 
   // Create NOT bit array - marks forbidden components
   const notInstances = getRegisteredInstances(query.none);
-  const not = new BooleanArray(size);
-  for (const instance of notInstances) {
-    not.set(instance.id, true);
-  }
+  const not = new BooleanArray(size).setFromObjects(ID_KEY, notInstances, true);
 
   // Build lookup table for quick component access
   const components: Record<string, ComponentInstance<SchemaOrNull<any>>> = {};
@@ -123,20 +111,10 @@ function createQueryInstance(getInstances: ComponentInstanceGetter, size: number
   // Initialize empty set for matching archetypes
   const archetypes = new Set<Archetype>();
 
-  // Check if a component is a candidate for the query
-  const isCandidate = (target: number, idx: number): boolean => {
-    // AND
-    if (!((target & and.buffer[idx]!) === and.buffer[idx])) return false;
-    // OR
-    if (or.buffer[idx] !== 0 && (target & or.buffer[idx]!) === 0) return false;
-    // NOT
-    return (target & not.buffer[idx]!) === 0;
-  };
-
   // turn the three arrays into a string
   const id = `${and.toString()}:${or.toString()}:${not.toString()}`;
 
-  return { and, or, not, archetypes, isCandidate, components, isDirty: true, id };
+  return { and, or, not, archetypes, components, isDirty: true, id };
 }
 
 /** The QueryManager is responsible for creating, registering, and destroying queries. */
