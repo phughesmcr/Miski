@@ -62,10 +62,47 @@ Because Miski is designed to be used inside your own projects, we let you config
 * Ability to limit the number of entities a component can be added to
 * Define components, systems and queries once, reuse them across multiple worlds
 * `AND`,`OR`,`NOT` operators in Queries
-* `world.getQueryEntered` & `world.getQueryExited` methods
-* Use `component.changed` to get an iterator of entities whose properties were changed via `component.proxy`
+* Dense zero-allocation `queryList` API for index-based hot loops
+* Batch component add/remove APIs for query-wide transitions
+* `world.archetypes.queryEntered` & `world.archetypes.queryExited` methods
+* Use `world.components.getChanged(...)` to get entities whose properties were changed via a component proxy
 * No 3rd-party dependencies
 * MIT license
+
+## Performance Snapshot
+
+Miski is optimized for Deno game-loop workloads where predictable frame time and low GC pressure matter.
+
+Recent local benchmark results on Deno 2.7.14, aarch64 macOS:
+
+| Benchmark | Result |
+| --- | ---: |
+| `isActive` hot check | 6.2 ns |
+| `entityHas` ownership check | 5.9 ns |
+| Add/remove tag component | 61.1 ns |
+| Add/remove data component | 91.1 ns |
+| Move entity across common gameplay archetypes | 246.3 ns |
+| Query cache miss after refresh | 3.5 us |
+| Cached dense `queryList` iteration | 965.7 ns |
+| Spawn/despawn 128 projectiles with 6 components | 58.3 us |
+| Game frame - move, query renderables, refresh | 40.2 us |
+
+GC allocation pressure is budgeted separately. Hot entity, component check, direct write, cached query list, and owner
+iteration paths are effectively allocation-free in steady state. The current `deno task bench:gc` run reports:
+
+| Allocation Scenario | Steady-State Allocation |
+| --- | ---: |
+| Entity create/destroy recycled hot path | 0.0360 B/iter |
+| `isActive` and `entityHas` hot checks | 0.0008 B/iter |
+| Direct typed-array component writes | 0.0008 B/iter |
+| Cached `queryList` entity iteration | 0.0020 B/iter |
+| Component owners iterator | 0.0020 B/iter |
+| Add/remove data component runtime transition | 40.0032 B/iter |
+| Game frame system + cached render query + refresh | 1.31 KiB/iter |
+
+Against a local ECS benchmark shape derived from `noctjs/ecs-benchmark`, Miski ranks in the top three by normalized
+geomean when using Deno and Miski's dense/batch APIs for hot query loops. Cross-library benchmark numbers are sensitive
+to runtime, machine, benchmark shape, and API style, so treat this as a comparison aid rather than a universal ranking.
 
 ## Installation
 
@@ -201,6 +238,21 @@ world.components.addToEntity(positionComponent, entity, { x: 10, y: 20 });
 world.components.removeFromEntity(positionComponent, entity);
 ```
 
+For hot loops that add or remove a component across a dense query result, resolve the query once and use the batch APIs:
+
+```typescript
+const query = new Query({ all: [positionComponent] });
+const entities = world.entities.queryList(query);
+
+// Add a tag or data component to every entity in the dense list:
+const added = world.components.addToEntities(renderableComponent, entities);
+
+// Remove it again:
+const removed = world.components.removeFromEntities(renderableComponent, entities);
+```
+
+The return value is the number of entities whose ownership changed.
+
 #### Test for Component presence
 
 We can also test if entities have components:
@@ -312,6 +364,16 @@ We can then access the entities and components which match our query:
 ```typescript
 const components = world.components.query(positionQuery);
 const entities = world.entities.query(positionQuery);
+```
+
+For performance-sensitive loops, use `queryList` to get a dense reusable view of matching entity IDs:
+
+```typescript
+const result = world.entities.queryList(positionQuery);
+for (let i = 0; i < result.count; i++) {
+  const entity = result.indices[i];
+  positionX[entity] += 1;
+}
 ```
 
 We can also access entities which have entered or exited the query since the last `world.refresh()`:
