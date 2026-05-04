@@ -16,6 +16,9 @@ import { NotRegisteredError } from "../errors.ts";
 import type { Query } from "./Query.ts";
 import type { World } from "../world/World.ts";
 
+type QueryComponent = Parameters<ComponentInstanceGetter>[0][number];
+type RegisteredComponentInstance = ComponentInstance<SchemaOrNull<any>>;
+
 /**
  * @internal
  * Get components for a query
@@ -77,6 +80,31 @@ function getEntityListFromQuery(this: QueryManager, query: Query): QueryEntityRe
   return result;
 }
 
+function getRegisteredInstances(
+  getInstances: ComponentInstanceGetter,
+  components: ReadonlyArray<QueryComponent>,
+): RegisteredComponentInstance[] {
+  const instances = getInstances(components);
+  for (let i = 0; i < instances.length; i++) {
+    const instance = instances[i];
+    if (!instance) {
+      const component = components[i];
+      throw new NotRegisteredError(`Component "${component?.name ?? "unknown"}" not registered in world.`);
+    }
+  }
+  return instances as RegisteredComponentInstance[];
+}
+
+function addComponentsToLookup(
+  lookup: Record<string, RegisteredComponentInstance>,
+  instances: readonly RegisteredComponentInstance[],
+): void {
+  for (let i = 0; i < instances.length; i++) {
+    const instance = instances[i]!;
+    lookup[instance.name] = instance;
+  }
+}
+
 /**
  * @internal
  * Creates a runtime instance of a Query for efficient entity matching
@@ -86,37 +114,22 @@ function getEntityListFromQuery(this: QueryManager, query: Query): QueryEntityRe
  * @returns A QueryInstance.
  */
 function createQueryInstance(getInstances: ComponentInstanceGetter, size: number, query: Query): QueryInstance {
-  const getRegisteredInstances = (
-    components: ReadonlyArray<Parameters<ComponentInstanceGetter>[0][number]>,
-  ): ComponentInstance<SchemaOrNull<any>>[] => {
-    const instances = getInstances(components);
-    for (let i = 0; i < instances.length; i++) {
-      const instance = instances[i];
-      if (!instance) {
-        const component = components[i];
-        throw new NotRegisteredError(`Component "${component?.name ?? "unknown"}" not registered in world.`);
-      }
-    }
-    return instances as ComponentInstance<SchemaOrNull<any>>[];
-  };
-
   // Create AND bit array - marks required components
-  const andInstances = getRegisteredInstances(query.all);
+  const andInstances = getRegisteredInstances(getInstances, query.all);
   const and = new BooleanArray(size).setFromObjects(ID_KEY, andInstances, true);
 
-  // Create OR bit array - marks optional components (need at least one)
-  const orInstances = getRegisteredInstances(query.any);
+  // Create OR bit array - when present, at least one component must match
+  const orInstances = getRegisteredInstances(getInstances, query.any);
   const or = new BooleanArray(size).setFromObjects(ID_KEY, orInstances, true);
 
   // Create NOT bit array - marks forbidden components
-  const notInstances = getRegisteredInstances(query.none);
+  const notInstances = getRegisteredInstances(getInstances, query.none);
   const not = new BooleanArray(size).setFromObjects(ID_KEY, notInstances, true);
 
   // Build lookup table for quick component access
-  const components: Record<string, ComponentInstance<SchemaOrNull<any>>> = {};
-  for (const instance of [...andInstances, ...orInstances]) {
-    components[instance.name] = instance;
-  }
+  const components: Record<string, RegisteredComponentInstance> = {};
+  addComponentsToLookup(components, andInstances);
+  addComponentsToLookup(components, orInstances);
   Object.freeze(components);
 
   // Initialize empty set for matching archetypes

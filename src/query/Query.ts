@@ -28,10 +28,7 @@ export const isValidQuerySpec = (spec: unknown): spec is QuerySpec => {
   // check for presence of component in multiple arrays
   if (all && any && all.some((c) => any.includes(c))) return false;
   if (all && none && all.some((c) => none.includes(c))) return false;
-  if (any && all && any.some((c) => all.includes(c))) return false;
   if (any && none && any.some((c) => none.includes(c))) return false;
-  if (none && all && none.some((c) => all.includes(c))) return false;
-  if (none && any && none.some((c) => any.includes(c))) return false;
   return true;
 };
 
@@ -53,7 +50,7 @@ export class Query {
   /** `AND` - Gather entities as long as they have all these components */
   readonly all: Readonly<Component<SchemaOrNull<any>>[]>;
 
-  /** `OR` - Gather entities as long as they have 0...* of these components */
+  /** `OR` - When present, gather entities that have at least one of these components */
   readonly any: Readonly<Component<SchemaOrNull<any>>[]>;
 
   /** `NOT` - Gather entities as long as they don't have these components */
@@ -63,7 +60,7 @@ export class Query {
    * Create a new Query
    * @param spec - The Query's specification object
    * @param spec.all - `AND` - Gather entities as long as they have all these components
-   * @param spec.any - `OR` - Gather entities as long as they have 0...* of these components
+   * @param spec.any - `OR` - When present, gather entities that have at least one of these components
    * @param spec.none - `NOT` - Gather entities as long as they don't have these components
    * @returns A new Query object
    * @throws {SpecError} if the spec is invalid

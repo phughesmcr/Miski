@@ -40,6 +40,16 @@ Deno.test("component, world, query, and system specifications reject invalid sha
     "Query specification object is invalid",
   );
   assertThrows(
+    () => new Query({ all: [position], any: [position] }),
+    SpecError,
+    "Query specification object is invalid",
+  );
+  assertThrows(
+    () => new Query({ any: [position], none: [position] }),
+    SpecError,
+    "Query specification object is invalid",
+  );
+  assertThrows(
     () =>
       new System({
         name: "bad system name",

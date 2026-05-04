@@ -131,7 +131,7 @@ export type ComponentInstanceSpec<T extends SchemaOrNull<T>> = {
 export type QuerySpec = {
   /** `AND` - Gather entities as long as they have all these components */
   all?: Component<SchemaOrNull<any>>[];
-  /** `OR` - Gather entities as long as they have 0...* of these components */
+  /** `OR` - When present, gather entities that have at least one of these components */
   any?: Component<SchemaOrNull<any>>[];
   /** `NOT` - Gather entities as long as they don't have these components */
   none?: Component<SchemaOrNull<any>>[];
