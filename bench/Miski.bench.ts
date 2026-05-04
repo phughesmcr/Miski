@@ -30,6 +30,7 @@ const movementSmall = await populateMovementWorld(SMALL_CAPACITY);
 const movementMedium = await populateMovementWorld(MEDIUM_CAPACITY);
 const movementLarge = await populateMovementWorld(LARGE_CAPACITY);
 const lifecycle = await populateSparseLifecycleWorld(MEDIUM_CAPACITY);
+const batchTransitions = await populateSparseLifecycleWorld(MEDIUM_CAPACITY);
 const queryInvalidation = await populateMovementWorld(SMALL_CAPACITY);
 const transitionTracking = await populateSparseLifecycleWorld(SMALL_CAPACITY);
 const wide = await populateWideWorld(SMALL_CAPACITY);
@@ -41,6 +42,7 @@ const movementFrameRenderableQuery = createRenderableQuery(movementMedium.compon
 const invalidationMovementQuery = createMovementQuery(queryInvalidation.components);
 const transitionTrackingQuery = createMovementQuery(transitionTracking.components);
 const wideQuery = createWideQuery(wide.components);
+const batchPositionQuery = new Query({ all: [batchTransitions.components.position] });
 mixed.world.entities.query(movementQuery);
 mixed.world.entities.query(renderableQuery);
 mixed.world.entities.query(projectileQuery);
@@ -48,6 +50,7 @@ movementMedium.world.entities.query(movementFrameRenderableQuery);
 queryInvalidation.world.entities.query(invalidationMovementQuery);
 transitionTracking.world.entities.query(transitionTrackingQuery);
 wide.world.entities.query(wideQuery);
+batchTransitions.world.entities.query(batchPositionQuery);
 
 const positionInstance = mixed.world.components.getInstance(mixed.components.position) as ComponentInstance<Vec2>;
 const positionStorage = positionInstance.storage;
@@ -309,6 +312,16 @@ Deno.bench({
 });
 
 Deno.bench({
+  name: "batch add/remove tag component across queryList",
+  group: "archetype transitions",
+  fn: () => {
+    const positioned = batchTransitions.world.entities.queryList(batchPositionQuery);
+    batchTransitions.world.components.addToEntities(batchTransitions.components.renderable, positioned);
+    batchTransitions.world.components.removeFromEntities(batchTransitions.components.renderable, positioned);
+  },
+});
+
+Deno.bench({
   name: "move entity across common gameplay archetypes",
   group: "archetype transitions",
   fn: () => {
@@ -402,6 +415,19 @@ Deno.bench({
 });
 
 Deno.bench({
+  name: "queryList cached - movement all + none",
+  group: "queries",
+  fn: () => {
+    const result = mixed.world.entities.queryList(movementQuery);
+    let count = 0;
+    for (let i = 0; i < result.count; i++) {
+      count++;
+    }
+    entitySink ^= count;
+  },
+});
+
+Deno.bench({
   name: "cached query - renderable all + any",
   group: "queries",
   fn: () => {
@@ -475,6 +501,15 @@ Deno.bench({
   group: "queries",
   fn: () => {
     entitySink ^= countEntities(wide.world.entities.query(wideQuery));
+  },
+});
+
+Deno.bench({
+  name: "64-component world queryList cached query",
+  group: "queries",
+  fn: () => {
+    const result = wide.world.entities.queryList(wideQuery);
+    entitySink ^= result.count;
   },
 });
 

@@ -352,6 +352,17 @@ const scenarios: Scenario[] = [
     },
   },
   {
+    name: "queryList cached entity iteration",
+    iterations: 100_000,
+    maxSteadyStateBeforeGcBytesPerIter: ZERO_ALLOC_BUDGET_BYTES_PER_ITER,
+    fn: () => {
+      const result = mixed.world.entities.queryList(movementQuery);
+      let count = 0;
+      for (let i = 0; i < result.count; i++) count++;
+      entitySink ^= count;
+    },
+  },
+  {
     name: "component changed iterator",
     iterations: 100_000,
     maxSteadyStateBeforeGcBytesPerIter: CHANGED_ITERATION_BUDGET_BYTES_PER_ITER,
