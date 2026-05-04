@@ -8,10 +8,10 @@
 import { BooleanArray } from "@phughesmcr/booleanarray";
 import { ID_KEY } from "../constants.ts";
 import { QueryCache } from "./QueryCache.ts";
-import { QueryResultPool } from "./QueryPool.ts";
+import { type QueryEntityResult, QueryResultPool } from "./QueryPool.ts";
 import type { Archetype } from "../archetype/Archetype.ts";
 import type { ComponentInstance } from "../component/ComponentInstance.ts";
-import type { ComponentInstanceGetter, Entity, QueryInstance, SchemaOrNull } from "../types.ts";
+import type { ComponentInstanceGetter, Entity, QueryEntityList, QueryInstance, SchemaOrNull } from "../types.ts";
 import { NotRegisteredError } from "../errors.ts";
 import type { Query } from "./Query.ts";
 import type { World } from "../world/World.ts";
@@ -32,6 +32,7 @@ function getComponentsFromQuery(this: QueryManager, query: Query): Record<string
   );
   // Update last seen version after computing
   this.lastQueryVersion.set(queryId, this.cache.version);
+  this.cacheInvalidated = false;
   return result;
 }
 
@@ -42,19 +43,28 @@ function getComponentsFromQuery(this: QueryManager, query: Query): Record<string
  * @returns An iterable iterator of entities
  */
 function getEntitiesFromQuery(this: QueryManager, query: Query): IterableIterator<Entity> {
+  return getEntityListFromQuery.call(this, query).iterate();
+}
+
+/**
+ * @internal
+ * Get a dense entity list for a query
+ * @param query - The Query to get entities for
+ * @returns A dense reusable entity list
+ */
+function getEntityListFromQuery(this: QueryManager, query: Query): QueryEntityResult {
   const instance = this.register(query);
   const queryId = instance.id;
+  this.ensureQueryMembership();
 
   const result = this.cache.getEntities(
     queryId,
     () => {
-      this.visited.clear();
-      const result = this.pool.acquireEntityArray();
+      const result = this.pool.acquireEntityResult();
       result.clear();
       for (const archetype of instance.archetypes) {
-        archetype.writeEntitiesInto(result, this.visited);
+        archetype.writeEntitiesIntoResult(result);
       }
-      this.visited.clear();
       return result;
     },
     this.lastQueryVersion.get(queryId) ?? 0,
@@ -62,8 +72,9 @@ function getEntitiesFromQuery(this: QueryManager, query: Query): IterableIterato
 
   // Update last seen version after computing
   this.lastQueryVersion.set(queryId, this.cache.version);
+  this.cacheInvalidated = false;
 
-  return result.truthyIndices();
+  return result;
 }
 
 /**
@@ -134,24 +145,37 @@ export class QueryManager {
   /** Map of Query objects to their IDs */
   readonly idsByQuery: Map<Query, string>;
 
+  /** Whether global query cache invalidation has already been recorded. */
+  cacheInvalidated: boolean;
+
   /** Boolean array for visited entities */
   readonly visited: BooleanArray;
+
+  /** Ensures query-to-archetype membership is current before entity queries. */
+  readonly ensureQueryMembership: () => void;
 
   /**
    * Create a new QueryManager
    * @param world - The World instance containing the component registry
    */
-  constructor(world: World, capacity: number) {
+  constructor(
+    world: World,
+    capacity: number,
+    ensureQueryMembership: (queries: MapIterator<QueryInstance>) => void,
+  ) {
     this.pool = new QueryResultPool(capacity);
     this.cache = new QueryCache(this.pool);
     this.lastQueryVersion = new Map();
     this.instancesByID = new Map();
     this.idsByQuery = new Map();
+    this.cacheInvalidated = false;
     this.visited = new BooleanArray(capacity);
+    this.ensureQueryMembership = () => ensureQueryMembership(this.instancesByID.values());
 
     this.components = getComponentsFromQuery.bind(this);
 
     this.entities = getEntitiesFromQuery.bind(this);
+    this.entityList = getEntityListFromQuery.bind(this);
 
     // Setup the registrar
     this.register = function (this: QueryManager, query: Query): QueryInstance {
@@ -190,6 +214,9 @@ export class QueryManager {
   /** Get entities for a query */
   entities: (query: Query) => IterableIterator<Entity>;
 
+  /** Get entities for a query as a dense reusable list */
+  entityList: (query: Query) => QueryEntityList;
+
   /** Register a query */
   register: (query: Query) => QueryInstance;
 
@@ -200,8 +227,9 @@ export class QueryManager {
       if (queryId) {
         this.lastQueryVersion.set(queryId, this.cache.version);
       }
-    } else {
+    } else if (!this.cacheInvalidated) {
       this.cache.invalidate();
+      this.cacheInvalidated = true;
     }
   };
 }

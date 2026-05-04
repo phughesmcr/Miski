@@ -16,7 +16,7 @@ import type { System } from "./system/System.ts";
 import type { ComponentInstance } from "./component/ComponentInstance.ts";
 import type { Archetype } from "./archetype/Archetype.ts";
 import type { StorageProxy } from "./component/StorageProxy.ts";
-import type { $_PARTITION_KEY, $_SYSTEM_DESTROY_KEY, $_SYSTEM_INIT_KEY } from "./constants.ts";
+import type { $_COMPONENT_ID_KEY, $_PARTITION_KEY, $_SYSTEM_DESTROY_KEY, $_SYSTEM_INIT_KEY } from "./constants.ts";
 
 export type { PartitionStorage, Schema, TypedArray, TypedArrayConstructor };
 
@@ -109,6 +109,8 @@ export type ComponentSpec<T extends SchemaOrNull = null> =
  * The private methods of a Component
  */
 export interface ComponentPrivateMethods<T> {
+  /** The stable id of the Component definition */
+  readonly [$_COMPONENT_ID_KEY]: number;
   /** The Partition object of the Component */
   readonly [$_PARTITION_KEY]: Partition<T>;
 }
@@ -154,6 +156,14 @@ export type QueryInstance = {
   or: BooleanArray;
   /** A BooleanArray for the NOT match criteria */
   not: BooleanArray;
+};
+
+/** A dense, reusable view of matching query entity IDs. */
+export type QueryEntityList = {
+  /** Number of valid entity IDs in {@link QueryEntityList.indices}. */
+  readonly count: number;
+  /** Dense entity IDs. Only entries before {@link QueryEntityList.count} are valid. */
+  readonly indices: Uint32Array;
 };
 
 /** A Record of SystemInstances by System name */
@@ -271,6 +281,8 @@ export type WorldEntityAPI = {
   isEntity(entity: Entity): boolean;
   /** Query for entities */
   query(query: Query): IterableIterator<Entity>;
+  /** Query for entities as a dense reusable list for index-based hot loops */
+  queryList(query: Query): QueryEntityList;
 };
 
 /** The public Component management API */
@@ -291,6 +303,20 @@ export type WorldComponentAPI = {
     entity: Entity,
     data?: { [k in keyof T]: number },
   ): void;
+  /**
+   * Add a component to every entity in a dense query list
+   * @param component - The component to add
+   * @param entities - The dense entity list to mutate
+   * @param data - The data to set for the component
+   * @returns The number of entities whose ownership changed
+   * @throws {NotRegisteredError} - If the component is not registered
+   * @throws {EntityNotFoundError} - If any entity is inactive
+   */
+  addToEntities<T extends SchemaOrNull<T>>(
+    component: Component<T> | string,
+    entities: QueryEntityList,
+    data?: { [k in keyof T]: number },
+  ): number;
   /**
    * Check if an entity has a component
    * @param component - The component to check for
@@ -353,6 +379,14 @@ export type WorldComponentAPI = {
    * @throws {NotRegisteredError} - If the component is not registered
    */
   removeFromEntity<T extends SchemaOrNull<T>>(component: Component<T> | string, entity: Entity): void;
+  /**
+   * Remove a component from every entity in a dense query list
+   * @param component - The component to remove
+   * @param entities - The dense entity list to mutate
+   * @returns The number of entities whose ownership changed
+   * @throws {NotRegisteredError} - If the component is not registered
+   */
+  removeFromEntities<T extends SchemaOrNull<T>>(component: Component<T> | string, entities: QueryEntityList): number;
   /**
    * Set the data of a component for an entity
    * @param component - The component to set the data for

@@ -45,6 +45,12 @@ export const $_PARTITION_KEY: unique symbol = Symbol(`$_PARTITION_KEY_${randomSt
 
 /**
  * @internal
+ * The symbol used to store the component definition id
+ */
+export const $_COMPONENT_ID_KEY: unique symbol = Symbol(`$_COMPONENT_ID_KEY_${randomString()}`);
+
+/**
+ * @internal
  * The symbol used to store the query's instances
  */
 export const $_QUERY_KEY: unique symbol = Symbol(`$_QUERY_KEY_${randomString()}`);

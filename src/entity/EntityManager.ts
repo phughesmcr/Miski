@@ -8,6 +8,7 @@
 import { BitPool } from "@phughesmcr/bitpool";
 import { BooleanArray } from "@phughesmcr/booleanarray";
 import { EntityNotFoundError } from "../errors.ts";
+import { ReusableEntityIterator } from "./EntityList.ts";
 import { isPositiveUint32, isUint32, numberArrayFromString } from "../utils.ts";
 import type { Entity, EntityManagerSerialized } from "../types.ts";
 
@@ -18,6 +19,12 @@ export class EntityManager {
 
   /** The entity ID pool */
   pool: BitPool;
+
+  /** Scratch storage for active entity iteration */
+  #activeEntities: Uint32Array;
+
+  /** Reusable active entity iterator */
+  #activeIterator: ReusableEntityIterator;
 
   /** @returns an iterable of all active entities */
   getActive: (startEntity?: Entity, endEntity?: Entity) => IterableIterator<Entity>;
@@ -57,7 +64,12 @@ export class EntityManager {
       );
     }
     this.pool = pool;
-    this.getActive = this.pool.occupiedIndices.bind(this.pool);
+    this.#activeEntities = new Uint32Array(capacity);
+    this.#activeIterator = new ReusableEntityIterator(this.#activeEntities);
+    this.getActive = (startEntity: Entity = 0, endEntity: Entity = this.pool.size): IterableIterator<Entity> => {
+      const count = this.pool.occupiedIndicesInto(this.#activeEntities, startEntity, endEntity);
+      return this.#activeIterator.reset(count);
+    };
   }
 
   /** @returns the maximum number of entities allowed in the pool (inclusive) */

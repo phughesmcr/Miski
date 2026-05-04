@@ -1,7 +1,7 @@
 /// <reference lib="deno.ns" />
 
 import { Component, EntityNotFoundError, Query, System, World, WorldStateError } from "../mod.ts";
-import { assert, assertEquals, assertRejects, assertStrictEquals, assertThrows, ids } from "./helpers.ts";
+import { assert, assertEquals, assertRejects, assertStrictEquals, assertThrows, ids, listIds } from "./helpers.ts";
 import type { ComponentInstance, Entity } from "../mod.ts";
 
 type Vec2 = { x: Float32ArrayConstructor; y: Float32ArrayConstructor };
@@ -254,6 +254,67 @@ Deno.test("query compose supports reusable filters for renderable active movers"
     [movingSprite],
     "Expected composed query to combine active, movement, and renderable filters",
   );
+});
+
+Deno.test("queryList exposes dense live entity IDs for index-based hot loops", async () => {
+  const position = vec2Component();
+  const velocity = vec2Component("velocity");
+  const sleeping = new Component<null>({ name: "sleeping" });
+  const world = new World({ capacity: 8, components: [position, velocity, sleeping] });
+  await world.init();
+
+  const first = createEntity(world);
+  const second = createEntity(world);
+  const third = createEntity(world);
+  world.components.addToEntity(position, first);
+  world.components.addToEntity(velocity, first);
+  world.components.addToEntity(position, second);
+  world.components.addToEntity(velocity, second);
+  world.components.addToEntity(sleeping, second);
+  world.components.addToEntity(position, third);
+
+  const activeMovers = new Query({ all: [position, velocity], none: [sleeping] });
+  assertEquals(listIds(world.entities.queryList(activeMovers)), [first], "Expected dense query list to match query");
+
+  world.components.addToEntity(velocity, third);
+  assertEquals(
+    listIds(world.entities.queryList(activeMovers)),
+    [first, third],
+    "Expected dense query list to update after component transitions",
+  );
+
+  world.entities.destroy(first);
+  assertEquals(listIds(world.entities.queryList(activeMovers)), [third], "Expected dense query list to drop destroys");
+});
+
+Deno.test("batch component transitions mutate dense query lists", async () => {
+  const position = vec2Component();
+  const velocity = vec2Component("velocity");
+  const world = new World({ capacity: 8, components: [position, velocity] });
+  await world.init();
+
+  const first = createEntity(world);
+  const second = createEntity(world);
+  const third = createEntity(world);
+  world.components.addToEntity(position, first);
+  world.components.addToEntity(position, second);
+  world.components.addToEntity(position, third);
+  world.components.addToEntity(velocity, second);
+
+  const positioned = new Query({ all: [position] });
+  const moving = new Query({ all: [position, velocity] });
+  const changed = world.components.addToEntities(velocity, world.entities.queryList(positioned));
+
+  assertEquals(changed, 2, "Expected only entities missing velocity to change ownership");
+  assertEquals(
+    listIds(world.entities.queryList(moving)).toSorted((a, b) => a - b),
+    [first, second, third],
+    "Expected all positioned entities to move",
+  );
+
+  const removed = world.components.removeFromEntities(velocity, world.entities.queryList(moving));
+  assertEquals(removed, 3, "Expected every moving entity to lose velocity");
+  assertEquals(listIds(world.entities.queryList(moving)), [], "Expected batch removal to invalidate cached queries");
 });
 
 Deno.test("queries remain live across add, remove, destroy, and recreate operations", async () => {

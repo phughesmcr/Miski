@@ -178,4 +178,13 @@ export { World } from "@/world/World.ts";
 export { isValidWorldSpec } from "@/world/utils.ts";
 export { isValidName } from "@/utils.ts";
 export type { ComponentInstance } from "@/component/ComponentInstance.ts";
-export type { ComponentRecord, ComponentSpec, Entity, QuerySpec, Schema, SystemSpec, WorldState } from "@/types.ts";
+export type {
+  ComponentRecord,
+  ComponentSpec,
+  Entity,
+  QueryEntityList,
+  QuerySpec,
+  Schema,
+  SystemSpec,
+  WorldState,
+} from "@/types.ts";

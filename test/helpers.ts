@@ -55,3 +55,11 @@ export async function assertRejects(
 export function ids(iterable: Iterable<number> | undefined): number[] {
   return iterable ? [...iterable] : [];
 }
+
+export function listIds(list: { readonly count: number; readonly indices: Uint32Array }): number[] {
+  const result = new Array<number>(list.count);
+  for (let i = 0; i < list.count; i++) {
+    result[i] = list.indices[i]!;
+  }
+  return result;
+}

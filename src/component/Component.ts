@@ -19,7 +19,7 @@
  */
 
 import { isSchema, isValidName, Partition, type PartitionSpec } from "@phughesmcr/partitionedbuffer";
-import { $_PARTITION_KEY } from "../constants.ts";
+import { $_COMPONENT_ID_KEY, $_PARTITION_KEY } from "../constants.ts";
 import { isPositiveUint32 } from "../utils.ts";
 import type { ComponentPrivateMethods, ComponentSpec, Schema, SchemaOrNull } from "../types.ts";
 
@@ -53,6 +53,12 @@ export function isValidComponentArray(array: unknown): array is Array<Component<
 
 /** A Component is a collection of properties that are stored in a world */
 export class Component<T extends SchemaOrNull<T> = null> implements ComponentPrivateMethods<T> {
+  /** Next stable id for component definitions */
+  static #nextId = 0;
+
+  /** Stable id for this component definition */
+  readonly #id: number;
+
   /** The component's storage partition */
   readonly #partition: Partition<T>;
 
@@ -69,6 +75,7 @@ export class Component<T extends SchemaOrNull<T> = null> implements ComponentPri
       throw new TypeError("Invalid component specification.");
     }
 
+    this.#id = Component.#nextId++;
     this.#partition = new Partition<T>({
       name: spec.name,
       schema: spec.schema as Schema<T> | null,
@@ -104,6 +111,10 @@ export class Component<T extends SchemaOrNull<T> = null> implements ComponentPri
 
   get [Symbol.toStringTag](): string {
     return "Component";
+  }
+
+  get [$_COMPONENT_ID_KEY](): number {
+    return this.#id;
   }
 
   get [$_PARTITION_KEY](): Partition<T> {

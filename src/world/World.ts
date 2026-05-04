@@ -20,6 +20,7 @@ import type { ComponentInstance } from "@/component/ComponentInstance.ts";
 import type { Query } from "@/query/Query.ts";
 import type {
   Entity,
+  QueryEntityList,
   QueryInstance,
   SchemaOrNull,
   WorldAPIResult,
@@ -63,6 +64,7 @@ export class World {
     const queryArchetypeEntities = (function* (query: Query): IterableIterator<Entity> {
       visitedArchetypeEntities.clear();
       const queryInstance = world.#queryManager.register(query);
+      world.#archetypeManager.ensureQueryMembership(world.#queryManager.instancesByID.values(), true);
       const archetypes = world.#archetypeManager.query(queryInstance);
       if (archetypes === undefined) {
         return;
@@ -80,20 +82,6 @@ export class World {
     // COMPONENTS API
 
     /**
-     * Convenience function to get a component from a string or Component
-     * @throws {NotRegisteredError} - If the component is not registered
-     */
-    const getComponentByName = <T extends SchemaOrNull<T>>(component: string | Component<T>): Component<T> => {
-      if (typeof component === "string") {
-        component = world.#componentManager.getInstance(component)?.type as Component<T>;
-        if (component === undefined) {
-          throw new NotRegisteredError(`Component ${component} not registered in world`);
-        }
-      }
-      return component;
-    };
-
-    /**
      * Add a component to an entity
      * @param component - The component to add
      * @param entity - The entity to add the component to
@@ -108,12 +96,51 @@ export class World {
       if (!world.#entityManager.isActive(entity)) {
         throw new EntityNotFoundError(`Entity ${entity} is not active.`);
       }
-      component = getComponentByName(component);
-      const instances = world.#componentManager.addToEntity(component, entity, data);
-      world.#archetypeManager.update(entity, instances);
-      if (world.#state === "initialized") {
-        world.refresh(true, true);
+      const instance = world.#componentManager.getInstance(component);
+      if (instance === undefined) {
+        throw new NotRegisteredError(`Component ${component} not registered in world`);
       }
+      const changed = world.#componentManager.addInstanceToEntity(instance, entity, data);
+      if (changed) {
+        world.#archetypeManager.addComponent(entity, instance);
+      }
+      if (changed && world.#state === "initialized" && !world.#queryManager.cacheInvalidated) {
+        world.#queryManager.invalidate();
+      }
+    };
+
+    /**
+     * Add a component to every entity in a dense query list.
+     * @param component - The component to add
+     * @param entities - The dense entity list to mutate
+     * @param data - The data to set for the component
+     * @returns The number of changed entities
+     */
+    const addComponentToEntities = <T extends SchemaOrNull<T>>(
+      component: Component<T> | string,
+      entities: QueryEntityList,
+      data?: { [k in keyof T]: number } | undefined,
+    ): number => {
+      const instance = world.#componentManager.getInstance(component);
+      if (instance === undefined) {
+        throw new NotRegisteredError(`Component ${component} not registered in world`);
+      }
+
+      let changedCount = 0;
+      for (let i = 0; i < entities.count; i++) {
+        const entity = entities.indices[i]!;
+        if (!world.#entityManager.isActive(entity)) {
+          throw new EntityNotFoundError(`Entity ${entity} is not active.`);
+        }
+        if (world.#componentManager.addInstanceToEntity(instance, entity, data)) {
+          world.#archetypeManager.addComponent(entity, instance);
+          changedCount++;
+        }
+      }
+      if (changedCount > 0 && world.#state === "initialized" && !world.#queryManager.cacheInvalidated) {
+        world.#queryManager.invalidate();
+      }
+      return changedCount;
     };
 
     /**
@@ -126,12 +153,46 @@ export class World {
       component: string | Component<T>,
       entity: Entity,
     ): void => {
-      component = getComponentByName(component);
-      const instances = world.#componentManager.removeFromEntity(component, entity);
-      world.#archetypeManager.update(entity, instances);
-      if (world.#state === "initialized") {
-        world.refresh(true, true);
+      const instance = world.#componentManager.getInstance(component);
+      if (instance === undefined) {
+        throw new NotRegisteredError(`Component ${component} not registered in world`);
       }
+      const changed = world.#componentManager.removeInstanceFromEntity(instance, entity);
+      if (changed) {
+        world.#archetypeManager.removeComponent(entity, instance);
+      }
+      if (changed && world.#state === "initialized" && !world.#queryManager.cacheInvalidated) {
+        world.#queryManager.invalidate();
+      }
+    };
+
+    /**
+     * Remove a component from every entity in a dense query list.
+     * @param component - The component to remove
+     * @param entities - The dense entity list to mutate
+     * @returns The number of changed entities
+     */
+    const removeComponentFromEntities = <T extends SchemaOrNull<T>>(
+      component: Component<T> | string,
+      entities: QueryEntityList,
+    ): number => {
+      const instance = world.#componentManager.getInstance(component);
+      if (instance === undefined) {
+        throw new NotRegisteredError(`Component ${component} not registered in world`);
+      }
+
+      let changedCount = 0;
+      for (let i = 0; i < entities.count; i++) {
+        const entity = entities.indices[i]!;
+        if (world.#componentManager.removeInstanceFromEntity(instance, entity)) {
+          world.#archetypeManager.removeComponent(entity, instance);
+          changedCount++;
+        }
+      }
+      if (changedCount > 0 && world.#state === "initialized" && !world.#queryManager.cacheInvalidated) {
+        world.#queryManager.invalidate();
+      }
+      return changedCount;
     };
 
     // MAIN
@@ -144,6 +205,7 @@ export class World {
     const queryEnteredEntities = (function* (query: Query): IterableIterator<Entity> {
       visitedArchetypeEntities.clear();
       const queryInstance = world.#queryManager.register(query);
+      world.#archetypeManager.ensureQueryMembership(world.#queryManager.instancesByID.values(), true);
       const archetypes = world.#archetypeManager.query(queryInstance);
       if (archetypes === undefined) {
         return;
@@ -166,6 +228,7 @@ export class World {
     const queryExitedEntities = (function* (query: Query): IterableIterator<Entity> {
       visitedArchetypeEntities.clear();
       const queryInstance = world.#queryManager.register(query);
+      world.#archetypeManager.ensureQueryMembership(world.#queryManager.instancesByID.values(), true);
       const archetypes = world.#archetypeManager.query(queryInstance);
       if (archetypes === undefined) {
         return;
@@ -195,6 +258,7 @@ export class World {
       count: world.#componentManager.count,
       registry: world.#componentManager.registry,
       addToEntity: addComponentToEntity,
+      addToEntities: addComponentToEntities,
       entityHas: world.#componentManager.entityHas,
       getChanged: world.#componentManager.getChanged,
       getEntityData: world.#componentManager.getEntityData,
@@ -204,6 +268,7 @@ export class World {
       isRegistered: world.#componentManager.isRegistered,
       query: world.#queryManager.components,
       removeFromEntity: removeComponentFromEntity,
+      removeFromEntities: removeComponentFromEntities,
       setEntityData: world.#componentManager.setEntityData,
     };
 
@@ -217,7 +282,7 @@ export class World {
       if (archetype) {
         // Remove all components from the entity
         for (const componentInstance of archetype.components) {
-          world.#componentManager.removeFromEntity(componentInstance.type, entity);
+          world.#componentManager.removeInstanceFromEntity(componentInstance, entity);
         }
       }
       // Reset the entity to the root archetype
@@ -238,6 +303,7 @@ export class World {
       isActive: world.#entityManager.isActive,
       isEntity: world.#entityManager.isEntity,
       query: world.#queryManager.entities,
+      queryList: world.#queryManager.entityList,
     };
 
     const systems: WorldSystemAPI = {
@@ -322,7 +388,9 @@ export class World {
     // Wire up archetype manager for optimized component lookups
     this.#componentManager.setArchetypeManager(this.#archetypeManager);
 
-    this.#queryManager = new QueryManager(this, capacity);
+    this.#queryManager = new QueryManager(this, capacity, (queries) => {
+      this.#archetypeManager.ensureQueryMembership(queries, true);
+    });
     this[$_QUERY_KEY] = () => [...this.#queryManager.instancesByID.values()];
 
     this.#systemManager = new SystemManager(this);

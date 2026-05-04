@@ -9,33 +9,87 @@ import { BooleanArray } from "@phughesmcr/booleanarray";
 import { ID_KEY } from "../constants.ts";
 import { isQueryMatch } from "../query/Query.ts";
 import type { ComponentInstance } from "../component/ComponentInstance.ts";
+import type { QueryEntityResult } from "../query/QueryPool.ts";
 import type { Entity, QueryInstance } from "../types.ts";
+
+function* activeListIterator(
+  list: Uint32Array,
+  active: Uint8Array,
+  count: number,
+): IterableIterator<Entity> {
+  for (let i = 0; i < count; i++) {
+    const entity = list[i]!;
+    if (active[entity] === 1) yield entity;
+  }
+}
 
 /** An Archetype is a collection of ComponentInstances which define the schema of an Entity. */
 export class Archetype {
   /** QueryInstances and their candidacy status */
   #candidateCache: Map<QueryInstance, boolean>;
 
-  /** Entities which have entered this archetype since last refresh */
-  #entered: BooleanArray;
+  /** Active entered flags for this refresh window */
+  #enteredActive: Uint8Array;
 
-  /** Set of Entities which inhabit this Archetype */
-  #entities: BooleanArray;
+  /** Number of currently active entered entities */
+  #enteredCount: number;
 
-  /** Entities which have exited this archetype since last refresh */
-  #exited: BooleanArray;
+  /** Entities that were marked entered during this refresh window */
+  #enteredList: Uint32Array;
+
+  /** Number of entries in the entered list */
+  #enteredListCount: number;
+
+  /** Whether an entity already has an entered-list slot this refresh */
+  #enteredListed: Uint8Array;
+
+  /** Active entity flags for this archetype */
+  #entityActive: Uint8Array;
+
+  /** Active exited flags for this refresh window */
+  #exitedActive: Uint8Array;
+
+  /** Number of currently active exited entities */
+  #exitedCount: number;
+
+  /** Entities that were marked exited during this refresh window */
+  #exitedList: Uint32Array;
+
+  /** Number of entries in the exited list */
+  #exitedListCount: number;
+
+  /** Whether an entity already has an exited-list slot this refresh */
+  #exitedListed: Uint8Array;
 
   /** The world's entity capacity (used for entity tracking arrays) */
   #entityCapacity: number;
 
+  /** Entities that have ever inhabited this archetype, in first-entry order */
+  #entityList: Uint32Array;
+
+  /** Number of entries in the entity list */
+  #entityListCount: number;
+
+  /** Whether an entity already has an entity-list slot */
+  #entityListed: Uint8Array;
+
+  /** Number of entities currently associated with this archetype */
+  #populationCount: number;
+
   /** The Archetype's Component Bitfield */
   readonly bitfield: BooleanArray;
+
+  /** Cached add-component transition edges by component instance id */
+  readonly addTransitions: Archetype[];
 
   /** The components associated with this archetype */
   readonly components: ComponentInstance<any>[];
 
   /** The Archetype's unique identifier */
   readonly id: string;
+
+  /** Cached remove-component transition edges by component instance id */
+  readonly removeTransitions: Archetype[];
 
   /**
    * Creates a new Archetype
@@ -58,9 +112,23 @@ export class Archetype {
     this.id = bitfield.buffer.toString();
     this.components = components;
     this.#candidateCache = new Map();
-    this.#entered = new BooleanArray(capacity);
-    this.#entities = new BooleanArray(capacity);
-    this.#exited = new BooleanArray(capacity);
+    this.#enteredActive = new Uint8Array(capacity);
+    this.#enteredCount = 0;
+    this.#enteredList = new Uint32Array(capacity);
+    this.#enteredListCount = 0;
+    this.#enteredListed = new Uint8Array(capacity);
+    this.#entityActive = new Uint8Array(capacity);
+    this.#entityList = new Uint32Array(capacity);
+    this.#entityListCount = 0;
+    this.#entityListed = new Uint8Array(capacity);
+    this.#exitedActive = new Uint8Array(capacity);
+    this.#exitedCount = 0;
+    this.#exitedList = new Uint32Array(capacity);
+    this.#exitedListCount = 0;
+    this.#exitedListed = new Uint8Array(capacity);
+    this.#populationCount = 0;
+    this.addTransitions = [];
+    this.removeTransitions = [];
   }
 
   /** The maximum id number of the components this Archetype can represent */
@@ -79,9 +147,21 @@ export class Archetype {
    * @returns The Archetype with the Entity added
    */
   addEntity(entity: Entity): Archetype {
-    if (this.#entities.get(entity)) return this;
-    this.#entities.set(entity, true);
-    this.#entered.set(entity, true);
+    if (this.#entityActive[entity] === 1) return this;
+    if (this.#entityListed[entity] === 0) {
+      this.#entityListed[entity] = 1;
+      this.#entityList[this.#entityListCount++] = entity;
+    }
+    this.#entityActive[entity] = 1;
+    if (this.#enteredActive[entity] === 0) {
+      if (this.#enteredListed[entity] === 0) {
+        this.#enteredListed[entity] = 1;
+        this.#enteredList[this.#enteredListCount++] = entity;
+      }
+      this.#enteredActive[entity] = 1;
+      this.#enteredCount++;
+    }
+    this.#populationCount++;
     return this;
   }
 
@@ -98,7 +178,7 @@ export class Archetype {
    * @returns The number of entities in the Archetype
    */
   getPopulationCount(): number {
-    return this.#entities.getCount(true);
+    return this.#populationCount;
   }
 
   /**
@@ -106,7 +186,7 @@ export class Archetype {
    * @returns An iterator of Entities which have entered the Archetype
    */
   getEntered(): IterableIterator<Entity> {
-    return this.#entered.truthyIndices() as IterableIterator<Entity>;
+    return activeListIterator(this.#enteredList, this.#enteredActive, this.#enteredListCount);
   }
 
   /**
@@ -114,7 +194,7 @@ export class Archetype {
    * @returns An iterator of Entities which inhabit the Archetype
    */
   getEntities(): IterableIterator<Entity> {
-    return this.#entities.truthyIndices() as IterableIterator<Entity>;
+    return activeListIterator(this.#entityList, this.#entityActive, this.#entityListCount);
   }
 
   /**
@@ -126,10 +206,12 @@ export class Archetype {
   writeEntitiesInto(out: BooleanArray, visited?: BooleanArray): BooleanArray {
     if (visited) {
       for (
-        let entity = this.#entities.nextTruthyIndex();
-        entity !== -1;
-        entity = this.#entities.nextTruthyIndex(entity + 1)
+        let i = 0;
+        i < this.#entityListCount;
+        i++
       ) {
+        const entity = this.#entityList[i]!;
+        if (this.#entityActive[entity] !== 1) continue;
         if (visited.get(entity)) continue;
         out.set(entity, true);
         visited.set(entity, true);
@@ -138,11 +220,47 @@ export class Archetype {
     }
 
     for (
-      let entity = this.#entities.nextTruthyIndex();
-      entity !== -1;
-      entity = this.#entities.nextTruthyIndex(entity + 1)
+      let i = 0;
+      i < this.#entityListCount;
+      i++
     ) {
+      const entity = this.#entityList[i]!;
+      if (this.#entityActive[entity] !== 1) continue;
       out.set(entity, true);
+    }
+    return out;
+  }
+
+  /**
+   * Add this archetype's entities to a dense query result, optionally skipping entities already seen.
+   * @param out - The destination dense result to update
+   * @param visited - Optional bitfield used to deduplicate entities across archetypes
+   * @returns The destination result
+   */
+  writeEntitiesIntoResult(out: QueryEntityResult, visited?: BooleanArray): QueryEntityResult {
+    if (visited) {
+      for (
+        let i = 0;
+        i < this.#entityListCount;
+        i++
+      ) {
+        const entity = this.#entityList[i]!;
+        if (this.#entityActive[entity] !== 1) continue;
+        if (visited.get(entity)) continue;
+        out.add(entity);
+        visited.set(entity, true);
+      }
+      return out;
+    }
+
+    for (
+      let i = 0;
+      i < this.#entityListCount;
+      i++
+    ) {
+      const entity = this.#entityList[i]!;
+      if (this.#entityActive[entity] !== 1) continue;
+      out.add(entity);
     }
     return out;
   }
@@ -152,7 +270,7 @@ export class Archetype {
    * @returns An iterator of Entities which have exited the Archetype
    */
   getExited(): IterableIterator<Entity> {
-    return this.#exited.truthyIndices() as IterableIterator<Entity>;
+    return activeListIterator(this.#exitedList, this.#exitedActive, this.#exitedListCount);
   }
 
   /**
@@ -174,7 +292,7 @@ export class Archetype {
    * @returns `true` if this Archetype is dirty, `false` otherwise
    */
   isDirty(): boolean {
-    return !this.#entered.isEmpty() || !this.#exited.isEmpty();
+    return this.#enteredCount > 0 || this.#exitedCount > 0;
   }
 
   /**
@@ -182,7 +300,7 @@ export class Archetype {
    * @returns `true` if this Archetype is empty
    */
   isEmpty(): boolean {
-    return this.#entities.isEmpty();
+    return this.#populationCount === 0;
   }
 
   /**
@@ -190,8 +308,20 @@ export class Archetype {
    * @returns The refreshed Archetype
    */
   refresh(): Archetype {
-    this.#entered.clear();
-    this.#exited.clear();
+    for (let i = 0; i < this.#enteredListCount; i++) {
+      const entity = this.#enteredList[i]!;
+      this.#enteredActive[entity] = 0;
+      this.#enteredListed[entity] = 0;
+    }
+    for (let i = 0; i < this.#exitedListCount; i++) {
+      const entity = this.#exitedList[i]!;
+      this.#exitedActive[entity] = 0;
+      this.#exitedListed[entity] = 0;
+    }
+    this.#enteredCount = 0;
+    this.#enteredListCount = 0;
+    this.#exitedCount = 0;
+    this.#exitedListCount = 0;
     return this;
   }
 
@@ -201,10 +331,21 @@ export class Archetype {
    * @returns The Archetype with the Entity removed
    */
   removeEntity(entity: Entity): Archetype {
-    if (!this.#entities.get(entity)) return this;
-    this.#entered.set(entity, false);
-    this.#entities.set(entity, false);
-    this.#exited.set(entity, true);
+    if (this.#entityActive[entity] !== 1) return this;
+    if (this.#enteredActive[entity] === 1) {
+      this.#enteredActive[entity] = 0;
+      this.#enteredCount--;
+    }
+    this.#entityActive[entity] = 0;
+    if (this.#exitedActive[entity] === 0) {
+      if (this.#exitedListed[entity] === 0) {
+        this.#exitedListed[entity] = 1;
+        this.#exitedList[this.#exitedListCount++] = entity;
+      }
+      this.#exitedActive[entity] = 1;
+      this.#exitedCount++;
+    }
+    this.#populationCount--;
     return this;
   }
 
@@ -217,7 +358,7 @@ export class Archetype {
       {
         id: this.id,
         components: this.components.map((instance) => instance.id),
-        entities: [...this.#entities.values()],
+        entities: [...this.getEntities()],
       },
     );
   }

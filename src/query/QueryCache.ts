@@ -1,12 +1,11 @@
-import type { BooleanArray } from "@phughesmcr/booleanarray";
 import type { ComponentInstance } from "../component/ComponentInstance.ts";
 import type { SchemaOrNull } from "../types.ts";
-import type { QueryResultPool } from "./QueryPool.ts";
+import type { QueryEntityResult, QueryResultPool } from "./QueryPool.ts";
 
 /** Cache for query results */
 export class QueryCache {
   #componentCache: Map<string, Record<string, ComponentInstance<SchemaOrNull>>>;
-  #entityCache: Map<string, BooleanArray>;
+  #entityCache: Map<string, QueryEntityResult>;
   #globalVersion: number;
   #pool?: QueryResultPool;
 
@@ -47,14 +46,14 @@ export class QueryCache {
   /** Get cached entities or compute and cache them */
   getEntities(
     queryId: string,
-    compute: () => BooleanArray,
+    compute: () => QueryEntityResult,
     lastVersion: number,
-  ): BooleanArray {
+  ): QueryEntityResult {
     if (lastVersion < this.#globalVersion) {
       // Release the old array back to the pool before removing
-      const oldArray = this.#entityCache.get(queryId);
-      if (oldArray && this.#pool) {
-        this.#pool.releaseEntityArray(oldArray);
+      const oldResult = this.#entityCache.get(queryId);
+      if (oldResult && this.#pool) {
+        this.#pool.releaseEntityResult(oldResult);
       }
       this.#entityCache.delete(queryId);
     }
@@ -70,8 +69,8 @@ export class QueryCache {
   clear(): void {
     // Release all entity arrays back to pool
     if (this.#pool) {
-      for (const array of this.#entityCache.values()) {
-        this.#pool.releaseEntityArray(array);
+      for (const result of this.#entityCache.values()) {
+        this.#pool.releaseEntityResult(result);
       }
     }
     this.#entityCache.clear();

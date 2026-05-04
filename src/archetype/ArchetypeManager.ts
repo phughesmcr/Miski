@@ -29,6 +29,108 @@ export class ArchetypeManager {
   /** The number of components registered in the world */
   #componentCount: number = 0;
 
+  /** Whether query-to-archetype mappings need to be rebuilt */
+  #queryMembershipDirty: boolean;
+
+  /** Reusable query list for refresh passes */
+  #queryScratch: QueryInstance[];
+
+  /**
+   * Move an entity to a
+   * new archetype and mark query membership dirty.
+   * @param entity - The entity to move
+   * @param archetype - The target archetype
+   * @returns The target archetype
+   */
+  #moveEntity(entity: Entity, archetype: Archetype): Archetype {
+    const oldArchetype = this.entityArchetypes[entity];
+    if (oldArchetype === archetype) return archetype;
+
+    oldArchetype?.removeEntity(entity);
+    archetype.addEntity(entity);
+    this.entityArchetypes[entity] = archetype;
+    this.#queryMembershipDirty = true;
+
+    return archetype;
+  }
+
+  /**
+   * Get or create the archetype reached by adding/removing one component.
+   * @param from - The source archetype
+   * @param instance - The component being added or removed
+   * @param add - Whether the component is being added
+   * @returns The target archetype
+   */
+  #getTransitionArchetype(from: Archetype, instance: ComponentInstance<any>, add: boolean): Archetype {
+    const hasComponent = from.bitfield.get(instance.id);
+    if (hasComponent === add) return from;
+
+    const transitions = add ? from.addTransitions : from.removeTransitions;
+    const cached = transitions[instance.id];
+    if (cached) return cached;
+
+    const bitfield = from.bitfield.clone();
+    bitfield.set(instance.id, add);
+    const archetypeId = bitfield.buffer.toString();
+    let archetype = this.registry.get(archetypeId);
+
+    if (!archetype) {
+      const components = add
+        ? this.#componentsWithAdded(from.components, instance)
+        : this.#componentsWithRemoved(from.components, instance);
+      archetype = new Archetype(this.entityArchetypes.length, components, bitfield);
+      this.registry.set(archetypeId, archetype);
+    }
+
+    transitions[instance.id] = archetype;
+    return archetype;
+  }
+
+  /**
+   * Build a component list with one component inserted by registry id.
+   * @param components - The source component list
+   * @param instance - The component to insert
+   * @returns A component list for the target archetype
+   */
+  #componentsWithAdded(
+    components: readonly ComponentInstance<any>[],
+    instance: ComponentInstance<any>,
+  ): ComponentInstance<any>[] {
+    const result = new Array<ComponentInstance<any>>(components.length + 1);
+    let out = 0;
+    let inserted = false;
+    for (let i = 0; i < components.length; i++) {
+      const component = components[i]!;
+      if (!inserted && instance.id < component.id) {
+        result[out++] = instance;
+        inserted = true;
+      }
+      result[out++] = component;
+    }
+    if (!inserted) result[out] = instance;
+    return result;
+  }
+
+  /**
+   * Build a component list with one component removed.
+   * @param components - The source component list
+   * @param instance - The component to remove
+   * @returns A component list for the target archetype
+   */
+  #componentsWithRemoved(
+    components: readonly ComponentInstance<any>[],
+    instance: ComponentInstance<any>,
+  ): ComponentInstance<any>[] {
+    const result = new Array<ComponentInstance<any>>(Math.max(components.length - 1, 0));
+    let out = 0;
+    for (let i = 0; i < components.length; i++) {
+      const component = components[i]!;
+      if (component.id === instance.id) continue;
+      result[out++] = component;
+    }
+    return result;
+  }
+
   /**
    * Create a new ArchetypeManager
    * @param capacity - The maximum number of entities this manager can handle
@@ -38,6 +140,8 @@ export class ArchetypeManager {
     this.registry = new Map();
     this.entityArchetypes = new Array(capacity);
     this.queryArchetypes = new Map();
+    this.#queryMembershipDirty = true;
+    this.#queryScratch = [];
     this.#componentCount = componentCount;
 
     // Create root archetype with properly sized bitfield for components
@@ -75,14 +179,20 @@ export class ArchetypeManager {
           this.registry.set(archetypeId, archetype);
         }
 
-        // Move entity to new archetype
-        oldArchetype?.removeEntity(entity);
-        archetype.addEntity(entity);
-        this.entityArchetypes[entity] = archetype;
-
-        return archetype;
+        return this.#moveEntity(entity, archetype);
       };
     })();
+  }
+
+  /**
+   * Move an entity to the archetype reached by adding a component.
+   * @param entity - The entity to move
+   * @param instance - The component instance being added
+   * @returns The target archetype
+   */
+  addComponent(entity: Entity, instance: ComponentInstance<any>): Archetype {
+    const oldArchetype = this.entityArchetypes[entity] ?? this.root;
+    return this.#moveEntity(entity, this.#getTransitionArchetype(oldArchetype, instance, true));
   }
 
   /**
@@ -180,8 +290,12 @@ export class ArchetypeManager {
     // Clear existing query archetype mappings
     this.queryArchetypes.clear();
 
-    // Convert queries iterator to array to avoid exhaustion
-    const queryArray = [...queries];
+    // Convert queries iterator to a reusable array to avoid exhausting it.
+    const queryArray = this.#queryScratch;
+    queryArray.length = 0;
+    for (const query of queries) {
+      queryArray.push(query);
+    }
 
     // Initialize query archetype sets
     for (const query of queryArray) {
@@ -203,8 +317,22 @@ export class ArchetypeManager {
       }
       if (!retainTransitions) archetype.refresh();
     }
+    this.#queryMembershipDirty = false;
     return this;
   };
+
+  /**
+   * Rebuild query-to-archetype mappings if transitions changed them.
+   * @param queries - The registered query instances
+   * @param retainTransitions - Keep entered/exited state while refreshing membership
+   * @returns this
+   */
+  ensureQueryMembership(queries: MapIterator<QueryInstance>, retainTransitions: boolean = true): this {
+    if (this.#queryMembershipDirty) {
+      this.refresh(queries, retainTransitions);
+    }
+    return this;
+  }
 
   /**
    * Reset an Entity to the root archetype
@@ -215,6 +343,17 @@ export class ArchetypeManager {
     this.set(this.root, entity);
     return this;
   };
+
+  /**
+   * Move an entity to the archetype reached by removing a component.
+   * @param entity - The entity to move
+   * @param instance - The component instance being removed
+   * @returns The target archetype
+   */
+  removeComponent(entity: Entity, instance: ComponentInstance<any>): Archetype {
+    const oldArchetype = this.entityArchetypes[entity] ?? this.root;
+    return this.#moveEntity(entity, this.#getTransitionArchetype(oldArchetype, instance, false));
+  }
 
   /**
    * Set the Archetype associated with an Entity
@@ -237,6 +376,7 @@ export class ArchetypeManager {
     currentArchetype?.removeEntity(entity);
     this.entityArchetypes[entity] = archetype;
     archetype.addEntity(entity);
+    this.#queryMembershipDirty = true;
     return archetype;
   };
 
