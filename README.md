@@ -360,7 +360,22 @@ systemInstance();
 
 Contributions are welcome and encouraged. The aim of the project is performance - both in terms of speed and GC allocation pressure.
 
-Please run `deno test`, `deno bench` and `deno task prep` to run tests, benchmarks, and formatting before committing.
+The benchmark suite covers the gameplay paths ECS users usually care about: world setup, spawn/despawn lifecycle,
+multi-component destroy cleanup, archetype transitions, component storage access, owner and changed iteration, cached
+and invalidated queries, entered/exited query tracking, 64-component worlds, plain TypeScript data-layout baselines,
+system updates, and whole-frame loops. Run throughput benchmarks with:
+
+```bash
+deno task bench
+```
+
+GC allocation pressure is measured separately because it requires V8's exposed GC hook and budget checks:
+
+```bash
+deno task bench:gc
+```
+
+Please run `deno test`, `deno task bench`, `deno task bench:gc` and `deno task prep` before committing performance-sensitive changes.
 
 ## Feature Requests
 

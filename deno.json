@@ -59,9 +59,17 @@
       "description": "Run the demo",
       "command": "deno run -Ar --unstable example/cli.example.ts"
     },
+    "bench": {
+      "description": "Run the ECS throughput benchmark suite",
+      "command": "deno bench"
+    },
+    "bench:gc": {
+      "description": "Measure GC allocation pressure and enforce zero-allocation budgets",
+      "command": "deno run --v8-flags=--expose-gc bench/gc_allocations.ts --check"
+    },
     "prep": {
       "description": "Format, lint, and check the codebase",
-      "command": "deno fmt && deno lint && deno check mod.ts src/**/*.ts"
+      "command": "deno fmt && deno lint && deno check mod.ts src/**/*.ts bench/**/*.ts"
     }
   },
   "test": {
