@@ -337,9 +337,17 @@ export class ComponentManager {
     if (!storage) {
       return this;
     }
+    let changed = false;
     for (const key in value) {
       if (key in storage) {
+        changed ||= storage[key][entity] !== value[key];
         storage[key][entity] = value[key];
+      }
+    }
+    if (changed && this.#owners.get(instance.type)?.get(entity)) {
+      const changedState = this.#changed.get(instance.type)?.set(entity, true);
+      if (changedState === undefined) {
+        throw new Error(`Failed to set changed state for component ${instance.type.name} on entity ${entity}.`);
       }
     }
     return this;

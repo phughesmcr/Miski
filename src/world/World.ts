@@ -173,6 +173,8 @@ export class World {
       for (const archetype of archetypes) {
         for (const entity of archetype.getExited()) {
           if (visitedArchetypeEntities.get(entity)) continue;
+          const currentArchetype = world.#archetypeManager.getEntityArchetype(entity);
+          if (currentArchetype?.isCandidate(queryInstance)) continue;
           visitedArchetypeEntities.set(entity, true);
           yield entity;
         }
@@ -382,6 +384,9 @@ export class World {
     const state = await this.#initPromise;
     if (state !== "initialized") {
       throw new WorldStateError(`World failed to initialize: state is "${state}"`);
+    }
+    if (this.#state !== "initialized") {
+      throw new WorldStateError(`World is not ready: state is "${this.#state}"`);
     }
   }
 

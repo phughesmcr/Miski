@@ -1,6 +1,6 @@
 /// <reference lib="deno.ns" />
 
-import { Component, EntityNotFoundError, Query, World } from "../mod.ts";
+import { Component, EntityNotFoundError, Query, World, WorldStateError } from "../mod.ts";
 import { EntityManager } from "../src/entity/EntityManager.ts";
 import { NotRegisteredError } from "../src/errors.ts";
 
@@ -21,6 +21,24 @@ function assertEquals<T>(actual: T, expected: T, message: string): void {
 function assertThrows(fn: () => unknown, ErrorClass: new (...args: any[]) => Error, messageIncludes: string): void {
   try {
     fn();
+  } catch (error) {
+    assert(error instanceof ErrorClass, `Expected ${ErrorClass.name}, got ${error}`);
+    assert(
+      error instanceof Error && error.message.includes(messageIncludes),
+      `Expected error message to include "${messageIncludes}", got "${error instanceof Error ? error.message : error}"`,
+    );
+    return;
+  }
+  throw new Error(`Expected ${ErrorClass.name} to be thrown`);
+}
+
+async function assertRejects(
+  fn: () => Promise<unknown>,
+  ErrorClass: new (...args: any[]) => Error,
+  messageIncludes: string,
+): Promise<void> {
+  try {
+    await fn();
   } catch (error) {
     assert(error instanceof ErrorClass, `Expected ${ErrorClass.name}, got ${error}`);
     assert(
@@ -149,6 +167,54 @@ Deno.test("query any and none clauses match through component bitfields", async 
     [positionEntity, velocityEntity],
     "Expected any/none query to include matching entities and exclude disabled entities",
   );
+});
+
+Deno.test("setEntityData marks the component changed when storage is updated", async () => {
+  const position = new Component<Vec2>({ name: "position", schema: { x: Float32Array, y: Float32Array } });
+  const world = new World({ capacity: 8, components: [position] });
+  await world.init();
+
+  const entity = world.entities.create();
+  assert(entity !== undefined, "Expected entity to be created");
+  world.components.addToEntity(position, entity, { x: 1, y: 2 });
+  world.refresh();
+
+  world.components.setEntityData(position, entity, { x: 3, y: 4 });
+
+  assertEquals(world.components.getEntityData(position, entity), { x: 3, y: 4 }, "Expected storage to update");
+  assertEquals(ids(world.components.getChanged(position)), [entity], "Expected setEntityData to mark changed");
+});
+
+Deno.test("queryExited ignores archetype exits while the entity still matches the query", async () => {
+  const position = new Component<Vec2>({ name: "position", schema: { x: Float32Array, y: Float32Array } });
+  const velocity = new Component<Vec2>({ name: "velocity", schema: { x: Float32Array, y: Float32Array } });
+  const renderable = new Component<null>({ name: "renderable" });
+  const world = new World({ capacity: 8, components: [position, velocity, renderable] });
+  await world.init();
+
+  const entity = world.entities.create();
+  assert(entity !== undefined, "Expected entity to be created");
+  const query = new Query({ any: [position, velocity] });
+
+  world.components.addToEntity(position, entity);
+  world.components.addToEntity(velocity, entity);
+  world.components.addToEntity(renderable, entity);
+  world.refresh();
+
+  world.components.removeFromEntity(renderable, entity);
+  world.components.removeFromEntity(velocity, entity);
+
+  assertEquals(ids(world.entities.query(query)), [entity], "Expected entity to still match through position");
+  assertEquals(ids(world.archetypes.queryExited(query)), [], "Expected no query exit while still matching");
+});
+
+Deno.test("world.onReady rejects after the world has been destroyed", async () => {
+  const position = new Component<Vec2>({ name: "position", schema: { x: Float32Array, y: Float32Array } });
+  const world = new World({ capacity: 8, components: [position] });
+  await world.init();
+  await world.destroy();
+
+  await assertRejects(() => world.onReady(), WorldStateError, 'state is "destroyed"');
 });
 
 Deno.test("components cannot be added to inactive entities", async () => {
