@@ -11,7 +11,7 @@ import { $_ARCHETYPE_KEY, $_QUERY_KEY, VERSION } from "@/constants.ts";
 import { ArchetypeManager } from "@/archetype/ArchetypeManager.ts";
 import { ComponentManager } from "@/component/ComponentManager.ts";
 import { EntityManager } from "@/entity/EntityManager.ts";
-import { NotRegisteredError, SpecError, WorldStateError } from "@/errors.ts";
+import { EntityNotFoundError, NotRegisteredError, SpecError, WorldStateError } from "@/errors.ts";
 import { QueryManager } from "@/query/QueryManager.ts";
 import { SystemManager } from "@/system/SystemManager.ts";
 import type { Component } from "@/component/Component.ts";
@@ -105,11 +105,14 @@ export class World {
       entity: Entity,
       data?: { [k in keyof T]: number } | undefined,
     ): void => {
+      if (!world.#entityManager.isActive(entity)) {
+        throw new EntityNotFoundError(`Entity ${entity} is not active.`);
+      }
       component = getComponentByName(component);
       const instances = world.#componentManager.addToEntity(component, entity, data);
       world.#archetypeManager.update(entity, instances);
       if (world.#state === "initialized") {
-        world.refresh(true);
+        world.refresh(true, true);
       }
     };
 
@@ -127,7 +130,7 @@ export class World {
       const instances = world.#componentManager.removeFromEntity(component, entity);
       world.#archetypeManager.update(entity, instances);
       if (world.#state === "initialized") {
-        world.refresh(true);
+        world.refresh(true, true);
       }
     };
 
@@ -385,12 +388,13 @@ export class World {
   /**
    * Run routine maintenance on the World
    * @param retainChanged - skip component refresh if true
+   * @param retainTransitions - skip clearing query entered/exited state if true
    * @throws {WorldStateError} - If the World has not yet been initialized, or has already been destroyed
    */
-  refresh(retainChanged: boolean = false): void {
+  refresh(retainChanged: boolean = false, retainTransitions: boolean = false): void {
     assertWorldState("initialized", this.#state);
     try {
-      this.#archetypeManager.refresh(this.#queryManager.instancesByID.values());
+      this.#archetypeManager.refresh(this.#queryManager.instancesByID.values(), retainTransitions);
       if (!retainChanged) this.#componentManager.refresh();
       this.#queryManager.invalidate();
     } catch (error) {

@@ -23,6 +23,8 @@ export class ComponentManager {
   #buffer: PartitionedBuffer;
   /** The changed state for each component */
   #changed: Map<Component<any>, BooleanArray>;
+  /** The owner count for each component */
+  #ownerCounts: Map<Component<any>, number>;
   /** The owner state for each component */
   #owners: Map<Component<any>, BooleanArray>;
   /** The registry of component instances */
@@ -39,10 +41,11 @@ export class ComponentManager {
    */
   constructor(capacity: number, components: Component<any>[]) {
     // create the storage buffer
-    const size = components.reduce((acc, component) => acc + component.size, 0) * capacity;
+    const size = Math.max(components.reduce((acc, component) => acc + component.size, 0) * capacity, capacity);
     this.#buffer = new PartitionedBuffer(size, capacity);
     // create the various registries
     this.#changed = new Map();
+    this.#ownerCounts = new Map();
     this.#owners = new Map();
     this.#registry = new Map();
     this.#registryByName = {};
@@ -51,6 +54,7 @@ export class ComponentManager {
       // instance owner entity tracking
       const instanceOwners = new BooleanArray(capacity);
       this.#owners.set(component, instanceOwners);
+      this.#ownerCounts.set(component, 0);
       // instance changed entity tracking
       const instanceChanged = new BooleanArray(capacity);
       this.#changed.set(component, instanceChanged);
@@ -93,11 +97,28 @@ export class ComponentManager {
       );
     }
     const { type } = instance;
+    const owners = this.#owners.get(type);
+    if (owners === undefined) {
+      throw new Error(`Failed to find ownership state for component ${type.name}.`);
+    }
+
+    const alreadyOwned = owners.get(entity);
+    if (!alreadyOwned && type.maxEntities !== null) {
+      const ownerCount = this.#ownerCounts.get(type) ?? 0;
+      if (ownerCount >= type.maxEntities) {
+        throw new RangeError(
+          `Component "${type.name}" can only be added to ${type.maxEntities} entities.`,
+        );
+      }
+    }
 
     // Set ownership
-    const ownerState = this.#owners.get(type)?.set(entity, true);
+    const ownerState = owners.set(entity, true);
     if (ownerState === undefined) {
       throw new Error(`Failed to set ownership for component ${type.name} on entity ${entity}.`);
+    }
+    if (!alreadyOwned) {
+      this.#ownerCounts.set(type, (this.#ownerCounts.get(type) ?? 0) + 1);
     }
 
     // Set changed
@@ -280,8 +301,20 @@ export class ComponentManager {
     const instance = this.getInstance(component);
     if (!instance) return this.#getEntityComponentsDirect(entity);
     const { type } = instance;
-    this.#owners.get(type)?.set(entity, false);
+    const owners = this.#owners.get(type);
+    const wasOwned = owners?.get(entity) ?? false;
+    if (wasOwned) {
+      this.#ownerCounts.set(type, Math.max((this.#ownerCounts.get(type) ?? 1) - 1, 0));
+    }
+    owners?.set(entity, false);
     this.#changed.get(type)?.set(entity, false);
+    if (wasOwned && instance.storage) {
+      const storage = instance.storage.partitions as Record<string, TypedArray>;
+      for (const key in storage) {
+        const partition = storage[key];
+        if (partition) Reflect.deleteProperty(partition, String(entity));
+      }
+    }
     return this.#getEntityComponentsDirect(entity);
   };
 

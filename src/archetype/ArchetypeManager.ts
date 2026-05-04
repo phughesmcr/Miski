@@ -177,7 +177,7 @@ export class ArchetypeManager {
    * Run routine maintenance on the ArchetypeManager
    * @returns this
    */
-  refresh = (queries: MapIterator<QueryInstance>): this => {
+  refresh = (queries: MapIterator<QueryInstance>, retainTransitions: boolean = false): this => {
     // Clear existing query archetype mappings
     this.queryArchetypes.clear();
 
@@ -196,14 +196,13 @@ export class ArchetypeManager {
       for (const query of queryArray) {
         if (archetype.isCandidate(query)) {
           const archetypeSet = this.queryArchetypes.get(query)!;
-          // Only add if it has entities TODO: is this right?
-          if (archetype.getPopulationCount() > 0) {
+          if (archetype.getPopulationCount() > 0 || (retainTransitions && archetype.isDirty())) {
             archetypeSet.add(archetype);
             query.archetypes.add(archetype); // Update the QueryInstance's archetypes set
           }
         }
       }
-      archetype.refresh();
+      if (!retainTransitions) archetype.refresh();
     }
     return this;
   };

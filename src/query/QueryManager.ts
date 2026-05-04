@@ -11,6 +11,7 @@ import { QueryResultPool } from "./QueryPool.ts";
 import type { Archetype } from "../archetype/Archetype.ts";
 import type { ComponentInstance } from "../component/ComponentInstance.ts";
 import type { ComponentInstanceGetter, Entity, QueryInstance, SchemaOrNull } from "../types.ts";
+import { NotRegisteredError } from "../errors.ts";
 import type { Query } from "./Query.ts";
 import type { World } from "../world/World.ts";
 
@@ -77,22 +78,36 @@ function getEntitiesFromQuery(this: QueryManager, query: Query): IterableIterato
  * @returns A QueryInstance.
  */
 function createQueryInstance(getInstances: ComponentInstanceGetter, size: number, query: Query): QueryInstance {
+  const getRegisteredInstances = (
+    components: ReadonlyArray<Parameters<ComponentInstanceGetter>[0][number]>,
+  ): ComponentInstance<SchemaOrNull<any>>[] => {
+    const instances = getInstances(components);
+    for (let i = 0; i < instances.length; i++) {
+      const instance = instances[i];
+      if (!instance) {
+        const component = components[i];
+        throw new NotRegisteredError(`Component "${component?.name ?? "unknown"}" not registered in world.`);
+      }
+    }
+    return instances as ComponentInstance<SchemaOrNull<any>>[];
+  };
+
   // Create AND bit array - marks required components
-  const andInstances = getInstances(query.all).filter(Boolean) as ComponentInstance<SchemaOrNull<any>>[];
+  const andInstances = getRegisteredInstances(query.all);
   const and = new BooleanArray(size);
   for (const instance of andInstances) {
     and.set(instance.id, true);
   }
 
   // Create OR bit array - marks optional components (need at least one)
-  const orInstances = getInstances(query.any).filter(Boolean) as ComponentInstance<SchemaOrNull<any>>[];
+  const orInstances = getRegisteredInstances(query.any);
   const or = new BooleanArray(size);
   for (const instance of orInstances) {
     or.set(instance.id, true);
   }
 
   // Create NOT bit array - marks forbidden components
-  const notInstances = getInstances(query.none).filter(Boolean) as ComponentInstance<SchemaOrNull<any>>[];
+  const notInstances = getRegisteredInstances(query.none);
   const not = new BooleanArray(size);
   for (const instance of notInstances) {
     not.set(instance.id, true);
@@ -184,7 +199,7 @@ export class QueryManager {
 
       // Refresh archetypes after query registration to update mappings
       if (world.state === "initialized") {
-        world.refresh(true);
+        world.refresh(true, true);
       }
 
       return instance;
