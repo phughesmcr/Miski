@@ -163,8 +163,11 @@ export class World {
 
   /** Construct the system public API facade */
   #constructSystemAPI(): WorldSystemAPI {
+    const systemManager = this.#systemManager;
     return {
-      registry: this.#systemManager.registry,
+      get registry() {
+        return systemManager.registry;
+      },
       create: (system) => this.#systemManager.create(system),
       get: (system) => this.#systemManager.get(system),
       has: (system) => this.#systemManager.has(system),

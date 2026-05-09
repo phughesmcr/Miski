@@ -4,6 +4,15 @@ import { WorldStateError } from "@/errors.ts";
 import type { WorldSpec, WorldState } from "@/types.ts";
 import { isObject, isPositiveUint32 } from "@/utils.ts";
 
+function hasUniqueComponentNames(components: WorldSpec["components"]): boolean {
+  const names = new Set<string>();
+  for (const component of components) {
+    if (names.has(component.name)) return false;
+    names.add(component.name);
+  }
+  return true;
+}
+
 /**
  * Test if an object is a valid WorldSpec
  * @param spec The object to test
@@ -13,7 +22,7 @@ export function isValidWorldSpec(spec: unknown): spec is WorldSpec {
   if (isObject(spec) === false) return false;
   const { capacity, components } = spec;
   return isPositiveUint32(capacity) && capacity >= MIN_WORLD_CAPACITY && isValidComponentArray(components) &&
-    components.length > 0;
+    components.length > 0 && hasUniqueComponentNames(components);
 }
 
 /**

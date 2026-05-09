@@ -179,7 +179,7 @@ export type QueryEntityList = {
 };
 
 /** A Record of SystemInstances by System name */
-export type SystemRecord = Record<string, SystemInstance<any, any>>;
+export type SystemRecord = Readonly<Record<string, SystemInstance<any, any>>>;
 
 /**
  * The parameters of a function omitting the first two parameters
@@ -302,7 +302,7 @@ export type WorldComponentAPI = {
   /** The number of components registered */
   readonly count: number;
   /** A Record of ComponentInstances by Component name */
-  readonly registry: Record<string, ComponentInstance<any>>;
+  readonly registry: Readonly<Record<string, ComponentInstance<any>>>;
   /**
    * Add a component to an entity
    * @param component - The component to add

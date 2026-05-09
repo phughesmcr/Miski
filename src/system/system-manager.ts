@@ -19,7 +19,11 @@ export class SystemManager {
   /** Internal component query callback used while public query APIs are unavailable. */
   #queryComponents: Parameters<typeof createSystemInstance>[2];
 
-  registry: Record<string, SystemInstance<any>>;
+  /** Internal mutable system registry keyed by system name. */
+  #registry: Record<string, SystemInstance<any>>;
+
+  /** Frozen public registry view keyed by system name. */
+  #publicRegistry: Readonly<Record<string, SystemInstance<any>>>;
 
   /**
    * Create a new SystemManager
@@ -28,7 +32,18 @@ export class SystemManager {
   constructor(world: World, queryComponents: Parameters<typeof createSystemInstance>[2]) {
     this.#world = world;
     this.#queryComponents = queryComponents;
-    this.registry = {};
+    this.#registry = {};
+    this.#publicRegistry = Object.freeze({});
+  }
+
+  /** @returns a frozen record of all system instances by name */
+  get registry(): Readonly<Record<string, SystemInstance<any>>> {
+    return this.#publicRegistry;
+  }
+
+  /** Refresh the public registry view after cold-path system registry changes. */
+  #refreshPublicRegistry(): void {
+    this.#publicRegistry = Object.freeze({ ...this.#registry });
   }
 
   /**
@@ -43,7 +58,8 @@ export class SystemManager {
       return existing;
     }
     const instance = createSystemInstance(this.#world, system, this.#queryComponents);
-    this.registry[system.name] = instance as SystemInstance<any>;
+    this.#registry[system.name] = instance as SystemInstance<any>;
+    this.#refreshPublicRegistry();
     return instance as SystemInstance<T>;
   }
 
@@ -63,14 +79,15 @@ export class SystemManager {
     }
     const proto = Object.getPrototypeOf(instance);
     await proto[$_SYSTEM_DESTROY_KEY](this.#world);
-    delete this.registry[proto.name];
+    delete this.#registry[proto.name];
+    this.#refreshPublicRegistry();
   }
 
   /**
    * Destroy all systems
    */
   async destroyAll(): Promise<void> {
-    for (const instance of Object.values(this.registry)) {
+    for (const instance of Object.values(this.#registry)) {
       const proto = Object.getPrototypeOf(instance);
       await this.destroy(proto.name);
     }
@@ -83,9 +100,9 @@ export class SystemManager {
    */
   get<T extends SystemCallback>(system: string | System<T>): SystemInstance<T> | undefined {
     if (typeof system === "string") {
-      return this.registry[system];
+      return this.#registry[system];
     }
-    const result = this.registry[system.name];
+    const result = this.#registry[system.name];
     if (result && Object.getPrototypeOf(result) !== system) {
       return undefined;
     }
@@ -105,7 +122,7 @@ export class SystemManager {
    * Initialize all systems
    */
   async init(): Promise<void> {
-    for (const instance of Object.values(this.registry)) {
+    for (const instance of Object.values(this.#registry)) {
       const system: System<any> = Object.getPrototypeOf(instance);
       await system[$_SYSTEM_INIT_KEY](this.#world);
     }

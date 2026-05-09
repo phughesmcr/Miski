@@ -48,6 +48,8 @@ export class ComponentManager {
   #registry: Map<Component<any>, ComponentInstance<any>>;
   /** The registry of component instances by name */
   #registryByName: Record<string, ComponentInstance<any>>;
+  /** Frozen public registry view keyed by component name */
+  #publicRegistry: Readonly<Record<string, ComponentInstance<any>>>;
   /** Component instances indexed by component definition id */
   #registryByComponentId: ComponentInstance<any>[];
   /** Component instances indexed by component instance id */
@@ -86,6 +88,7 @@ export class ComponentManager {
     this.#ownersById = [];
     this.#registry = new Map();
     this.#registryByName = {};
+    this.#publicRegistry = {};
     this.#registryByComponentId = [];
     this.#instancesById = [];
     this.#isUncappedTagById = [];
@@ -136,6 +139,7 @@ export class ComponentManager {
       this.#registryByName[component.name] = instance;
       this.#registryByComponentId[component[$_COMPONENT_ID_KEY]] = instance;
     }
+    this.#publicRegistry = Object.freeze({ ...this.#registryByName });
   }
 
   /** @returns the number of components registered */
@@ -144,8 +148,8 @@ export class ComponentManager {
   }
 
   /** @returns a record of all component instances by name */
-  get registry(): Record<string, ComponentInstance<any>> {
-    return this.#registryByName;
+  get registry(): Readonly<Record<string, ComponentInstance<any>>> {
+    return this.#publicRegistry;
   }
 
   /**
