@@ -40,8 +40,8 @@ Try to include:
 
 ## Use a Consistent Coding Style
 
-Please remember to use `deno fmt` and `deno lint` and fix any linter errors
-before submitting pull requests
+Please run `deno task ci` and fix any formatting, linting, type-checking, test,
+or publish validation errors before submitting pull requests.
 
 Prefer prototype methods for class behavior. Use arrow functions for small
 public facade wrappers, callbacks, or other cases that intentionally need

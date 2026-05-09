@@ -19,12 +19,12 @@ list any relevant details for your test configuration
 
 ## Checklist
 
-- [ ] My code follows the style guidelines of this project (run `deno fmt` and `deno lint`)
+- [ ] `deno task ci` passes locally
 - [ ] I have performed a self-review of my own code
 - [ ] I have commented my code, particularly in hard-to-understand areas
 - [ ] I have made any corresponding changes to the documentation
 - [ ] My changes generate no new warnings or errors
-- [ ] New and existing unit tests pass locally with my changes
+- [ ] New and existing unit tests are covered by the local validation run
 - [ ] I have added tests that prove my fix is effective or that my feature works
 - [ ] Any dependent changes have been merged and published in downstream modules
 - [ ] I have checked my code and corrected any misspellings

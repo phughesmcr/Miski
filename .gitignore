@@ -7,7 +7,6 @@ node_modules/
 .env
 .env.*
 .npm
-deno.lock
 package-lock.json
 package.json
 

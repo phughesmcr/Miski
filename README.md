@@ -136,6 +136,42 @@ bunx jsr add @phughesmcr/miski
 import { World, ... } from "@phughesmcr/miski";
 ```
 
+## Development
+
+Miski uses Deno 2.x for local validation and CI.
+
+Run the full contributor check before opening a pull request:
+
+```bash
+deno task ci
+```
+
+For local formatting plus lint and type checks, run:
+
+```bash
+deno task prep
+```
+
+Run tests with:
+
+```bash
+deno task test
+```
+
+Run demos with:
+
+```bash
+deno task demo
+deno task demo:cli
+```
+
+Benchmarks are manual and are not part of PR CI:
+
+```bash
+deno task bench
+deno task bench:gc
+```
+
 ## Quick Start API Reference
 
 Below are the essentials of the Miski API. For full API documentation see [jsr.io/@phughesmcr/miski](https://jsr.io/@phughesmcr/miski).
@@ -437,7 +473,8 @@ GC allocation pressure is measured separately because it requires V8's exposed G
 deno task bench:gc
 ```
 
-Please run `deno test`, `deno task bench`, `deno task bench:gc` and `deno task prep` before committing performance-sensitive changes.
+Please run `deno task ci` before opening a PR. For performance-sensitive changes, also run `deno task bench` and
+`deno task bench:gc`.
 
 ## Feature Requests
 

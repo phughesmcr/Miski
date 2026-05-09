@@ -1,5 +1,4 @@
 {
-  "lock": false,
   "name": "@phughesmcr/miski",
   "version": "0.1.0",
   "license": "MIT",
@@ -50,6 +49,15 @@
       "tags": ["recommended", "jsr"]
     }
   },
+  "publish": {
+    "include": [
+      "deno.json",
+      "README.md",
+      "LICENSE",
+      "mod.ts",
+      "src/**/*.ts"
+    ]
+  },
   "tasks": {
     "bundle": {
       "description": "Bundle the codebase using Bun",
@@ -73,7 +81,27 @@
     },
     "prep": {
       "description": "Format, lint, and check the codebase",
-      "command": "deno fmt && deno lint && deno check mod.ts src/**/*.ts bench/**/*.ts"
+      "command": "deno fmt && deno lint && deno task check"
+    },
+    "fmt:check": {
+      "description": "Check formatting without modifying files",
+      "command": "deno fmt --check"
+    },
+    "check": {
+      "description": "Type-check the project graph",
+      "command": "deno check mod.ts src/**/*.ts test/**/*.ts bench/**/*.ts example/**/*.ts"
+    },
+    "test": {
+      "description": "Run tests with the committed lockfile",
+      "command": "deno test --frozen"
+    },
+    "publish:dry-run": {
+      "description": "Validate the JSR package without publishing",
+      "command": "deno publish --dry-run --allow-dirty"
+    },
+    "ci": {
+      "description": "Run formatting, linting, type-checking, tests, and publish validation",
+      "command": "deno task fmt:check && deno lint && deno task check && deno task test && deno task publish:dry-run"
     }
   },
   "test": {
