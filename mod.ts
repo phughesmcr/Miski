@@ -171,7 +171,16 @@
  */
 
 export { Component, isValidComponentSpec } from "@/component/component.ts";
-export { EntityNotFoundError, isMiskiError, MiskiError, SpecError, WorldStateError } from "@/errors.ts";
+export {
+  ComponentDataError,
+  ComponentOwnershipError,
+  EntityNotFoundError,
+  isMiskiError,
+  MiskiError,
+  NotRegisteredError,
+  SpecError,
+  WorldStateError,
+} from "@/errors.ts";
 export { isValidQuerySpec, Query } from "@/query/query.ts";
 export { isValidSystemSpec, System } from "@/system/system.ts";
 export { World } from "@/world/world.ts";

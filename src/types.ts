@@ -346,12 +346,13 @@ export type WorldComponentAPI = {
    * Get the data of a component from an entity
    * @param component - The component to get the data for
    * @param entity - The entity to get the data for
-   * @returns The data for the component or `undefined` if the component is not registered
+   * @returns The data for the component
+   * @throws {EntityNotFoundError} - If the entity is inactive
+   * @throws {NotRegisteredError} - If the component is not registered
+   * @throws {ComponentDataError} - If the component has no data storage
+   * @throws {ComponentOwnershipError} - If the active entity does not own the component
    */
-  getEntityData<T extends SchemaOrNull<T>>(
-    component: Component<T> | string,
-    entity: Entity,
-  ): Record<keyof T, number> | undefined;
+  getEntityData<T extends SchemaOrNull<T>>(component: Component<T> | string, entity: Entity): Record<keyof T, number>;
   /**
    * Check if a component is registered
    * @param component - The component to check
@@ -388,6 +389,8 @@ export type WorldComponentAPI = {
    * Remove a component from an entity
    * @param component - The component to remove
    * @param entity - The entity to remove the component from
+   * @remarks Active entities that do not own the component are skipped idempotently.
+   * @throws {EntityNotFoundError} - If the entity is inactive
    * @throws {NotRegisteredError} - If the component is not registered
    */
   removeFromEntity<T extends SchemaOrNull<T>>(component: Component<T> | string, entity: Entity): void;
@@ -396,7 +399,9 @@ export type WorldComponentAPI = {
    * @param component - The component to remove
    * @param entities - The dense entity list to mutate
    * @returns The number of entities whose ownership changed
+   * @remarks Fail-fast and non-atomic: inactive entities throw when encountered; active non-owners are skipped.
    * @throws {NotRegisteredError} - If the component is not registered
+   * @throws {EntityNotFoundError} - If any entity is inactive
    */
   removeFromEntities<T extends SchemaOrNull<T>>(component: Component<T> | string, entities: QueryEntityList): number;
   /**
@@ -404,6 +409,10 @@ export type WorldComponentAPI = {
    * @param component - The component to set the data for
    * @param entity - The entity to set the data for
    * @param value - The data to set
+   * @throws {EntityNotFoundError} - If the entity is inactive
+   * @throws {NotRegisteredError} - If the component is not registered
+   * @throws {ComponentDataError} - If the component has no data storage
+   * @throws {ComponentOwnershipError} - If the active entity does not own the component
    */
   setEntityData<T extends SchemaOrNull<T>>(
     component: Component<T> | string,

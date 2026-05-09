@@ -47,6 +47,18 @@ export const ComponentNotFoundError: typeof MiskiError = createErrorClass(
   "Component not found",
 );
 
+/** An error thrown when an entity does not own the requested component */
+export const ComponentOwnershipError: typeof MiskiError = createErrorClass(
+  "ComponentOwnershipError",
+  "Entity does not own component",
+);
+
+/** An error thrown when a component has no data storage */
+export const ComponentDataError: typeof MiskiError = createErrorClass(
+  "ComponentDataError",
+  "Component has no data storage",
+);
+
 /** An error thrown when a query returned no components */
 export const NoComponentsFoundError: typeof MiskiError = createErrorClass(
   "NoComponentsFoundError",

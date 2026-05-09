@@ -284,6 +284,17 @@ export class ComponentManager {
   }
 
   /**
+   * Check if an entity owns a registered component instance.
+   * @param instance - The registered component instance
+   * @param entity - The entity to check
+   * @returns `true` if the entity owns the component instance
+   * @internal
+   */
+  entityOwnsInstance<T extends SchemaOrNull<T>>(instance: ComponentInstance<T>, entity: Entity): boolean {
+    return this.#ownersById[instance.id]?.[entity] === 1;
+  }
+
+  /**
    * Get a component instance
    * @param component - The component to get the instance of
    * @returns The component instance or `undefined` if the component is not registered
@@ -386,10 +397,22 @@ export class ComponentManager {
     if (!instance) {
       return undefined;
     }
+    return this.getInstanceEntityData(instance, entity);
+  }
+
+  /**
+   * Get the data for a registered data component instance on an entity.
+   * @param instance - The registered component instance
+   * @param entity - The entity to get the data for
+   * @returns The data for the component or `undefined` if the instance has no storage
+   * @internal
+   */
+  getInstanceEntityData<T extends SchemaOrNull<T>>(
+    instance: ComponentInstance<T>,
+    entity: Entity,
+  ): Record<keyof T, number> | undefined {
     const storage = instance.storage?.partitions as Record<keyof T, TypedArray> | undefined;
-    if (!storage) {
-      return undefined;
-    }
+    if (!storage) return undefined;
     const result: Record<keyof T, number> = {} as Record<keyof T, number>;
     for (const key in storage) {
       result[key] = storage[key][entity] ?? Number.NaN;
@@ -518,10 +541,25 @@ export class ComponentManager {
     if (!instance || !value) {
       return this;
     }
+    return this.setInstanceEntityData(instance, entity, value);
+  }
+
+  /**
+   * Set data for a registered data component instance on an entity.
+   * @param instance - The registered component instance
+   * @param entity - The entity to set the data for
+   * @param value - The data to set
+   * @returns This component manager
+   * @internal
+   */
+  setInstanceEntityData<T extends SchemaOrNull<T>>(
+    instance: ComponentInstance<T>,
+    entity: Entity,
+    value: Record<keyof T, number>,
+  ): this {
+    if (!value) return this;
     const storage = instance.storage?.partitions as Record<keyof T, TypedArray> | undefined;
-    if (!storage) {
-      return this;
-    }
+    if (!storage) return this;
     let changed = false;
     for (const key in value) {
       if (key in storage) {

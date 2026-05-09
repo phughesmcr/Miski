@@ -11,7 +11,14 @@ import { $_ARCHETYPE_KEY, $_QUERY_KEY, VERSION } from "@/constants.ts";
 import { ArchetypeManager } from "@/archetype/archetype-manager.ts";
 import { ComponentManager } from "@/component/component-manager.ts";
 import { EntityManager } from "@/entity/entity-manager.ts";
-import { EntityNotFoundError, NotRegisteredError, SpecError, WorldStateError } from "@/errors.ts";
+import {
+  ComponentDataError,
+  ComponentOwnershipError,
+  EntityNotFoundError,
+  NotRegisteredError,
+  SpecError,
+  WorldStateError,
+} from "@/errors.ts";
 import { QueryManager } from "@/query/query-manager.ts";
 import { SystemManager } from "@/system/system-manager.ts";
 import type { Component } from "@/component/component.ts";
@@ -125,7 +132,7 @@ export class World {
       getChanged: <T extends SchemaOrNull<T>>(component: Component<T> | string) =>
         this.#componentManager.getChanged(component),
       getEntityData: <T extends SchemaOrNull<T>>(component: Component<T> | string, entity: Entity) =>
-        this.#componentManager.getEntityData(component, entity),
+        this.#getComponentEntityData(component, entity),
       getInstance: <T extends SchemaOrNull<T>>(component: Component<T> | string) =>
         this.#componentManager.getInstance(component),
       getInstances: (array: Component<SchemaOrNull<any>>[]) => this.#componentManager.getInstances(array),
@@ -141,7 +148,7 @@ export class World {
         component: Component<T> | string,
         entity: Entity,
         value: Record<keyof T, number>,
-      ) => this.#componentManager.setEntityData(component, entity, value),
+      ) => this.#setComponentEntityData(component, entity, value),
     };
   }
 
@@ -233,7 +240,7 @@ export class World {
       component: Component<T> | string,
       entity: Entity,
       value: Record<keyof T, number>,
-    ) => this.#componentManager.setEntityData(component, entity, value);
+    ) => this.#setComponentEntityData(component, entity, value);
 
     this.entities.create = () => this.#entityManager.create();
     this.entities.destroy = (entity: Entity) => this.#destroyEntity(entity);
@@ -388,6 +395,9 @@ export class World {
     component: string | Component<T>,
     entity: Entity,
   ): void {
+    if (!this.#entityManager.isActive(entity)) {
+      throw new EntityNotFoundError(`Entity ${entity} is not active.`);
+    }
     const instance = this.#componentManager.getInstance(component);
     if (instance === undefined) {
       throw new NotRegisteredError(`Component ${component} not registered in world`);
@@ -414,6 +424,9 @@ export class World {
     let changedCount = 0;
     for (let i = 0; i < entities.count; i++) {
       const entity = entities.indices[i]!;
+      if (!this.#entityManager.isActive(entity)) {
+        throw new EntityNotFoundError(`Entity ${entity} is not active.`);
+      }
       if (this.#componentManager.removeInstanceFromEntity(instance, entity)) {
         this.#archetypeManager.removeComponent(entity, instance);
         changedCount++;
@@ -425,8 +438,49 @@ export class World {
     return changedCount;
   }
 
+  /** Resolve a registered data component instance for guarded public data access. */
+  #getGuardedDataComponent<T extends SchemaOrNull<T>>(
+    component: Component<T> | string,
+    entity: Entity,
+  ): ComponentInstance<T> {
+    if (!this.#entityManager.isActive(entity)) {
+      throw new EntityNotFoundError(`Entity ${entity} is not active.`);
+    }
+    const instance = this.#componentManager.getInstance(component);
+    if (instance === undefined) {
+      throw new NotRegisteredError(`Component ${component} not registered in world`);
+    }
+    if (instance.storage === null) {
+      throw new ComponentDataError(`Component ${instance.type.name} has no data storage.`);
+    }
+    if (!this.#componentManager.entityOwnsInstance(instance, entity)) {
+      throw new ComponentOwnershipError(`Entity ${entity} does not own component ${instance.type.name}.`);
+    }
+    return instance;
+  }
+
+  /** Get guarded component data for an active owning entity. */
+  #getComponentEntityData<T extends SchemaOrNull<T>>(
+    component: Component<T> | string,
+    entity: Entity,
+  ): Record<keyof T, number> {
+    return this.#componentManager.getInstanceEntityData(this.#getGuardedDataComponent(component, entity), entity)!;
+  }
+
+  /** Set guarded component data for an active owning entity. */
+  #setComponentEntityData<T extends SchemaOrNull<T>>(
+    component: Component<T> | string,
+    entity: Entity,
+    value: Record<keyof T, number>,
+  ): void {
+    this.#componentManager.setInstanceEntityData(this.#getGuardedDataComponent(component, entity), entity, value);
+  }
+
   /** Destroy an entity and clean up its components and archetype */
   #destroyEntity(entity: Entity): void {
+    if (!this.#entityManager.isActive(entity)) {
+      throw new EntityNotFoundError(`Entity ${entity} is not active.`);
+    }
     // Get all components for this entity before destroying
     const archetype = this.#archetypeManager.getEntityArchetype(entity);
     if (archetype) {

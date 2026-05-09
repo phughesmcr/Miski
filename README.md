@@ -289,6 +289,9 @@ const removed = world.components.removeFromEntities(renderableComponent, entitie
 
 The return value is the number of entities whose ownership changed.
 
+Removal is idempotent for active entities that do not own the component. Batch removal is fail-fast and non-atomic:
+inactive entities throw when encountered, while active non-owners are skipped.
+
 #### Test for Component presence
 
 We can also test if entities have components:
@@ -320,7 +323,7 @@ Once we have the component instance we can modify entity properties.
 
 There are two ways to do this:
 
-The first is quick but unsafe (no change tracking):
+The first is quick but unsafe (no change tracking and no ownership checks):
 
 ```typescript
 positionInstance.storage.partitions.x[entity] = 1;
@@ -334,6 +337,17 @@ positionInstance.proxy.x = 1;
 ```
 
 The second way, using `.proxy` has the advantage of also adding the entity to the changed tracking as well as performing some basic typeguarding.
+
+For convenience, the public data APIs perform ownership and data-storage checks:
+
+```typescript
+const data = world.components.getEntityData(positionComponent, entity);
+world.components.setEntityData(positionComponent, entity, { x: 10, y: 20 });
+```
+
+These public methods throw Miski errors for inactive entities, unregistered components, tag components, and active
+entities that do not own the requested data component. Direct typed-array storage remains the explicit opt-out path for
+performance-sensitive code that wants raw access without guards.
 
 For example:
 
