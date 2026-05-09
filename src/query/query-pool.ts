@@ -2,6 +2,7 @@ import { BooleanArray } from "@phughesmcr/booleanarray";
 import { ReusableEntityIterator } from "@/entity/entity-list.ts";
 import type { Entity } from "@/types.ts";
 
+/** Mutable pooled backing store for the public borrowed QueryEntityList view. */
 export class QueryEntityResult {
   #iterator: ReusableEntityIterator;
   count: number = 0;

@@ -2,7 +2,7 @@
 
 import { Component, EntityNotFoundError, Query, System, World, WorldStateError } from "../mod.ts";
 import { assert, assertEquals, assertRejects, assertStrictEquals, assertThrows, ids, listIds } from "./helpers.ts";
-import type { ComponentInstance, Entity } from "../mod.ts";
+import type { ComponentInstance, Entity, QueryEntityList } from "../mod.ts";
 
 type Vec2 = { x: Float32ArrayConstructor; y: Float32ArrayConstructor };
 type Health = { current: Uint16ArrayConstructor; max: Uint16ArrayConstructor };
@@ -285,6 +285,38 @@ Deno.test("queryList exposes dense live entity IDs for index-based hot loops", a
 
   world.entities.destroy(first);
   assertEquals(listIds(world.entities.queryList(activeMovers)), [third], "Expected dense query list to drop destroys");
+});
+
+Deno.test("queryList returns a borrowed pooled view, not a stable snapshot", async () => {
+  const position = vec2Component();
+  const velocity = vec2Component("velocity");
+  const world = new World({ capacity: 8, components: [position, velocity] });
+  await world.init();
+
+  const first = createEntity(world);
+  const second = createEntity(world);
+  world.components.addToEntity(position, first);
+  world.components.addToEntity(velocity, first);
+  world.components.addToEntity(position, second);
+  world.components.addToEntity(velocity, second);
+
+  const moving = new Query({ all: [position, velocity] });
+  const stale = world.entities.queryList(moving);
+  assertEquals(listIds(stale), [first, second], "Expected initial query list to contain both moving entities");
+
+  world.components.removeFromEntity(velocity, second);
+  const current = world.entities.queryList(moving);
+
+  assertStrictEquals(stale, current, "Expected invalidated queryList storage to be recycled for the same query");
+  assertEquals(listIds(stale), [first], "Expected stale handle to reflect the current recycled result");
+});
+
+Deno.test("queryList indices are readonly at the public type boundary", () => {
+  const assertReadonlyIndices = (list: QueryEntityList): void => {
+    // @ts-expect-error QueryEntityList exposes a borrowed read-only index view.
+    list.indices[0] = 1;
+  };
+  void assertReadonlyIndices;
 });
 
 Deno.test("batch component transitions mutate dense query lists", async () => {

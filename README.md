@@ -412,6 +412,10 @@ for (let i = 0; i < result.count; i++) {
 }
 ```
 
+`queryList` returns a borrowed, pooled view, not a stable snapshot. The result is valid only until the next
+world mutation, query invalidation, or `world.refresh()`. Read `indices` only for entries `0 <= i < count`;
+callers that need stable entity IDs must explicitly copy the valid prefix in user code.
+
 We can also access entities which have entered or exited the query since the last `world.refresh()`:
 
 ```typescript

@@ -158,12 +158,24 @@ export type QueryInstance = {
   not: BooleanArray;
 };
 
-/** A dense, reusable view of matching query entity IDs. */
+/** Read-only numeric index view for borrowed query entity IDs. */
+export type QueryEntityIndices = {
+  /** Dense entity ID at `index`; only entries before the owning list's `count` are valid. */
+  readonly [index: number]: Entity;
+};
+
+/**
+ * A borrowed, reusable view of matching query entity IDs.
+ *
+ * The view is pooled and valid only until the next world mutation, query
+ * invalidation, or `world.refresh()`. Copy the valid prefix when a stable
+ * snapshot is required.
+ */
 export type QueryEntityList = {
   /** Number of valid entity IDs in {@link QueryEntityList.indices}. */
   readonly count: number;
-  /** Dense entity IDs. Only entries before {@link QueryEntityList.count} are valid. */
-  readonly indices: Uint32Array;
+  /** Borrowed dense entity IDs. Read only entries `0 <= i < count`. */
+  readonly indices: QueryEntityIndices;
 };
 
 /** A Record of SystemInstances by System name */
