@@ -16,14 +16,18 @@ export class SystemManager {
   /** The World that owns this system manager. */
   #world: World;
 
+  /** Internal component query callback used while public query APIs are unavailable. */
+  #queryComponents: Parameters<typeof createSystemInstance>[2];
+
   registry: Record<string, SystemInstance<any>>;
 
   /**
    * Create a new SystemManager
    * @param world The world to create the system manager in
    */
-  constructor(world: World) {
+  constructor(world: World, queryComponents: Parameters<typeof createSystemInstance>[2]) {
     this.#world = world;
+    this.#queryComponents = queryComponents;
     this.registry = {};
   }
 
@@ -38,7 +42,7 @@ export class SystemManager {
     if (existing) {
       return existing;
     }
-    const instance = createSystemInstance(this.#world, system);
+    const instance = createSystemInstance(this.#world, system, this.#queryComponents);
     this.registry[system.name] = instance as SystemInstance<any>;
     return instance as SystemInstance<T>;
   }

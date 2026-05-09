@@ -380,13 +380,102 @@ Deno.test("entered and exited query views deduplicate entities that match throug
 Deno.test("world state guards make lifecycle misuse explicit", async () => {
   const position = vec2Component();
   const world = new World({ capacity: 8, components: [position] });
+  const query = new Query({ all: [position] });
+  const emptyList = { count: 0, indices: new Uint32Array(0) };
 
   assertThrows(() => world.refresh(), WorldStateError, "World has not been initialized");
+  assertThrows(() => world.entities.create(), WorldStateError, "World has not been initialized");
+  assertThrows(() => world.entities.destroy(0), WorldStateError, "World has not been initialized");
+  assertThrows(() => ids(world.entities.query(query)), WorldStateError, "World has not been initialized");
+  assertThrows(() => world.entities.queryList(query), WorldStateError, "World has not been initialized");
+  assertThrows(() => world.components.addToEntity(position, 0), WorldStateError, "World has not been initialized");
+  assertThrows(
+    () => world.components.addToEntities(position, emptyList),
+    WorldStateError,
+    "World has not been initialized",
+  );
+  assertThrows(() => world.components.removeFromEntity(position, 0), WorldStateError, "World has not been initialized");
+  assertThrows(
+    () => world.components.removeFromEntities(position, emptyList),
+    WorldStateError,
+    "World has not been initialized",
+  );
+  assertThrows(
+    () => world.components.setEntityData(position, 0, { x: 1, y: 2 }),
+    WorldStateError,
+    "World has not been initialized",
+  );
+  assertThrows(() => world.components.query(query), WorldStateError, "World has not been initialized");
+  assertThrows(() => world.archetypes.queryComponents(query), WorldStateError, "World has not been initialized");
+  assertThrows(() => ids(world.archetypes.queryEntities(query)), WorldStateError, "World has not been initialized");
+  assertThrows(() => ids(world.archetypes.queryEntered(query)), WorldStateError, "World has not been initialized");
+  assertThrows(() => ids(world.archetypes.queryExited(query)), WorldStateError, "World has not been initialized");
+
   await world.init();
   await assertRejects(() => world.init(), WorldStateError, "World has already been initialized");
   await world.destroy();
   assertThrows(() => world.refresh(), WorldStateError, "World has already been destroyed");
+  assertThrows(() => world.entities.create(), WorldStateError, "World has already been destroyed");
+  assertThrows(() => world.entities.destroy(0), WorldStateError, "World has already been destroyed");
+  assertThrows(() => ids(world.entities.query(query)), WorldStateError, "World has already been destroyed");
+  assertThrows(() => world.entities.queryList(query), WorldStateError, "World has already been destroyed");
+  assertThrows(() => world.components.addToEntity(position, 0), WorldStateError, "World has already been destroyed");
+  assertThrows(
+    () => world.components.addToEntities(position, emptyList),
+    WorldStateError,
+    "World has already been destroyed",
+  );
+  assertThrows(
+    () => world.components.removeFromEntity(position, 0),
+    WorldStateError,
+    "World has already been destroyed",
+  );
+  assertThrows(
+    () => world.components.removeFromEntities(position, emptyList),
+    WorldStateError,
+    "World has already been destroyed",
+  );
+  assertThrows(
+    () => world.components.setEntityData(position, 0, { x: 1, y: 2 }),
+    WorldStateError,
+    "World has already been destroyed",
+  );
+  assertThrows(() => world.components.query(query), WorldStateError, "World has already been destroyed");
+  assertThrows(() => world.archetypes.queryComponents(query), WorldStateError, "World has already been destroyed");
+  assertThrows(() => ids(world.archetypes.queryEntities(query)), WorldStateError, "World has already been destroyed");
+  assertThrows(() => ids(world.archetypes.queryEntered(query)), WorldStateError, "World has already been destroyed");
+  assertThrows(() => ids(world.archetypes.queryExited(query)), WorldStateError, "World has already been destroyed");
   await assertRejects(() => world.onReady(), WorldStateError, 'state is "destroyed"');
+});
+
+Deno.test("systems can be registered before init but cannot run outside the initialized lifecycle", async () => {
+  const position = vec2Component();
+  const calls: string[] = [];
+  const world = new World({ capacity: 8, components: [position] });
+  const system = new System({
+    name: "lifecycleGuarded",
+    query: new Query({ all: [position] }),
+    init: (hookWorld) => {
+      assertStrictEquals(hookWorld.state, "initialized", "Expected init hook to see initialized world state");
+      calls.push("init");
+    },
+    callback: () => {
+      calls.push("callback");
+    },
+  });
+
+  const runSystem = world.systems.create(system);
+  assertStrictEquals(world.systems.get(system), runSystem, "Expected pre-init system registration to succeed");
+  assertThrows(() => runSystem(), WorldStateError, "World has not been initialized");
+
+  await world.init();
+  runSystem();
+  await world.destroy();
+
+  assertThrows(() => runSystem(), WorldStateError, "World has already been destroyed");
+  assertThrows(() => world.systems.create(system), WorldStateError, "World has already been destroyed");
+  await assertRejects(() => world.systems.destroy(system), WorldStateError, "World has already been destroyed");
+  assertEquals(calls, ["init", "callback"], "Expected guarded system calls to skip the callback");
 });
 
 Deno.test("a component definition can back independent worlds without shared ownership or changed state", async () => {

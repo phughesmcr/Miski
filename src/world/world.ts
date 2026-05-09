@@ -172,6 +172,100 @@ export class World {
     };
   }
 
+  /** Throw the current lifecycle state's public API error. */
+  #throwUnavailable(): never {
+    assertWorldState("initialized", this.#state);
+    throw new WorldStateError("World is unavailable");
+  }
+
+  /** Install facades for APIs that require an initialized World. */
+  #installUninitializedAPIs(): void {
+    const unavailable = () => {
+      throw new WorldStateError("World has not been initialized");
+    };
+
+    this.archetypes.queryComponents = unavailable;
+    this.archetypes.queryEntities = unavailable;
+    this.archetypes.queryEntered = unavailable;
+    this.archetypes.queryExited = unavailable;
+
+    this.components.addToEntity = unavailable;
+    this.components.addToEntities = unavailable;
+    this.components.query = unavailable;
+    this.components.removeFromEntity = unavailable;
+    this.components.removeFromEntities = unavailable;
+    this.components.setEntityData = unavailable;
+
+    this.entities.create = unavailable;
+    this.entities.destroy = unavailable;
+    this.entities.query = unavailable;
+    this.entities.queryList = unavailable;
+  }
+
+  /** Install initialized fast-path facades with no lifecycle branch in public hot methods. */
+  #installInitializedAPIs(): void {
+    this.archetypes.queryComponents = (query: Query) => this.#queryArchetypeComponents(query);
+    this.archetypes.queryEntities = (query: Query) => this.#queryArchetypeEntities(query);
+    this.archetypes.queryEntered = (query: Query) => this.#queryEnteredEntities(query);
+    this.archetypes.queryExited = (query: Query) => this.#queryExitedEntities(query);
+
+    this.components.addToEntity = <T extends SchemaOrNull<T>>(
+      component: Component<T> | string,
+      entity: Entity,
+      data?: { [k in keyof T]: number } | undefined,
+    ) => this.#addComponentToEntity(component, entity, data);
+    this.components.addToEntities = <T extends SchemaOrNull<T>>(
+      component: Component<T> | string,
+      entities: QueryEntityList,
+      data?: { [k in keyof T]: number } | undefined,
+    ) => this.#addComponentToEntities(component, entities, data);
+    this.components.query = (query: Query) => this.#queryManager.components(query);
+    this.components.removeFromEntity = <T extends SchemaOrNull<T>>(component: string | Component<T>, entity: Entity) =>
+      this.#removeComponentFromEntity(component, entity);
+    this.components.removeFromEntities = <T extends SchemaOrNull<T>>(
+      component: Component<T> | string,
+      entities: QueryEntityList,
+    ) => this.#removeComponentFromEntities(component, entities);
+    this.components.setEntityData = <T extends SchemaOrNull<T>>(
+      component: Component<T> | string,
+      entity: Entity,
+      value: Record<keyof T, number>,
+    ) => this.#componentManager.setEntityData(component, entity, value);
+
+    this.entities.create = () => this.#entityManager.create();
+    this.entities.destroy = (entity: Entity) => this.#destroyEntity(entity);
+    this.entities.query = (query: Query) => this.#queryManager.entities(query);
+    this.entities.queryList = (query: Query) => this.#queryManager.entityList(query);
+
+    this.systems.create = (system) => this.#systemManager.create(system);
+    this.systems.destroy = (system) => this.#systemManager.destroy(system);
+  }
+
+  /** Install facades for APIs that are unavailable after destroy or error. */
+  #installUnavailableAPIs(): void {
+    const unavailable = () => this.#throwUnavailable();
+
+    this.archetypes.queryComponents = unavailable;
+    this.archetypes.queryEntities = unavailable;
+    this.archetypes.queryEntered = unavailable;
+    this.archetypes.queryExited = unavailable;
+
+    this.components.addToEntity = unavailable;
+    this.components.addToEntities = unavailable;
+    this.components.query = unavailable;
+    this.components.removeFromEntity = unavailable;
+    this.components.removeFromEntities = unavailable;
+    this.components.setEntityData = unavailable;
+
+    this.entities.create = unavailable;
+    this.entities.destroy = unavailable;
+    this.entities.query = unavailable;
+    this.entities.queryList = unavailable;
+
+    this.systems.create = unavailable;
+    this.systems.destroy = unavailable;
+  }
+
   /** Get the components for a query */
   #queryArchetypeComponents(query: Query): Record<string, ComponentInstance<any>> {
     return this.#queryManager.components(query);
@@ -378,7 +472,7 @@ export class World {
     });
     this[$_QUERY_KEY] = () => [...this.#queryManager.instancesByID.values()];
 
-    this.#systemManager = new SystemManager(this);
+    this.#systemManager = new SystemManager(this, (query: Query) => this.#queryManager.components(query));
 
     // Public APIs
     const APIs: WorldAPIResult = this.#constructAPIs();
@@ -386,6 +480,7 @@ export class World {
     this.components = APIs.components;
     this.entities = APIs.entities;
     this.systems = APIs.systems;
+    this.#installUninitializedAPIs();
   }
 
   /** The World's current state */
@@ -402,13 +497,15 @@ export class World {
     // TODO: ensure everything is in its correct initial state - however, fromJSON world's shouldn't set everything to initial??
     try {
       this.#archetypeManager.init();
-      await this.#systemManager.init();
       this.#state = "initialized";
+      this.#installInitializedAPIs();
+      await this.#systemManager.init();
       this.#initResolver?.("initialized");
       this.refresh();
       assertWorldState("initialized", this.#state);
     } catch (error) {
       this.#state = "error";
+      this.#installUnavailableAPIs();
       this.#initResolver?.("error");
       throw error;
     }
@@ -423,8 +520,10 @@ export class World {
     try {
       await this.#systemManager.destroyAll();
       this.#state = "destroyed";
+      this.#installUnavailableAPIs();
     } catch (error) {
       this.#state = "error";
+      this.#installUnavailableAPIs();
       throw error;
     }
   }

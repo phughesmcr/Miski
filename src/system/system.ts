@@ -16,9 +16,10 @@ import type { World } from "@/world/world.ts";
 export function createSystemInstance<T extends SystemCallback>(
   world: World,
   system: System<T>,
+  queryComponents: (query: Query) => Record<string, unknown> = (query) => world.components.query(query),
 ): SystemInstance<T> {
   // Collect all entries from the iterator into an array first
-  const components = world.components.query(system.query) as Parameters<T>[0];
+  const components = queryComponents(system.query) as Parameters<T>[0];
 
   if (Object.keys(components).length === 0) {
     throw new NoComponentsFoundError("System query returned no components");
