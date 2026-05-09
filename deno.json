@@ -56,7 +56,11 @@
       "command": "bun build ./mod.ts --outdir ./dist --sourcemap=linked --minify"
     },
     "demo": {
-      "description": "Run the demo",
+      "description": "Run the visual browser demo",
+      "command": "deno run -Ar example/visual.example.ts"
+    },
+    "demo:cli": {
+      "description": "Run the legacy terminal predator-prey demo",
       "command": "deno run -Ar --unstable example/cli.example.ts"
     },
     "bench": {
