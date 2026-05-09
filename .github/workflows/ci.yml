@@ -17,5 +17,8 @@ jobs:
         with:
           deno-version: v2.x
 
-      - name: Run validation
+      - name: Run CI validation
         run: deno task ci
+
+      - name: Run GC allocation benchmark gate
+        run: deno task bench:gc

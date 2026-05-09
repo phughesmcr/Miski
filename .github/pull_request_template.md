@@ -17,6 +17,14 @@ List any dependencies that are required for this change.
 Please describe the tests that you ran to verify your changes. Provide instructions so we can reproduce. Please also
 list any relevant details for your test configuration
 
+## Performance
+
+- [ ] `deno task bench:gc` passes locally
+- [ ] This change does not worsen benchmark-sensitive paths; benchmark output is included when relevant
+
+Include `deno task bench` results for changes touching ECS runtime hot paths, benchmark fixtures,
+storage/query/component/entity/system behavior, or performance documentation.
+
 ## Checklist
 
 - [ ] `deno task ci` passes locally

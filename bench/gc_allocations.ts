@@ -50,6 +50,12 @@ const WIDE_QUERY_ITERATION_BUDGET_BYTES_PER_ITER = 260;
 const CHANGED_ITERATION_BUDGET_BYTES_PER_ITER = 360;
 const SYSTEM_UPDATE_BUDGET_BYTES_PER_ITER = 220;
 const FRAME_BUDGET_BYTES_PER_ITER = 2_700;
+const WORLD_CONSTRUCTOR_BUDGET_BYTES_PER_ITER = 10_500;
+const PROJECTILE_SPAWN_DESPAWN_BUDGET_BYTES_PER_ITER = 3_200;
+const GET_ENTITY_DATA_BUDGET_BYTES_PER_ITER = 80;
+const DATA_COMPONENT_TRANSITION_BUDGET_BYTES_PER_ITER = 60;
+const QUERY_TRANSITION_TRACKING_BUDGET_BYTES_PER_ITER = 1_800;
+const WIDE_ARCHETYPE_TRANSITION_BUDGET_BYTES_PER_ITER = 1_100;
 const checkMode = Deno.args.includes("--check");
 
 const gc = (globalThis as { gc?: GcFn }).gc;
@@ -286,6 +292,7 @@ const scenarios: Scenario[] = [
   {
     name: "world constructor allocating",
     iterations: 10_000,
+    maxSteadyStateBeforeGcBytesPerIter: WORLD_CONSTRUCTOR_BUDGET_BYTES_PER_ITER,
     fn: () => {
       objectSink = new World({ capacity: 256, components: mixed.components.all });
     },
@@ -316,6 +323,7 @@ const scenarios: Scenario[] = [
   {
     name: "spawn/despawn 128 projectiles with 6 components",
     iterations: 10_000,
+    maxSteadyStateBeforeGcBytesPerIter: PROJECTILE_SPAWN_DESPAWN_BUDGET_BYTES_PER_ITER,
     fn: () => {
       spawnProjectileBatch(fullSpawnEntities);
       destroyBatch(fullSpawnEntities);
@@ -339,6 +347,7 @@ const scenarios: Scenario[] = [
   {
     name: "getEntityData allocating object materialization",
     iterations: 100_000,
+    maxSteadyStateBeforeGcBytesPerIter: GET_ENTITY_DATA_BUDGET_BYTES_PER_ITER,
     fn: () => {
       objectSink = mixed.world.components.getEntityData(mixed.components.position, mutationEntity);
     },
@@ -381,6 +390,7 @@ const scenarios: Scenario[] = [
   {
     name: "add/remove data component runtime transition",
     iterations: 100_000,
+    maxSteadyStateBeforeGcBytesPerIter: DATA_COMPONENT_TRANSITION_BUDGET_BYTES_PER_ITER,
     fn: () => {
       lifecycle.world.components.addToEntity(lifecycle.components.velocity, transitionEntity, { x: 1, y: -1 });
       lifecycle.world.components.removeFromEntity(lifecycle.components.velocity, transitionEntity);
@@ -389,6 +399,7 @@ const scenarios: Scenario[] = [
   {
     name: "entered/exited query transition tracking",
     iterations: 50_000,
+    maxSteadyStateBeforeGcBytesPerIter: QUERY_TRANSITION_TRACKING_BUDGET_BYTES_PER_ITER,
     fn: () => {
       transitionTracking.world.components.addToEntity(transitionTracking.components.velocity, enteredExitedEntity, {
         x: 1,
@@ -411,6 +422,7 @@ const scenarios: Scenario[] = [
   {
     name: "64-component world archetype transition",
     iterations: 50_000,
+    maxSteadyStateBeforeGcBytesPerIter: WIDE_ARCHETYPE_TRANSITION_BUDGET_BYTES_PER_ITER,
     fn: () => {
       wide.world.components.addToEntity(wide.components.all[63]!, wideTransitionEntity);
       entitySink ^= countEntities(wide.world.entities.query(wideQuery));
