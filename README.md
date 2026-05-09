@@ -186,7 +186,7 @@ We can create a new world like so:
 
 ```typescript
 const world = new World({
-  capacity: 1000, // The maximum number of entities to allow in the world
+  capacity: 1000, // The maximum number of entities to allow in the world (minimum 8)
   components: [
     positionComponent, // We'll create this in the components section below
   ],

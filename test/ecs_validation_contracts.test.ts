@@ -24,6 +24,14 @@ Deno.test("component, world, query, and system specifications reject invalid sha
     SpecError,
     "Invalid WorldSpec",
   );
+  for (let capacity = 1; capacity < 8; capacity++) {
+    assertThrows(
+      () => new World({ capacity, components: [position] }),
+      SpecError,
+      "Invalid WorldSpec",
+    );
+  }
+  new World({ capacity: 8, components: [position] });
   assertThrows(
     () => new World({ capacity: 8, components: [] }),
     SpecError,
@@ -58,6 +66,16 @@ Deno.test("component, world, query, and system specifications reject invalid sha
       }),
     SpecError,
     "Invalid system specification",
+  );
+});
+
+Deno.test("world capacity validation does not expose storage-layer errors", () => {
+  const position = new Component<Vec2>({ name: "position", schema: { x: Float32Array, y: Float32Array } });
+
+  assertThrows(
+    () => new World({ capacity: 7, components: [position] }),
+    SpecError,
+    "Invalid WorldSpec",
   );
 });
 

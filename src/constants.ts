@@ -27,6 +27,12 @@ export const MAX_UINT32 = 0xffffffff as const;
 
 /**
  * @internal
+ * The minimum capacity for a World
+ */
+export const MIN_WORLD_CAPACITY = 8 as const;
+
+/**
+ * @internal
  * The key used to store the Entity's id
  */
 export const ID_KEY = "id" as const;

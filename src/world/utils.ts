@@ -1,4 +1,5 @@
 import { isValidComponentArray } from "@/component/component.ts";
+import { MIN_WORLD_CAPACITY } from "@/constants.ts";
 import { WorldStateError } from "@/errors.ts";
 import type { WorldSpec, WorldState } from "@/types.ts";
 import { isObject, isPositiveUint32 } from "@/utils.ts";
@@ -11,7 +12,8 @@ import { isObject, isPositiveUint32 } from "@/utils.ts";
 export function isValidWorldSpec(spec: unknown): spec is WorldSpec {
   if (isObject(spec) === false) return false;
   const { capacity, components } = spec;
-  return isPositiveUint32(capacity) && isValidComponentArray(components) && components.length > 0;
+  return isPositiveUint32(capacity) && capacity >= MIN_WORLD_CAPACITY && isValidComponentArray(components) &&
+    components.length > 0;
 }
 
 /**
