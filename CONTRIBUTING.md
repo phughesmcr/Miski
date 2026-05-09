@@ -42,3 +42,11 @@ Try to include:
 
 Please remember to use `deno fmt` and `deno lint` and fix any linter errors
 before submitting pull requests
+
+Prefer prototype methods for class behavior. Use arrow functions for small
+public facade wrappers, callbacks, or other cases that intentionally need
+lexical `this`.
+
+Inside `src`, use `@/` imports for cross-folder modules and `./` imports for
+same-folder modules. Keep external package imports first, then a blank line,
+then internal imports.

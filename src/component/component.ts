@@ -19,9 +19,9 @@
  */
 
 import { isSchema, isValidName, Partition, type PartitionSpec } from "@phughesmcr/partitionedbuffer";
-import { $_COMPONENT_ID_KEY, $_PARTITION_KEY } from "../constants.ts";
-import { isPositiveUint32 } from "../utils.ts";
-import type { ComponentPrivateMethods, ComponentSpec, Schema, SchemaOrNull } from "../types.ts";
+import { $_COMPONENT_ID_KEY, $_PARTITION_KEY } from "@/constants.ts";
+import type { ComponentPrivateMethods, ComponentSpec, Schema, SchemaOrNull } from "@/types.ts";
+import { isPositiveUint32 } from "@/utils.ts";
 
 /**
  * Component specification type guard.

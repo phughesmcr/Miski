@@ -1,4 +1,4 @@
-import type { Entity } from "../types.ts";
+import type { Entity } from "@/types.ts";
 
 export class ReusableEntityIterator implements IterableIterator<Entity> {
   count: number;

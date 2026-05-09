@@ -9,14 +9,14 @@ import type { Partition, Schema, TypedArray, TypedArrayConstructor } from "@phug
 import type { PartitionStorage } from "@phughesmcr/partitionedbuffer";
 import type { BooleanArray } from "@phughesmcr/booleanarray";
 
-import type { Component } from "./component/component.ts";
-import type { Query } from "./query/query.ts";
-import type { World } from "./world/world.ts";
-import type { System } from "./system/system.ts";
-import type { ComponentInstance } from "./component/component-instance.ts";
-import type { Archetype } from "./archetype/archetype.ts";
-import type { StorageProxy } from "./component/storage-proxy.ts";
-import type { $_COMPONENT_ID_KEY, $_PARTITION_KEY, $_SYSTEM_DESTROY_KEY, $_SYSTEM_INIT_KEY } from "./constants.ts";
+import type { $_COMPONENT_ID_KEY, $_PARTITION_KEY, $_SYSTEM_DESTROY_KEY, $_SYSTEM_INIT_KEY } from "@/constants.ts";
+import type { Archetype } from "@/archetype/archetype.ts";
+import type { ComponentInstance } from "@/component/component-instance.ts";
+import type { Component } from "@/component/component.ts";
+import type { StorageProxy } from "@/component/storage-proxy.ts";
+import type { Query } from "@/query/query.ts";
+import type { System } from "@/system/system.ts";
+import type { World } from "@/world/world.ts";
 
 export type { PartitionStorage, Schema, TypedArray, TypedArrayConstructor };
 
@@ -82,7 +82,7 @@ export type TypedComponentRecord<T> = {
 /** A Schema or null (null = tag component) */
 export type SchemaOrNull<T = any> = Schema<T> | null;
 
-/** The Component's construct`or specification */
+/** The Component's constructor specification */
 export type ComponentSpec<T extends SchemaOrNull = null> =
   & {
     /** The component's label */

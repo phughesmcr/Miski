@@ -5,12 +5,13 @@
  * @license     MIT
  */
 
-import { Archetype } from "./archetype.ts";
 import { BooleanArray } from "@phughesmcr/booleanarray";
-import { ID_KEY } from "../constants.ts";
-import { NotRegisteredError } from "../errors.ts";
-import type { ComponentInstance } from "../component/component-instance.ts";
-import type { Entity, QueryInstance } from "../types.ts";
+
+import { ID_KEY } from "@/constants.ts";
+import { NotRegisteredError } from "@/errors.ts";
+import type { ComponentInstance } from "@/component/component-instance.ts";
+import type { Entity, QueryInstance } from "@/types.ts";
+import { Archetype } from "./archetype.ts";
 
 /** ArchetypeManager handles creation and allocation of Archetypes */
 export class ArchetypeManager {
@@ -26,14 +27,20 @@ export class ArchetypeManager {
   /** Entities in this archetype have no components */
   readonly root: Archetype;
 
-  /** The number of components registered in the world */
-  #componentCount: number = 0;
+  /** The maximum number of entities this manager can handle. */
+  #capacity: number;
+
+  /** Reusable cache for entity component lookup. */
+  #componentCache: Record<string, ComponentInstance<any>>;
 
   /** Whether query-to-archetype mappings need to be rebuilt */
   #queryMembershipDirty: boolean;
 
   /** Reusable query list for refresh passes */
   #queryScratch: QueryInstance[];
+
+  /** Reusable bitfield for full component-list archetype updates. */
+  #updateBitfield: BooleanArray;
 
   /**
    * Move an entity to a
@@ -137,51 +144,19 @@ export class ArchetypeManager {
    * @param componentCount - The number of components registered in the world
    */
   constructor(capacity: number, componentCount: number) {
+    this.#capacity = capacity;
     this.registry = new Map();
     this.entityArchetypes = new Array(capacity);
     this.queryArchetypes = new Map();
+    this.#componentCache = {};
     this.#queryMembershipDirty = true;
     this.#queryScratch = [];
-    this.#componentCount = componentCount;
+    this.#updateBitfield = new BooleanArray(componentCount);
 
     // Create root archetype with properly sized bitfield for components
     const rootBitfield = new BooleanArray(componentCount);
     this.root = new Archetype(capacity, [], rootBitfield);
     this.registry.set(this.root.id, this.root);
-
-    // Created here to avoid dependency on providing `capacity`
-    this.init = () => {
-      this.entityArchetypes.length = capacity;
-      for (let i = 0; i < capacity; i++) {
-        this.entityArchetypes[i] = this.set(this.root, i);
-      }
-      return this;
-    };
-
-    // Created here to avoid dependency on providing `capacity` and `componentCount`
-    this.update = (() => {
-      const bitfield = new BooleanArray(this.#componentCount);
-
-      return (entity: Entity, components: ComponentInstance<any>[]): Archetype => {
-        const oldArchetype = this.entityArchetypes[entity];
-
-        // Reset and update bitfield
-        bitfield.clear();
-        bitfield.setFromObjects(ID_KEY, components, true);
-
-        // Get or create archetype for these components
-        const archetypeId = bitfield.buffer.toString();
-        if (oldArchetype?.id === archetypeId) return oldArchetype;
-
-        let archetype = this.registry.get(archetypeId);
-        if (!archetype) {
-          archetype = new Archetype(capacity, components, bitfield.clone());
-          this.registry.set(archetypeId, archetype);
-        }
-
-        return this.#moveEntity(entity, archetype);
-      };
-    })();
   }
 
   /**
@@ -200,30 +175,26 @@ export class ArchetypeManager {
    * @param entity - The entity to get the components for
    * @returns A record of component instances
    */
-  getEntityComponents = (() => {
-    const componentCache: Record<string, ComponentInstance<any>> = {};
+  getEntityComponents(entity: Entity): Readonly<Record<string, ComponentInstance<any>>> {
+    // Clear cache
+    for (const key in this.#componentCache) {
+      delete this.#componentCache[key];
+    }
 
-    return (entity: Entity): Readonly<Record<string, ComponentInstance<any>>> => {
-      // Clear cache
-      for (const key in componentCache) {
-        delete componentCache[key];
+    const archetype = this.entityArchetypes[entity];
+    if (!archetype) return this.#componentCache;
+
+    // Reuse cache object
+    const components = archetype.components;
+    const len = components.length;
+    for (let i = 0; i < len; i++) {
+      const component = components[i];
+      if (component) {
+        this.#componentCache[component.name] = component;
       }
-
-      const archetype = this.entityArchetypes[entity];
-      if (!archetype) return componentCache;
-
-      // Reuse cache object
-      const components = archetype.components;
-      const len = components.length;
-      for (let i = 0; i < len; i++) {
-        const component = components[i];
-        if (component) {
-          componentCache[component.name] = component;
-        }
-      }
-      return componentCache;
-    };
-  })();
+    }
+    return this.#componentCache;
+  }
 
   /**
    * Called by `world.destroy()`
@@ -231,12 +202,12 @@ export class ArchetypeManager {
    * Destroy the ArchetypeManager
    * @returns this
    */
-  destroy = (): this => {
+  destroy(): this {
     this.registry.clear();
     this.entityArchetypes.length = 0;
     this.queryArchetypes.clear();
     return this;
-  };
+  }
 
   /**
    * Get the Archetype associated with an Entity
@@ -253,40 +224,46 @@ export class ArchetypeManager {
    * Initialize the ArchetypeManager
    * @returns this
    */
-  init: () => this;
+  init(): this {
+    this.entityArchetypes.length = this.#capacity;
+    for (let i = 0; i < this.#capacity; i++) {
+      this.entityArchetypes[i] = this.set(this.root, i);
+    }
+    return this;
+  }
 
   /**
    * Check if the ArchetypeManager manages an Archetype
    * @param archetype The Archetype
    * @returns `true` if the ArchetypeManager manages the Archetype, `false` otherwise
    */
-  has = (archetype: Archetype): boolean => {
+  has(archetype: Archetype): boolean {
     return this.registry.has(archetype.id);
-  };
+  }
 
   /**
    * Check if an Entity is in the root archetype
    * @param entity The Entity
    * @returns `true` if the Entity is in the root archetype, `false` otherwise
    */
-  isEntityInRoot = (entity: Entity): boolean => {
+  isEntityInRoot(entity: Entity): boolean {
     return this.entityArchetypes[entity] === this.root;
-  };
+  }
 
   /**
    * Get the Archetypes associated with a QueryInstance
    * @param query The QueryInstance
    * @returns An IterableIterator of Archetypes associated with the QueryInstance or undefined
    */
-  query = (query: QueryInstance): IterableIterator<Archetype> | undefined => {
+  query(query: QueryInstance): IterableIterator<Archetype> | undefined {
     return this.queryArchetypes.get(query)?.values();
-  };
+  }
 
   /**
    * Run routine maintenance on the ArchetypeManager
    * @returns this
    */
-  refresh = (queries: MapIterator<QueryInstance>, retainTransitions: boolean = false): this => {
+  refresh(queries: MapIterator<QueryInstance>, retainTransitions: boolean = false): this {
     // Clear existing query archetype mappings
     this.queryArchetypes.clear();
 
@@ -319,7 +296,7 @@ export class ArchetypeManager {
     }
     this.#queryMembershipDirty = false;
     return this;
-  };
+  }
 
   /**
    * Rebuild query-to-archetype mappings if transitions changed them.
@@ -339,10 +316,10 @@ export class ArchetypeManager {
    * @param entity The Entity
    * @returns this
    */
-  reset = (entity: Entity): this => {
+  reset(entity: Entity): this {
     this.set(this.root, entity);
     return this;
-  };
+  }
 
   /**
    * Move an entity to the archetype reached by removing a component.
@@ -362,7 +339,7 @@ export class ArchetypeManager {
    * @returns this
    * @throws {NotRegisteredError} If the Archetype is not registered
    */
-  set = (archetype: Archetype, entity: Entity): Archetype => {
+  set(archetype: Archetype, entity: Entity): Archetype {
     if (!this.registry.has(archetype.id)) {
       throw new NotRegisteredError("Invalid archetype.");
     }
@@ -378,13 +355,13 @@ export class ArchetypeManager {
     archetype.addEntity(entity);
     this.#queryMembershipDirty = true;
     return archetype;
-  };
+  }
 
   /**
    * Stringify the ArchetypeManager
    * @returns The JSON string
    */
-  stringify = (): string => {
+  stringify(): string {
     return JSON.stringify({
       registry: [...this.registry.values()].map((archetype) => archetype.stringify()),
       entityArchetypes: this.entityArchetypes,
@@ -392,7 +369,7 @@ export class ArchetypeManager {
         return [query.id, [...archetypes].map((archetype) => archetype.id)];
       }),
     });
-  };
+  }
 
   /**
    * @internal
@@ -401,5 +378,23 @@ export class ArchetypeManager {
    * @param components The ComponentInstances
    * @returns The Archetype associated with the Entity
    */
-  update: (entity: Entity, components: ComponentInstance<any>[]) => Archetype;
+  update(entity: Entity, components: ComponentInstance<any>[]): Archetype {
+    const oldArchetype = this.entityArchetypes[entity];
+
+    // Reset and update bitfield
+    this.#updateBitfield.clear();
+    this.#updateBitfield.setFromObjects(ID_KEY, components, true);
+
+    // Get or create archetype for these components
+    const archetypeId = this.#updateBitfield.buffer.toString();
+    if (oldArchetype?.id === archetypeId) return oldArchetype;
+
+    let archetype = this.registry.get(archetypeId);
+    if (!archetype) {
+      archetype = new Archetype(this.#capacity, components, this.#updateBitfield.clone());
+      this.registry.set(archetypeId, archetype);
+    }
+
+    return this.#moveEntity(entity, archetype);
+  }
 }

@@ -11,7 +11,7 @@ import type {
   Schema,
   SchemaOrNull,
   StorageProxyWithProperties,
-} from "../types.ts";
+} from "@/types.ts";
 import type { Component } from "./component.ts";
 
 /** A ComponentInstance is the world-local representation of a component */

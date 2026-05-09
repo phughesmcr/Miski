@@ -7,10 +7,11 @@
 
 import { BitPool } from "@phughesmcr/bitpool";
 import { BooleanArray } from "@phughesmcr/booleanarray";
-import { EntityNotFoundError } from "../errors.ts";
+
+import { EntityNotFoundError } from "@/errors.ts";
+import type { Entity, EntityManagerSerialized } from "@/types.ts";
+import { isPositiveUint32, isUint32, numberArrayFromString } from "@/utils.ts";
 import { ReusableEntityIterator } from "./entity-list.ts";
-import { isPositiveUint32, isUint32, numberArrayFromString } from "../utils.ts";
-import type { Entity, EntityManagerSerialized } from "../types.ts";
 
 /** An EntityManager is responsible for creating and destroying entities */
 export class EntityManager {
@@ -25,9 +26,6 @@ export class EntityManager {
 
   /** Reusable active entity iterator */
   #activeIterator: ReusableEntityIterator;
-
-  /** @returns an iterable of all active entities */
-  getActive: (startEntity?: Entity, endEntity?: Entity) => IterableIterator<Entity>;
 
   /**
    * Create a new EntityManager from a JSON string
@@ -66,10 +64,6 @@ export class EntityManager {
     this.pool = pool;
     this.#activeEntities = new Uint32Array(capacity);
     this.#activeIterator = new ReusableEntityIterator(this.#activeEntities);
-    this.getActive = (startEntity: Entity = 0, endEntity: Entity = this.pool.size): IterableIterator<Entity> => {
-      const count = this.pool.occupiedIndicesInto(this.#activeEntities, startEntity, endEntity);
-      return this.#activeIterator.reset(count);
-    };
   }
 
   /** @returns the maximum number of entities allowed in the pool (inclusive) */
@@ -81,44 +75,50 @@ export class EntityManager {
    * Create a new entity
    * @returns The new `Entity`, or `undefined` if the pool is full
    */
-  create = (): Entity | undefined => {
+  create(): Entity | undefined {
     const entity = this.pool.acquire() as Entity;
     if (entity === -1) {
       return undefined;
     }
     return entity;
-  };
+  }
 
   /**
    * Destroy an entity
    * @param entity - The entity to destroy
    * @throws {EntityNotFoundError} - If the entity is not found
    */
-  destroy = (entity: Entity): void => {
+  destroy(entity: Entity): void {
     if (this.isEntity(entity) === false) {
       throw new EntityNotFoundError(entity);
     }
     this.pool.release(entity);
-  };
+  }
+
+  /** @returns an iterable of all active entities */
+  getActive(startEntity: Entity = 0, endEntity: Entity = this.pool.size): IterableIterator<Entity> {
+    const count = this.pool.occupiedIndicesInto(this.#activeEntities, startEntity, endEntity);
+    return this.#activeIterator.reset(count);
+  }
 
   /** @returns the number of active entities */
-  getActiveCount = (): number => {
+  getActiveCount(): number {
     return this.pool.occupiedCount;
-  };
+  }
 
   /** @returns the number of available entities */
-  getAvailableCount = (): number => {
+  getAvailableCount(): number {
     return this.capacity - this.pool.occupiedCount;
-  };
+  }
 
   /**
    * Check if an entity exists (i.e., is valid && is active)
    * @param entity - The entity to check
    * @returns `true` if the entity exists, `false` otherwise
    */
-  isActive = (entity: Entity): boolean => {
+  isActive(entity: Entity): boolean {
     return this.isEntity(entity) && this.pool.isOccupied(entity);
-  };
+  }
 
   /**
    * Check if an entity is valid for this pool
@@ -126,16 +126,16 @@ export class EntityManager {
    * @returns `true` if the entity is valid, `false` otherwise
    * @see EntityManager.exists to check if an entity is valid and resident
    */
-  isEntity = (entity: Entity): entity is Entity => {
+  isEntity(entity: Entity): entity is Entity {
     return (entity === 0 || isPositiveUint32(entity)) && entity < this.capacity;
-  };
+  }
 
   /**
    * Serialize the entity manager to a JSON string
    * @returns a JSON string representation of the entity manager
    * @see {@link https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/JSON/stringify|MDN}
    */
-  stringify = (): string => {
+  stringify(): string {
     return JSON.stringify(
       {
         MAX_CAPACITY: EntityManager.MAX_CAPACITY,
@@ -143,5 +143,5 @@ export class EntityManager {
         entities: this.pool.toUint32Array().toString(),
       },
     );
-  };
+  }
 }

@@ -6,11 +6,11 @@
  */
 
 import { BooleanArray } from "@phughesmcr/booleanarray";
-import { ID_KEY } from "../constants.ts";
-import { isQueryMatch } from "../query/query.ts";
-import type { ComponentInstance } from "../component/component-instance.ts";
-import type { QueryEntityResult } from "../query/query-pool.ts";
-import type { Entity, QueryInstance } from "../types.ts";
+import { ID_KEY } from "@/constants.ts";
+import type { ComponentInstance } from "@/component/component-instance.ts";
+import { isQueryMatch } from "@/query/query.ts";
+import type { QueryEntityResult } from "@/query/query-pool.ts";
+import type { Entity, QueryInstance } from "@/types.ts";
 
 function* activeListIterator(
   list: Uint32Array,
@@ -205,11 +205,7 @@ export class Archetype {
    */
   writeEntitiesInto(out: BooleanArray, visited?: BooleanArray): BooleanArray {
     if (visited) {
-      for (
-        let i = 0;
-        i < this.#entityListCount;
-        i++
-      ) {
+      for (let i = 0; i < this.#entityListCount; i++) {
         const entity = this.#entityList[i]!;
         if (this.#entityActive[entity] !== 1) continue;
         if (visited.get(entity)) continue;
@@ -219,11 +215,7 @@ export class Archetype {
       return out;
     }
 
-    for (
-      let i = 0;
-      i < this.#entityListCount;
-      i++
-    ) {
+    for (let i = 0; i < this.#entityListCount; i++) {
       const entity = this.#entityList[i]!;
       if (this.#entityActive[entity] !== 1) continue;
       out.set(entity, true);
@@ -239,11 +231,7 @@ export class Archetype {
    */
   writeEntitiesIntoResult(out: QueryEntityResult, visited?: BooleanArray): QueryEntityResult {
     if (visited) {
-      for (
-        let i = 0;
-        i < this.#entityListCount;
-        i++
-      ) {
+      for (let i = 0; i < this.#entityListCount; i++) {
         const entity = this.#entityList[i]!;
         if (this.#entityActive[entity] !== 1) continue;
         if (visited.get(entity)) continue;
@@ -253,11 +241,7 @@ export class Archetype {
       return out;
     }
 
-    for (
-      let i = 0;
-      i < this.#entityListCount;
-      i++
-    ) {
+    for (let i = 0; i < this.#entityListCount; i++) {
       const entity = this.#entityList[i]!;
       if (this.#entityActive[entity] !== 1) continue;
       out.add(entity);
