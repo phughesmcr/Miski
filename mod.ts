@@ -170,14 +170,14 @@
  * ```
  */
 
-export { Component, isValidComponentSpec } from "@/component/Component.ts";
+export { Component, isValidComponentSpec } from "@/component/component.ts";
 export { EntityNotFoundError, isMiskiError, MiskiError, SpecError, WorldStateError } from "@/errors.ts";
-export { isValidQuerySpec, Query } from "@/query/Query.ts";
-export { isValidSystemSpec, System } from "@/system/System.ts";
-export { World } from "@/world/World.ts";
+export { isValidQuerySpec, Query } from "@/query/query.ts";
+export { isValidSystemSpec, System } from "@/system/system.ts";
+export { World } from "@/world/world.ts";
 export { isValidWorldSpec } from "@/world/utils.ts";
 export { isValidName } from "@/utils.ts";
-export type { ComponentInstance } from "@/component/ComponentInstance.ts";
+export type { ComponentInstance } from "@/component/component-instance.ts";
 export type {
   ComponentRecord,
   ComponentSpec,

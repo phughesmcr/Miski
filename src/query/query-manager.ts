@@ -7,14 +7,14 @@
 
 import { BooleanArray } from "@phughesmcr/booleanarray";
 import { ID_KEY } from "../constants.ts";
-import { QueryCache } from "./QueryCache.ts";
-import { type QueryEntityResult, QueryResultPool } from "./QueryPool.ts";
-import type { Archetype } from "../archetype/Archetype.ts";
-import type { ComponentInstance } from "../component/ComponentInstance.ts";
+import { QueryCache } from "./query-cache.ts";
+import { type QueryEntityResult, QueryResultPool } from "./query-pool.ts";
+import type { Archetype } from "../archetype/archetype.ts";
+import type { ComponentInstance } from "../component/component-instance.ts";
 import type { ComponentInstanceGetter, Entity, QueryEntityList, QueryInstance, SchemaOrNull } from "../types.ts";
 import { NotRegisteredError } from "../errors.ts";
-import type { Query } from "./Query.ts";
-import type { World } from "../world/World.ts";
+import type { Query } from "./query.ts";
+import type { World } from "../world/world.ts";
 
 type QueryComponent = Parameters<ComponentInstanceGetter>[0][number];
 type RegisteredComponentInstance = ComponentInstance<SchemaOrNull<any>>;

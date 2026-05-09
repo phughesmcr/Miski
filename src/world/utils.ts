@@ -1,4 +1,4 @@
-import { isValidComponentArray } from "@/component/Component.ts";
+import { isValidComponentArray } from "@/component/component.ts";
 import { WorldStateError } from "@/errors.ts";
 import type { WorldSpec, WorldState } from "@/types.ts";
 import { isObject, isPositiveUint32 } from "@/utils.ts";

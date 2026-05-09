@@ -1,7 +1,7 @@
 /// <reference lib="deno.ns" />
 
 import { Component, EntityNotFoundError, Query, World, WorldStateError } from "../mod.ts";
-import { EntityManager } from "../src/entity/EntityManager.ts";
+import { EntityManager } from "../src/entity/entity-manager.ts";
 import { NotRegisteredError } from "../src/errors.ts";
 
 type Vec2 = { x: Float32ArrayConstructor; y: Float32ArrayConstructor };

@@ -1,5 +1,5 @@
 import { BooleanArray } from "@phughesmcr/booleanarray";
-import { ReusableEntityIterator } from "../entity/EntityList.ts";
+import { ReusableEntityIterator } from "../entity/entity-list.ts";
 import type { Entity } from "../types.ts";
 
 export class QueryEntityResult {

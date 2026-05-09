@@ -7,7 +7,7 @@
 
 import { isObject } from "../utils.ts";
 import { SpecError } from "../errors.ts";
-import { type Component, isValidComponentArray } from "../component/Component.ts";
+import { type Component, isValidComponentArray } from "../component/component.ts";
 import type { BooleanArray } from "@phughesmcr/booleanarray";
 import type { QueryInstance, QuerySpec, SchemaOrNull } from "../types.ts";
 

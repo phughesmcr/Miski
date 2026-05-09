@@ -8,16 +8,16 @@
 import { BooleanArray } from "@phughesmcr/booleanarray";
 
 import { $_ARCHETYPE_KEY, $_QUERY_KEY, VERSION } from "@/constants.ts";
-import { ArchetypeManager } from "@/archetype/ArchetypeManager.ts";
-import { ComponentManager } from "@/component/ComponentManager.ts";
-import { EntityManager } from "@/entity/EntityManager.ts";
+import { ArchetypeManager } from "@/archetype/archetype-manager.ts";
+import { ComponentManager } from "@/component/component-manager.ts";
+import { EntityManager } from "@/entity/entity-manager.ts";
 import { EntityNotFoundError, NotRegisteredError, SpecError, WorldStateError } from "@/errors.ts";
-import { QueryManager } from "@/query/QueryManager.ts";
-import { SystemManager } from "@/system/SystemManager.ts";
-import type { Component } from "@/component/Component.ts";
-import type { Archetype } from "@/archetype/Archetype.ts";
-import type { ComponentInstance } from "@/component/ComponentInstance.ts";
-import type { Query } from "@/query/Query.ts";
+import { QueryManager } from "@/query/query-manager.ts";
+import { SystemManager } from "@/system/system-manager.ts";
+import type { Component } from "@/component/component.ts";
+import type { Archetype } from "@/archetype/archetype.ts";
+import type { ComponentInstance } from "@/component/component-instance.ts";
+import type { Query } from "@/query/query.ts";
 import type {
   Entity,
   QueryEntityList,

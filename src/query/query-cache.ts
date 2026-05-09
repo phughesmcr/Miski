@@ -1,6 +1,6 @@
-import type { ComponentInstance } from "../component/ComponentInstance.ts";
+import type { ComponentInstance } from "../component/component-instance.ts";
 import type { SchemaOrNull } from "../types.ts";
-import type { QueryEntityResult, QueryResultPool } from "./QueryPool.ts";
+import type { QueryEntityResult, QueryResultPool } from "./query-pool.ts";
 
 /** Cache for query results */
 export class QueryCache {

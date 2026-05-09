@@ -1,10 +1,10 @@
 import { isValidName } from "@phughesmcr/partitionedbuffer";
 import { $_SYSTEM_DESTROY_KEY, $_SYSTEM_INIT_KEY } from "../constants.ts";
 import { isObject, noop } from "../utils.ts";
-import { Query } from "../query/Query.ts";
+import { Query } from "../query/query.ts";
 import { NoComponentsFoundError, SpecError } from "../errors.ts";
 import type { SystemCallback, SystemInstance, SystemPrivateMethods, SystemSpec } from "../types.ts";
-import type { World } from "../world/World.ts";
+import type { World } from "../world/world.ts";
 
 /**
  * Create a system instance

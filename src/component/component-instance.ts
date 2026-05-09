@@ -12,7 +12,7 @@ import type {
   SchemaOrNull,
   StorageProxyWithProperties,
 } from "../types.ts";
-import type { Component } from "./Component.ts";
+import type { Component } from "./component.ts";
 
 /** A ComponentInstance is the world-local representation of a component */
 export class ComponentInstance<T extends SchemaOrNull<T>> {

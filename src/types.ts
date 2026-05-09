@@ -9,13 +9,13 @@ import type { Partition, Schema, TypedArray, TypedArrayConstructor } from "@phug
 import type { PartitionStorage } from "@phughesmcr/partitionedbuffer";
 import type { BooleanArray } from "@phughesmcr/booleanarray";
 
-import type { Component } from "./component/Component.ts";
-import type { Query } from "./query/Query.ts";
-import type { World } from "./world/World.ts";
-import type { System } from "./system/System.ts";
-import type { ComponentInstance } from "./component/ComponentInstance.ts";
-import type { Archetype } from "./archetype/Archetype.ts";
-import type { StorageProxy } from "./component/StorageProxy.ts";
+import type { Component } from "./component/component.ts";
+import type { Query } from "./query/query.ts";
+import type { World } from "./world/world.ts";
+import type { System } from "./system/system.ts";
+import type { ComponentInstance } from "./component/component-instance.ts";
+import type { Archetype } from "./archetype/archetype.ts";
+import type { StorageProxy } from "./component/storage-proxy.ts";
 import type { $_COMPONENT_ID_KEY, $_PARTITION_KEY, $_SYSTEM_DESTROY_KEY, $_SYSTEM_INIT_KEY } from "./constants.ts";
 
 export type { PartitionStorage, Schema, TypedArray, TypedArrayConstructor };
