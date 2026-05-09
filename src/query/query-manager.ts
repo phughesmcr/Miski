@@ -89,6 +89,9 @@ export class QueryManager {
   /** Callback for refreshing query-to-archetype membership. */
   #ensureQueryMembership: (queries: MapIterator<QueryInstance>) => void;
 
+  /** Callback for registering one query against existing archetypes. */
+  #registerQueryMembership: (query: QueryInstance) => void;
+
   /** Cache for query results */
   readonly cache: QueryCache;
 
@@ -118,9 +121,11 @@ export class QueryManager {
     world: World,
     capacity: number,
     ensureQueryMembership: (queries: MapIterator<QueryInstance>) => void,
+    registerQueryMembership: (query: QueryInstance) => void,
   ) {
     this.#world = world;
     this.#ensureQueryMembership = ensureQueryMembership;
+    this.#registerQueryMembership = registerQueryMembership;
     this.pool = new QueryResultPool(capacity);
     this.cache = new QueryCache(this.pool);
     this.lastQueryVersion = new Map();
@@ -200,9 +205,16 @@ export class QueryManager {
 
     // Refresh archetypes after query registration to update mappings
     if (this.#world.state === "initialized") {
-      this.#world.refresh(true, true);
+      this.#registerQueryMembership(instance);
     }
 
+    return instance;
+  }
+
+  /** Register a query and return its instance after membership is current. */
+  instanceWithMembership(query: Query): QueryInstance {
+    const instance = this.register(query);
+    this.ensureQueryMembership();
     return instance;
   }
 

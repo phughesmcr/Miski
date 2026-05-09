@@ -178,6 +178,100 @@ Deno.test("query any and none clauses match through component bitfields", async 
   );
 });
 
+Deno.test("query registered after init sees existing matching entities", async () => {
+  const position = new Component<Vec2>({ name: "position", schema: { x: Float32Array, y: Float32Array } });
+  const world = new World({ capacity: 8, components: [position] });
+  await world.init();
+
+  const entity = world.entities.create();
+  assert(entity !== undefined, "Expected entity to be created");
+  world.components.addToEntity(position, entity, { x: 1, y: 2 });
+  world.refresh();
+
+  const lateQuery = new Query({ all: [position] });
+
+  assertEquals(
+    ids(world.entities.query(lateQuery)),
+    [entity],
+    "Expected late query registration to see existing owner",
+  );
+  assertEquals(
+    ids(world.archetypes.queryEntities(lateQuery)),
+    [entity],
+    "Expected late archetype query registration to see existing owner",
+  );
+});
+
+Deno.test("registering a new query preserves pending entered and exited visibility", async () => {
+  const position = new Component<Vec2>({ name: "position", schema: { x: Float32Array, y: Float32Array } });
+  const velocity = new Component<Vec2>({ name: "velocity", schema: { x: Float32Array, y: Float32Array } });
+  const world = new World({ capacity: 8, components: [position, velocity] });
+  await world.init();
+
+  const entity = world.entities.create();
+  assert(entity !== undefined, "Expected entity to be created");
+  const positionQuery = new Query({ all: [position] });
+
+  world.components.addToEntity(position, entity, { x: 1, y: 2 });
+  assertEquals(
+    ids(world.entities.query(new Query({ all: [velocity] }))),
+    [],
+    "Expected new velocity query to register",
+  );
+  assertEquals(ids(world.archetypes.queryEntered(positionQuery)), [entity], "Expected entered state to remain visible");
+
+  world.refresh();
+  world.components.removeFromEntity(position, entity);
+  assertEquals(
+    ids(world.entities.query(new Query({ any: [position, velocity] }))),
+    [],
+    "Expected new any query to register",
+  );
+  assertEquals(ids(world.archetypes.queryExited(positionQuery)), [entity], "Expected exited state to remain visible");
+});
+
+Deno.test("clean refresh preserves query results and clears changed and transition state", async () => {
+  const position = new Component<Vec2>({ name: "position", schema: { x: Float32Array, y: Float32Array } });
+  const world = new World({ capacity: 8, components: [position] });
+  await world.init();
+
+  const entity = world.entities.create();
+  assert(entity !== undefined, "Expected entity to be created");
+  const query = new Query({ all: [position] });
+  world.components.addToEntity(position, entity, { x: 1, y: 2 });
+
+  assertEquals(ids(world.entities.query(query)), [entity], "Expected query to cache current owner");
+  assertEquals(ids(world.components.getChanged(position)), [entity], "Expected ownership add to mark changed");
+  assertEquals(ids(world.archetypes.queryEntered(query)), [entity], "Expected transition to be visible before refresh");
+
+  world.refresh();
+
+  assertEquals(ids(world.entities.query(query)), [entity], "Expected clean refresh to preserve query result behavior");
+  assertEquals(ids(world.components.getChanged(position)), [], "Expected refresh to clear changed state");
+  assertEquals(ids(world.archetypes.queryEntered(query)), [], "Expected refresh to clear entered state");
+});
+
+Deno.test("component transitions update cached query results immediately", async () => {
+  const position = new Component<Vec2>({ name: "position", schema: { x: Float32Array, y: Float32Array } });
+  const velocity = new Component<Vec2>({ name: "velocity", schema: { x: Float32Array, y: Float32Array } });
+  const world = new World({ capacity: 8, components: [position, velocity] });
+  await world.init();
+
+  const entity = world.entities.create();
+  assert(entity !== undefined, "Expected entity to be created");
+  world.components.addToEntity(position, entity, { x: 1, y: 2 });
+  world.refresh();
+
+  const moving = new Query({ all: [position, velocity] });
+  assertEquals(ids(world.entities.query(moving)), [], "Expected initial cached query to be empty");
+
+  world.components.addToEntity(velocity, entity, { x: 3, y: 4 });
+  assertEquals(ids(world.entities.query(moving)), [entity], "Expected add transition to update cached query");
+
+  world.components.removeFromEntity(velocity, entity);
+  assertEquals(ids(world.entities.query(moving)), [], "Expected remove transition to update cached query");
+});
+
 Deno.test("setEntityData marks the component changed when storage is updated", async () => {
   const position = new Component<Vec2>({ name: "position", schema: { x: Float32Array, y: Float32Array } });
   const world = new World({ capacity: 8, components: [position] });

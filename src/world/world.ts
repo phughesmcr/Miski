@@ -284,8 +284,7 @@ export class World {
   /** Get the entities for a query */
   *#queryArchetypeEntities(query: Query): IterableIterator<Entity> {
     this.#visitedArchetypeEntities.clear();
-    const queryInstance = this.#queryManager.register(query);
-    this.#archetypeManager.ensureQueryMembership(this.#queryManager.instancesByID.values(), true);
+    const queryInstance = this.#queryManager.instanceWithMembership(query);
     const archetypes = this.#archetypeManager.query(queryInstance);
     if (archetypes === undefined) {
       return;
@@ -303,8 +302,7 @@ export class World {
   /** Get entities that entered a query since last refresh */
   *#queryEnteredEntities(query: Query): IterableIterator<Entity> {
     this.#visitedArchetypeEntities.clear();
-    const queryInstance = this.#queryManager.register(query);
-    this.#archetypeManager.ensureQueryMembership(this.#queryManager.instancesByID.values(), true);
+    const queryInstance = this.#queryManager.instanceWithMembership(query);
     const archetypes = this.#archetypeManager.query(queryInstance);
     if (archetypes === undefined) {
       return;
@@ -322,8 +320,7 @@ export class World {
   /** Get entities that exited a query since last refresh */
   *#queryExitedEntities(query: Query): IterableIterator<Entity> {
     this.#visitedArchetypeEntities.clear();
-    const queryInstance = this.#queryManager.register(query);
-    this.#archetypeManager.ensureQueryMembership(this.#queryManager.instancesByID.values(), true);
+    const queryInstance = this.#queryManager.instanceWithMembership(query);
     const archetypes = this.#archetypeManager.query(queryInstance);
     if (archetypes === undefined) {
       return;
@@ -524,9 +521,16 @@ export class World {
     // Wire up archetype manager for optimized component lookups
     this.#componentManager.setArchetypeManager(this.#archetypeManager);
 
-    this.#queryManager = new QueryManager(this, capacity, (queries) => {
-      this.#archetypeManager.ensureQueryMembership(queries, true);
-    });
+    this.#queryManager = new QueryManager(
+      this,
+      capacity,
+      (queries) => {
+        this.#archetypeManager.ensureQueryMembership(queries, true);
+      },
+      (query) => {
+        this.#archetypeManager.registerQuery(query, true);
+      },
+    );
     this[$_QUERY_KEY] = () => [...this.#queryManager.instancesByID.values()];
 
     this.#systemManager = new SystemManager(this, (query: Query) => this.#queryManager.components(query));
@@ -610,7 +614,6 @@ export class World {
     try {
       this.#archetypeManager.refresh(this.#queryManager.instancesByID.values(), retainTransitions);
       if (!retainChanged) this.#componentManager.refresh();
-      this.#queryManager.invalidate();
     } catch (error) {
       this.#state = "error";
       throw error;

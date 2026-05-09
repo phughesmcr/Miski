@@ -260,6 +260,33 @@ export class ArchetypeManager {
   }
 
   /**
+   * Register one query against existing archetypes without rebuilding global state.
+   * @param query - The query instance to register
+   * @param retainTransitions - Include dirty empty archetypes for entered/exited views
+   * @returns this
+   */
+  registerQuery(query: QueryInstance, retainTransitions: boolean = true): this {
+    let archetypeSet = this.queryArchetypes.get(query);
+    if (!archetypeSet) {
+      archetypeSet = new Set();
+      this.queryArchetypes.set(query, archetypeSet);
+    } else {
+      archetypeSet.clear();
+    }
+
+    query.archetypes.clear();
+    for (const archetype of this.registry.values()) {
+      if (!archetype.isCandidate(query)) continue;
+      if (archetype.getPopulationCount() > 0 || (retainTransitions && archetype.isDirty())) {
+        archetypeSet.add(archetype);
+        query.archetypes.add(archetype);
+      }
+    }
+    query.isDirty = false;
+    return this;
+  }
+
+  /**
    * Run routine maintenance on the ArchetypeManager
    * @returns this
    */
@@ -278,6 +305,7 @@ export class ArchetypeManager {
     for (const query of queryArray) {
       this.queryArchetypes.set(query, new Set());
       query.archetypes.clear(); // Clear the QueryInstance's archetypes set
+      query.isDirty = false;
     }
 
     // For each archetype

@@ -469,6 +469,19 @@ Deno.bench({
 });
 
 Deno.bench({
+  name: "register new query after cached query",
+  group: "queries",
+  fn: () => {
+    entitySink ^= countEntities(queryInvalidation.world.entities.query(invalidationMovementQuery));
+    entitySink ^= countEntities(
+      queryInvalidation.world.entities.query(
+        new Query({ all: [queryInvalidation.components.position], none: [queryInvalidation.components.sleeping] }),
+      ),
+    );
+  },
+});
+
+Deno.bench({
   name: "query after component transition invalidation",
   group: "queries",
   fn: () => {
