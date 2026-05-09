@@ -2,7 +2,15 @@ import { isValidName } from "@phughesmcr/partitionedbuffer";
 import { $_SYSTEM_DESTROY_KEY, $_SYSTEM_INIT_KEY } from "@/constants.ts";
 import { NoComponentsFoundError, SpecError } from "@/errors.ts";
 import { Query } from "@/query/query.ts";
-import type { SystemCallback, SystemInstance, SystemPrivateMethods, SystemSpec } from "@/types.ts";
+import type {
+  AnySystemCallback,
+  ComponentMap,
+  SystemInstance,
+  SystemPrivateMethods,
+  SystemSpec,
+  TypedSystemCallback,
+  TypedSystemSpec,
+} from "@/types.ts";
 import { isObject, noop } from "@/utils.ts";
 import type { World } from "@/world/world.ts";
 
@@ -13,7 +21,7 @@ import type { World } from "@/world/world.ts";
  * @returns The created system instance
  * @throws {NoComponentsFoundError} If the system query returned no components
  */
-export function createSystemInstance<T extends SystemCallback>(
+export function createSystemInstance<T extends AnySystemCallback>(
   world: World,
   system: System<T>,
   queryComponents: (query: Query) => Record<string, unknown> = (query) => world.components.query(query),
@@ -48,8 +56,32 @@ export function isValidSystemSpec(spec: unknown): spec is SystemSpec<any> {
   return true;
 }
 
+/** Define a typed system from keyed component maps. */
+export function defineSystem<
+  const TAll extends ComponentMap = Record<never, never>,
+  const TAny extends ComponentMap = Record<never, never>,
+  const TNone extends ComponentMap = Record<never, never>,
+  TArgs extends unknown[] = [],
+  TReturn = void,
+>(
+  spec: TypedSystemSpec<TAll, TAny, TNone, TArgs, TReturn>,
+): System<TypedSystemCallback<TAll & TAny, TArgs, TReturn>> {
+  const { name, all = {}, any = {}, none = {}, callback, destroy, init } = spec;
+  return new System({
+    name,
+    query: new Query({
+      all: Object.values(all),
+      any: Object.values(any),
+      none: Object.values(none),
+    }),
+    callback,
+    destroy,
+    init,
+  });
+}
+
 /** Systems are behaviours which affect components. */
-export class System<T extends SystemCallback> implements SystemPrivateMethods {
+export class System<T extends AnySystemCallback> implements SystemPrivateMethods {
   /** The function to call when the system is destroyed. */
   readonly [$_SYSTEM_DESTROY_KEY]: (world: World) => void | Promise<void>;
 
@@ -63,7 +95,7 @@ export class System<T extends SystemCallback> implements SystemPrivateMethods {
   readonly query: Query;
 
   /** The core function of the system. Called when this.exec is called. */
-  readonly callback: SystemCallback;
+  readonly callback: T;
 
   /**
    * Creates a new system.

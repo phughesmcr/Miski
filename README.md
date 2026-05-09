@@ -444,6 +444,47 @@ Systems are functions which use queries to modify entity properties.
 
 It is recommended (but not necessary) that all data mutation take place inside a system.
 
+For new code, `defineSystem` is the recommended typed authoring path. It accepts keyed component maps and gives the
+callback a typed component instance record:
+
+```typescript
+const movementSystem = defineSystem({
+  name: "movementSystem",
+  all: { position: positionComponent, velocity: velocityComponent },
+  callback: (components, entities, dt: number) => {
+    const { position, velocity } = components;
+    const positionStorage = position.storage.partitions;
+    const velocityStorage = velocity.storage.partitions;
+
+    for (const entity of entities) {
+      positionStorage.x[entity] += velocityStorage.x[entity] * dt;
+      positionStorage.y[entity] += velocityStorage.y[entity] * dt;
+    }
+  },
+});
+```
+
+`any` components are also exposed in the callback record. `none` components are query filters only:
+
+```typescript
+const renderSystem = defineSystem({
+  name: "renderSystem",
+  all: { position: positionComponent },
+  any: { sprite: spriteComponent },
+  none: { hidden: hiddenComponent },
+  callback: (components, entities) => {
+    components.position; // ComponentInstance<Vec2>
+    components.sprite; // ComponentInstance<Sprite>
+    // components.hidden is intentionally unavailable here.
+    for (const entity of entities) {
+      // render...
+    }
+  },
+});
+```
+
+The lower-level `System` constructor remains available for dynamic string/query based code:
+
 ```typescript
 const positionSystem = new System({
   name: "positionSystem",

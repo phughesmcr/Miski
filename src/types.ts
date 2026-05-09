@@ -82,6 +82,19 @@ export type TypedComponentRecord<T> = {
 /** A Schema or null (null = tag component) */
 export type SchemaOrNull<T = any> = Schema<T> | null;
 
+/** A keyed map of component definitions used by typed system helpers. */
+export type ComponentMap = Readonly<Record<string, Component<SchemaOrNull<unknown>>>>;
+
+/** Extract the schema type from a Component definition. */
+export type ComponentSchemaOf<TComponent> = TComponent extends Component<infer TSchema> ? TSchema : never;
+
+/** Convert a keyed Component map into the world-local ComponentInstance record for that map. */
+export type ComponentInstances<TMap extends ComponentMap> = {
+  readonly [K in keyof TMap]: TMap[K] extends Component<infer TSchema>
+    ? TSchema extends SchemaOrNull<TSchema> ? ComponentInstance<TSchema> : never
+    : never;
+};
+
 /** The Component's constructor specification */
 export type ComponentSpec<T extends SchemaOrNull = null> =
   & {
@@ -187,6 +200,13 @@ export type SystemRecord = Readonly<Record<string, SystemInstance<any, any>>>;
  */
 export type ParametersExceptFirstTwo<F> = F extends (arg0: any, arg1: any, ...rest: infer R) => any ? R : never;
 
+/** Internal-compatible system function shape. */
+export type AnySystemCallback = (
+  components: any,
+  entities: IterableIterator<Entity>,
+  ...args: any[]
+) => unknown;
+
 /**
  * A multi-arity function where the first two parameters
  * are the components and entities available to
@@ -198,24 +218,59 @@ export type SystemCallback = (
   ...args: any[]
 ) => void | Promise<void>;
 
+/** A typed system callback for component-map based system authoring. */
+export type TypedSystemCallback<
+  TComponents extends ComponentMap,
+  TArgs extends unknown[] = [],
+  TReturn = void,
+> = (
+  components: ComponentInstances<TComponents>,
+  entities: IterableIterator<Entity>,
+  ...args: TArgs
+) => TReturn;
+
 /**
  * The parameters of a SystemCallback excluding the first two parameters
  * which are always the components and entities
  */
-export type SystemFunctionArgs<T extends SystemCallback> = ParametersExceptFirstTwo<T>;
+export type SystemFunctionArgs<T extends AnySystemCallback> = ParametersExceptFirstTwo<T>;
 
 /**
  * The specification for a System.
  * @param T The callback's type
  * @param U The parameters of the callback excluding the first two (which are always the components and entities)
  */
-export type SystemSpec<T extends SystemCallback> = {
+export type SystemSpec<T extends AnySystemCallback> = {
   /** The name of the system */
   name: string;
   /** The query which will provide the components and entities to the system. */
   query: Query;
   /** The core function of the system. Called when this.exec is called. */
   callback: T;
+  /** The function to call when the system is initialized. */
+  init?: (world: World) => void | Promise<void>;
+  /** The function to call when the system is destroyed. */
+  destroy?: (world: World) => void | Promise<void>;
+};
+
+/** The specification for the typed defineSystem helper. */
+export type TypedSystemSpec<
+  TAll extends ComponentMap,
+  TAny extends ComponentMap,
+  TNone extends ComponentMap,
+  TArgs extends unknown[] = [],
+  TReturn = void,
+> = {
+  /** The name of the system */
+  name: string;
+  /** Components every matching entity must have. */
+  all?: TAll;
+  /** Components where at least one must be present when supplied. */
+  any?: TAny;
+  /** Components matching entities must not have. These are filters only. */
+  none?: TNone;
+  /** The core function of the system. Called when the SystemInstance is called. */
+  callback: TypedSystemCallback<TAll & TAny, TArgs, TReturn>;
   /** The function to call when the system is initialized. */
   init?: (world: World) => void | Promise<void>;
   /** The function to call when the system is destroyed. */
@@ -240,8 +295,8 @@ export interface SystemPrivateMethods {
  * @param U The parameters of the callback excluding the first two (which are always the components and entities)
  */
 export type SystemInstance<
-  T extends SystemCallback,
-  TReturn = void,
+  T extends AnySystemCallback,
+  TReturn = ReturnType<T>,
   TArgs extends ParametersExceptFirstTwo<T> = ParametersExceptFirstTwo<T>,
 > = (
   ...args: TArgs
@@ -429,13 +484,13 @@ export type WorldSystemAPI = {
   /** The systems by name */
   readonly registry: SystemRecord;
   /** Create a system */
-  create<T extends SystemCallback>(system: System<T>): SystemInstance<T>;
+  create<T extends AnySystemCallback>(system: System<T>): SystemInstance<T>;
   /** Get a system instance */
-  get<T extends SystemCallback>(system: System<T> | string): SystemInstance<T> | undefined;
+  get<T extends AnySystemCallback>(system: System<T> | string): SystemInstance<T> | undefined;
   /** Check if a system is registered */
-  has<T extends SystemCallback>(system: System<T> | string): boolean;
+  has<T extends AnySystemCallback>(system: System<T> | string): boolean;
   /** Destroy a system */
-  destroy<T extends SystemCallback>(system: System<T> | string): Promise<void>;
+  destroy<T extends AnySystemCallback>(system: System<T> | string): Promise<void>;
 };
 
 /** The result of a World API constructor */

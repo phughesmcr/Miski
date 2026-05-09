@@ -1,6 +1,6 @@
 /// <reference lib="deno.ns" />
 
-import { Component, Query, SpecError, System, World } from "../mod.ts";
+import { Component, defineSystem, Query, SpecError, System, World } from "../mod.ts";
 import { NoComponentsFoundError } from "../src/errors.ts";
 import { assert, assertEquals, assertThrows } from "./helpers.ts";
 
@@ -90,6 +90,24 @@ Deno.test("systems cannot be created for queries that expose no component instan
         new System({
           name: "disabledSweep",
           query: new Query({ none: [disabled] }),
+          callback: () => {},
+        }),
+      ),
+    NoComponentsFoundError,
+    "System query returned no components",
+  );
+});
+
+Deno.test("defineSystem with no component maps fails through existing system creation validation", async () => {
+  const disabled = new Component<null>({ name: "disabled" });
+  const world = new World({ capacity: 8, components: [disabled] });
+  await world.init();
+
+  assertThrows(
+    () =>
+      world.systems.create(
+        defineSystem({
+          name: "emptyTypedSystem",
           callback: () => {},
         }),
       ),

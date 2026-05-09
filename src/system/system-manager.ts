@@ -7,7 +7,7 @@
 
 import { $_SYSTEM_DESTROY_KEY, $_SYSTEM_INIT_KEY } from "@/constants.ts";
 import { NotRegisteredError } from "@/errors.ts";
-import type { SystemCallback, SystemInstance } from "@/types.ts";
+import type { AnySystemCallback, SystemInstance } from "@/types.ts";
 import type { World } from "@/world/world.ts";
 import { createSystemInstance, type System } from "./system.ts";
 
@@ -52,7 +52,7 @@ export class SystemManager {
    * @returns The created system instance
    * @throws {NoComponentsFoundError} If the system query returns no components
    */
-  create<T extends SystemCallback>(system: System<T>): SystemInstance<T> {
+  create<T extends AnySystemCallback>(system: System<T>): SystemInstance<T> {
     const existing = this.get(system);
     if (existing) {
       return existing;
@@ -67,7 +67,7 @@ export class SystemManager {
    * Destroy a system instance
    * @param system The system to destroy
    */
-  async destroy<T extends SystemCallback>(
+  async destroy<T extends AnySystemCallback>(
     system: System<T> | string,
     throwOnNotFound = true,
   ): Promise<void> {
@@ -98,7 +98,7 @@ export class SystemManager {
    * @param system The system to get the instance of
    * @returns The system instance
    */
-  get<T extends SystemCallback>(system: string | System<T>): SystemInstance<T> | undefined {
+  get<T extends AnySystemCallback>(system: string | System<T>): SystemInstance<T> | undefined {
     if (typeof system === "string") {
       return this.#registry[system];
     }
@@ -114,7 +114,7 @@ export class SystemManager {
    * @param system The system to check
    * @returns Whether the system is registered
    */
-  has<T extends SystemCallback>(system: string | System<T>): boolean {
+  has<T extends AnySystemCallback>(system: string | System<T>): boolean {
     return this.get(system) !== undefined;
   }
 

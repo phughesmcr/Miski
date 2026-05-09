@@ -1,6 +1,6 @@
 /// <reference lib="deno.ns" />
 
-import { Component, EntityNotFoundError, Query, System, World, WorldStateError } from "../mod.ts";
+import { Component, defineSystem, EntityNotFoundError, Query, System, World, WorldStateError } from "../mod.ts";
 import { assert, assertEquals, assertRejects, assertStrictEquals, assertThrows, ids, listIds } from "./helpers.ts";
 import type { ComponentInstance, Entity, QueryEntityList } from "../mod.ts";
 
@@ -192,6 +192,83 @@ Deno.test("systems receive matching component instances, fresh entity views, and
   assertEquals(world.components.getEntityData(position, second), { x: 3, y: 4 }, "Expected second entity to update");
   assertStrictEquals(world.systems.get(movement), updateMovement, "Expected systems to be retrievable by prototype");
   assertStrictEquals(world.systems.get("movement"), updateMovement, "Expected systems to be retrievable by name");
+});
+
+Deno.test("defineSystem creates the same query behavior as manual System construction", async () => {
+  const position = vec2Component();
+  const velocity = vec2Component("velocity");
+  const renderable = new Component<null>({ name: "renderable" });
+  const sleeping = new Component<null>({ name: "sleeping" });
+  const world = new World({ capacity: 8, components: [position, velocity, renderable, sleeping] });
+  await world.init();
+
+  const matching = createEntity(world);
+  const missingAny = createEntity(world);
+  const blocked = createEntity(world);
+  world.components.addToEntity(position, matching);
+  world.components.addToEntity(velocity, matching);
+  world.components.addToEntity(renderable, matching);
+  world.components.addToEntity(position, missingAny);
+  world.components.addToEntity(velocity, missingAny);
+  world.components.addToEntity(position, blocked);
+  world.components.addToEntity(velocity, blocked);
+  world.components.addToEntity(renderable, blocked);
+  world.components.addToEntity(sleeping, blocked);
+
+  const manualQuery = new Query({ all: [position, velocity], any: [renderable], none: [sleeping] });
+  const typedSystem = defineSystem({
+    name: "typedMovement",
+    all: { position, velocity },
+    any: { renderable },
+    none: { sleeping },
+    callback: () => {},
+  });
+
+  assertEquals(
+    ids(world.entities.query(typedSystem.query)),
+    ids(world.entities.query(manualQuery)),
+    "Expected query match",
+  );
+  assertEquals(ids(world.entities.query(typedSystem.query)), [matching], "Expected all/any/none behavior to match");
+});
+
+Deno.test("defineSystem instances receive keyed component records and live entity iterators", async () => {
+  const position = vec2Component();
+  const velocity = vec2Component("velocity");
+  const world = new World({ capacity: 8, components: [position, velocity] });
+  await world.init();
+
+  const first = createEntity(world);
+  world.components.addToEntity(position, first, { x: 1, y: 2 });
+  world.components.addToEntity(velocity, first, { x: 3, y: 4 });
+
+  const seen: Entity[][] = [];
+  const movement = defineSystem({
+    name: "typedMovement",
+    all: { position, velocity },
+    callback: (components, entities, dt: number) => {
+      seen.push(ids(entities));
+      const positionStorage = components.position.storage;
+      const velocityStorage = components.velocity.storage;
+      assert(positionStorage !== null && velocityStorage !== null, "Expected data components to have storage");
+      for (const entity of seen.at(-1) ?? []) {
+        positionStorage.partitions.x[entity] = (positionStorage.partitions.x[entity] ?? 0) +
+          (velocityStorage.partitions.x[entity] ?? 0) * dt;
+      }
+    },
+  });
+
+  const updateMovement = world.systems.create(movement);
+  updateMovement(2);
+
+  const second = createEntity(world);
+  world.components.addToEntity(position, second, { x: 10, y: 0 });
+  world.components.addToEntity(velocity, second, { x: 1, y: 0 });
+  updateMovement(1);
+
+  assertEquals(seen, [[first], [first, second]], "Expected each invocation to receive a fresh entity iterator");
+  assertEquals(world.components.getEntityData(position, first), { x: 10, y: 2 }, "Expected first entity updates");
+  assertEquals(world.components.getEntityData(position, second), { x: 11, y: 0 }, "Expected second entity updates");
 });
 
 Deno.test("system lifecycle hooks run during world initialization and destruction", async () => {

@@ -182,18 +182,25 @@ export {
   WorldStateError,
 } from "@/errors.ts";
 export { isValidQuerySpec, Query } from "@/query/query.ts";
-export { isValidSystemSpec, System } from "@/system/system.ts";
+export { defineSystem, isValidSystemSpec, System } from "@/system/system.ts";
 export { World } from "@/world/world.ts";
 export { isValidWorldSpec } from "@/world/utils.ts";
 export { isValidName } from "@/utils.ts";
 export type { ComponentInstance } from "@/component/component-instance.ts";
 export type {
+  ComponentInstances,
+  ComponentMap,
   ComponentRecord,
+  ComponentSchemaOf,
   ComponentSpec,
   Entity,
   QueryEntityList,
   QuerySpec,
   Schema,
+  SystemCallback,
+  SystemInstance,
   SystemSpec,
+  TypedSystemCallback,
+  TypedSystemSpec,
   WorldState,
 } from "@/types.ts";
