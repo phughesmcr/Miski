@@ -179,7 +179,7 @@ export async function populateMovementWorld(
   const movementSystem = new System({
     name: "movement",
     query: createMovementQuery(components),
-    callback: (componentRecord, entityIterator, dt: number): void => {
+    callback: (componentRecord, entities, dt: number): void => {
       const position = componentRecord["position"] as ComponentInstance<Vec2>;
       const velocity = componentRecord["velocity"] as ComponentInstance<Vec2>;
       const positionStorage = position.storage;
@@ -191,7 +191,8 @@ export async function populateMovementWorld(
       const py = positionStorage.partitions.y;
       const vx = velocityStorage.partitions.x;
       const vy = velocityStorage.partitions.y;
-      for (const entity of entityIterator) {
+      for (let i = 0; i < entities.count; i++) {
+        const entity = entities.indices[i]!;
         px[entity] = (px[entity] ?? 0) + (vx[entity] ?? 0) * dt;
         py[entity] = (py[entity] ?? 0) + (vy[entity] ?? 0) * dt;
       }

@@ -316,9 +316,10 @@ Deno.bench({
 });
 
 Deno.bench({
-  name: "batch add/remove tag component across queryList",
-  group: "archetype transitions",
+  name: "bulk add/remove tag component across queryList - 7,168 entities",
+  group: "bulk archetype transitions",
   fn: () => {
+    // MEDIUM_CAPACITY sparse lifecycle fixtures leave 7,168 active positioned entities.
     const positioned = batchTransitions.world.entities.queryList(batchPositionQuery);
     batchTransitions.world.components.addToEntities(batchTransitions.components.renderable, positioned);
     const positionedAfterAdd = batchTransitions.world.entities.queryList(batchPositionQuery);
@@ -327,9 +328,10 @@ Deno.bench({
 });
 
 Deno.bench({
-  name: "batch add/remove data component across queryList",
-  group: "archetype transitions",
+  name: "bulk add/remove data component across queryList - 7,168 entities",
+  group: "bulk archetype transitions",
   fn: () => {
+    // MEDIUM_CAPACITY sparse lifecycle fixtures leave 7,168 active positioned entities.
     const positioned = batchDataTransitions.world.entities.queryList(batchDataPositionQuery);
     batchDataTransitions.world.components.addToEntities(
       batchDataTransitions.components.acceleration,
@@ -405,7 +407,7 @@ Deno.bench({
 });
 
 Deno.bench({
-  name: "iterate changed component entities",
+  name: "iterate dense changed component entities",
   group: "component data hot path",
   fn: () => {
     numericSink ^= countEntities(mixed.world.components.getChanged(mixed.components.position));

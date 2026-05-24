@@ -3,8 +3,8 @@ import { $_SYSTEM_DESTROY_KEY, $_SYSTEM_INIT_KEY } from "@/constants.ts";
 import { NoComponentsFoundError, SpecError } from "@/errors.ts";
 import { Query } from "@/query/query.ts";
 import type {
+  BorrowedEntityList,
   ComponentMap,
-  Entity,
   SystemCallback,
   SystemFunction,
   SystemFunctionArgs,
@@ -26,7 +26,7 @@ import type { World } from "@/world/world.ts";
  */
 type CallableSystem<T extends SystemFunction> = (
   components: Parameters<T>[0],
-  entities: IterableIterator<Entity>,
+  entities: BorrowedEntityList,
   ...args: SystemFunctionArgs<T>
 ) => ReturnType<T>;
 
@@ -45,7 +45,7 @@ export function createSystemInstance<T extends SystemFunction>(
 
   // Bind the callback with components and a getter that returns fresh entities on each call
   const boundCallback = ((...args: SystemFunctionArgs<T>) => {
-    return callback(components, world.entities.query(system.query), ...args);
+    return callback(components, world.entities.queryList(system.query), ...args);
   }) as SystemInstance<T>;
   return boundCallback;
 }

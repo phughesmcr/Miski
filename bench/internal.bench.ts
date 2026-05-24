@@ -109,6 +109,11 @@ for (let i = 0; i < MEDIUM_CAPACITY; i++) {
   queryResult.add(i);
 }
 
+const bulkTransitionEntities = new Uint32Array(SMALL_CAPACITY);
+for (let i = 0; i < SMALL_CAPACITY; i++) {
+  bulkTransitionEntities[i] = i;
+}
+
 const queryResultPool = new QueryResultPool(MEDIUM_CAPACITY);
 const queryCache = new QueryCache(queryResultPool);
 const cacheId = "position:velocity:!sleeping";
@@ -292,6 +297,19 @@ Deno.bench({
 });
 
 Deno.bench({
+  name: "ComponentManager getChanged dense iterator",
+  group: "internal component manager",
+  fn: () => {
+    let count = 0;
+    const changed = componentManager.getChanged(components.position);
+    if (changed !== undefined) {
+      for (const entity of changed) count += entity & 1;
+    }
+    entitySink ^= count;
+  },
+});
+
+Deno.bench({
   name: "ComponentManager getEntityComponents scan",
   group: "internal component manager",
   fn: () => {
@@ -367,6 +385,15 @@ Deno.bench({
   fn: () => {
     archetypeManager.addComponent(3, accelerationInstance);
     archetypeManager.removeComponent(3, accelerationInstance);
+  },
+});
+
+Deno.bench({
+  name: "ArchetypeManager bulk add/remove component transition - 1K entities",
+  group: "internal archetype manager",
+  fn: () => {
+    archetypeManager.addComponents(bulkTransitionEntities, SMALL_CAPACITY, accelerationInstance);
+    archetypeManager.removeComponents(bulkTransitionEntities, SMALL_CAPACITY, accelerationInstance);
   },
 });
 

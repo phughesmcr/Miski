@@ -60,33 +60,36 @@ Because Miski is designed to be used inside your own projects, we let you config
 * Ability to limit the number of entities a component can be added to
 * Define components, systems and queries once, reuse them across multiple worlds
 * `AND`,`OR`,`NOT` operators in Queries
-* Dense zero-allocation `queryList` API for index-based hot loops
-* Atomic batch component add/remove APIs for query-wide transitions
+* Dense zero-allocation `queryList` API for index-based hot loops and systems
+* Atomic bulk component add/remove APIs for spawn, load, and query-wide transitions
 * Opt-in snapshot helpers for tools, tests, and non-frame-critical code
 * `world.archetypes.queryEntered` & `world.archetypes.queryExited` methods
-* Use `world.components.getChanged(...)` to get entities whose properties were changed via a component proxy
+* Use `world.components.getChanged(...)` to get data-component entities changed by add-with-data, public setters, or proxies
 * MIT license
 
 ## Performance Snapshot
 
 Miski is optimized for Deno game-loop workloads where predictable frame time and low GC pressure matter.
 
-Recent local benchmark results on Deno 2.7.14, aarch64 macOS:
+Recent local benchmark results on Deno 2.8.0, aarch64 macOS:
 
 | Benchmark | Result |
 | --- | ---: |
-| `isActive` hot check | 6.2 ns |
-| `entityHas` ownership check | 5.9 ns |
-| Add/remove tag component | 61.1 ns |
-| Add/remove data component | 91.1 ns |
-| Move entity across common gameplay archetypes | 246.3 ns |
-| Query cache miss after refresh | 3.5 us |
-| Cached dense `queryList` iteration | 965.7 ns |
-| Spawn/despawn 128 projectiles with 6 components | 58.3 us |
-| Game frame - move, query renderables, refresh | 40.2 us |
+| `isActive` hot check | 6.9 ns |
+| `entityHas` ownership check | 6.3 ns |
+| Add/remove tag component | 72.3 ns |
+| Add/remove data component | 113.2 ns |
+| Move entity across common gameplay archetypes | 287.8 ns |
+| Bulk add/remove tag component - 7,168 entities | 429.2 us, 59.9 ns/entity |
+| Bulk add/remove data component - 7,168 entities | 642.6 us, 89.7 ns/entity |
+| Query cache miss after refresh | 2.0 us |
+| Cached dense `queryList` iteration | 941.1 ns |
+| Dense changed iteration with no changed entities | 9.3 ns |
+| Spawn/despawn 128 projectiles with 6 components | 60.4 us |
+| Game frame - move, query renderables, refresh | 7.3 us |
 
-GC allocation pressure is budgeted separately. Hot entity, component check, direct write, cached query list, and owner
-iteration paths are effectively allocation-free in steady state. The current `deno task bench:gc` run reports:
+GC allocation pressure is budgeted separately. Hot entity, component check, direct write, cached query list, changed,
+and owner iteration paths are effectively allocation-free in steady state. The current `deno task bench:gc` run reports:
 
 | Allocation Scenario | Steady-State Allocation |
 | --- | ---: |
@@ -94,12 +97,15 @@ iteration paths are effectively allocation-free in steady state. The current `de
 | `isActive` and `entityHas` hot checks | 0.0008 B/iter |
 | Direct typed-array component writes | 0.0008 B/iter |
 | Cached `queryList` entity iteration | 0.0020 B/iter |
-| Component owners iterator | 0.0020 B/iter |
-| Add/remove data component runtime transition | 40.0032 B/iter |
-| Game frame system + cached render query + refresh | 1.31 KiB/iter |
+| Component changed dense iterator | 0.0486 B/iter |
+| Component owners iterator | 0.0000 B/iter |
+| Add/remove data component runtime transition | 40.0016 B/iter |
+| Bulk add/remove tag component - 896 entities | 1.64 KiB/iter |
+| Bulk add/remove data component - 896 entities | 1.64 KiB/iter |
+| Game frame system + cached render query + refresh | 0.99 KiB/iter |
 
 Against a local ECS benchmark shape derived from `noctjs/ecs-benchmark`, Miski ranks in the top three by normalized
-geomean when using Deno and Miski's dense/batch APIs for hot query loops. Cross-library benchmark numbers are sensitive
+geomean when using Deno and Miski's dense/bulk APIs for hot query loops. Cross-library benchmark numbers are sensitive
 to runtime, machine, benchmark shape, and API style, so treat this as a comparison aid rather than a universal ranking.
 
 ## Installation
@@ -274,7 +280,7 @@ world.components.addToEntity(positionComponent, entity, { x: 10, y: 20 });
 world.components.removeFromEntity(positionComponent, entity);
 ```
 
-For hot loops that add or remove a component across a dense query result, resolve the query once and use the batch APIs:
+For spawn, load, and other bulk transitions across a dense query result, resolve the query once and use the batch APIs:
 
 ```typescript
 const query = new Query({ all: [positionComponent] });
@@ -291,7 +297,9 @@ The return value is the number of entities whose ownership changed.
 
 Batch add/remove preflights the full dense list before mutating anything. Inactive entities, duplicate entity IDs, and
 capacity failures throw before ownership, component data, archetypes, changed state, or query caches are changed.
-Removal remains idempotent for active entities that do not own the component.
+Removal remains idempotent for active entities that do not own the component. These APIs are optimized for bulk
+archetype movement, but they are still transitions; avoid using them as per-frame whole-world toggles when a tag,
+query filter, or data field can represent the same state.
 
 #### Test for Component presence
 
@@ -337,7 +345,8 @@ positionInstance.proxy.entity = entity;
 positionInstance.proxy.x = 1;
 ```
 
-The second way, using `.proxy` has the advantage of also adding the entity to the changed tracking as well as performing some basic typeguarding.
+The second way, using `.proxy`, has the advantage of also adding the entity to changed tracking as well as performing
+some basic typeguarding.
 
 For convenience, the public data APIs perform ownership and data-storage checks:
 
@@ -378,6 +387,10 @@ You can also access the changed entities of a component like so:
 ```typescript
 const changed = world.components.getChanged(positionComponent);
 ```
+
+`getChanged(...)` is backed by a borrowed dense iterator for data components and returns each entity at most once per
+refresh window, even when multiple fields change. Tag components currently return an empty changed iterator. Use
+`getChangedSnapshot(...)` when retained stable IDs are needed.
 
 ### Entities
 
@@ -478,13 +491,34 @@ const movementSystem = defineSystem({
     const positionStorage = position.storage.partitions;
     const velocityStorage = velocity.storage.partitions;
 
-    for (const entity of entities) {
+    for (let i = 0; i < entities.count; i++) {
+      const entity = entities.indices[i];
       positionStorage.x[entity] += velocityStorage.x[entity] * dt;
       positionStorage.y[entity] += velocityStorage.y[entity] * dt;
     }
   },
 });
 ```
+
+System callbacks receive a borrowed `BorrowedEntityList`, the same dense view returned by `world.entities.queryList(...)`.
+This is a breaking migration from iterator-style callbacks. Existing callback loops should change from:
+
+```typescript
+for (const entity of entities) {
+  // ...
+}
+```
+
+to:
+
+```typescript
+for (let i = 0; i < entities.count; i++) {
+  const entity = entities.indices[i];
+  // ...
+}
+```
+
+`world.entities.query(...)` remains available as a convenience iterator API outside the system hot path.
 
 `any` components are also exposed in the callback record. `none` components are query filters only:
 
@@ -498,7 +532,8 @@ const renderSystem = defineSystem({
     components.position; // ComponentInstance<Vec2>
     components.sprite; // ComponentInstance<Sprite>
     // components.hidden is intentionally unavailable here.
-    for (const entity of entities) {
+    for (let i = 0; i < entities.count; i++) {
+      const entity = entities.indices[i];
       // render...
     }
   },
@@ -518,7 +553,8 @@ const positionSystem = new System({
   callback: (components, entities) => {
     const position = components.position as ComponentInstance<Vec2>;
     const { x, y } = position.storage.partitions;
-    for (const entity of entities) {
+    for (let i = 0; i < entities.count; i++) {
+      const entity = entities.indices[i];
       x[entity] += 1;
       y[entity] += 1;
     }

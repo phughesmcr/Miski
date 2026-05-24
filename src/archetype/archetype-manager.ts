@@ -37,6 +37,24 @@ export class ArchetypeManager {
   /** Reusable query list for refresh passes */
   #queryScratch: QueryInstance[];
 
+  /** Reusable grouped entity storage for batch component transitions */
+  #bulkEntities: Uint32Array;
+
+  /** Reusable group counts for batch component transitions */
+  #bulkGroupCounts: number[];
+
+  /** Reusable group offsets for batch component transitions */
+  #bulkGroupOffsets: number[];
+
+  /** Reusable group write offsets for batch component transitions */
+  #bulkGroupWrites: number[];
+
+  /** Reusable source archetypes for batch component transitions */
+  #bulkSources: Archetype[];
+
+  /** Reusable target archetypes for batch component transitions */
+  #bulkTargets: Archetype[];
+
   /**
    * Move an entity to a
    * new archetype and mark query membership dirty.
@@ -54,6 +72,100 @@ export class ArchetypeManager {
     this.#queryMembershipDirty = true;
 
     return archetype;
+  }
+
+  /**
+   * Move a dense entity list through a single-component transition grouped by source archetype.
+   * @param entities - Dense entity IDs
+   * @param count - Number of entity IDs to read
+   * @param instance - The component instance being added or removed
+   * @param add - Whether the component is being added
+   * @returns The number of entities moved to a different archetype
+   */
+  #moveEntities(
+    entities: Uint32Array,
+    count: number,
+    instance: DynamicComponentInstance,
+    add: boolean,
+  ): number {
+    if (count === 0) return 0;
+
+    const sources = this.#bulkSources;
+    const targets = this.#bulkTargets;
+    const counts = this.#bulkGroupCounts;
+    const offsets = this.#bulkGroupOffsets;
+    const writes = this.#bulkGroupWrites;
+    sources.length = 0;
+    targets.length = 0;
+
+    for (let i = 0; i < count; i++) {
+      const entity = entities[i]!;
+      const source = this.entityArchetypes[entity] ?? this.root;
+      let group = -1;
+      for (let j = 0; j < sources.length; j++) {
+        if (sources[j] === source) {
+          group = j;
+          break;
+        }
+      }
+      if (group === -1) {
+        const target = this.#getTransitionArchetype(source, instance, add);
+        if (source === target) continue;
+        group = sources.length;
+        sources[group] = source;
+        targets[group] = target;
+        counts[group] = 0;
+      }
+      counts[group] = (counts[group] ?? 0) + 1;
+    }
+
+    let moved = 0;
+    for (let group = 0; group < sources.length; group++) {
+      offsets[group] = moved;
+      writes[group] = moved;
+      moved += counts[group] ?? 0;
+    }
+    if (moved === 0) {
+      return 0;
+    }
+
+    for (let i = 0; i < count; i++) {
+      const entity = entities[i]!;
+      const source = this.entityArchetypes[entity] ?? this.root;
+      let group = -1;
+      for (let j = 0; j < sources.length; j++) {
+        if (sources[j] === source) {
+          group = j;
+          break;
+        }
+      }
+      if (group === -1) continue;
+      const write = writes[group]!;
+      this.#bulkEntities[write] = entity;
+      writes[group] = write + 1;
+    }
+
+    for (let group = 0; group < sources.length; group++) {
+      const source = sources[group]!;
+      const target = targets[group]!;
+      const offset = offsets[group]!;
+      const groupCount = counts[group] ?? 0;
+      source.removeEntities(this.#bulkEntities, offset, groupCount);
+      target.addEntities(this.#bulkEntities, offset, groupCount);
+      const end = offset + groupCount;
+      for (let i = offset; i < end; i++) {
+        this.entityArchetypes[this.#bulkEntities[i]!] = target;
+        this.#bulkEntities[i] = 0;
+      }
+      counts[group] = 0;
+      offsets[group] = 0;
+      writes[group] = 0;
+    }
+
+    sources.length = 0;
+    targets.length = 0;
+    this.#queryMembershipDirty = true;
+    return moved;
   }
 
   /**
@@ -146,6 +258,12 @@ export class ArchetypeManager {
     this.#componentCache = {};
     this.#queryMembershipDirty = true;
     this.#queryScratch = [];
+    this.#bulkEntities = new Uint32Array(capacity);
+    this.#bulkGroupCounts = [];
+    this.#bulkGroupOffsets = [];
+    this.#bulkGroupWrites = [];
+    this.#bulkSources = [];
+    this.#bulkTargets = [];
 
     // Create root archetype with properly sized bitfield for components
     const rootBitfield = new BooleanArray(componentCount);
@@ -162,6 +280,17 @@ export class ArchetypeManager {
   addComponent(entity: Entity, instance: DynamicComponentInstance): Archetype {
     const oldArchetype = this.entityArchetypes[entity] ?? this.root;
     return this.#moveEntity(entity, this.#getTransitionArchetype(oldArchetype, instance, true));
+  }
+
+  /**
+   * Move entities to the archetypes reached by adding a component.
+   * @param entities - Dense entity IDs
+   * @param count - Number of entity IDs to read
+   * @param instance - The component instance being added
+   * @returns The number of entities moved to a different archetype
+   */
+  addComponents(entities: Uint32Array, count: number, instance: DynamicComponentInstance): number {
+    return this.#moveEntities(entities, count, instance, true);
   }
 
   /**
@@ -355,6 +484,17 @@ export class ArchetypeManager {
   removeComponent(entity: Entity, instance: DynamicComponentInstance): Archetype {
     const oldArchetype = this.entityArchetypes[entity] ?? this.root;
     return this.#moveEntity(entity, this.#getTransitionArchetype(oldArchetype, instance, false));
+  }
+
+  /**
+   * Move entities to the archetypes reached by removing a component.
+   * @param entities - Dense entity IDs
+   * @param count - Number of entity IDs to read
+   * @param instance - The component instance being removed
+   * @returns The number of entities moved to a different archetype
+   */
+  removeComponents(entities: Uint32Array, count: number, instance: DynamicComponentInstance): number {
+    return this.#moveEntities(entities, count, instance, false);
   }
 
   /**

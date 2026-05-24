@@ -54,7 +54,10 @@ export class QueryCache {
 
     if (entry && this.#pool) {
       this.#pool.releaseEntityResult(entry.result);
-      this.#entityCache.delete(queryId);
+      const result = compute();
+      entry.result = result;
+      entry.version = this.#globalVersion;
+      return result;
     }
 
     const result = compute();

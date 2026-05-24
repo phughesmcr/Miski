@@ -22,7 +22,7 @@ export class StorageProxy<T extends SchemaOrNull> {
    * @param spec - The specification for the StorageProxy
    */
   constructor(spec: StorageProxySpec<T>) {
-    const { capacity, changed, storage } = spec;
+    const { capacity, markChanged, storage } = spec;
 
     this.#capacity = capacity;
 
@@ -35,7 +35,7 @@ export class StorageProxy<T extends SchemaOrNull> {
           const store = storage.partitions[key as keyof T] as TypedArray;
           if (store[this.#entity] !== value) {
             store[this.#entity] = value;
-            changed.set(this.#entity, true);
+            markChanged(this.#entity);
           }
         },
         enumerable: true,

@@ -28,8 +28,8 @@ export type Entity = number;
  * @param T The Schema / Partition type of the StorageProxy
  */
 export type StorageProxySpec<T> = {
-  /** The BooleanArray of changed values */
-  changed: BooleanArray;
+  /** Mark the current entity as changed for this component. */
+  markChanged(entity: Entity): void;
   /** The Partition data of the StorageProxy */
   storage: PartitionStorage<T>;
   /** The capacity of the World */
@@ -222,12 +222,12 @@ export type SystemFunction = (...args: never[]) => unknown;
 
 /**
  * A multi-arity function where the first two parameters
- * are the components and entities available to
- * the system respectively.
+ * are the components and borrowed dense entity list available
+ * to the system respectively.
  */
 export type SystemCallback = (
   components: ComponentRecord<SchemaOrNull>,
-  entities: IterableIterator<Entity>,
+  entities: BorrowedEntityList,
   ...args: unknown[]
 ) => void | Promise<void>;
 
@@ -238,7 +238,7 @@ export type TypedSystemCallback<
   TReturn = void,
 > = (
   components: ComponentInstances<TComponents>,
-  entities: IterableIterator<Entity>,
+  entities: BorrowedEntityList,
   ...args: TArgs
 ) => TReturn;
 
@@ -396,6 +396,8 @@ export type WorldComponentAPI = {
    * @param entities - The dense entity list to mutate
    * @param data - The data to set for the component
    * @returns The number of entities whose ownership changed
+   * @remarks Preflights the full list before mutating; inactive entities, duplicate entity IDs, and capacity failures
+   * leave ownership, data, archetypes, changed state, and query caches unchanged.
    * @throws {NotRegisteredError} - If the component is not registered
    * @throws {EntityNotFoundError} - If any entity is inactive
    */
@@ -486,7 +488,8 @@ export type WorldComponentAPI = {
    * @param component - The component to remove
    * @param entities - The dense entity list to mutate
    * @returns The number of entities whose ownership changed
-   * @remarks Fail-fast and non-atomic: inactive entities throw when encountered; active non-owners are skipped.
+   * @remarks Preflights the full list before mutating; inactive entities and duplicate entity IDs leave ownership,
+   * data, archetypes, changed state, and query caches unchanged. Active non-owners are skipped idempotently.
    * @throws {NotRegisteredError} - If the component is not registered
    * @throws {EntityNotFoundError} - If any entity is inactive
    */

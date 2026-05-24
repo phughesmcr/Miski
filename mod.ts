@@ -103,7 +103,7 @@
  * positionComponentInstance.proxy.y = 20;
  * ```
  *
- * @example Get all the Entities whose properties changed since the last `world.refresh()`
+ * @example Get all the data-component Entities whose properties changed since the last `world.refresh()`
  * ```ts
  * const changedPosition: IterableIterator<Entity> | undefined = world.components.getChanged(positionComponent);
  * if (changedPosition) {
@@ -113,10 +113,20 @@
  * }
  * ```
  *
- * @example Query entities by component
+ * @example Query entities by component for hot loops
  * ```ts
  * const positionQuery = new Query({ all: [positionComponent] });
- * const positionView: IterableIterator<Entity> = world.entities.query(positionQuery);
+ * const positionView = world.entities.queryList(positionQuery);
+ * for (let i = 0; i < positionView.count; i++) {
+ *   const entity = positionView.indices[i]!;
+ *   console.log(entity);
+ * }
+ * ```
+ *
+ * @example Query entities by component with the convenience iterator API
+ * ```ts
+ * const positionQuery = new Query({ all: [positionComponent] });
+ * const positionView = world.entities.query(positionQuery);
  * for (const entity of positionView) {
  *   console.log(entity);
  * }
@@ -154,7 +164,8 @@
  *   callback: (components, entities, frametime: number, message: string): void => {
  *     console.log(frametime, message);
  *     const position = components.position;
- *     for (const entity of entities) {
+ *     for (let i = 0; i < entities.count; i++) {
+ *       const entity = entities.indices[i]!;
  *       position.proxy.entity = entity;
  *     }
  *   },

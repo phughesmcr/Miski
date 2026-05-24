@@ -480,9 +480,12 @@ export class World {
 
       let changedCount = 0;
       for (let i = 0; i < count; i++) {
-        if (this.#commitAddComponent(instance, this.#batchEntities[i]!, data)) {
+        if (this.#componentManager.addInstanceToEntity(instance, this.#batchEntities[i]!, data)) {
           changedCount++;
         }
+      }
+      if (changedCount > 0) {
+        this.#archetypeManager.addComponents(this.#batchEntities, count, instance);
       }
       this.#invalidateCommittedTransition(changedCount > 0);
       return changedCount;
@@ -514,9 +517,12 @@ export class World {
     try {
       let changedCount = 0;
       for (let i = 0; i < count; i++) {
-        if (this.#commitRemoveComponent(instance, this.#batchEntities[i]!)) {
+        if (this.#componentManager.removeInstanceFromEntity(instance, this.#batchEntities[i]!)) {
           changedCount++;
         }
+      }
+      if (changedCount > 0) {
+        this.#archetypeManager.removeComponents(this.#batchEntities, count, instance);
       }
       this.#invalidateCommittedTransition(changedCount > 0);
       return changedCount;

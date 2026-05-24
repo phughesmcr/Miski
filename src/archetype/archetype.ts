@@ -165,6 +165,38 @@ export class Archetype {
   }
 
   /**
+   * Add multiple entities to the archetype.
+   * @param entities - Dense entity IDs
+   * @param start - First index to read
+   * @param count - Number of entity IDs to read
+   * @returns The number of newly active entities
+   */
+  addEntities(entities: Uint32Array, start: number, count: number): number {
+    let added = 0;
+    const end = start + count;
+    for (let i = start; i < end; i++) {
+      const entity = entities[i]!;
+      if (this.#entityActive[entity] === 1) continue;
+      if (this.#entityListed[entity] === 0) {
+        this.#entityListed[entity] = 1;
+        this.#entityList[this.#entityListCount++] = entity;
+      }
+      this.#entityActive[entity] = 1;
+      if (this.#enteredActive[entity] === 0) {
+        if (this.#enteredListed[entity] === 0) {
+          this.#enteredListed[entity] = 1;
+          this.#enteredList[this.#enteredListCount++] = entity;
+        }
+        this.#enteredActive[entity] = 1;
+        this.#enteredCount++;
+      }
+      this.#populationCount++;
+      added++;
+    }
+    return added;
+  }
+
+  /**
    * Create a new Archetype from an existing Archetype
    * @returns A new Archetype
    */
@@ -304,5 +336,37 @@ export class Archetype {
     }
     this.#populationCount--;
     return this;
+  }
+
+  /**
+   * Remove multiple entities from the archetype.
+   * @param entities - Dense entity IDs
+   * @param start - First index to read
+   * @param count - Number of entity IDs to read
+   * @returns The number of entities that were active before removal
+   */
+  removeEntities(entities: Uint32Array, start: number, count: number): number {
+    let removed = 0;
+    const end = start + count;
+    for (let i = start; i < end; i++) {
+      const entity = entities[i]!;
+      if (this.#entityActive[entity] !== 1) continue;
+      if (this.#enteredActive[entity] === 1) {
+        this.#enteredActive[entity] = 0;
+        this.#enteredCount--;
+      }
+      this.#entityActive[entity] = 0;
+      if (this.#exitedActive[entity] === 0) {
+        if (this.#exitedListed[entity] === 0) {
+          this.#exitedListed[entity] = 1;
+          this.#exitedList[this.#exitedListCount++] = entity;
+        }
+        this.#exitedActive[entity] = 1;
+        this.#exitedCount++;
+      }
+      this.#populationCount--;
+      removed++;
+    }
+    return removed;
   }
 }

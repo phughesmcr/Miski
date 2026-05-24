@@ -1,5 +1,5 @@
 import { Component, defineSystem, Query, System, World } from "../mod.ts";
-import type { ComponentInstance, QuerySpec, SchemaOrNull, SystemCallback } from "../mod.ts";
+import type { BorrowedEntityList, ComponentInstance, QuerySpec, SchemaOrNull, SystemCallback } from "../mod.ts";
 // @ts-expect-error AnySystemCallback is not exported from the public mod.ts surface.
 import type { AnySystemCallback } from "../mod.ts";
 
@@ -22,7 +22,8 @@ const movement = defineSystem({
     expectType<ComponentInstance<Vec2>>(components.position);
     expectType<ComponentInstance<Vec2>>(components.velocity);
     expectType<ComponentInstance<null>>(components.renderable);
-    entities.next();
+    expectType<BorrowedEntityList>(entities);
+    entities.indices[0];
     expectType<number>(dt);
 
     components.position.storage?.partitions.x;
@@ -63,7 +64,8 @@ const compatibilityCallback: SystemCallback = (components, entities, label) => {
   const dynamicPosition = components["position"];
   if (!dynamicPosition) return;
   expectType<ComponentInstance<SchemaOrNull>>(dynamicPosition);
-  entities.next();
+  expectType<BorrowedEntityList>(entities);
+  entities.indices[0];
   expectType<unknown>(label);
 
   // @ts-expect-error dynamic compatibility callbacks do not expose concrete schema properties without narrowing.

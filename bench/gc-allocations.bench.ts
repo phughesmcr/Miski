@@ -47,7 +47,7 @@ const DEFAULT_WARMUP_ITERATIONS = 10_000;
 const ZERO_ALLOC_BUDGET_BYTES_PER_ITER = 0.5;
 const QUERY_ITERATION_BUDGET_BYTES_PER_ITER = 180;
 const WIDE_QUERY_ITERATION_BUDGET_BYTES_PER_ITER = 260;
-const CHANGED_ITERATION_BUDGET_BYTES_PER_ITER = 360;
+const CHANGED_ITERATION_BUDGET_BYTES_PER_ITER = ZERO_ALLOC_BUDGET_BYTES_PER_ITER;
 const SYSTEM_UPDATE_BUDGET_BYTES_PER_ITER = 220;
 const FRAME_BUDGET_BYTES_PER_ITER = 2_700;
 const WORLD_CONSTRUCTOR_BUDGET_BYTES_PER_ITER = 12_000;
@@ -398,7 +398,7 @@ const scenarios: Scenario[] = [
     },
   },
   {
-    name: "component changed iterator",
+    name: "component changed dense iterator",
     iterations: 100_000,
     maxSteadyStateBeforeGcBytesPerIter: CHANGED_ITERATION_BUDGET_BYTES_PER_ITER,
     fn: () => {
@@ -423,10 +423,11 @@ const scenarios: Scenario[] = [
     },
   },
   {
-    name: "batch add/remove tag component across queryList",
+    name: "bulk add/remove tag component across queryList - 896 entities",
     iterations: 10_000,
     maxSteadyStateBeforeGcBytesPerIter: BATCH_COMPONENT_TRANSITION_BUDGET_BYTES_PER_ITER,
     fn: () => {
+      // SMALL_CAPACITY sparse lifecycle fixtures leave 896 active positioned entities.
       const positioned = batchTagTransitions.world.entities.queryList(batchTagPositionQuery);
       batchTagTransitions.world.components.addToEntities(batchTagTransitions.components.renderable, positioned);
       const positionedAfterAdd = batchTagTransitions.world.entities.queryList(batchTagPositionQuery);
@@ -437,10 +438,11 @@ const scenarios: Scenario[] = [
     },
   },
   {
-    name: "batch add/remove data component across queryList",
+    name: "bulk add/remove data component across queryList - 896 entities",
     iterations: 10_000,
     maxSteadyStateBeforeGcBytesPerIter: BATCH_COMPONENT_TRANSITION_BUDGET_BYTES_PER_ITER,
     fn: () => {
+      // SMALL_CAPACITY sparse lifecycle fixtures leave 896 active positioned entities.
       const positioned = batchDataTransitions.world.entities.queryList(batchDataPositionQuery);
       batchDataTransitions.world.components.addToEntities(
         batchDataTransitions.components.acceleration,

@@ -56,13 +56,15 @@ Deno.test("world enforces entity capacity and reuses destroyed entity slots with
   );
 });
 
-Deno.test("component data APIs expose initial data, mutation, and per-frame changed tracking", async () => {
+Deno.test("component data APIs expose initial data, mutation, and per-frame dense changed tracking", async () => {
   const position = vec2Component();
-  const world = new World({ capacity: 8, components: [position] });
+  const renderable = new Component<null>({ name: "renderable" });
+  const world = new World({ capacity: 8, components: [position, renderable] });
   await world.init();
 
   const entity = createEntity(world);
   world.components.addToEntity(position, entity, { x: 1.5, y: -2 });
+  world.components.addToEntity(renderable, entity);
 
   assertEquals(
     world.components.getEntityData(position, entity),
@@ -70,6 +72,11 @@ Deno.test("component data APIs expose initial data, mutation, and per-frame chan
     "Expected initial data to be stored",
   );
   assertEquals(ids(world.components.getChanged(position)), [entity], "Expected addToEntity to mark component changed");
+  assertEquals(
+    ids(world.components.getChanged(renderable)),
+    [],
+    "Expected tag components to stay out of changed state",
+  );
 
   world.refresh();
   assertEquals(ids(world.components.getChanged(position)), [], "Expected refresh to clear changed tracking");
@@ -118,6 +125,41 @@ Deno.test("component proxy tracks only real writes and direct storage access rem
   assertEquals(ids(world.components.getChanged(position)), [entity], "Expected proxy writes to mark changed entities");
 });
 
+Deno.test("changed iteration reuses dense storage and tracks each entity once per frame", async () => {
+  const position = vec2Component();
+  const world = new World({ capacity: 8, components: [position] });
+  await world.init();
+
+  const first = createEntity(world);
+  const second = createEntity(world);
+  world.components.addToEntity(position, first, { x: 0, y: 0 });
+  world.components.addToEntity(position, second, { x: 1, y: 1 });
+  world.refresh();
+
+  const instance = world.components.getInstance(position);
+  assert(instance !== undefined && instance.proxy !== null, "Expected data component instance");
+
+  world.components.setEntityData(position, first, { x: 2, y: 2 });
+  world.components.setEntityData(position, first, { x: 3, y: 3 });
+  instance.proxy.entity = first;
+  instance.proxy.x = 4;
+  instance.proxy.y = 5;
+  world.components.setEntityData(position, second, { x: 6, y: 6 });
+
+  const firstRead = world.components.getChanged(position);
+  const secondRead = world.components.getChanged(position);
+
+  assert(firstRead !== undefined && secondRead !== undefined, "Expected changed iterator for registered component");
+  assertStrictEquals(secondRead, firstRead, "Expected getChanged to reuse the component's borrowed iterator");
+  assertEquals(ids(firstRead), [first, second], "Expected one dense changed entry per entity");
+
+  world.components.removeFromEntity(position, first);
+  assertEquals(ids(world.components.getChanged(position)), [second], "Expected removal to erase changed membership");
+
+  world.refresh();
+  assertEquals(ids(world.components.getChanged(position)), [], "Expected refresh to reset dense changed count");
+});
+
 Deno.test("proxy rejects out-of-range entity targets before mutating component storage", async () => {
   const position = vec2Component();
   const world = new World({ capacity: 8, components: [position] });
@@ -137,7 +179,7 @@ Deno.test("proxy rejects out-of-range entity targets before mutating component s
   );
 });
 
-Deno.test("systems receive matching component instances, fresh entity views, and frame arguments", async () => {
+Deno.test("systems receive matching component instances, borrowed entity lists, and frame arguments", async () => {
   const position = vec2Component();
   const velocity = vec2Component("velocity");
   const world = new World({ capacity: 8, components: [position, velocity] });
@@ -158,7 +200,8 @@ Deno.test("systems receive matching component instances, fresh entity views, and
       const positionStore = positionInstance.storage;
       const velocityStore = velocityInstance.storage;
       assert(positionStore !== null && velocityStore !== null, "Expected movement components to have storage");
-      for (const entity of entities) {
+      for (let i = 0; i < entities.count; i++) {
+        const entity = entities.indices[i]!;
         const nextX = (positionStore.partitions.x[entity] ?? Number.NaN) +
           (velocityStore.partitions.x[entity] ?? Number.NaN) * dt;
         const nextY = (positionStore.partitions.y[entity] ?? Number.NaN) +
@@ -232,7 +275,7 @@ Deno.test("defineSystem creates the same query behavior as manual System constru
   assertEquals(ids(world.entities.query(typedSystem.query)), [matching], "Expected all/any/none behavior to match");
 });
 
-Deno.test("defineSystem instances receive keyed component records and live entity iterators", async () => {
+Deno.test("defineSystem instances receive keyed component records and borrowed entity lists", async () => {
   const position = vec2Component();
   const velocity = vec2Component("velocity");
   const world = new World({ capacity: 8, components: [position, velocity] });
@@ -247,11 +290,13 @@ Deno.test("defineSystem instances receive keyed component records and live entit
     name: "typedMovement",
     all: { position, velocity },
     callback: (components, entities, dt: number) => {
-      seen.push(ids(entities));
+      const current = listIds(entities);
+      seen.push(current);
       const positionStorage = components.position.storage;
       const velocityStorage = components.velocity.storage;
       assert(positionStorage !== null && velocityStorage !== null, "Expected data components to have storage");
-      for (const entity of seen.at(-1) ?? []) {
+      for (let i = 0; i < entities.count; i++) {
+        const entity = entities.indices[i]!;
         positionStorage.partitions.x[entity] = (positionStorage.partitions.x[entity] ?? 0) +
           (velocityStorage.partitions.x[entity] ?? 0) * dt;
       }
@@ -459,6 +504,42 @@ Deno.test("batch component transitions mutate dense query lists", async () => {
   const removed = world.components.removeFromEntities(velocity, world.entities.queryList(moving));
   assertEquals(removed, 3, "Expected every moving entity to lose velocity");
   assertEquals(listIds(world.entities.queryList(moving)), [], "Expected batch removal to invalidate cached queries");
+});
+
+Deno.test("batch component transitions preserve entered and exited visibility until refresh", async () => {
+  const position = vec2Component();
+  const velocity = vec2Component("velocity");
+  const world = new World({ capacity: 8, components: [position, velocity] });
+  await world.init();
+
+  const first = createEntity(world);
+  const second = createEntity(world);
+  world.components.addToEntity(position, first);
+  world.components.addToEntity(position, second);
+  world.refresh();
+
+  const positioned = new Query({ all: [position] });
+  const moving = new Query({ all: [position, velocity] });
+
+  world.components.addToEntities(velocity, world.entities.queryList(positioned), { x: 1, y: 1 });
+  assertEquals(
+    ids(world.archetypes.queryEntered(moving)).toSorted((a, b) => a - b),
+    [first, second],
+    "Expected batch-added entities to be visible as entered",
+  );
+
+  world.refresh();
+  assertEquals(ids(world.archetypes.queryEntered(moving)), [], "Expected refresh to clear batch entered state");
+
+  world.components.removeFromEntities(velocity, world.entities.queryList(moving));
+  assertEquals(
+    ids(world.archetypes.queryExited(moving)).toSorted((a, b) => a - b),
+    [first, second],
+    "Expected batch-removed entities to be visible as exited",
+  );
+
+  world.refresh();
+  assertEquals(ids(world.archetypes.queryExited(moving)), [], "Expected refresh to clear batch exited state");
 });
 
 Deno.test("queries remain live across add, remove, destroy, and recreate operations", async () => {

@@ -32,10 +32,18 @@ function getComponentStorageSize(component: DynamicComponent, capacity: number):
 export class ComponentManager {
   /** The storage buffer for the component manager */
   #buffer: PartitionedBuffer;
-  /** The changed state for each component */
-  #changed: Map<DynamicComponent, BooleanArray>;
   /** Changed state indexed by component instance id */
-  #changedById: BooleanArray[];
+  #changedById: (BooleanArray | undefined)[];
+  /** Number of changed entities indexed by component instance id */
+  #changedCountsById: number[];
+  /** Dense changed entity IDs indexed by component instance id */
+  #changedListsById: (Uint32Array | undefined)[];
+  /** Reusable changed iterators indexed by component instance id */
+  #changedIteratorsById: (ReusableEntityIterator | undefined)[];
+  /** Dense changed-list positions indexed by component instance id, then entity ID */
+  #changedPositionsById: (Uint32Array | undefined)[];
+  /** Shared empty changed iterator returned for tag components */
+  #emptyChangedIterator: ReusableEntityIterator;
   /** Owner count indexed by component instance id */
   #ownerCountsById: number[];
   /** Dense owner entity IDs for each component */
@@ -84,8 +92,12 @@ export class ComponentManager {
     const size = roundUpToMultiple(Math.max(storageSize, capacity), capacity);
     this.#buffer = new PartitionedBuffer(size, capacity);
     // create the various registries
-    this.#changed = new Map();
     this.#changedById = [];
+    this.#changedCountsById = [];
+    this.#changedListsById = [];
+    this.#changedIteratorsById = [];
+    this.#changedPositionsById = [];
+    this.#emptyChangedIterator = new ReusableEntityIterator(new Uint32Array(0));
     this.#ownerCountsById = [];
     this.#ownerLists = new Map();
     this.#ownerListsById = [];
@@ -114,17 +126,29 @@ export class ComponentManager {
       const ownerIterator = new ReusableEntityIterator(ownerList);
       this.#ownerIterators.set(component, ownerIterator);
       this.#ownerPositions.set(component, new Uint32Array(capacity));
-      // instance changed entity tracking
-      const instanceChanged = new BooleanArray(capacity);
-      this.#changed.set(component, instanceChanged);
       // instance storage
       const storage = this.#buffer.addPartition(component[$_PARTITION_KEY]);
-      const proxy = storage ? new StorageProxy({ storage, changed: instanceChanged, capacity }) : null;
+      const instanceId = this.#registry.size;
+      const proxy = storage ?
+        new StorageProxy({
+          storage,
+          markChanged: (entity: Entity) => this.#markChanged(instanceId, entity),
+          capacity,
+        }) :
+        null;
       // register component instance
-      const instance = new ComponentInstance({ id: this.#registry.size, proxy, storage, type: component });
+      const instance = new ComponentInstance({ id: instanceId, proxy, storage, type: component });
       const maxEntities = component.maxEntities;
       let usesSparseStorage = false;
       if (storage !== null) {
+        const instanceChanged = new BooleanArray(capacity);
+        const changedList = new Uint32Array(capacity);
+        const changedPositions = new Uint32Array(capacity);
+        const changedIterator = new ReusableEntityIterator(changedList);
+        this.#changedById[instance.id] = instanceChanged;
+        this.#changedListsById[instance.id] = changedList;
+        this.#changedPositionsById[instance.id] = changedPositions;
+        this.#changedIteratorsById[instance.id] = changedIterator;
         const partitions = storage.partitions as Record<string, unknown>;
         for (const key in partitions) {
           if (!ArrayBuffer.isView(partitions[key] as ArrayBufferView)) {
@@ -133,7 +157,7 @@ export class ComponentManager {
           }
         }
       }
-      this.#changedById[instance.id] = instanceChanged;
+      this.#changedCountsById[instance.id] = 0;
       this.#ownerCountsById[instance.id] = 0;
       this.#ownerListsById[instance.id] = ownerList;
       this.#ownerIteratorsById[instance.id] = ownerIterator;
@@ -159,6 +183,49 @@ export class ComponentManager {
   /** @returns a record of all component instances by name */
   get registry(): Readonly<Record<string, DynamicComponentInstance>> {
     return this.#publicRegistry;
+  }
+
+  /** Mark a data component changed once per entity per refresh window. */
+  #markChanged(instanceId: number, entity: Entity): void {
+    const changed = this.#changedById[instanceId];
+    if (changed === undefined || changed.get(entity)) return;
+
+    const changedList = this.#changedListsById[instanceId];
+    const changedPositions = this.#changedPositionsById[instanceId];
+    if (changedList === undefined || changedPositions === undefined) {
+      throw new Error(`Failed to find dense changed state for component id ${instanceId}.`);
+    }
+
+    const changedCount = this.#changedCountsById[instanceId] ?? 0;
+    changed.set(entity, true);
+    changedList[changedCount] = entity;
+    changedPositions[entity] = changedCount;
+    this.#changedCountsById[instanceId] = changedCount + 1;
+  }
+
+  /** Remove a data component from changed iteration if present. */
+  #unmarkChanged(instanceId: number, entity: Entity): void {
+    const changed = this.#changedById[instanceId];
+    if (changed === undefined || !changed.get(entity)) return;
+
+    const changedList = this.#changedListsById[instanceId];
+    const changedPositions = this.#changedPositionsById[instanceId];
+    if (changedList === undefined || changedPositions === undefined) {
+      throw new Error(`Failed to find dense changed state for component id ${instanceId}.`);
+    }
+
+    const changedCount = this.#changedCountsById[instanceId] ?? 1;
+    const removeIndex = changedPositions[entity]!;
+    const lastIndex = changedCount - 1;
+    const lastEntity = changedList[lastIndex]!;
+    if (removeIndex !== lastIndex) {
+      changedList[removeIndex] = lastEntity;
+      changedPositions[lastEntity] = removeIndex;
+    }
+    changedList[lastIndex] = 0;
+    changedPositions[entity] = 0;
+    this.#changedCountsById[instanceId] = lastIndex;
+    changed.set(entity, false);
   }
 
   /**
@@ -256,10 +323,7 @@ export class ComponentManager {
     const storage = instance.storage;
     const hasData = isObject(data);
     if (storage !== null && hasData) {
-      const changedState = this.#changedById[id]?.set(entity, true);
-      if (changedState === undefined) {
-        throw new Error(`Failed to set changed state for component ${instance.type.name} on entity ${entity}.`);
-      }
+      this.#markChanged(id, entity);
     }
 
     // Set data if provided
@@ -334,7 +398,9 @@ export class ComponentManager {
   getChanged<T extends SchemaOrNull>(component: Component<T> | string): IterableIterator<Entity> | undefined {
     const instance = this.getInstance(component);
     if (!instance) return;
-    return this.#changedById[instance.id]?.truthyIndices() as IterableIterator<Entity> | undefined;
+    const iterator = this.#changedIteratorsById[instance.id];
+    if (iterator === undefined) return this.#emptyChangedIterator.reset(0);
+    return iterator.reset(this.#changedCountsById[instance.id] ?? 0);
   }
 
   /**
@@ -428,7 +494,8 @@ export class ComponentManager {
    */
   refresh(): ComponentManager {
     for (let i = 0; i < this.#changedById.length; i++) {
-      this.#changedById[i]!.clear();
+      this.#changedById[i]?.clear();
+      this.#changedCountsById[i] = 0;
     }
     return this;
   }
@@ -505,7 +572,7 @@ export class ComponentManager {
     }
     const storage = instance.storage;
     if (storage !== null) {
-      this.#changedById[id]?.set(entity, false);
+      this.#unmarkChanged(id, entity);
     }
     if (wasOwned && storage !== null && this.#usesSparseStorageById[id]) {
       const partitions = storage.partitions as Record<string, TypedArray>;
@@ -561,10 +628,7 @@ export class ComponentManager {
       }
     }
     if (changed && this.#ownersById[instance.id]?.[entity] === 1) {
-      const changedState = this.#changedById[instance.id]?.set(entity, true);
-      if (changedState === undefined) {
-        throw new Error(`Failed to set changed state for component ${instance.type.name} on entity ${entity}.`);
-      }
+      this.#markChanged(instance.id, entity);
     }
     return this;
   }
