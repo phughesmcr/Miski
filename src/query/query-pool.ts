@@ -1,14 +1,15 @@
 import { ReusableEntityIterator } from "@/entity/entity-list.ts";
+import { createEntityArray, type EntityArray } from "@/entity/entity-array.ts";
 import type { Entity } from "@/types.ts";
 
 /** Mutable pooled backing store for the public borrowed QueryEntityList view. */
 export class QueryEntityResult {
   #iterator: ReusableEntityIterator;
   count: number = 0;
-  readonly indices: Uint32Array;
+  readonly indices: EntityArray;
 
   constructor(size: number) {
-    this.indices = new Uint32Array(size);
+    this.indices = createEntityArray(size);
     this.#iterator = new ReusableEntityIterator(this.indices);
   }
 

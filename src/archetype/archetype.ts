@@ -7,12 +7,13 @@
 
 import { BooleanArray } from "@phughesmcr/booleanarray";
 import { ID_KEY } from "@/constants.ts";
+import { createEntityArray, type EntityArray } from "@/entity/entity-array.ts";
 import { isQueryMatch } from "@/query/query.ts";
 import type { QueryEntityResult } from "@/query/query-pool.ts";
 import type { DynamicComponentInstance, Entity, QueryInstance } from "@/types.ts";
 
 function* activeListIterator(
-  list: Uint32Array,
+  list: EntityArray,
   active: Uint8Array,
   count: number,
 ): IterableIterator<Entity> {
@@ -34,7 +35,7 @@ export class Archetype {
   #enteredCount: number;
 
   /** Entities that were marked entered during this refresh window */
-  #enteredList: Uint32Array;
+  #enteredList: EntityArray;
 
   /** Number of entries in the entered list */
   #enteredListCount: number;
@@ -52,7 +53,7 @@ export class Archetype {
   #exitedCount: number;
 
   /** Entities that were marked exited during this refresh window */
-  #exitedList: Uint32Array;
+  #exitedList: EntityArray;
 
   /** Number of entries in the exited list */
   #exitedListCount: number;
@@ -64,7 +65,7 @@ export class Archetype {
   #entityCapacity: number;
 
   /** Entities that have ever inhabited this archetype, in first-entry order */
-  #entityList: Uint32Array;
+  #entityList: EntityArray;
 
   /** Number of entries in the entity list */
   #entityListCount: number;
@@ -113,16 +114,16 @@ export class Archetype {
     this.#candidateCache = new Map();
     this.#enteredActive = new Uint8Array(capacity);
     this.#enteredCount = 0;
-    this.#enteredList = new Uint32Array(capacity);
+    this.#enteredList = createEntityArray(capacity);
     this.#enteredListCount = 0;
     this.#enteredListed = new Uint8Array(capacity);
     this.#entityActive = new Uint8Array(capacity);
-    this.#entityList = new Uint32Array(capacity);
+    this.#entityList = createEntityArray(capacity);
     this.#entityListCount = 0;
     this.#entityListed = new Uint8Array(capacity);
     this.#exitedActive = new Uint8Array(capacity);
     this.#exitedCount = 0;
-    this.#exitedList = new Uint32Array(capacity);
+    this.#exitedList = createEntityArray(capacity);
     this.#exitedListCount = 0;
     this.#exitedListed = new Uint8Array(capacity);
     this.#populationCount = 0;
@@ -171,7 +172,7 @@ export class Archetype {
    * @param count - Number of entity IDs to read
    * @returns The number of newly active entities
    */
-  addEntities(entities: Uint32Array, start: number, count: number): number {
+  addEntities(entities: EntityArray, start: number, count: number): number {
     let added = 0;
     const end = start + count;
     for (let i = start; i < end; i++) {
@@ -345,7 +346,7 @@ export class Archetype {
    * @param count - Number of entity IDs to read
    * @returns The number of entities that were active before removal
    */
-  removeEntities(entities: Uint32Array, start: number, count: number): number {
+  removeEntities(entities: EntityArray, start: number, count: number): number {
     let removed = 0;
     const end = start + count;
     for (let i = start; i < end; i++) {

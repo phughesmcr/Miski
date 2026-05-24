@@ -10,6 +10,7 @@ import { BooleanArray } from "@phughesmcr/booleanarray";
 import { VERSION } from "@/constants.ts";
 import { ArchetypeManager } from "@/archetype/archetype-manager.ts";
 import { ComponentManager } from "@/component/component-manager.ts";
+import { createEntityArray, type EntityArray } from "@/entity/entity-array.ts";
 import { EntityManager } from "@/entity/entity-manager.ts";
 import {
   ComponentDataError,
@@ -64,7 +65,7 @@ export class World {
   #visitedArchetypeEntities: BooleanArray;
 
   /** Dense scratch storage for preflighted batch component transitions */
-  #batchEntities: Uint32Array;
+  #batchEntities: EntityArray;
 
   /** Duplicate-detection scratch flags for preflighted batch component transitions */
   #batchSeen: Uint8Array;
@@ -611,7 +612,7 @@ export class World {
 
     this.#archetypeManager = new ArchetypeManager(capacity, components.length);
     this.#visitedArchetypeEntities = new BooleanArray(capacity);
-    this.#batchEntities = new Uint32Array(capacity);
+    this.#batchEntities = createEntityArray(capacity);
     this.#batchSeen = new Uint8Array(capacity);
 
     this.#queryManager = new QueryManager(

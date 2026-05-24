@@ -7,6 +7,7 @@
 
 import { BooleanArray } from "@phughesmcr/booleanarray";
 
+import { createEntityArray, type EntityArray } from "@/entity/entity-array.ts";
 import { NotRegisteredError } from "@/errors.ts";
 import type { DynamicComponentInstance, Entity, QueryInstance } from "@/types.ts";
 import { Archetype } from "./archetype.ts";
@@ -38,7 +39,7 @@ export class ArchetypeManager {
   #queryScratch: QueryInstance[];
 
   /** Reusable grouped entity storage for batch component transitions */
-  #bulkEntities: Uint32Array;
+  #bulkEntities: EntityArray;
 
   /** Reusable group counts for batch component transitions */
   #bulkGroupCounts: number[];
@@ -83,7 +84,7 @@ export class ArchetypeManager {
    * @returns The number of entities moved to a different archetype
    */
   #moveEntities(
-    entities: Uint32Array,
+    entities: EntityArray,
     count: number,
     instance: DynamicComponentInstance,
     add: boolean,
@@ -258,7 +259,7 @@ export class ArchetypeManager {
     this.#componentCache = {};
     this.#queryMembershipDirty = true;
     this.#queryScratch = [];
-    this.#bulkEntities = new Uint32Array(capacity);
+    this.#bulkEntities = createEntityArray(capacity);
     this.#bulkGroupCounts = [];
     this.#bulkGroupOffsets = [];
     this.#bulkGroupWrites = [];
@@ -289,7 +290,7 @@ export class ArchetypeManager {
    * @param instance - The component instance being added
    * @returns The number of entities moved to a different archetype
    */
-  addComponents(entities: Uint32Array, count: number, instance: DynamicComponentInstance): number {
+  addComponents(entities: EntityArray, count: number, instance: DynamicComponentInstance): number {
     return this.#moveEntities(entities, count, instance, true);
   }
 
@@ -493,7 +494,7 @@ export class ArchetypeManager {
    * @param instance - The component instance being removed
    * @returns The number of entities moved to a different archetype
    */
-  removeComponents(entities: Uint32Array, count: number, instance: DynamicComponentInstance): number {
+  removeComponents(entities: EntityArray, count: number, instance: DynamicComponentInstance): number {
     return this.#moveEntities(entities, count, instance, false);
   }
 

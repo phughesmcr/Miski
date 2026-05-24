@@ -9,6 +9,7 @@ import { BooleanArray } from "@phughesmcr/booleanarray";
 import { getPartitionByteSize, PartitionedBuffer } from "@phughesmcr/partitionedbuffer";
 
 import { $_COMPONENT_ID_KEY, $_PARTITION_KEY } from "@/constants.ts";
+import { createEntityArray, type EntityArray } from "@/entity/entity-array.ts";
 import { ReusableEntityIterator } from "@/entity/entity-list.ts";
 import { NotRegisteredError } from "@/errors.ts";
 import type { DynamicComponent, DynamicComponentInstance, Entity, SchemaOrNull, TypedArray } from "@/types.ts";
@@ -37,27 +38,27 @@ export class ComponentManager {
   /** Number of changed entities indexed by component instance id */
   #changedCountsById: number[];
   /** Dense changed entity IDs indexed by component instance id */
-  #changedListsById: (Uint32Array | undefined)[];
+  #changedListsById: (EntityArray | undefined)[];
   /** Reusable changed iterators indexed by component instance id */
   #changedIteratorsById: (ReusableEntityIterator | undefined)[];
   /** Dense changed-list positions indexed by component instance id, then entity ID */
-  #changedPositionsById: (Uint32Array | undefined)[];
+  #changedPositionsById: (EntityArray | undefined)[];
   /** Shared empty changed iterator returned for tag components */
   #emptyChangedIterator: ReusableEntityIterator;
   /** Owner count indexed by component instance id */
   #ownerCountsById: number[];
   /** Dense owner entity IDs for each component */
-  #ownerLists: Map<DynamicComponent, Uint32Array>;
+  #ownerLists: Map<DynamicComponent, EntityArray>;
   /** Dense owner entity IDs indexed by component instance id */
-  #ownerListsById: Uint32Array[];
+  #ownerListsById: EntityArray[];
   /** Reusable owner iterators for each component */
   #ownerIterators: Map<DynamicComponent, ReusableEntityIterator>;
   /** Reusable owner iterators indexed by component instance id */
   #ownerIteratorsById: ReusableEntityIterator[];
   /** Dense owner-list positions indexed by entity ID */
-  #ownerPositions: Map<DynamicComponent, Uint32Array>;
+  #ownerPositions: Map<DynamicComponent, EntityArray>;
   /** Dense owner-list positions indexed by component instance id, then entity ID */
-  #ownerPositionsById: Uint32Array[];
+  #ownerPositionsById: EntityArray[];
   /** Byte ownership flags for each component, indexed by entity ID */
   #owners: Map<DynamicComponent, Uint8Array>;
   /** Byte ownership flags indexed by component instance id, then entity ID */
@@ -97,7 +98,7 @@ export class ComponentManager {
     this.#changedListsById = [];
     this.#changedIteratorsById = [];
     this.#changedPositionsById = [];
-    this.#emptyChangedIterator = new ReusableEntityIterator(new Uint32Array(0));
+    this.#emptyChangedIterator = new ReusableEntityIterator(createEntityArray(0));
     this.#ownerCountsById = [];
     this.#ownerLists = new Map();
     this.#ownerListsById = [];
@@ -119,13 +120,15 @@ export class ComponentManager {
     // register each component
     for (const component of components) {
       // instance owner entity tracking
+      const maxEntities = component.maxEntities;
+      const listCapacity = Math.min(maxEntities ?? capacity, capacity);
       const instanceOwners = new Uint8Array(capacity);
       this.#owners.set(component, instanceOwners);
-      const ownerList = new Uint32Array(capacity);
+      const ownerList = createEntityArray(capacity, listCapacity);
       this.#ownerLists.set(component, ownerList);
       const ownerIterator = new ReusableEntityIterator(ownerList);
       this.#ownerIterators.set(component, ownerIterator);
-      this.#ownerPositions.set(component, new Uint32Array(capacity));
+      this.#ownerPositions.set(component, createEntityArray(capacity));
       // instance storage
       const storage = this.#buffer.addPartition(component[$_PARTITION_KEY]);
       const instanceId = this.#registry.size;
@@ -138,12 +141,11 @@ export class ComponentManager {
         null;
       // register component instance
       const instance = new ComponentInstance({ id: instanceId, proxy, storage, type: component });
-      const maxEntities = component.maxEntities;
       let usesSparseStorage = false;
       if (storage !== null) {
         const instanceChanged = new BooleanArray(capacity);
-        const changedList = new Uint32Array(capacity);
-        const changedPositions = new Uint32Array(capacity);
+        const changedList = createEntityArray(capacity, listCapacity);
+        const changedPositions = createEntityArray(capacity);
         const changedIterator = new ReusableEntityIterator(changedList);
         this.#changedById[instance.id] = instanceChanged;
         this.#changedListsById[instance.id] = changedList;

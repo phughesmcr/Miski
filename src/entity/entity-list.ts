@@ -1,12 +1,13 @@
 import type { Entity } from "@/types.ts";
+import type { EntityArray } from "./entity-array.ts";
 
 export class ReusableEntityIterator implements IterableIterator<Entity> {
   count: number;
   cursor: number;
-  indices: Uint32Array;
+  indices: EntityArray;
   result: IteratorResult<Entity>;
 
-  constructor(indices: Uint32Array) {
+  constructor(indices: EntityArray) {
     this.indices = indices;
     this.count = 0;
     this.cursor = 0;
