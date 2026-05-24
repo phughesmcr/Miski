@@ -11,12 +11,10 @@ See [jsr.io/@phughesmcr/miski](https://jsr.io/@phughesmcr/miski) for complete do
 <p align="left">
   <img src="https://badgen.net/badge/license/MIT/blue" alt="MIT License" />
   <img src="https://badgen.net/badge/icon/typescript?icon=typescript&label" alt="Written in Typescript">
-  <img src="https://img.shields.io/badge/deno-^2.1.0-lightgrey?logo=deno" alt="Deno version" />
-  <img src="https://img.shields.io/badge/bun-%5E1.1.0-lightgrey?logo=bun" alt="Bun version" />
-  <img src="https://img.shields.io/badge/node-%5E22.0.0-lightgrey?logo=node.js" alt="Node version" />
+  <img src="https://img.shields.io/badge/deno-^2.2.10-lightgrey?logo=deno" alt="Deno version" />
+  <img src="https://img.shields.io/badge/bun-%5E1.3.0-lightgrey?logo=bun" alt="Bun version" />
+  <img src="https://img.shields.io/badge/node-%5E24.0.0-lightgrey?logo=node.js" alt="Node version" />
 </p>
-
-*Note*: The runtime versions above are indicative, Miski should work on any modern JavaScript runtime.
 
 ## Purpose
 
@@ -55,7 +53,7 @@ Because Miski is designed to be used inside your own projects, we let you config
 
 ## Features
 
-* Modern modular ES2022 data-oriented Typescript codebase
+* Modern modular ESNext data-oriented Typescript codebase
 * Fast, cache-friendly ArrayBuffer-based component data storage
 * Simple, developer-friendly, human-readable API
 * Ability to register more than 32 components in one world
