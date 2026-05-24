@@ -10,7 +10,7 @@ import type { Entity, SchemaOrNull, StorageProxySpec, TypedArray } from "@/types
 import { hasOwnProperty } from "@/utils.ts";
 
 /** A StorageProxy is a wrapper around a component's storage */
-export class StorageProxy<T extends SchemaOrNull<T>> {
+export class StorageProxy<T extends SchemaOrNull> {
   /** The current entity ID the proxy is pointed at */
   #entity: Entity = 0 as Entity;
 

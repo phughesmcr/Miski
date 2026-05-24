@@ -20,7 +20,7 @@
 
 import { isSchema, isValidName, Partition, type PartitionSpec } from "@phughesmcr/partitionedbuffer";
 import { $_COMPONENT_ID_KEY, $_PARTITION_KEY } from "@/constants.ts";
-import type { ComponentPrivateMethods, ComponentSpec, Schema, SchemaOrNull } from "@/types.ts";
+import type { ComponentPrivateMethods, ComponentSpec, DynamicComponent, Schema, SchemaOrNull } from "@/types.ts";
 import { isPositiveUint32 } from "@/utils.ts";
 
 /**
@@ -28,7 +28,7 @@ import { isPositiveUint32 } from "@/utils.ts";
  * @param spec - The component's specification.
  * @returns `true` if the spec is valid, `false` otherwise
  */
-export function isValidComponentSpec<T extends SchemaOrNull<T>>(spec: unknown): spec is ComponentSpec<T> {
+export function isValidComponentSpec<T extends SchemaOrNull>(spec: unknown): spec is ComponentSpec<T> {
   if (!spec || typeof spec !== "object") return false;
   const s = spec as ComponentSpec<T>;
   if (!isValidName(s.name)) return false;
@@ -38,12 +38,12 @@ export function isValidComponentSpec<T extends SchemaOrNull<T>>(spec: unknown): 
 }
 
 /** Component type guard */
-export function isComponent(component: unknown): component is Component<SchemaOrNull<any>> {
+export function isComponent(component: unknown): component is DynamicComponent {
   return !!(component && component instanceof Component);
 }
 
 /** Checks if a value is an array of Components */
-export function isValidComponentArray(array: unknown): array is Array<Component<SchemaOrNull<any>>> {
+export function isValidComponentArray(array: unknown): array is Array<DynamicComponent> {
   if (!Array.isArray(array)) return false;
   for (let i = 0; i < array.length; i++) {
     if (!isComponent(array[i])) return false;
@@ -52,7 +52,7 @@ export function isValidComponentArray(array: unknown): array is Array<Component<
 }
 
 /** A Component is a collection of properties that are stored in a world */
-export class Component<T extends SchemaOrNull<T> = null> implements ComponentPrivateMethods<T> {
+export class Component<T extends SchemaOrNull = null> implements ComponentPrivateMethods<T> {
   /** Next stable id for component definitions */
   static #nextId = 0;
 

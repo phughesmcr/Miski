@@ -42,9 +42,8 @@
     "@phughesmcr/partitionedbuffer": "jsr:@phughesmcr/partitionedbuffer@^0.4.0"
   },
   "lint": {
-    "exclude": ["example/**/*.ts"],
+    "exclude": ["bench/**/*.ts", "example/**/*.ts", "test/**/*.ts"],
     "rules": {
-      "exclude": ["no-explicit-any"],
       "include": ["use-isnan"],
       "tags": ["recommended", "jsr"]
     }

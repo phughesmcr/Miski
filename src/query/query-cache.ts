@@ -1,10 +1,9 @@
-import type { ComponentInstance } from "@/component/component-instance.ts";
-import type { SchemaOrNull } from "@/types.ts";
+import type { DynamicComponentInstance } from "@/types.ts";
 import type { QueryEntityResult, QueryResultPool } from "./query-pool.ts";
 
 /** Cache for query results */
 export class QueryCache {
-  #componentCache: Map<string, Record<string, ComponentInstance<SchemaOrNull>>>;
+  #componentCache: Map<string, Record<string, DynamicComponentInstance>>;
   #entityCache: Map<string, QueryEntityResult>;
   #globalVersion: number;
   #pool?: QueryResultPool;
@@ -29,9 +28,9 @@ export class QueryCache {
   /** Get cached components or compute and cache them */
   getComponents(
     queryId: string,
-    compute: () => Record<string, ComponentInstance<SchemaOrNull<any>>>,
+    compute: () => Record<string, DynamicComponentInstance>,
     lastVersion: number,
-  ): Record<string, ComponentInstance<SchemaOrNull<any>>> {
+  ): Record<string, DynamicComponentInstance> {
     if (lastVersion < this.#globalVersion) {
       this.#componentCache.delete(queryId);
     }

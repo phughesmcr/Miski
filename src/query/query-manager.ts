@@ -10,15 +10,14 @@ import { BooleanArray } from "@phughesmcr/booleanarray";
 import { ID_KEY } from "@/constants.ts";
 import { NotRegisteredError } from "@/errors.ts";
 import type { Archetype } from "@/archetype/archetype.ts";
-import type { ComponentInstance } from "@/component/component-instance.ts";
-import type { ComponentInstanceGetter, Entity, QueryInstance, SchemaOrNull } from "@/types.ts";
+import type { ComponentInstanceGetter, DynamicComponentInstance, Entity, QueryInstance } from "@/types.ts";
 import type { World } from "@/world/world.ts";
 import { QueryCache } from "./query-cache.ts";
 import { type QueryEntityResult, QueryResultPool } from "./query-pool.ts";
 import type { Query } from "./query.ts";
 
 type QueryComponent = Parameters<ComponentInstanceGetter>[0][number];
-type RegisteredComponentInstance = ComponentInstance<SchemaOrNull<any>>;
+type RegisteredComponentInstance = DynamicComponentInstance;
 
 function getRegisteredInstances(
   getInstances: ComponentInstanceGetter,
@@ -136,7 +135,7 @@ export class QueryManager {
   }
 
   /** Get components for a query */
-  components(query: Query): Record<string, ComponentInstance<SchemaOrNull>> {
+  components(query: Query): Record<string, DynamicComponentInstance> {
     const instance = this.register(query);
     const queryId = instance.id;
     const result = this.cache.getComponents(

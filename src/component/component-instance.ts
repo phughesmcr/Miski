@@ -15,7 +15,7 @@ import type {
 import type { Component } from "./component.ts";
 
 /** A ComponentInstance is the world-local representation of a component */
-export class ComponentInstance<T extends SchemaOrNull<T>> {
+export class ComponentInstance<T extends SchemaOrNull> {
   /** The ComponentInstance's id */
   readonly id: number;
 

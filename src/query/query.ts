@@ -7,9 +7,9 @@
 
 import type { BooleanArray } from "@phughesmcr/booleanarray";
 
-import { type Component, isValidComponentArray } from "@/component/component.ts";
+import { isValidComponentArray } from "@/component/component.ts";
 import { SpecError } from "@/errors.ts";
-import type { QueryInstance, QuerySpec, SchemaOrNull } from "@/types.ts";
+import type { DynamicComponent, QueryInstance, QuerySpec } from "@/types.ts";
 import { isObject } from "@/utils.ts";
 
 /**
@@ -49,13 +49,13 @@ export class Query {
   }
 
   /** `AND` - Gather entities as long as they have all these components */
-  readonly all: Readonly<Component<SchemaOrNull<any>>[]>;
+  readonly all: Readonly<DynamicComponent[]>;
 
   /** `OR` - When present, gather entities that have at least one of these components */
-  readonly any: Readonly<Component<SchemaOrNull<any>>[]>;
+  readonly any: Readonly<DynamicComponent[]>;
 
   /** `NOT` - Gather entities as long as they don't have these components */
-  readonly none: Readonly<Component<SchemaOrNull<any>>[]>;
+  readonly none: Readonly<DynamicComponent[]>;
 
   /**
    * Create a new Query

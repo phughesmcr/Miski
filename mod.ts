@@ -134,11 +134,11 @@
  * });
  * ```
  *
- * @example Register a System
+ * @example Register a typed System
  * ```ts
- * const positionSystem = new System({
+ * const positionSystem = defineSystem({
  *   name: "positionSystem",
- *   query: positionQuery,
+ *   all: { position: positionComponent },
  *   // optional
  *   init: (world: World) => {
  *     // called once on world.init()
@@ -151,10 +151,11 @@
  *   },
  *   // required
  *   // The callback to run when the SystemInstance is called
- *   callback: (components: Readonly<Record<string, ComponentInstance<any>>>, entities: IterableIterator<Entity>, ...args: any[]): void => {
- *     console.log(args[0], args[1]); // should log the frametime and "Hello, World!" (see below)
+ *   callback: (components, entities, frametime: number, message: string): void => {
+ *     console.log(frametime, message);
+ *     const position = components.position;
  *     for (const entity of entities) {
- *       console.log(entity);
+ *       position.proxy.entity = entity;
  *     }
  *   },
  * });
@@ -197,6 +198,7 @@ export type {
   QueryEntityList,
   QuerySpec,
   Schema,
+  SchemaOrNull,
   SystemCallback,
   SystemInstance,
   SystemSpec,

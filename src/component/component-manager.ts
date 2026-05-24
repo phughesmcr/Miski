@@ -12,7 +12,7 @@ import { $_COMPONENT_ID_KEY, $_PARTITION_KEY } from "@/constants.ts";
 import type { ArchetypeManager } from "@/archetype/archetype-manager.ts";
 import { ReusableEntityIterator } from "@/entity/entity-list.ts";
 import { NotRegisteredError } from "@/errors.ts";
-import type { Entity, SchemaOrNull, TypedArray } from "@/types.ts";
+import type { DynamicComponent, DynamicComponentInstance, Entity, SchemaOrNull, TypedArray } from "@/types.ts";
 import { isObject } from "@/utils.ts";
 import { ComponentInstance } from "./component-instance.ts";
 import { StorageProxy } from "./storage-proxy.ts";
@@ -23,37 +23,37 @@ export class ComponentManager {
   /** The storage buffer for the component manager */
   #buffer: PartitionedBuffer;
   /** The changed state for each component */
-  #changed: Map<Component<any>, BooleanArray>;
+  #changed: Map<DynamicComponent, BooleanArray>;
   /** Changed state indexed by component instance id */
   #changedById: BooleanArray[];
   /** Owner count indexed by component instance id */
   #ownerCountsById: number[];
   /** Dense owner entity IDs for each component */
-  #ownerLists: Map<Component<any>, Uint32Array>;
+  #ownerLists: Map<DynamicComponent, Uint32Array>;
   /** Dense owner entity IDs indexed by component instance id */
   #ownerListsById: Uint32Array[];
   /** Reusable owner iterators for each component */
-  #ownerIterators: Map<Component<any>, ReusableEntityIterator>;
+  #ownerIterators: Map<DynamicComponent, ReusableEntityIterator>;
   /** Reusable owner iterators indexed by component instance id */
   #ownerIteratorsById: ReusableEntityIterator[];
   /** Dense owner-list positions indexed by entity ID */
-  #ownerPositions: Map<Component<any>, Uint32Array>;
+  #ownerPositions: Map<DynamicComponent, Uint32Array>;
   /** Dense owner-list positions indexed by component instance id, then entity ID */
   #ownerPositionsById: Uint32Array[];
   /** Byte ownership flags for each component, indexed by entity ID */
-  #owners: Map<Component<any>, Uint8Array>;
+  #owners: Map<DynamicComponent, Uint8Array>;
   /** Byte ownership flags indexed by component instance id, then entity ID */
   #ownersById: Uint8Array[];
   /** The registry of component instances */
-  #registry: Map<Component<any>, ComponentInstance<any>>;
+  #registry: Map<DynamicComponent, DynamicComponentInstance>;
   /** The registry of component instances by name */
-  #registryByName: Record<string, ComponentInstance<any>>;
+  #registryByName: Record<string, DynamicComponentInstance>;
   /** Frozen public registry view keyed by component name */
-  #publicRegistry: Readonly<Record<string, ComponentInstance<any>>>;
+  #publicRegistry: Readonly<Record<string, DynamicComponentInstance>>;
   /** Component instances indexed by component definition id */
-  #registryByComponentId: ComponentInstance<any>[];
+  #registryByComponentId: DynamicComponentInstance[];
   /** Component instances indexed by component instance id */
-  #instancesById: ComponentInstance<any>[];
+  #instancesById: DynamicComponentInstance[];
   /** `true` for uncapped tag components, indexed by component id */
   #isUncappedTagById: boolean[];
   /** `true` for uncapped data components, indexed by component id */
@@ -70,7 +70,7 @@ export class ComponentManager {
    * @param capacity - The capacity of the component manager
    * @param components - The components to register
    */
-  constructor(capacity: number, components: Component<any>[]) {
+  constructor(capacity: number, components: DynamicComponent[]) {
     // create the storage buffer
     const size = Math.max(components.reduce((acc, component) => acc + component.size, 0) * capacity, capacity);
     this.#buffer = new PartitionedBuffer(size, capacity);
@@ -148,7 +148,7 @@ export class ComponentManager {
   }
 
   /** @returns a record of all component instances by name */
-  get registry(): Readonly<Record<string, ComponentInstance<any>>> {
+  get registry(): Readonly<Record<string, DynamicComponentInstance>> {
     return this.#publicRegistry;
   }
 
@@ -159,7 +159,7 @@ export class ComponentManager {
    * @param data - Optional data to set for the component
    * @returns `true` if the component ownership changed
    */
-  addToEntity<T extends SchemaOrNull<T>>(
+  addToEntity<T extends SchemaOrNull>(
     component: Component<T> | string,
     entity: Entity,
     data?: { [k in keyof T]: number },
@@ -181,7 +181,7 @@ export class ComponentManager {
    * @returns `true` if the component ownership changed
    * @internal
    */
-  addInstanceToEntity<T extends SchemaOrNull<T>>(
+  addInstanceToEntity<T extends SchemaOrNull>(
     instance: ComponentInstance<T>,
     entity: Entity,
     data?: { [k in keyof T]: number },
@@ -272,7 +272,7 @@ export class ComponentManager {
    * @param entity - The entity to check for the component on
    * @returns `true` if the entity has the component, `false` otherwise
    */
-  entityHas<T extends SchemaOrNull<T>>(component: Component<T> | string, entity: Entity): boolean {
+  entityHas<T extends SchemaOrNull>(component: Component<T> | string, entity: Entity): boolean {
     let proto;
     if (typeof component === "string") {
       proto = this.getInstance(component)?.type;
@@ -290,7 +290,7 @@ export class ComponentManager {
    * @returns `true` if the entity owns the component instance
    * @internal
    */
-  entityOwnsInstance<T extends SchemaOrNull<T>>(instance: ComponentInstance<T>, entity: Entity): boolean {
+  entityOwnsInstance<T extends SchemaOrNull>(instance: ComponentInstance<T>, entity: Entity): boolean {
     return this.#ownersById[instance.id]?.[entity] === 1;
   }
 
@@ -299,11 +299,11 @@ export class ComponentManager {
    * @param component - The component to get the instance of
    * @returns The component instance or `undefined` if the component is not registered
    */
-  getInstance<T extends SchemaOrNull<T>>(component: Component<T> | string): ComponentInstance<T> | undefined {
+  getInstance<T extends SchemaOrNull>(component: Component<T> | string): ComponentInstance<T> | undefined {
     if (typeof component === "string") {
-      return this.#registryByName[component];
+      return this.#registryByName[component] as ComponentInstance<T> | undefined;
     }
-    return this.#registryByComponentId[component[$_COMPONENT_ID_KEY]];
+    return this.#registryByComponentId[component[$_COMPONENT_ID_KEY]] as ComponentInstance<T> | undefined;
   }
 
   /**
@@ -312,8 +312,8 @@ export class ComponentManager {
    * @returns An array of component instances
    */
   getInstances(
-    array: Component<SchemaOrNull<any>>[] | Readonly<Component<SchemaOrNull<any>>[]>,
-  ): (ComponentInstance<SchemaOrNull<any>> | undefined)[] {
+    array: DynamicComponent[] | Readonly<DynamicComponent[]>,
+  ): (DynamicComponentInstance | undefined)[] {
     return array.map((component) => this.getInstance(component));
   }
 
@@ -322,7 +322,7 @@ export class ComponentManager {
    * @param component The component to get changed entities for
    * @returns An iterable of entities or `undefined` if the component is not registered
    */
-  getChanged<T extends SchemaOrNull<T>>(component: Component<T> | string): IterableIterator<Entity> | undefined {
+  getChanged<T extends SchemaOrNull>(component: Component<T> | string): IterableIterator<Entity> | undefined {
     const instance = this.getInstance(component);
     if (!instance) return;
     return this.#changedById[instance.id]?.truthyIndices() as IterableIterator<Entity> | undefined;
@@ -333,7 +333,7 @@ export class ComponentManager {
    * @param component The component to get entities for
    * @returns An iterable of entities or `undefined` if the component is not registered
    */
-  getOwners<T extends SchemaOrNull<T>>(component: Component<T> | string): IterableIterator<Entity> | undefined {
+  getOwners<T extends SchemaOrNull>(component: Component<T> | string): IterableIterator<Entity> | undefined {
     const instance = this.getInstance(component);
     if (!instance) return;
     return this.#ownerIteratorsById[instance.id]?.reset(this.#ownerCountsById[instance.id] ?? 0);
@@ -353,8 +353,8 @@ export class ComponentManager {
    * @param entity The entity to get components for
    * @returns An array of component instances
    */
-  #getEntityComponentsDirect(entity: Entity): ComponentInstance<any>[] {
-    const components: ComponentInstance<any>[] = [];
+  #getEntityComponentsDirect(entity: Entity): DynamicComponentInstance[] {
+    const components: DynamicComponentInstance[] = [];
     for (let i = 0; i < this.#instancesById.length; i++) {
       const instance = this.#instancesById[i]!;
       if (this.#ownersById[i]?.[entity] === 1) {
@@ -369,7 +369,7 @@ export class ComponentManager {
    * @param entity The entity to get components for
    * @returns An array of component instances
    */
-  getEntityComponents(entity: Entity): ComponentInstance<any>[] {
+  getEntityComponents(entity: Entity): DynamicComponentInstance[] {
     // Fast path: use archetype if available
     if (this.#archetypeManager) {
       const archetype = this.#archetypeManager.getEntityArchetype(entity);
@@ -389,7 +389,7 @@ export class ComponentManager {
    * @param entity - The entity to get the data for
    * @returns The data for the component or `undefined` if the component is not registered
    */
-  getEntityData<T extends SchemaOrNull<T>>(
+  getEntityData<T extends SchemaOrNull>(
     component: Component<T> | string,
     entity: Entity,
   ): Record<keyof T, number> | undefined {
@@ -407,7 +407,7 @@ export class ComponentManager {
    * @returns The data for the component or `undefined` if the instance has no storage
    * @internal
    */
-  getInstanceEntityData<T extends SchemaOrNull<T>>(
+  getInstanceEntityData<T extends SchemaOrNull>(
     instance: ComponentInstance<T>,
     entity: Entity,
   ): Record<keyof T, number> | undefined {
@@ -425,7 +425,7 @@ export class ComponentManager {
    * @param component - The component to check for
    * @returns `true` if the component is registered, `false` otherwise
    */
-  isRegistered(component: Component<any> | string): boolean {
+  isRegistered(component: DynamicComponent | string): boolean {
     return this.getInstance(component) !== undefined;
   }
 
@@ -446,7 +446,7 @@ export class ComponentManager {
    * @param entity - The entity to remove the component from
    * @returns `true` if the component ownership changed, or `undefined` if the component is not registered
    */
-  removeFromEntity<T extends SchemaOrNull<T>>(
+  removeFromEntity<T extends SchemaOrNull>(
     component: string | Component<T>,
     entity: Entity,
   ): boolean | undefined {
@@ -462,7 +462,7 @@ export class ComponentManager {
    * @returns `true` if the component ownership changed
    * @internal
    */
-  removeInstanceFromEntity<T extends SchemaOrNull<T>>(
+  removeInstanceFromEntity<T extends SchemaOrNull>(
     instance: ComponentInstance<T>,
     entity: Entity,
   ): boolean {
@@ -532,7 +532,7 @@ export class ComponentManager {
    * @param entity - The entity to set the data for
    * @param value - The data to set for the component
    */
-  setEntityData<T extends SchemaOrNull<T>>(
+  setEntityData<T extends SchemaOrNull>(
     component: Component<T> | string,
     entity: Entity,
     value: Record<keyof T, number>,
@@ -552,7 +552,7 @@ export class ComponentManager {
    * @returns This component manager
    * @internal
    */
-  setInstanceEntityData<T extends SchemaOrNull<T>>(
+  setInstanceEntityData<T extends SchemaOrNull>(
     instance: ComponentInstance<T>,
     entity: Entity,
     value: Record<keyof T, number>,

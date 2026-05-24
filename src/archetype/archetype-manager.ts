@@ -9,8 +9,7 @@ import { BooleanArray } from "@phughesmcr/booleanarray";
 
 import { ID_KEY } from "@/constants.ts";
 import { NotRegisteredError } from "@/errors.ts";
-import type { ComponentInstance } from "@/component/component-instance.ts";
-import type { Entity, QueryInstance } from "@/types.ts";
+import type { DynamicComponentInstance, Entity, QueryInstance } from "@/types.ts";
 import { Archetype } from "./archetype.ts";
 
 /** ArchetypeManager handles creation and allocation of Archetypes */
@@ -31,7 +30,7 @@ export class ArchetypeManager {
   #capacity: number;
 
   /** Reusable cache for entity component lookup. */
-  #componentCache: Record<string, ComponentInstance<any>>;
+  #componentCache: Record<string, DynamicComponentInstance>;
 
   /** Whether query-to-archetype mappings need to be rebuilt */
   #queryMembershipDirty: boolean;
@@ -68,7 +67,7 @@ export class ArchetypeManager {
    * @param add - Whether the component is being added
    * @returns The target archetype
    */
-  #getTransitionArchetype(from: Archetype, instance: ComponentInstance<any>, add: boolean): Archetype {
+  #getTransitionArchetype(from: Archetype, instance: DynamicComponentInstance, add: boolean): Archetype {
     const hasComponent = from.bitfield.get(instance.id);
     if (hasComponent === add) return from;
 
@@ -100,10 +99,10 @@ export class ArchetypeManager {
    * @returns A component list for the target archetype
    */
   #componentsWithAdded(
-    components: readonly ComponentInstance<any>[],
-    instance: ComponentInstance<any>,
-  ): ComponentInstance<any>[] {
-    const result = new Array<ComponentInstance<any>>(components.length + 1);
+    components: readonly DynamicComponentInstance[],
+    instance: DynamicComponentInstance,
+  ): DynamicComponentInstance[] {
+    const result = new Array<DynamicComponentInstance>(components.length + 1);
     let out = 0;
     let inserted = false;
     for (let i = 0; i < components.length; i++) {
@@ -125,10 +124,10 @@ export class ArchetypeManager {
    * @returns A component list for the target archetype
    */
   #componentsWithRemoved(
-    components: readonly ComponentInstance<any>[],
-    instance: ComponentInstance<any>,
-  ): ComponentInstance<any>[] {
-    const result = new Array<ComponentInstance<any>>(Math.max(components.length - 1, 0));
+    components: readonly DynamicComponentInstance[],
+    instance: DynamicComponentInstance,
+  ): DynamicComponentInstance[] {
+    const result = new Array<DynamicComponentInstance>(Math.max(components.length - 1, 0));
     let out = 0;
     for (let i = 0; i < components.length; i++) {
       const component = components[i]!;
@@ -165,7 +164,7 @@ export class ArchetypeManager {
    * @param instance - The component instance being added
    * @returns The target archetype
    */
-  addComponent(entity: Entity, instance: ComponentInstance<any>): Archetype {
+  addComponent(entity: Entity, instance: DynamicComponentInstance): Archetype {
     const oldArchetype = this.entityArchetypes[entity] ?? this.root;
     return this.#moveEntity(entity, this.#getTransitionArchetype(oldArchetype, instance, true));
   }
@@ -175,7 +174,7 @@ export class ArchetypeManager {
    * @param entity - The entity to get the components for
    * @returns A record of component instances
    */
-  getEntityComponents(entity: Entity): Readonly<Record<string, ComponentInstance<any>>> {
+  getEntityComponents(entity: Entity): Readonly<Record<string, DynamicComponentInstance>> {
     // Clear cache
     for (const key in this.#componentCache) {
       delete this.#componentCache[key];
@@ -355,7 +354,7 @@ export class ArchetypeManager {
    * @param instance - The component instance being removed
    * @returns The target archetype
    */
-  removeComponent(entity: Entity, instance: ComponentInstance<any>): Archetype {
+  removeComponent(entity: Entity, instance: DynamicComponentInstance): Archetype {
     const oldArchetype = this.entityArchetypes[entity] ?? this.root;
     return this.#moveEntity(entity, this.#getTransitionArchetype(oldArchetype, instance, false));
   }
@@ -406,7 +405,7 @@ export class ArchetypeManager {
    * @param components The ComponentInstances
    * @returns The Archetype associated with the Entity
    */
-  update(entity: Entity, components: ComponentInstance<any>[]): Archetype {
+  update(entity: Entity, components: DynamicComponentInstance[]): Archetype {
     const oldArchetype = this.entityArchetypes[entity];
 
     // Reset and update bitfield

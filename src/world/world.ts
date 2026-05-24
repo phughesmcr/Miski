@@ -22,10 +22,12 @@ import {
 import { QueryManager } from "@/query/query-manager.ts";
 import { SystemManager } from "@/system/system-manager.ts";
 import type { Component } from "@/component/component.ts";
-import type { Archetype } from "@/archetype/archetype.ts";
 import type { ComponentInstance } from "@/component/component-instance.ts";
+import type { Archetype } from "@/archetype/archetype.ts";
 import type { Query } from "@/query/query.ts";
 import type {
+  DynamicComponent,
+  DynamicComponentInstance,
   Entity,
   QueryEntityList,
   QueryInstance,
@@ -117,34 +119,34 @@ export class World {
     return {
       count: this.#componentManager.count,
       registry: this.#componentManager.registry,
-      addToEntity: <T extends SchemaOrNull<T>>(
+      addToEntity: <T extends SchemaOrNull>(
         component: Component<T> | string,
         entity: Entity,
         data?: { [k in keyof T]: number } | undefined,
       ) => this.#addComponentToEntity(component, entity, data),
-      addToEntities: <T extends SchemaOrNull<T>>(
+      addToEntities: <T extends SchemaOrNull>(
         component: Component<T> | string,
         entities: QueryEntityList,
         data?: { [k in keyof T]: number } | undefined,
       ) => this.#addComponentToEntities(component, entities, data),
-      entityHas: <T extends SchemaOrNull<T>>(component: Component<T> | string, entity: Entity) =>
+      entityHas: <T extends SchemaOrNull>(component: Component<T> | string, entity: Entity) =>
         this.#componentManager.entityHas(component, entity),
-      getChanged: <T extends SchemaOrNull<T>>(component: Component<T> | string) =>
+      getChanged: <T extends SchemaOrNull>(component: Component<T> | string) =>
         this.#componentManager.getChanged(component),
-      getEntityData: <T extends SchemaOrNull<T>>(component: Component<T> | string, entity: Entity) =>
+      getEntityData: <T extends SchemaOrNull>(component: Component<T> | string, entity: Entity) =>
         this.#getComponentEntityData(component, entity),
-      getInstance: <T extends SchemaOrNull<T>>(component: Component<T> | string) =>
+      getInstance: <T extends SchemaOrNull>(component: Component<T> | string) =>
         this.#componentManager.getInstance(component),
-      getInstances: (array: Component<SchemaOrNull<any>>[]) => this.#componentManager.getInstances(array),
-      getOwners: <T extends SchemaOrNull<T>>(component: Component<T> | string) =>
+      getInstances: (array: DynamicComponent[]) => this.#componentManager.getInstances(array),
+      getOwners: <T extends SchemaOrNull>(component: Component<T> | string) =>
         this.#componentManager.getOwners(component),
-      isRegistered: (component: Component<any> | string) => this.#componentManager.isRegistered(component),
+      isRegistered: (component: DynamicComponent | string) => this.#componentManager.isRegistered(component),
       query: (query: Query) => this.#queryManager.components(query),
-      removeFromEntity: <T extends SchemaOrNull<T>>(component: string | Component<T>, entity: Entity) =>
+      removeFromEntity: <T extends SchemaOrNull>(component: string | Component<T>, entity: Entity) =>
         this.#removeComponentFromEntity(component, entity),
-      removeFromEntities: <T extends SchemaOrNull<T>>(component: Component<T> | string, entities: QueryEntityList) =>
+      removeFromEntities: <T extends SchemaOrNull>(component: Component<T> | string, entities: QueryEntityList) =>
         this.#removeComponentFromEntities(component, entities),
-      setEntityData: <T extends SchemaOrNull<T>>(
+      setEntityData: <T extends SchemaOrNull>(
         component: Component<T> | string,
         entity: Entity,
         value: Record<keyof T, number>,
@@ -219,24 +221,24 @@ export class World {
     this.archetypes.queryEntered = (query: Query) => this.#queryEnteredEntities(query);
     this.archetypes.queryExited = (query: Query) => this.#queryExitedEntities(query);
 
-    this.components.addToEntity = <T extends SchemaOrNull<T>>(
+    this.components.addToEntity = <T extends SchemaOrNull>(
       component: Component<T> | string,
       entity: Entity,
       data?: { [k in keyof T]: number } | undefined,
     ) => this.#addComponentToEntity(component, entity, data);
-    this.components.addToEntities = <T extends SchemaOrNull<T>>(
+    this.components.addToEntities = <T extends SchemaOrNull>(
       component: Component<T> | string,
       entities: QueryEntityList,
       data?: { [k in keyof T]: number } | undefined,
     ) => this.#addComponentToEntities(component, entities, data);
     this.components.query = (query: Query) => this.#queryManager.components(query);
-    this.components.removeFromEntity = <T extends SchemaOrNull<T>>(component: string | Component<T>, entity: Entity) =>
+    this.components.removeFromEntity = <T extends SchemaOrNull>(component: string | Component<T>, entity: Entity) =>
       this.#removeComponentFromEntity(component, entity);
-    this.components.removeFromEntities = <T extends SchemaOrNull<T>>(
+    this.components.removeFromEntities = <T extends SchemaOrNull>(
       component: Component<T> | string,
       entities: QueryEntityList,
     ) => this.#removeComponentFromEntities(component, entities);
-    this.components.setEntityData = <T extends SchemaOrNull<T>>(
+    this.components.setEntityData = <T extends SchemaOrNull>(
       component: Component<T> | string,
       entity: Entity,
       value: Record<keyof T, number>,
@@ -277,7 +279,7 @@ export class World {
   }
 
   /** Get the components for a query */
-  #queryArchetypeComponents(query: Query): Record<string, ComponentInstance<any>> {
+  #queryArchetypeComponents(query: Query): Record<string, DynamicComponentInstance> {
     return this.#queryManager.components(query);
   }
 
@@ -338,7 +340,7 @@ export class World {
   }
 
   /** Add a component to an entity */
-  #addComponentToEntity<T extends SchemaOrNull<T>>(
+  #addComponentToEntity<T extends SchemaOrNull>(
     component: Component<T> | string,
     entity: Entity,
     data?: { [k in keyof T]: number } | undefined,
@@ -360,7 +362,7 @@ export class World {
   }
 
   /** Add a component to every entity in a dense query list. */
-  #addComponentToEntities<T extends SchemaOrNull<T>>(
+  #addComponentToEntities<T extends SchemaOrNull>(
     component: Component<T> | string,
     entities: QueryEntityList,
     data?: { [k in keyof T]: number } | undefined,
@@ -388,7 +390,7 @@ export class World {
   }
 
   /** Remove a component from an entity */
-  #removeComponentFromEntity<T extends SchemaOrNull<T>>(
+  #removeComponentFromEntity<T extends SchemaOrNull>(
     component: string | Component<T>,
     entity: Entity,
   ): void {
@@ -409,7 +411,7 @@ export class World {
   }
 
   /** Remove a component from every entity in a dense query list. */
-  #removeComponentFromEntities<T extends SchemaOrNull<T>>(
+  #removeComponentFromEntities<T extends SchemaOrNull>(
     component: Component<T> | string,
     entities: QueryEntityList,
   ): number {
@@ -436,7 +438,7 @@ export class World {
   }
 
   /** Resolve a registered data component instance for guarded public data access. */
-  #getGuardedDataComponent<T extends SchemaOrNull<T>>(
+  #getGuardedDataComponent<T extends SchemaOrNull>(
     component: Component<T> | string,
     entity: Entity,
   ): ComponentInstance<T> {
@@ -457,7 +459,7 @@ export class World {
   }
 
   /** Get guarded component data for an active owning entity. */
-  #getComponentEntityData<T extends SchemaOrNull<T>>(
+  #getComponentEntityData<T extends SchemaOrNull>(
     component: Component<T> | string,
     entity: Entity,
   ): Record<keyof T, number> {
@@ -465,7 +467,7 @@ export class World {
   }
 
   /** Set guarded component data for an active owning entity. */
-  #setComponentEntityData<T extends SchemaOrNull<T>>(
+  #setComponentEntityData<T extends SchemaOrNull>(
     component: Component<T> | string,
     entity: Entity,
     value: Record<keyof T, number>,

@@ -7,10 +7,9 @@
 
 import { BooleanArray } from "@phughesmcr/booleanarray";
 import { ID_KEY } from "@/constants.ts";
-import type { ComponentInstance } from "@/component/component-instance.ts";
 import { isQueryMatch } from "@/query/query.ts";
 import type { QueryEntityResult } from "@/query/query-pool.ts";
-import type { Entity, QueryInstance } from "@/types.ts";
+import type { DynamicComponentInstance, Entity, QueryInstance } from "@/types.ts";
 
 function* activeListIterator(
   list: Uint32Array,
@@ -83,7 +82,7 @@ export class Archetype {
   readonly addTransitions: Archetype[];
 
   /** The components associated with this archetype */
-  readonly components: ComponentInstance<any>[];
+  readonly components: DynamicComponentInstance[];
 
   /** The Archetype's unique identifier */
   readonly id: string;
@@ -100,7 +99,7 @@ export class Archetype {
    */
   constructor(
     capacity: number,
-    components: ComponentInstance<any>[],
+    components: DynamicComponentInstance[],
     bitfield?: BooleanArray,
   ) {
     this.#entityCapacity = capacity;

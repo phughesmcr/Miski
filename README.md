@@ -483,14 +483,18 @@ const renderSystem = defineSystem({
 });
 ```
 
-The lower-level `System` constructor remains available for dynamic string/query based code:
+#### Dynamic compatibility
+
+The lower-level `System` constructor remains available for legacy dynamic string/query based code. Dynamic component
+records intentionally expose unknown schemas, so cast or narrow a component instance before touching concrete storage
+properties:
 
 ```typescript
 const positionSystem = new System({
   name: "positionSystem",
   query: positionQuery,
   callback: (components, entities) => {
-    const { position } = components;
+    const position = components.position as ComponentInstance<Vec2>;
     const { x, y } = position.storage.partitions;
     for (const entity of entities) {
       x[entity] += 1;
