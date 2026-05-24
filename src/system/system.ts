@@ -47,7 +47,7 @@ export function createSystemInstance<T extends SystemFunction>(
   const boundCallback = ((...args: SystemFunctionArgs<T>) => {
     return callback(components, world.entities.query(system.query), ...args);
   }) as SystemInstance<T>;
-  return Object.setPrototypeOf(boundCallback, system);
+  return boundCallback;
 }
 
 /**

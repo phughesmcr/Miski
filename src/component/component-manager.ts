@@ -6,10 +6,9 @@
  */
 
 import { BooleanArray } from "@phughesmcr/booleanarray";
-import { PartitionedBuffer } from "@phughesmcr/partitionedbuffer";
+import { getPartitionByteSize, PartitionedBuffer } from "@phughesmcr/partitionedbuffer";
 
 import { $_COMPONENT_ID_KEY, $_PARTITION_KEY } from "@/constants.ts";
-import type { ArchetypeManager } from "@/archetype/archetype-manager.ts";
 import { ReusableEntityIterator } from "@/entity/entity-list.ts";
 import { NotRegisteredError } from "@/errors.ts";
 import type { DynamicComponent, DynamicComponentInstance, Entity, SchemaOrNull, TypedArray } from "@/types.ts";
@@ -17,6 +16,17 @@ import { isObject } from "@/utils.ts";
 import { ComponentInstance } from "./component-instance.ts";
 import { StorageProxy } from "./storage-proxy.ts";
 import type { Component } from "./component.ts";
+
+function roundUpToMultiple(value: number, multiple: number): number {
+  const remainder = value % multiple;
+  return remainder === 0 ? value : value + multiple - remainder;
+}
+
+function getComponentStorageSize(component: DynamicComponent, capacity: number): number {
+  const schema = component[$_PARTITION_KEY].schema;
+  if (schema === null) return 0;
+  return getPartitionByteSize(schema, component.maxEntities ?? capacity);
+}
 
 /** A component manager is responsible for managing the components of a world. */
 export class ComponentManager {
@@ -62,8 +72,6 @@ export class ComponentManager {
   #maxEntitiesById: number[];
   /** Whether component storage uses sparse non-typed-array partitions, indexed by component id */
   #usesSparseStorageById: boolean[];
-  /** Optional archetype manager for optimized entity component lookup */
-  #archetypeManager?: ArchetypeManager | undefined;
 
   /**
    * Create a new component manager.
@@ -72,7 +80,8 @@ export class ComponentManager {
    */
   constructor(capacity: number, components: DynamicComponent[]) {
     // create the storage buffer
-    const size = Math.max(components.reduce((acc, component) => acc + component.size, 0) * capacity, capacity);
+    const storageSize = components.reduce((acc, component) => acc + getComponentStorageSize(component, capacity), 0);
+    const size = roundUpToMultiple(Math.max(storageSize, capacity), capacity);
     this.#buffer = new PartitionedBuffer(size, capacity);
     // create the various registries
     this.#changed = new Map();
@@ -339,12 +348,15 @@ export class ComponentManager {
     return this.#ownerIteratorsById[instance.id]?.reset(this.#ownerCountsById[instance.id] ?? 0);
   }
 
-  /**
-   * Set the archetype manager for optimized component lookups
-   * @param archetypeManager The archetype manager to use
-   */
-  setArchetypeManager(archetypeManager: ArchetypeManager): void {
-    this.#archetypeManager = archetypeManager;
+  /** Get the current owner count for a registered component instance. */
+  getInstanceOwnerCount<T extends SchemaOrNull>(instance: ComponentInstance<T>): number {
+    return this.#ownerCountsById[instance.id] ?? 0;
+  }
+
+  /** Get the owner limit for a registered component instance, or `null` when uncapped. */
+  getInstanceMaxEntities<T extends SchemaOrNull>(instance: ComponentInstance<T>): number | null {
+    const maxEntities = this.#maxEntitiesById[instance.id] ?? 0;
+    return maxEntities === 0 ? null : maxEntities;
   }
 
   /**
@@ -353,7 +365,7 @@ export class ComponentManager {
    * @param entity The entity to get components for
    * @returns An array of component instances
    */
-  #getEntityComponentsDirect(entity: Entity): DynamicComponentInstance[] {
+  getEntityComponents(entity: Entity): DynamicComponentInstance[] {
     const components: DynamicComponentInstance[] = [];
     for (let i = 0; i < this.#instancesById.length; i++) {
       const instance = this.#instancesById[i]!;
@@ -362,25 +374,6 @@ export class ComponentManager {
       }
     }
     return components;
-  }
-
-  /**
-   * Get all components for an entity
-   * @param entity The entity to get components for
-   * @returns An array of component instances
-   */
-  getEntityComponents(entity: Entity): DynamicComponentInstance[] {
-    // Fast path: use archetype if available
-    if (this.#archetypeManager) {
-      const archetype = this.#archetypeManager.getEntityArchetype(entity);
-      if (archetype) {
-        return archetype.components;
-      }
-      return [];
-    }
-
-    // Fallback: scan all components (slower)
-    return this.#getEntityComponentsDirect(entity);
   }
 
   /**
@@ -574,18 +567,5 @@ export class ComponentManager {
       }
     }
     return this;
-  }
-
-  /**
-   * Stringify the component manager
-   * @returns A string representation of the component manager
-   */
-  stringify(): string {
-    return JSON.stringify(
-      {
-        buffer: this.#buffer.toString(),
-        // TODO: serialize changed, owners, registry
-      },
-    );
   }
 }

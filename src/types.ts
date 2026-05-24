@@ -18,7 +18,7 @@ import type { Query } from "@/query/query.ts";
 import type { System } from "@/system/system.ts";
 import type { World } from "@/world/world.ts";
 
-export type { PartitionStorage, Schema, TypedArray, TypedArrayConstructor };
+export type { Partition, PartitionStorage, Schema, TypedArray, TypedArrayConstructor };
 
 /** An Entity is essentially just an ID number / pointer */
 export type Entity = number;
@@ -93,9 +93,9 @@ export type ComponentSchemaOf<TComponent> = TComponent extends Component<infer T
 
 /** Convert a keyed Component map into the world-local ComponentInstance record for that map. */
 export type ComponentInstances<TMap extends ComponentMap> = {
-  readonly [K in keyof TMap]: TMap[K] extends Component<infer TSchema>
-    ? TSchema extends SchemaOrNull ? ComponentInstance<TSchema> : never
-    : never;
+  readonly [K in keyof TMap]: TMap[K] extends Component<infer TSchema> ?
+    TSchema extends SchemaOrNull ? ComponentInstance<TSchema> : never :
+    never;
 };
 
 /** The Component's constructor specification */
@@ -114,8 +114,8 @@ export type ComponentSpec<T extends SchemaOrNull = null> =
   & (T extends null ? {
       /** No schema for tag components */
       schema?: null;
-    }
-    : {
+    } :
+    {
       /** The component's property definitions */
       schema: Schema<T>;
     });
@@ -174,25 +174,31 @@ export type QueryInstance = {
   not: BooleanArray;
 };
 
-/** Read-only numeric index view for borrowed query entity IDs. */
-export type QueryEntityIndices = {
+/** A borrowed, reusable entity iterator. */
+export type BorrowedEntityIterator = IterableIterator<Entity>;
+
+/** Read-only numeric index view for borrowed entity IDs. */
+export type BorrowedEntityIndices = {
   /** Dense entity ID at `index`; only entries before the owning list's `count` are valid. */
   readonly [index: number]: Entity;
 };
 
 /**
- * A borrowed, reusable view of matching query entity IDs.
+ * A borrowed, reusable view of entity IDs.
  *
  * The view is pooled and valid only until the next world mutation, query
  * invalidation, or `world.refresh()`. Copy the valid prefix when a stable
  * snapshot is required.
  */
-export type QueryEntityList = {
-  /** Number of valid entity IDs in {@link QueryEntityList.indices}. */
+export type BorrowedEntityList = {
+  /** Number of valid entity IDs in {@link BorrowedEntityList.indices}. */
   readonly count: number;
   /** Borrowed dense entity IDs. Read only entries `0 <= i < count`. */
-  readonly indices: QueryEntityIndices;
+  readonly indices: BorrowedEntityIndices;
 };
+
+/** Backwards-compatible name for the borrowed dense query result. */
+export type QueryEntityList = BorrowedEntityList;
 
 /** A Record of SystemInstances by System name */
 export type SystemRecord = Readonly<Record<string, SystemInstance<SystemCallback>>>;
@@ -205,8 +211,8 @@ export type ParametersExceptFirstTwo<F extends SystemFunction> = Parameters<F> e
   unknown,
   unknown,
   ...infer R,
-] ? R
-  : [];
+] ? R :
+  [];
 
 /**
  * Internal-compatible system function constraint.
@@ -320,6 +326,7 @@ export type WorldSpec = {
 /** The state of a World */
 export type WorldState = "uninitialized" | "initialized" | "destroyed" | "error";
 
+/** The public archetype transition and query membership API. */
 export type WorldArchetypeAPI = {
   /** Get the archetype ID of an entity */
   getEntityArchetype: (entity: Entity) => string | undefined;
@@ -344,7 +351,9 @@ export type WorldEntityAPI = {
   /** Destroy an entity */
   destroy(entity: Entity): void;
   /** Get an iterable of all active entities */
-  getActive(startEntity?: Entity, endEntity?: Entity): IterableIterator<Entity>;
+  getActive(startEntity?: Entity, endEntity?: Entity): BorrowedEntityIterator;
+  /** Get a stable snapshot of all active entities */
+  getActiveSnapshot(startEntity?: Entity, endEntity?: Entity): Entity[];
   /** Get the number of active entities */
   getActiveCount(): number;
   /** Get the number of available entities */
@@ -354,9 +363,13 @@ export type WorldEntityAPI = {
   /** Check if an entity is valid */
   isEntity(entity: Entity): boolean;
   /** Query for entities */
-  query(query: Query): IterableIterator<Entity>;
+  query(query: Query): BorrowedEntityIterator;
   /** Query for entities as a dense reusable list for index-based hot loops */
-  queryList(query: Query): QueryEntityList;
+  queryList(query: Query): BorrowedEntityList;
+  /** Query for entities as a stable allocating array snapshot */
+  querySnapshot(query: Query): Entity[];
+  /** Copy a borrowed entity list into a stable array */
+  toArray(list: BorrowedEntityList): Entity[];
 };
 
 /** The public Component management API */
@@ -405,6 +418,12 @@ export type WorldComponentAPI = {
    */
   getChanged<T extends SchemaOrNull>(component: Component<T> | string): IterableIterator<Entity> | undefined;
   /**
+   * Get a stable snapshot of all entities with one or more changed properties for a component
+   * @param component - The component to get changed entities for
+   * @returns An array of entities or `undefined` if the component is not registered
+   */
+  getChangedSnapshot<T extends SchemaOrNull>(component: Component<T> | string): Entity[] | undefined;
+  /**
    * Get the data of a component from an entity
    * @param component - The component to get the data for
    * @param entity - The entity to get the data for
@@ -441,6 +460,12 @@ export type WorldComponentAPI = {
    * @returns An iterable of entities or `undefined` if the component is not registered
    */
   getOwners<T extends SchemaOrNull>(component: Component<T> | string): IterableIterator<Entity> | undefined;
+  /**
+   * Get a stable snapshot of all entities with a given component
+   * @param component - The component to get entities for
+   * @returns An array of entities or `undefined` if the component is not registered
+   */
+  getOwnersSnapshot<T extends SchemaOrNull>(component: Component<T> | string): Entity[] | undefined;
   /**
    * Query for components
    * @param query - The query to use

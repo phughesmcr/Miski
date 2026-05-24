@@ -105,18 +105,22 @@ export class Component<T extends SchemaOrNull = null> implements ComponentPrivat
     return this.#partition.size;
   }
 
+  /** Whether this component is a tag component with no data schema. */
   get isTag(): boolean {
     return this.#isTag;
   }
 
+  /** Runtime string tag used by `Object.prototype.toString`. */
   get [Symbol.toStringTag](): string {
     return "Component";
   }
 
+  /** Internal stable id for this component definition. */
   get [$_COMPONENT_ID_KEY](): number {
     return this.#id;
   }
 
+  /** Internal partition definition used to allocate world-local storage. */
   get [$_PARTITION_KEY](): Partition<T> {
     return this.#partition;
   }

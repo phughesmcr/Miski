@@ -1,6 +1,6 @@
 /// <reference lib="deno.ns" />
 
-import { Component, defineSystem, Query, SpecError, System, World } from "../mod.ts";
+import { AlreadyRegisteredError, Component, defineSystem, Query, SpecError, System, World } from "../mod.ts";
 import { NoComponentsFoundError } from "../src/errors.ts";
 import { assert, assertEquals, assertThrows } from "./helpers.ts";
 
@@ -209,4 +209,33 @@ Deno.test("system registry exposes a frozen live view without backing lookup mut
     "Expected destroyed system to disappear from public registry",
   );
   assert(world.systems.has(movement) === false, "Expected destroyed system to be absent from internal lookup");
+});
+
+Deno.test("duplicate system names are rejected explicitly", async () => {
+  const position = new Component<Vec2>({ name: "position", schema: { x: Float32Array, y: Float32Array } });
+  const world = new World({ capacity: 8, components: [position] });
+  await world.init();
+
+  const first = new System({
+    name: "movement",
+    query: new Query({ all: [position] }),
+    callback: () => {},
+  });
+  const second = new System({
+    name: "movement",
+    query: new Query({ all: [position] }),
+    callback: () => {},
+  });
+
+  world.systems.create(first);
+  assertThrows(
+    () => world.systems.create(second),
+    AlreadyRegisteredError,
+    'System "movement" is already registered',
+  );
+  assertThrows(
+    () => world.systems.create(first),
+    AlreadyRegisteredError,
+    'System "movement" is already registered',
+  );
 });

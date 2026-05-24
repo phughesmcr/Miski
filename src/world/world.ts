@@ -7,7 +7,7 @@
 
 import { BooleanArray } from "@phughesmcr/booleanarray";
 
-import { $_ARCHETYPE_KEY, $_QUERY_KEY, VERSION } from "@/constants.ts";
+import { VERSION } from "@/constants.ts";
 import { ArchetypeManager } from "@/archetype/archetype-manager.ts";
 import { ComponentManager } from "@/component/component-manager.ts";
 import { EntityManager } from "@/entity/entity-manager.ts";
@@ -23,14 +23,12 @@ import { QueryManager } from "@/query/query-manager.ts";
 import { SystemManager } from "@/system/system-manager.ts";
 import type { Component } from "@/component/component.ts";
 import type { ComponentInstance } from "@/component/component-instance.ts";
-import type { Archetype } from "@/archetype/archetype.ts";
 import type { Query } from "@/query/query.ts";
 import type {
   DynamicComponent,
   DynamicComponentInstance,
   Entity,
   QueryEntityList,
-  QueryInstance,
   SchemaOrNull,
   WorldAPIResult,
   WorldArchetypeAPI,
@@ -65,6 +63,12 @@ export class World {
   /** Cache of entities visited by archetype query helpers */
   #visitedArchetypeEntities: BooleanArray;
 
+  /** Dense scratch storage for preflighted batch component transitions */
+  #batchEntities: Uint32Array;
+
+  /** Duplicate-detection scratch flags for preflighted batch component transitions */
+  #batchSeen: Uint8Array;
+
   /** The World's current state */
   #state: WorldState;
 
@@ -85,12 +89,6 @@ export class World {
 
   /** System Management API */
   readonly systems: WorldSystemAPI;
-
-  /** Get an archetype by its ID */
-  readonly [$_ARCHETYPE_KEY]: (id: string) => Archetype | undefined;
-
-  /** The queries for the World */
-  readonly [$_QUERY_KEY]: () => QueryInstance[];
 
   /** Construct the public APIs for the World */
   #constructAPIs(): WorldAPIResult {
@@ -133,6 +131,8 @@ export class World {
         this.#componentManager.entityHas(component, entity),
       getChanged: <T extends SchemaOrNull>(component: Component<T> | string) =>
         this.#componentManager.getChanged(component),
+      getChangedSnapshot: <T extends SchemaOrNull>(component: Component<T> | string) =>
+        this.#snapshotIterator(this.#componentManager.getChanged(component)),
       getEntityData: <T extends SchemaOrNull>(component: Component<T> | string, entity: Entity) =>
         this.#getComponentEntityData(component, entity),
       getInstance: <T extends SchemaOrNull>(component: Component<T> | string) =>
@@ -140,6 +140,8 @@ export class World {
       getInstances: (array: DynamicComponent[]) => this.#componentManager.getInstances(array),
       getOwners: <T extends SchemaOrNull>(component: Component<T> | string) =>
         this.#componentManager.getOwners(component),
+      getOwnersSnapshot: <T extends SchemaOrNull>(component: Component<T> | string) =>
+        this.#snapshotIterator(this.#componentManager.getOwners(component)),
       isRegistered: (component: DynamicComponent | string) => this.#componentManager.isRegistered(component),
       query: (query: Query) => this.#queryManager.components(query),
       removeFromEntity: <T extends SchemaOrNull>(component: string | Component<T>, entity: Entity) =>
@@ -161,12 +163,16 @@ export class World {
       create: () => this.#entityManager.create(),
       destroy: (entity: Entity) => this.#destroyEntity(entity),
       getActive: (startEntity?: Entity, endEntity?: Entity) => this.#entityManager.getActive(startEntity, endEntity),
+      getActiveSnapshot: (startEntity?: Entity, endEntity?: Entity) =>
+        this.#snapshotIterator(this.#entityManager.getActive(startEntity, endEntity)) ?? [],
       getActiveCount: () => this.#entityManager.getActiveCount(),
       getAvailableCount: () => this.#entityManager.getAvailableCount(),
       isActive: (entity: Entity) => this.#entityManager.isActive(entity),
       isEntity: (entity: Entity) => this.#entityManager.isEntity(entity),
       query: (query: Query) => this.#queryManager.entities(query),
       queryList: (query: Query) => this.#queryManager.entityList(query),
+      querySnapshot: (query: Query) => this.#copyEntityList(this.#queryManager.entityList(query)),
+      toArray: (list: QueryEntityList) => this.#copyEntityList(list),
     };
   }
 
@@ -212,6 +218,7 @@ export class World {
     this.entities.destroy = unavailable;
     this.entities.query = unavailable;
     this.entities.queryList = unavailable;
+    this.entities.querySnapshot = unavailable;
   }
 
   /** Install initialized fast-path facades with no lifecycle branch in public hot methods. */
@@ -248,6 +255,7 @@ export class World {
     this.entities.destroy = (entity: Entity) => this.#destroyEntity(entity);
     this.entities.query = (query: Query) => this.#queryManager.entities(query);
     this.entities.queryList = (query: Query) => this.#queryManager.entityList(query);
+    this.entities.querySnapshot = (query: Query) => this.#copyEntityList(this.#queryManager.entityList(query));
 
     this.systems.create = (system) => this.#systemManager.create(system);
     this.systems.destroy = (system) => this.#systemManager.destroy(system);
@@ -273,9 +281,29 @@ export class World {
     this.entities.destroy = unavailable;
     this.entities.query = unavailable;
     this.entities.queryList = unavailable;
+    this.entities.querySnapshot = unavailable;
 
     this.systems.create = unavailable;
     this.systems.destroy = unavailable;
+  }
+
+  /** Copy an allocating stable array from a borrowed entity list. */
+  #copyEntityList(list: QueryEntityList): Entity[] {
+    const result = new Array<Entity>(list.count);
+    for (let i = 0; i < list.count; i++) {
+      result[i] = list.indices[i]!;
+    }
+    return result;
+  }
+
+  /** Copy an allocating stable array from a borrowed iterator. */
+  #snapshotIterator(iterator: IterableIterator<Entity> | undefined): Entity[] | undefined {
+    if (iterator === undefined) return undefined;
+    const result: Entity[] = [];
+    for (const entity of iterator) {
+      result.push(entity);
+    }
+    return result;
   }
 
   /** Get the components for a query */
@@ -339,6 +367,79 @@ export class World {
     this.#visitedArchetypeEntities.clear();
   }
 
+  /** Resolve a registered component instance for mutation paths. */
+  #getRegisteredComponentInstance<T extends SchemaOrNull>(component: Component<T> | string): ComponentInstance<T> {
+    const instance = this.#componentManager.getInstance(component);
+    if (instance !== undefined) return instance;
+    const name = typeof component === "string" ? `"${component}"` : `"${component.name}"`;
+    throw new NotRegisteredError(`Component ${name} is not registered in this world.`);
+  }
+
+  /** Preflight a borrowed dense entity list before an atomic batch mutation. */
+  #preflightBatchEntities(entities: QueryEntityList): number {
+    const count = entities.count;
+    if (!Number.isInteger(count) || count < 0 || count > this.#batchEntities.length) {
+      throw new RangeError(`Batch entity list count ${count} is outside world capacity.`);
+    }
+
+    for (let i = 0; i < count; i++) {
+      const entity = entities.indices[i]!;
+      if (!this.#entityManager.isActive(entity)) {
+        this.#clearBatchEntities(i);
+        throw new EntityNotFoundError(`Entity ${entity} is not active.`);
+      }
+      if (this.#batchSeen[entity] === 1) {
+        this.#clearBatchEntities(i);
+        throw new RangeError(`Duplicate entity ${entity} in batch entity list.`);
+      }
+      this.#batchSeen[entity] = 1;
+      this.#batchEntities[i] = entity;
+    }
+
+    return count;
+  }
+
+  /** Clear duplicate-detection scratch flags after batch preflight/commit. */
+  #clearBatchEntities(count: number): void {
+    for (let i = 0; i < count; i++) {
+      const entity = this.#batchEntities[i]!;
+      this.#batchSeen[entity] = 0;
+      this.#batchEntities[i] = 0;
+    }
+  }
+
+  /** Commit an already preflighted component add. */
+  #commitAddComponent<T extends SchemaOrNull>(
+    instance: ComponentInstance<T>,
+    entity: Entity,
+    data?: { [k in keyof T]: number },
+  ): boolean {
+    const changed = this.#componentManager.addInstanceToEntity(instance, entity, data);
+    if (changed) {
+      this.#archetypeManager.addComponent(entity, instance);
+    }
+    return changed;
+  }
+
+  /** Commit an already preflighted component removal. */
+  #commitRemoveComponent<T extends SchemaOrNull>(
+    instance: ComponentInstance<T>,
+    entity: Entity,
+  ): boolean {
+    const changed = this.#componentManager.removeInstanceFromEntity(instance, entity);
+    if (changed) {
+      this.#archetypeManager.removeComponent(entity, instance);
+    }
+    return changed;
+  }
+
+  /** Invalidate entity query caches once for a committed ownership transition batch. */
+  #invalidateCommittedTransition(changed: boolean): void {
+    if (changed && this.#state === "initialized" && !this.#queryManager.cacheInvalidated) {
+      this.#queryManager.invalidate();
+    }
+  }
+
   /** Add a component to an entity */
   #addComponentToEntity<T extends SchemaOrNull>(
     component: Component<T> | string,
@@ -348,17 +449,8 @@ export class World {
     if (!this.#entityManager.isActive(entity)) {
       throw new EntityNotFoundError(`Entity ${entity} is not active.`);
     }
-    const instance = this.#componentManager.getInstance(component);
-    if (instance === undefined) {
-      throw new NotRegisteredError(`Component ${component} not registered in world`);
-    }
-    const changed = this.#componentManager.addInstanceToEntity(instance, entity, data);
-    if (changed) {
-      this.#archetypeManager.addComponent(entity, instance);
-    }
-    if (changed && this.#state === "initialized" && !this.#queryManager.cacheInvalidated) {
-      this.#queryManager.invalidate();
-    }
+    const changed = this.#commitAddComponent(this.#getRegisteredComponentInstance(component), entity, data);
+    this.#invalidateCommittedTransition(changed);
   }
 
   /** Add a component to every entity in a dense query list. */
@@ -367,26 +459,36 @@ export class World {
     entities: QueryEntityList,
     data?: { [k in keyof T]: number } | undefined,
   ): number {
-    const instance = this.#componentManager.getInstance(component);
-    if (instance === undefined) {
-      throw new NotRegisteredError(`Component ${component} not registered in world`);
-    }
+    const instance = this.#getRegisteredComponentInstance(component);
+    const count = this.#preflightBatchEntities(entities);
 
-    let changedCount = 0;
-    for (let i = 0; i < entities.count; i++) {
-      const entity = entities.indices[i]!;
-      if (!this.#entityManager.isActive(entity)) {
-        throw new EntityNotFoundError(`Entity ${entity} is not active.`);
+    try {
+      const maxEntities = this.#componentManager.getInstanceMaxEntities(instance);
+      if (maxEntities !== null) {
+        let newOwners = 0;
+        for (let i = 0; i < count; i++) {
+          if (!this.#componentManager.entityOwnsInstance(instance, this.#batchEntities[i]!)) {
+            newOwners++;
+          }
+        }
+        if (this.#componentManager.getInstanceOwnerCount(instance) + newOwners > maxEntities) {
+          throw new RangeError(
+            `Component "${instance.type.name}" can only be added to ${maxEntities} entities.`,
+          );
+        }
       }
-      if (this.#componentManager.addInstanceToEntity(instance, entity, data)) {
-        this.#archetypeManager.addComponent(entity, instance);
-        changedCount++;
+
+      let changedCount = 0;
+      for (let i = 0; i < count; i++) {
+        if (this.#commitAddComponent(instance, this.#batchEntities[i]!, data)) {
+          changedCount++;
+        }
       }
+      this.#invalidateCommittedTransition(changedCount > 0);
+      return changedCount;
+    } finally {
+      this.#clearBatchEntities(count);
     }
-    if (changedCount > 0 && this.#state === "initialized" && !this.#queryManager.cacheInvalidated) {
-      this.#queryManager.invalidate();
-    }
-    return changedCount;
   }
 
   /** Remove a component from an entity */
@@ -397,17 +499,8 @@ export class World {
     if (!this.#entityManager.isActive(entity)) {
       throw new EntityNotFoundError(`Entity ${entity} is not active.`);
     }
-    const instance = this.#componentManager.getInstance(component);
-    if (instance === undefined) {
-      throw new NotRegisteredError(`Component ${component} not registered in world`);
-    }
-    const changed = this.#componentManager.removeInstanceFromEntity(instance, entity);
-    if (changed) {
-      this.#archetypeManager.removeComponent(entity, instance);
-    }
-    if (changed && this.#state === "initialized" && !this.#queryManager.cacheInvalidated) {
-      this.#queryManager.invalidate();
-    }
+    const changed = this.#commitRemoveComponent(this.#getRegisteredComponentInstance(component), entity);
+    this.#invalidateCommittedTransition(changed);
   }
 
   /** Remove a component from every entity in a dense query list. */
@@ -415,26 +508,21 @@ export class World {
     component: Component<T> | string,
     entities: QueryEntityList,
   ): number {
-    const instance = this.#componentManager.getInstance(component);
-    if (instance === undefined) {
-      throw new NotRegisteredError(`Component ${component} not registered in world`);
-    }
+    const instance = this.#getRegisteredComponentInstance(component);
+    const count = this.#preflightBatchEntities(entities);
 
-    let changedCount = 0;
-    for (let i = 0; i < entities.count; i++) {
-      const entity = entities.indices[i]!;
-      if (!this.#entityManager.isActive(entity)) {
-        throw new EntityNotFoundError(`Entity ${entity} is not active.`);
+    try {
+      let changedCount = 0;
+      for (let i = 0; i < count; i++) {
+        if (this.#commitRemoveComponent(instance, this.#batchEntities[i]!)) {
+          changedCount++;
+        }
       }
-      if (this.#componentManager.removeInstanceFromEntity(instance, entity)) {
-        this.#archetypeManager.removeComponent(entity, instance);
-        changedCount++;
-      }
+      this.#invalidateCommittedTransition(changedCount > 0);
+      return changedCount;
+    } finally {
+      this.#clearBatchEntities(count);
     }
-    if (changedCount > 0 && this.#state === "initialized" && !this.#queryManager.cacheInvalidated) {
-      this.#queryManager.invalidate();
-    }
-    return changedCount;
   }
 
   /** Resolve a registered data component instance for guarded public data access. */
@@ -492,8 +580,7 @@ export class World {
     this.#archetypeManager.reset(entity);
     // Destroy the entity itself
     this.#entityManager.destroy(entity);
-    // Invalidate query caches
-    this.#queryManager.invalidate();
+    this.#invalidateCommittedTransition(true);
   }
 
   /**
@@ -518,10 +605,8 @@ export class World {
 
     this.#archetypeManager = new ArchetypeManager(capacity, components.length);
     this.#visitedArchetypeEntities = new BooleanArray(capacity);
-    this[$_ARCHETYPE_KEY] = (id: string) => this.#archetypeManager.registry.get(id);
-
-    // Wire up archetype manager for optimized component lookups
-    this.#componentManager.setArchetypeManager(this.#archetypeManager);
+    this.#batchEntities = new Uint32Array(capacity);
+    this.#batchSeen = new Uint8Array(capacity);
 
     this.#queryManager = new QueryManager(
       this,
@@ -533,8 +618,6 @@ export class World {
         this.#archetypeManager.registerQuery(query, true);
       },
     );
-    this[$_QUERY_KEY] = () => [...this.#queryManager.instancesByID.values()];
-
     this.#systemManager = new SystemManager(this, (query: Query) => this.#queryManager.components(query));
 
     // Public APIs

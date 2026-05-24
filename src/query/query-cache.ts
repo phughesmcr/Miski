@@ -1,10 +1,15 @@
 import type { DynamicComponentInstance } from "@/types.ts";
 import type { QueryEntityResult, QueryResultPool } from "./query-pool.ts";
 
+type EntityCacheEntry = {
+  result: QueryEntityResult;
+  version: number;
+};
+
 /** Cache for query results */
 export class QueryCache {
   #componentCache: Map<string, Record<string, DynamicComponentInstance>>;
-  #entityCache: Map<string, QueryEntityResult>;
+  #entityCache: Map<string, EntityCacheEntry>;
   #globalVersion: number;
   #pool?: QueryResultPool;
 
@@ -29,12 +34,7 @@ export class QueryCache {
   getComponents(
     queryId: string,
     compute: () => Record<string, DynamicComponentInstance>,
-    lastVersion: number,
   ): Record<string, DynamicComponentInstance> {
-    if (lastVersion < this.#globalVersion) {
-      this.#componentCache.delete(queryId);
-    }
-
     if (!this.#componentCache.has(queryId)) {
       this.#componentCache.set(queryId, compute());
     }
@@ -46,30 +46,28 @@ export class QueryCache {
   getEntities(
     queryId: string,
     compute: () => QueryEntityResult,
-    lastVersion: number,
   ): QueryEntityResult {
-    if (lastVersion < this.#globalVersion) {
-      // Release the old array back to the pool before removing
-      const oldResult = this.#entityCache.get(queryId);
-      if (oldResult && this.#pool) {
-        this.#pool.releaseEntityResult(oldResult);
-      }
+    const entry = this.#entityCache.get(queryId);
+    if (entry && entry.version === this.#globalVersion) {
+      return entry.result;
+    }
+
+    if (entry && this.#pool) {
+      this.#pool.releaseEntityResult(entry.result);
       this.#entityCache.delete(queryId);
     }
 
-    if (!this.#entityCache.has(queryId)) {
-      this.#entityCache.set(queryId, compute());
-    }
-
-    return this.#entityCache.get(queryId)!;
+    const result = compute();
+    this.#entityCache.set(queryId, { result, version: this.#globalVersion });
+    return result;
   }
 
   /** Clear all caches and release pooled resources */
   clear(): void {
     // Release all entity arrays back to pool
     if (this.#pool) {
-      for (const result of this.#entityCache.values()) {
-        this.#pool.releaseEntityResult(result);
+      for (const entry of this.#entityCache.values()) {
+        this.#pool.releaseEntityResult(entry.result);
       }
     }
     this.#entityCache.clear();

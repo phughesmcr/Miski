@@ -2,7 +2,7 @@
 
 import { Component, defineSystem, EntityNotFoundError, Query, System, World, WorldStateError } from "../mod.ts";
 import { assert, assertEquals, assertRejects, assertStrictEquals, assertThrows, ids, listIds } from "./helpers.ts";
-import type { ComponentInstance, Entity, QueryEntityList } from "../mod.ts";
+import type { BorrowedEntityIterator, BorrowedEntityList, ComponentInstance, Entity, QueryEntityList } from "../mod.ts";
 
 type Vec2 = { x: Float32ArrayConstructor; y: Float32ArrayConstructor };
 type Health = { current: Uint16ArrayConstructor; max: Uint16ArrayConstructor };
@@ -388,12 +388,47 @@ Deno.test("queryList returns a borrowed pooled view, not a stable snapshot", asy
   assertEquals(listIds(stale), [first], "Expected stale handle to reflect the current recycled result");
 });
 
+Deno.test("snapshot helpers return stable arrays across retained and nested use", async () => {
+  const position = vec2Component();
+  const velocity = vec2Component("velocity");
+  const world = new World({ capacity: 8, components: [position, velocity] });
+  await world.init();
+
+  const first = createEntity(world);
+  const second = createEntity(world);
+  world.components.addToEntity(position, first);
+  world.components.addToEntity(velocity, first);
+  world.components.addToEntity(position, second);
+  world.components.addToEntity(velocity, second);
+
+  const moving = new Query({ all: [position, velocity] });
+  const retainedQuerySnapshot = world.entities.querySnapshot(moving);
+  const retainedOwnersSnapshot = world.components.getOwnersSnapshot(velocity);
+  const retainedActiveSnapshot = world.entities.getActiveSnapshot();
+
+  world.components.removeFromEntity(velocity, second);
+  const nestedSnapshot = world.entities.querySnapshot(moving);
+  world.components.addToEntity(velocity, second);
+
+  assertEquals(retainedQuerySnapshot, [first, second], "Expected retained query snapshot to stay stable");
+  assertEquals(retainedOwnersSnapshot, [first, second], "Expected retained owner snapshot to stay stable");
+  assertEquals(retainedActiveSnapshot, [first, second], "Expected retained active snapshot to stay stable");
+  assertEquals(nestedSnapshot, [first], "Expected nested snapshot to capture its own point in time");
+  assertEquals(world.entities.querySnapshot(moving), [first, second], "Expected fresh snapshot to see current state");
+});
+
 Deno.test("queryList indices are readonly at the public type boundary", () => {
   const assertReadonlyIndices = (list: QueryEntityList): void => {
     // @ts-expect-error QueryEntityList exposes a borrowed read-only index view.
     list.indices[0] = 1;
   };
+  const assertBorrowedAlias = (list: QueryEntityList, iterator: BorrowedEntityIterator): void => {
+    const borrowed: BorrowedEntityList = list;
+    borrowed.indices[0];
+    iterator.next();
+  };
   void assertReadonlyIndices;
+  void assertBorrowedAlias;
 });
 
 Deno.test("batch component transitions mutate dense query lists", async () => {

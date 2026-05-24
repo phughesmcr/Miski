@@ -31,6 +31,7 @@ const movementMedium = await populateMovementWorld(MEDIUM_CAPACITY);
 const movementLarge = await populateMovementWorld(LARGE_CAPACITY);
 const lifecycle = await populateSparseLifecycleWorld(MEDIUM_CAPACITY);
 const batchTransitions = await populateSparseLifecycleWorld(MEDIUM_CAPACITY);
+const batchDataTransitions = await populateSparseLifecycleWorld(MEDIUM_CAPACITY);
 const queryInvalidation = await populateMovementWorld(SMALL_CAPACITY);
 const transitionTracking = await populateSparseLifecycleWorld(SMALL_CAPACITY);
 const wide = await populateWideWorld(SMALL_CAPACITY);
@@ -43,6 +44,7 @@ const invalidationMovementQuery = createMovementQuery(queryInvalidation.componen
 const transitionTrackingQuery = createMovementQuery(transitionTracking.components);
 const wideQuery = createWideQuery(wide.components);
 const batchPositionQuery = new Query({ all: [batchTransitions.components.position] });
+const batchDataPositionQuery = new Query({ all: [batchDataTransitions.components.position] });
 mixed.world.entities.query(movementQuery);
 mixed.world.entities.query(renderableQuery);
 mixed.world.entities.query(projectileQuery);
@@ -51,6 +53,7 @@ queryInvalidation.world.entities.query(invalidationMovementQuery);
 transitionTracking.world.entities.query(transitionTrackingQuery);
 wide.world.entities.query(wideQuery);
 batchTransitions.world.entities.query(batchPositionQuery);
+batchDataTransitions.world.entities.query(batchDataPositionQuery);
 
 const positionInstance = mixed.world.components.getInstance(mixed.components.position) as ComponentInstance<Vec2>;
 const positionStorage = positionInstance.storage;
@@ -69,6 +72,7 @@ let destroySixComponentEntity = mustCreateEntity(lifecycle.world);
 const transitionQueryEntity = queryInvalidation.entities[1]!;
 const enteredExitedEntity = mustCreateEntity(transitionTracking.world);
 const wideTransitionEntity = mustCreateEntity(wide.world);
+const batchData = { x: 1, y: -1 };
 lifecycle.world.components.addToEntity(lifecycle.components.position, addRemoveEntity, { x: 0, y: 0 });
 lifecycle.world.components.addToEntity(lifecycle.components.position, lifecycleEntity, { x: 0, y: 0 });
 lifecycle.world.components.addToEntity(lifecycle.components.position, destroyOneComponentEntity, { x: 0, y: 0 });
@@ -317,7 +321,26 @@ Deno.bench({
   fn: () => {
     const positioned = batchTransitions.world.entities.queryList(batchPositionQuery);
     batchTransitions.world.components.addToEntities(batchTransitions.components.renderable, positioned);
-    batchTransitions.world.components.removeFromEntities(batchTransitions.components.renderable, positioned);
+    const positionedAfterAdd = batchTransitions.world.entities.queryList(batchPositionQuery);
+    batchTransitions.world.components.removeFromEntities(batchTransitions.components.renderable, positionedAfterAdd);
+  },
+});
+
+Deno.bench({
+  name: "batch add/remove data component across queryList",
+  group: "archetype transitions",
+  fn: () => {
+    const positioned = batchDataTransitions.world.entities.queryList(batchDataPositionQuery);
+    batchDataTransitions.world.components.addToEntities(
+      batchDataTransitions.components.acceleration,
+      positioned,
+      batchData,
+    );
+    const positionedAfterAdd = batchDataTransitions.world.entities.queryList(batchDataPositionQuery);
+    batchDataTransitions.world.components.removeFromEntities(
+      batchDataTransitions.components.acceleration,
+      positionedAfterAdd,
+    );
   },
 });
 
@@ -428,6 +451,22 @@ Deno.bench({
 });
 
 Deno.bench({
+  name: "querySnapshot allocating - movement all + none",
+  group: "queries",
+  fn: () => {
+    objectSink = mixed.world.entities.querySnapshot(movementQuery);
+  },
+});
+
+Deno.bench({
+  name: "toArray allocating from queryList - movement all + none",
+  group: "queries",
+  fn: () => {
+    objectSink = mixed.world.entities.toArray(mixed.world.entities.queryList(movementQuery));
+  },
+});
+
+Deno.bench({
   name: "cached query - renderable all + any",
   group: "queries",
   fn: () => {
@@ -465,6 +504,14 @@ Deno.bench({
   fn: () => {
     queryInvalidation.world.refresh();
     entitySink ^= countEntities(queryInvalidation.world.entities.query(invalidationMovementQuery));
+  },
+});
+
+Deno.bench({
+  name: "world refresh with cached queries",
+  group: "queries",
+  fn: () => {
+    queryInvalidation.world.refresh();
   },
 });
 
@@ -571,6 +618,31 @@ Deno.bench({
       count += queryMask[i]!;
     }
     numericSink ^= count;
+  },
+});
+
+Deno.bench({
+  name: "getActiveSnapshot allocating - 8K world",
+  group: "snapshots",
+  baseline: true,
+  fn: () => {
+    objectSink = mixed.world.entities.getActiveSnapshot();
+  },
+});
+
+Deno.bench({
+  name: "getOwnersSnapshot allocating - position",
+  group: "snapshots",
+  fn: () => {
+    objectSink = mixed.world.components.getOwnersSnapshot(mixed.components.position);
+  },
+});
+
+Deno.bench({
+  name: "getChangedSnapshot allocating - position",
+  group: "snapshots",
+  fn: () => {
+    objectSink = mixed.world.components.getChangedSnapshot(mixed.components.position);
   },
 });
 

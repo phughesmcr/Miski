@@ -1,22 +1,22 @@
 {
   "version": "5",
   "specifiers": {
-    "jsr:@phughesmcr/bitpool@0.8": "0.8.0",
-    "jsr:@phughesmcr/booleanarray@0.12": "0.12.0",
-    "jsr:@phughesmcr/partitionedbuffer@0.4": "0.4.0"
+    "jsr:@phughesmcr/bitpool@~0.9.1": "0.9.1",
+    "jsr:@phughesmcr/booleanarray@0.13": "0.13.0",
+    "jsr:@phughesmcr/partitionedbuffer@~0.4.1": "0.4.1"
   },
   "jsr": {
-    "@phughesmcr/bitpool@0.8.0": {
-      "integrity": "b6ff60d15a6548d613786f3e895257d7e2a9216f5540bc3417814a6a913847f7",
+    "@phughesmcr/bitpool@0.9.1": {
+      "integrity": "07519ef3646f6c7e6cc91171471b9db8bee20b52d69c41685a78ef9f2f256d96",
       "dependencies": [
         "jsr:@phughesmcr/booleanarray"
       ]
     },
-    "@phughesmcr/booleanarray@0.12.0": {
-      "integrity": "76ff174fce3927354d9671b7ad11990351730d0db1204a4239cbdde27f00487a"
+    "@phughesmcr/booleanarray@0.13.0": {
+      "integrity": "43ecfacfc0ec1044a60a3d2fe7163b5d2a3ed7b750c590336c650f124978b98d"
     },
-    "@phughesmcr/partitionedbuffer@0.4.0": {
-      "integrity": "c632180801d78eca94dc321de64e10aac618c9c1cf91f4ccd5d2a9bc7fd1ca5e",
+    "@phughesmcr/partitionedbuffer@0.4.1": {
+      "integrity": "d055c3f99df9f5b7fc470567a349ae113b33dba4c7f1ec38298739e9affcb66e",
       "dependencies": [
         "jsr:@phughesmcr/bitpool"
       ]
@@ -24,9 +24,9 @@
   },
   "workspace": {
     "dependencies": [
-      "jsr:@phughesmcr/bitpool@0.8",
-      "jsr:@phughesmcr/booleanarray@0.12",
-      "jsr:@phughesmcr/partitionedbuffer@0.4"
+      "jsr:@phughesmcr/bitpool@~0.9.1",
+      "jsr:@phughesmcr/booleanarray@0.13",
+      "jsr:@phughesmcr/partitionedbuffer@~0.4.1"
     ]
   }
 }

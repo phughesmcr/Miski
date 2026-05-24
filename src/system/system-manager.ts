@@ -6,10 +6,18 @@
  */
 
 import { $_SYSTEM_DESTROY_KEY, $_SYSTEM_INIT_KEY } from "@/constants.ts";
-import { NotRegisteredError } from "@/errors.ts";
+import { AlreadyRegisteredError, NotRegisteredError } from "@/errors.ts";
 import type { SystemCallback, SystemFunction, SystemInstance } from "@/types.ts";
 import type { World } from "@/world/world.ts";
 import { createSystemInstance, type System } from "./system.ts";
+
+type SystemRegistration = {
+  destroy: (world: World) => void | Promise<void>;
+  init: (world: World) => void | Promise<void>;
+  instance: SystemInstance<SystemFunction>;
+  name: string;
+  system: System<SystemFunction>;
+};
 
 /** The SystemManager is responsible for creating, registering, initializing, and destroying systems. */
 export class SystemManager {
@@ -18,6 +26,9 @@ export class SystemManager {
 
   /** Internal component query callback used while public query APIs are unavailable. */
   #queryComponents: Parameters<typeof createSystemInstance>[2];
+
+  /** Internal system registration records keyed by system name. */
+  #records: Record<string, SystemRegistration>;
 
   /** Internal mutable system registry keyed by system name. */
   #registry: Record<string, SystemInstance<SystemCallback>>;
@@ -32,6 +43,7 @@ export class SystemManager {
   constructor(world: World, queryComponents: Parameters<typeof createSystemInstance>[2]) {
     this.#world = world;
     this.#queryComponents = queryComponents;
+    this.#records = {};
     this.#registry = {};
     this.#publicRegistry = Object.freeze({});
   }
@@ -53,11 +65,18 @@ export class SystemManager {
    * @throws {NoComponentsFoundError} If the system query returns no components
    */
   create<T extends SystemFunction>(system: System<T>): SystemInstance<T> {
-    const existing = this.get(system);
+    const existing = this.#records[system.name];
     if (existing) {
-      return existing;
+      throw new AlreadyRegisteredError(`System "${system.name}" is already registered in the world.`);
     }
     const instance = createSystemInstance(this.#world, system, this.#queryComponents);
+    this.#records[system.name] = {
+      destroy: system[$_SYSTEM_DESTROY_KEY],
+      init: system[$_SYSTEM_INIT_KEY],
+      instance: instance as SystemInstance<SystemFunction>,
+      name: system.name,
+      system: system as System<SystemFunction>,
+    };
     this.#registry[system.name] = instance as unknown as SystemInstance<SystemCallback>;
     this.#refreshPublicRegistry();
     return instance as SystemInstance<T>;
@@ -71,15 +90,15 @@ export class SystemManager {
     system: System<T> | string,
     throwOnNotFound = true,
   ): Promise<void> {
-    const instance = this.get(system);
-    if (instance === undefined) {
+    const record = this.#getRecord(system);
+    if (record === undefined) {
       if (throwOnNotFound === false) return;
       const name = typeof system === "string" ? system : system.name;
       throw new NotRegisteredError(`System "${name}" is not registered in the world`);
     }
-    const proto = Object.getPrototypeOf(instance);
-    await proto[$_SYSTEM_DESTROY_KEY](this.#world);
-    delete this.#registry[proto.name];
+    await record.destroy(this.#world);
+    delete this.#records[record.name];
+    delete this.#registry[record.name];
     this.#refreshPublicRegistry();
   }
 
@@ -87,10 +106,11 @@ export class SystemManager {
    * Destroy all systems
    */
   async destroyAll(): Promise<void> {
-    for (const instance of Object.values(this.#registry)) {
-      const proto = Object.getPrototypeOf(instance);
-      await this.destroy(proto.name);
+    let pending: Promise<unknown> = Promise.resolve();
+    for (const name of Object.keys(this.#records)) {
+      pending = pending.then(() => this.destroy(name));
     }
+    await pending;
   }
 
   /**
@@ -99,14 +119,7 @@ export class SystemManager {
    * @returns The system instance
    */
   get<T extends SystemFunction>(system: string | System<T>): SystemInstance<T> | undefined {
-    if (typeof system === "string") {
-      return this.#registry[system] as SystemInstance<T> | undefined;
-    }
-    const result = this.#registry[system.name];
-    if (result && Object.getPrototypeOf(result) !== system) {
-      return undefined;
-    }
-    return result as SystemInstance<T> | undefined;
+    return this.#getRecord(system)?.instance as SystemInstance<T> | undefined;
   }
 
   /**
@@ -122,9 +135,19 @@ export class SystemManager {
    * Initialize all systems
    */
   async init(): Promise<void> {
-    for (const instance of Object.values(this.#registry)) {
-      const system: System<SystemCallback> = Object.getPrototypeOf(instance);
-      await system[$_SYSTEM_INIT_KEY](this.#world);
+    let pending: Promise<unknown> = Promise.resolve();
+    for (const record of Object.values(this.#records)) {
+      pending = pending.then(() => record.init(this.#world));
     }
+    await pending;
+  }
+
+  /** Resolve a registration by exact system object or name. */
+  #getRecord<T extends SystemFunction>(system: string | System<T>): SystemRegistration | undefined {
+    if (typeof system === "string") {
+      return this.#records[system];
+    }
+    const record = this.#records[system.name];
+    return record?.system === system ? record : undefined;
   }
 }

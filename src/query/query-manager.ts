@@ -5,9 +5,8 @@
  * @license     MIT
  */
 
-import { BooleanArray } from "@phughesmcr/booleanarray";
-
 import { ID_KEY } from "@/constants.ts";
+import { BooleanArray } from "@phughesmcr/booleanarray";
 import { NotRegisteredError } from "@/errors.ts";
 import type { Archetype } from "@/archetype/archetype.ts";
 import type { ComponentInstanceGetter, DynamicComponentInstance, Entity, QueryInstance } from "@/types.ts";
@@ -94,9 +93,6 @@ export class QueryManager {
   /** Cache for query results */
   readonly cache: QueryCache;
 
-  /** Map of registered Queries and their last update version for the cache */
-  readonly lastQueryVersion: Map<string, number>;
-
   /** Pool for reusing query result objects */
   readonly pool: QueryResultPool;
 
@@ -108,9 +104,6 @@ export class QueryManager {
 
   /** Whether global query cache invalidation has already been recorded. */
   cacheInvalidated: boolean;
-
-  /** Boolean array for visited entities */
-  readonly visited: BooleanArray;
 
   /**
    * Create a new QueryManager
@@ -127,11 +120,9 @@ export class QueryManager {
     this.#registerQueryMembership = registerQueryMembership;
     this.pool = new QueryResultPool(capacity);
     this.cache = new QueryCache(this.pool);
-    this.lastQueryVersion = new Map();
     this.instancesByID = new Map();
     this.idsByQuery = new Map();
     this.cacheInvalidated = false;
-    this.visited = new BooleanArray(capacity);
   }
 
   /** Get components for a query */
@@ -141,11 +132,7 @@ export class QueryManager {
     const result = this.cache.getComponents(
       queryId,
       () => instance.components,
-      this.lastQueryVersion.get(queryId) ?? 0,
     );
-    // Update last seen version after computing
-    this.lastQueryVersion.set(queryId, this.cache.version);
-    this.cacheInvalidated = false;
     return result;
   }
 
@@ -170,11 +157,8 @@ export class QueryManager {
         }
         return result;
       },
-      this.lastQueryVersion.get(queryId) ?? 0,
     );
 
-    // Update last seen version after computing
-    this.lastQueryVersion.set(queryId, this.cache.version);
     this.cacheInvalidated = false;
 
     return result;
@@ -222,14 +206,9 @@ export class QueryManager {
     this.#ensureQueryMembership(this.instancesByID.values());
   }
 
-  /** Mark query as dirty and invalidate caches */
-  invalidate(query?: Query): void {
-    if (query) {
-      const queryId = this.idsByQuery.get(query);
-      if (queryId) {
-        this.lastQueryVersion.set(queryId, this.cache.version);
-      }
-    } else if (!this.cacheInvalidated) {
+  /** Invalidate entity query caches after a committed entity/component transition. */
+  invalidate(): void {
+    if (!this.cacheInvalidated) {
       this.cache.invalidate();
       this.cacheInvalidated = true;
     }

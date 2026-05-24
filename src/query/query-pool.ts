@@ -1,4 +1,3 @@
-import { BooleanArray } from "@phughesmcr/booleanarray";
 import { ReusableEntityIterator } from "@/entity/entity-list.ts";
 import type { Entity } from "@/types.ts";
 
@@ -28,23 +27,12 @@ export class QueryEntityResult {
 
 /** Pool for reusing query result objects */
 export class QueryResultPool {
-  #entityArrays: BooleanArray[] = [];
   #entityResults: QueryEntityResult[] = [];
   #size: number;
 
   constructor(size: number) {
     this.#size = size;
-    this.#entityArrays = [];
     this.#entityResults = [];
-  }
-
-  acquireEntityArray(): BooleanArray {
-    return this.#entityArrays.pop() ?? new BooleanArray(this.#size);
-  }
-
-  releaseEntityArray(array: BooleanArray): void {
-    array.clear();
-    this.#entityArrays.push(array);
   }
 
   acquireEntityResult(): QueryEntityResult {

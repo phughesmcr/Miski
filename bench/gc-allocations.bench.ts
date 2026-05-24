@@ -2,7 +2,7 @@
 /// <reference lib="dom" />
 // deno-lint-ignore-file no-console
 
-import { World } from "../mod.ts";
+import { Query, World } from "../mod.ts";
 import type { ComponentInstance, Entity } from "../mod.ts";
 import {
   countEntities,
@@ -50,10 +50,12 @@ const WIDE_QUERY_ITERATION_BUDGET_BYTES_PER_ITER = 260;
 const CHANGED_ITERATION_BUDGET_BYTES_PER_ITER = 360;
 const SYSTEM_UPDATE_BUDGET_BYTES_PER_ITER = 220;
 const FRAME_BUDGET_BYTES_PER_ITER = 2_700;
-const WORLD_CONSTRUCTOR_BUDGET_BYTES_PER_ITER = 10_500;
+const WORLD_CONSTRUCTOR_BUDGET_BYTES_PER_ITER = 12_000;
 const PROJECTILE_SPAWN_DESPAWN_BUDGET_BYTES_PER_ITER = 3_200;
 const GET_ENTITY_DATA_BUDGET_BYTES_PER_ITER = 80;
 const DATA_COMPONENT_TRANSITION_BUDGET_BYTES_PER_ITER = 60;
+const BATCH_COMPONENT_TRANSITION_BUDGET_BYTES_PER_ITER = 1_700;
+const REFRESH_BUDGET_BYTES_PER_ITER = 800;
 const QUERY_TRANSITION_TRACKING_BUDGET_BYTES_PER_ITER = 1_800;
 const WIDE_ARCHETYPE_TRANSITION_BUDGET_BYTES_PER_ITER = 1_100;
 const checkMode = Deno.args.includes("--check");
@@ -61,7 +63,7 @@ const checkMode = Deno.args.includes("--check");
 const gc = (globalThis as { gc?: GcFn }).gc;
 
 if (typeof gc !== "function") {
-  throw new Error("Run with: deno run --v8-flags=--expose-gc bench/gc_allocations.ts");
+  throw new Error("Run with: deno run --v8-flags=--expose-gc bench/gc-allocations.bench.ts");
 }
 
 const forceGc: GcFn = gc;
@@ -227,18 +229,24 @@ function budgeted(name: string, iterations: number, fn: () => void): Scenario {
 const mixed = await populateMixedWorld(MEDIUM_CAPACITY);
 const movement = await populateMovementWorld(MEDIUM_CAPACITY);
 const lifecycle = await populateSparseLifecycleWorld(MEDIUM_CAPACITY);
+const batchTagTransitions = await populateSparseLifecycleWorld(SMALL_CAPACITY);
+const batchDataTransitions = await populateSparseLifecycleWorld(SMALL_CAPACITY);
 const transitionTracking = await populateSparseLifecycleWorld(SMALL_CAPACITY);
 const wide = await populateWideWorld(SMALL_CAPACITY);
 const movementQuery = createMovementQuery(mixed.components);
 const renderableQuery = createRenderableQuery(mixed.components);
 const movementFrameQuery = createMovementQuery(movement.components);
 const renderableFrameQuery = createRenderableQuery(movement.components);
+const batchTagPositionQuery = new Query({ all: [batchTagTransitions.components.position] });
+const batchDataPositionQuery = new Query({ all: [batchDataTransitions.components.position] });
 const transitionTrackingQuery = createMovementQuery(transitionTracking.components);
 const wideQuery = createWideQuery(wide.components);
 mixed.world.entities.query(movementQuery);
 mixed.world.entities.query(renderableQuery);
 movement.world.entities.query(movementFrameQuery);
 movement.world.entities.query(renderableFrameQuery);
+batchTagTransitions.world.entities.query(batchTagPositionQuery);
+batchDataTransitions.world.entities.query(batchDataPositionQuery);
 transitionTracking.world.entities.query(transitionTrackingQuery);
 wide.world.entities.query(wideQuery);
 
@@ -253,6 +261,7 @@ const mutationEntity = mixed.entities[128]!;
 const transitionEntity = mustCreateEntity(lifecycle.world);
 const enteredExitedEntity = mustCreateEntity(transitionTracking.world);
 const wideTransitionEntity = mustCreateEntity(wide.world);
+const batchData = { x: 1, y: -1 };
 lifecycle.world.components.addToEntity(lifecycle.components.position, transitionEntity, { x: 0, y: 0 });
 lifecycle.world.refresh();
 transitionTracking.world.components.addToEntity(transitionTracking.components.position, enteredExitedEntity, {
@@ -372,6 +381,23 @@ const scenarios: Scenario[] = [
     },
   },
   {
+    name: "querySnapshot allocating convenience helper",
+    iterations: 10_000,
+    fn: () => {
+      objectSink = mixed.world.entities.querySnapshot(movementQuery);
+    },
+  },
+  {
+    name: "snapshot helpers allocating convenience baseline",
+    iterations: 5_000,
+    fn: () => {
+      objectSink = mixed.world.entities.getActiveSnapshot();
+      objectSink = mixed.world.components.getOwnersSnapshot(mixed.components.position);
+      objectSink = mixed.world.components.getChangedSnapshot(mixed.components.position);
+      objectSink = mixed.world.entities.toArray(mixed.world.entities.queryList(movementQuery));
+    },
+  },
+  {
     name: "component changed iterator",
     iterations: 100_000,
     maxSteadyStateBeforeGcBytesPerIter: CHANGED_ITERATION_BUDGET_BYTES_PER_ITER,
@@ -394,6 +420,38 @@ const scenarios: Scenario[] = [
     fn: () => {
       lifecycle.world.components.addToEntity(lifecycle.components.velocity, transitionEntity, { x: 1, y: -1 });
       lifecycle.world.components.removeFromEntity(lifecycle.components.velocity, transitionEntity);
+    },
+  },
+  {
+    name: "batch add/remove tag component across queryList",
+    iterations: 10_000,
+    maxSteadyStateBeforeGcBytesPerIter: BATCH_COMPONENT_TRANSITION_BUDGET_BYTES_PER_ITER,
+    fn: () => {
+      const positioned = batchTagTransitions.world.entities.queryList(batchTagPositionQuery);
+      batchTagTransitions.world.components.addToEntities(batchTagTransitions.components.renderable, positioned);
+      const positionedAfterAdd = batchTagTransitions.world.entities.queryList(batchTagPositionQuery);
+      batchTagTransitions.world.components.removeFromEntities(
+        batchTagTransitions.components.renderable,
+        positionedAfterAdd,
+      );
+    },
+  },
+  {
+    name: "batch add/remove data component across queryList",
+    iterations: 10_000,
+    maxSteadyStateBeforeGcBytesPerIter: BATCH_COMPONENT_TRANSITION_BUDGET_BYTES_PER_ITER,
+    fn: () => {
+      const positioned = batchDataTransitions.world.entities.queryList(batchDataPositionQuery);
+      batchDataTransitions.world.components.addToEntities(
+        batchDataTransitions.components.acceleration,
+        positioned,
+        batchData,
+      );
+      const positionedAfterAdd = batchDataTransitions.world.entities.queryList(batchDataPositionQuery);
+      batchDataTransitions.world.components.removeFromEntities(
+        batchDataTransitions.components.acceleration,
+        positionedAfterAdd,
+      );
     },
   },
   {
@@ -435,6 +493,14 @@ const scenarios: Scenario[] = [
     maxSteadyStateBeforeGcBytesPerIter: SYSTEM_UPDATE_BUDGET_BYTES_PER_ITER,
     fn: () => {
       movement.movement(1 / 60);
+    },
+  },
+  {
+    name: "world refresh standalone with cached queries",
+    iterations: 25_000,
+    maxSteadyStateBeforeGcBytesPerIter: REFRESH_BUDGET_BYTES_PER_ITER,
+    fn: () => {
+      movement.world.refresh();
     },
   },
   {

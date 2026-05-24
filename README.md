@@ -61,10 +61,10 @@ Because Miski is designed to be used inside your own projects, we let you config
 * Define components, systems and queries once, reuse them across multiple worlds
 * `AND`,`OR`,`NOT` operators in Queries
 * Dense zero-allocation `queryList` API for index-based hot loops
-* Batch component add/remove APIs for query-wide transitions
+* Atomic batch component add/remove APIs for query-wide transitions
+* Opt-in snapshot helpers for tools, tests, and non-frame-critical code
 * `world.archetypes.queryEntered` & `world.archetypes.queryExited` methods
 * Use `world.components.getChanged(...)` to get entities whose properties were changed via a component proxy
-* No 3rd-party dependencies
 * MIT license
 
 ## Performance Snapshot
@@ -167,7 +167,9 @@ Benchmarks are manual and are not part of PR CI:
 
 ```bash
 deno task bench
+deno task bench:memory
 deno task bench:gc
+deno task bench:all
 ```
 
 ## Quick Start API Reference
@@ -287,8 +289,9 @@ const removed = world.components.removeFromEntities(renderableComponent, entitie
 
 The return value is the number of entities whose ownership changed.
 
-Removal is idempotent for active entities that do not own the component. Batch removal is fail-fast and non-atomic:
-inactive entities throw when encountered, while active non-owners are skipped.
+Batch add/remove preflights the full dense list before mutating anything. Inactive entities, duplicate entity IDs, and
+capacity failures throw before ownership, component data, archetypes, changed state, or query caches are changed.
+Removal remains idempotent for active entities that do not own the component.
 
 #### Test for Component presence
 
@@ -426,7 +429,28 @@ for (let i = 0; i < result.count; i++) {
 
 `queryList` returns a borrowed, pooled view, not a stable snapshot. The result is valid only until the next
 world mutation, query invalidation, or `world.refresh()`. Read `indices` only for entries `0 <= i < count`;
-callers that need stable entity IDs must explicitly copy the valid prefix in user code.
+callers that need stable entity IDs must explicitly opt into allocation:
+
+```typescript
+const snapshot = world.entities.querySnapshot(positionQuery);
+const copied = world.entities.toArray(world.entities.queryList(positionQuery));
+```
+
+Other borrowed hot-path iterators follow the same rule:
+
+```typescript
+const active = world.entities.getActive();
+const owners = world.components.getOwners(positionComponent);
+const changed = world.components.getChanged(positionComponent);
+```
+
+Stable convenience snapshots are available for setup code, tools, debugging, and tests:
+
+```typescript
+const activeSnapshot = world.entities.getActiveSnapshot();
+const ownerSnapshot = world.components.getOwnersSnapshot(positionComponent);
+const changedSnapshot = world.components.getChangedSnapshot(positionComponent);
+```
 
 We can also access entities which have entered or exited the query since the last `world.refresh()`:
 
@@ -522,10 +546,25 @@ Contributions are welcome and encouraged. The aim of the project is performance 
 The benchmark suite covers the gameplay paths ECS users usually care about: world setup, spawn/despawn lifecycle,
 multi-component destroy cleanup, archetype transitions, component storage access, owner and changed iteration, cached
 and invalidated queries, entered/exited query tracking, 64-component worlds, plain TypeScript data-layout baselines,
-system updates, and whole-frame loops. Run throughput benchmarks with:
+system updates, and whole-frame loops. It also has dedicated internal manager/cache throughput coverage plus retained
+memory and GC allocation budget checks. Run public and internal throughput benchmarks with:
 
 ```bash
 deno task bench
+```
+
+Run individual throughput suites with:
+
+```bash
+deno task bench:user
+deno task bench:internal
+```
+
+Retained memory usage is measured separately because it uses V8's exposed GC hook to stabilize heap and ArrayBuffer
+measurements:
+
+```bash
+deno task bench:memory
 ```
 
 GC allocation pressure is measured separately because it requires V8's exposed GC hook and budget checks:
@@ -535,7 +574,7 @@ deno task bench:gc
 ```
 
 Please run `deno task ci` before opening a PR. For performance-sensitive changes, also run `deno task bench` and
-`deno task bench:gc`.
+`deno task bench:all`.
 
 ## Feature Requests
 

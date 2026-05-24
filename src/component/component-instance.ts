@@ -47,6 +47,7 @@ export class ComponentInstance<T extends SchemaOrNull> {
     return this.type.name;
   }
 
+  /** Runtime string tag used by `Object.prototype.toString`. */
   get [Symbol.toStringTag](): string {
     return "ComponentInstance";
   }

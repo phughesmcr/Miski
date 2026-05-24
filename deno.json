@@ -3,21 +3,20 @@
   "version": "0.1.0",
   "license": "MIT",
   "exports": "./mod.ts",
+  "lock": true,
   "bench": {
-    "include": ["bench/**/*.bench.ts"]
+    "include": ["bench/miski.bench.ts", "bench/internal.bench.ts"]
   },
   "compilerOptions": {
-    "erasableSyntaxOnly": true,
     "allowUnreachableCode": false,
     "allowUnusedLabels": false,
+    "erasableSyntaxOnly": true,
     "lib": ["esnext"],
     "module": "esnext",
     "noErrorTruncation": true,
     "noFallthroughCasesInSwitch": true,
-    "noImplicitAny": true,
     "noImplicitOverride": true,
     "noImplicitReturns": true,
-    "noImplicitThis": true,
     "noPropertyAccessFromIndexSignature": true,
     "noUncheckedIndexedAccess": true,
     "noUnusedLocals": true,
@@ -26,26 +25,53 @@
     "verbatimModuleSyntax": true
   },
   "fmt": {
-    "newLineKind": "lf",
+    "bracePosition": "sameLine",
     "indentWidth": 2,
     "lineWidth": 120,
+    "newLineKind": "lf",
+    "nextControlFlowPosition": "sameLine",
+    "operatorPosition": "sameLine",
+    "proseWrap": "always",
+    "quoteProps": "consistent",
     "semiColons": true,
     "singleQuote": false,
-    "proseWrap": "always",
+    "trailingCommas": "onlyMultiLine",
+    "useBraces": "whenNotSingleLine",
     "useTabs": false,
-    "exclude": ["*/.*", "**/*.md", "LICENSE"]
+    "exclude": ["*.md", "**/*.md", "LICENSE"]
   },
   "imports": {
     "@/": "./src/",
-    "@phughesmcr/bitpool": "jsr:@phughesmcr/bitpool@^0.8.0",
-    "@phughesmcr/booleanarray": "jsr:@phughesmcr/booleanarray@^0.12.0",
-    "@phughesmcr/partitionedbuffer": "jsr:@phughesmcr/partitionedbuffer@^0.4.0"
+    "@phughesmcr/bitpool": "jsr:@phughesmcr/bitpool@^0.9.1",
+    "@phughesmcr/booleanarray": "jsr:@phughesmcr/booleanarray@^0.13.0",
+    "@phughesmcr/partitionedbuffer": "jsr:@phughesmcr/partitionedbuffer@^0.4.1"
   },
   "lint": {
     "exclude": ["bench/**/*.ts", "example/**/*.ts", "test/**/*.ts"],
     "rules": {
-      "include": ["use-isnan"],
-      "tags": ["recommended", "jsr"]
+      "tags": [
+        "recommended",
+        "jsr"
+      ],
+      "include": [
+        "camelcase",
+        "default-param-last",
+        "explicit-function-return-type",
+        "explicit-module-boundary-types",
+        "no-await-in-loop",
+        "no-await-in-sync-fn",
+        "no-console",
+        "no-const-assign",
+        "no-eval",
+        "no-non-null-asserted-optional-chain",
+        "no-sync-fn-in-async-fn",
+        "no-throw-literal",
+        "no-top-level-await",
+        "no-undef",
+        "no-useless-rename",
+        "prefer-ascii",
+        "single-var-declarator"
+      ]
     }
   },
   "publish": {
@@ -55,6 +81,15 @@
       "LICENSE",
       "mod.ts",
       "src/**/*.ts"
+    ],
+    "exclude": [
+      "example/**",
+      "bench/**",
+      "test/**",
+      ".github/**",
+      ".vscode/**",
+      ".cursor/**",
+      ".claude/**"
     ]
   },
   "tasks": {
@@ -71,12 +106,28 @@
       "command": "deno run -Ar --unstable example/cli.example.ts"
     },
     "bench": {
-      "description": "Run the ECS throughput benchmark suite",
+      "description": "Run public and internal ECS throughput benchmark suites",
       "command": "deno bench"
+    },
+    "bench:user": {
+      "description": "Run consumer-facing ECS gameplay throughput benchmarks",
+      "command": "deno bench bench/miski.bench.ts"
+    },
+    "bench:internal": {
+      "description": "Run internal manager/cache throughput benchmarks",
+      "command": "deno bench bench/internal.bench.ts"
+    },
+    "bench:memory": {
+      "description": "Measure retained heap and ArrayBuffer memory budgets",
+      "command": "deno run --v8-flags=--expose-gc bench/memory.bench.ts --check"
     },
     "bench:gc": {
       "description": "Measure GC allocation pressure and enforce zero-allocation budgets",
-      "command": "deno run --v8-flags=--expose-gc bench/gc_allocations.ts --check"
+      "command": "deno run --v8-flags=--expose-gc bench/gc-allocations.bench.ts --check"
+    },
+    "bench:all": {
+      "description": "Run throughput, memory, and GC allocation benchmark checks",
+      "command": "deno task bench && deno task bench:memory && deno task bench:gc"
     },
     "prep": {
       "description": "Format, lint, and check the codebase",
@@ -100,7 +151,7 @@
     },
     "ci": {
       "description": "Run formatting, linting, type-checking, tests, and publish validation",
-      "command": "deno task fmt:check && deno lint && deno task check && deno task test && deno task publish:dry-run"
+      "command": "CI=1 deno task fmt:check && deno lint && deno task check && deno task test && deno doc --lint mod.ts && deno task publish:dry-run"
     }
   },
   "test": {

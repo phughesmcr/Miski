@@ -7,6 +7,10 @@
 
 /** The base error class for all Miski errors */
 export class MiskiError extends Error {
+  /**
+   * Create a Miski error.
+   * @param message - Optional human-readable error message.
+   */
   constructor(message?: string) {
     super(message);
     this.name = "MiskiError";
@@ -38,14 +42,14 @@ export const SpecError: typeof MiskiError = createErrorClass("SpecError", "Spec 
 /** An error thrown when an entity is not found */
 export const EntityNotFoundError: typeof MiskiError = createErrorClass("EntityNotFoundError", "Entity not found");
 
+/** An error thrown when a name is already registered */
+export const AlreadyRegisteredError: typeof MiskiError = createErrorClass(
+  "AlreadyRegisteredError",
+  "Already registered",
+);
+
 /** An error thrown when the world is in an invalid state */
 export const WorldStateError: typeof MiskiError = createErrorClass("WorldStateError", "World is in an invalid state");
-
-/** An error thrown when a component is not found */
-export const ComponentNotFoundError: typeof MiskiError = createErrorClass(
-  "ComponentNotFoundError",
-  "Component not found",
-);
 
 /** An error thrown when an entity does not own the requested component */
 export const ComponentOwnershipError: typeof MiskiError = createErrorClass(

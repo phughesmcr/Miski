@@ -7,7 +7,6 @@
 
 import { BooleanArray } from "@phughesmcr/booleanarray";
 
-import { ID_KEY } from "@/constants.ts";
 import { NotRegisteredError } from "@/errors.ts";
 import type { DynamicComponentInstance, Entity, QueryInstance } from "@/types.ts";
 import { Archetype } from "./archetype.ts";
@@ -37,9 +36,6 @@ export class ArchetypeManager {
 
   /** Reusable query list for refresh passes */
   #queryScratch: QueryInstance[];
-
-  /** Reusable bitfield for full component-list archetype updates. */
-  #updateBitfield: BooleanArray;
 
   /**
    * Move an entity to a
@@ -81,9 +77,9 @@ export class ArchetypeManager {
     let archetype = this.registry.get(archetypeId);
 
     if (!archetype) {
-      const components = add
-        ? this.#componentsWithAdded(from.components, instance)
-        : this.#componentsWithRemoved(from.components, instance);
+      const components = add ?
+        this.#componentsWithAdded(from.components, instance) :
+        this.#componentsWithRemoved(from.components, instance);
       archetype = new Archetype(this.entityArchetypes.length, components, bitfield);
       this.registry.set(archetypeId, archetype);
     }
@@ -150,7 +146,6 @@ export class ArchetypeManager {
     this.#componentCache = {};
     this.#queryMembershipDirty = true;
     this.#queryScratch = [];
-    this.#updateBitfield = new BooleanArray(componentCount);
 
     // Create root archetype with properly sized bitfield for components
     const rootBitfield = new BooleanArray(componentCount);
@@ -290,9 +285,6 @@ export class ArchetypeManager {
    * @returns this
    */
   refresh(queries: MapIterator<QueryInstance>, retainTransitions: boolean = false): this {
-    // Clear existing query archetype mappings
-    this.queryArchetypes.clear();
-
     // Convert queries iterator to a reusable array to avoid exhausting it.
     const queryArray = this.#queryScratch;
     queryArray.length = 0;
@@ -302,7 +294,13 @@ export class ArchetypeManager {
 
     // Initialize query archetype sets
     for (const query of queryArray) {
-      this.queryArchetypes.set(query, new Set());
+      let archetypeSet = this.queryArchetypes.get(query);
+      if (!archetypeSet) {
+        archetypeSet = new Set();
+        this.queryArchetypes.set(query, archetypeSet);
+      } else {
+        archetypeSet.clear();
+      }
       query.archetypes.clear(); // Clear the QueryInstance's archetypes set
       query.isDirty = false;
     }
@@ -382,46 +380,5 @@ export class ArchetypeManager {
     archetype.addEntity(entity);
     this.#queryMembershipDirty = true;
     return archetype;
-  }
-
-  /**
-   * Stringify the ArchetypeManager
-   * @returns The JSON string
-   */
-  stringify(): string {
-    return JSON.stringify({
-      registry: [...this.registry.values()].map((archetype) => archetype.stringify()),
-      entityArchetypes: this.entityArchetypes,
-      queryArchetypes: [...this.queryArchetypes.entries()].map(([query, archetypes]) => {
-        return [query.id, [...archetypes].map((archetype) => archetype.id)];
-      }),
-    });
-  }
-
-  /**
-   * @internal
-   * Update the Archetype associated with an Entity based on its components
-   * @param entity The Entity
-   * @param components The ComponentInstances
-   * @returns The Archetype associated with the Entity
-   */
-  update(entity: Entity, components: DynamicComponentInstance[]): Archetype {
-    const oldArchetype = this.entityArchetypes[entity];
-
-    // Reset and update bitfield
-    this.#updateBitfield.clear();
-    this.#updateBitfield.setFromObjects(ID_KEY, components, true);
-
-    // Get or create archetype for these components
-    const archetypeId = this.#updateBitfield.buffer.toString();
-    if (oldArchetype?.id === archetypeId) return oldArchetype;
-
-    let archetype = this.registry.get(archetypeId);
-    if (!archetype) {
-      archetype = new Archetype(this.#capacity, components, this.#updateBitfield.clone());
-      this.registry.set(archetypeId, archetype);
-    }
-
-    return this.#moveEntity(entity, archetype);
   }
 }

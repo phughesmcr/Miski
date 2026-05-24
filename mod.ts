@@ -173,6 +173,7 @@
 
 export { Component, isValidComponentSpec } from "@/component/component.ts";
 export {
+  AlreadyRegisteredError,
   ComponentDataError,
   ComponentOwnershipError,
   EntityNotFoundError,
@@ -188,21 +189,38 @@ export { World } from "@/world/world.ts";
 export { isValidWorldSpec } from "@/world/utils.ts";
 export { isValidName } from "@/utils.ts";
 export type { ComponentInstance } from "@/component/component-instance.ts";
+export type { StorageProxy } from "@/component/storage-proxy.ts";
 export type {
+  BorrowedEntityIndices,
+  BorrowedEntityIterator,
+  BorrowedEntityList,
   ComponentInstances,
   ComponentMap,
   ComponentRecord,
   ComponentSchemaOf,
   ComponentSpec,
+  DynamicComponent,
+  DynamicComponentInstance,
   Entity,
+  ParametersExceptFirstTwo,
+  Partition,
+  PartitionStorage,
   QueryEntityList,
   QuerySpec,
   Schema,
   SchemaOrNull,
+  StorageProxyWithProperties,
   SystemCallback,
+  SystemFunction,
   SystemInstance,
+  SystemRecord,
   SystemSpec,
   TypedSystemCallback,
   TypedSystemSpec,
+  WorldArchetypeAPI,
+  WorldComponentAPI,
+  WorldEntityAPI,
+  WorldSpec,
   WorldState,
+  WorldSystemAPI,
 } from "@/types.ts";

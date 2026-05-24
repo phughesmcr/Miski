@@ -104,9 +104,9 @@ export class Archetype {
   ) {
     this.#entityCapacity = capacity;
     bitfield = bitfield ??
-      (components.length > 0
-        ? BooleanArray.fromObjects(components.length, ID_KEY, components)
-        : new BooleanArray(capacity));
+      (components.length > 0 ?
+        BooleanArray.fromObjects(components.length, ID_KEY, components) :
+        new BooleanArray(capacity));
     this.bitfield = bitfield;
     this.id = bitfield.buffer.toString();
     this.components = components;
@@ -194,32 +194,6 @@ export class Archetype {
    */
   getEntities(): IterableIterator<Entity> {
     return activeListIterator(this.#entityList, this.#entityActive, this.#entityListCount);
-  }
-
-  /**
-   * Add this archetype's entities to a result bitfield, optionally skipping entities already seen.
-   * @param out - The destination bitfield to update
-   * @param visited - Optional bitfield used to deduplicate entities across archetypes
-   * @returns The destination bitfield
-   */
-  writeEntitiesInto(out: BooleanArray, visited?: BooleanArray): BooleanArray {
-    if (visited) {
-      for (let i = 0; i < this.#entityListCount; i++) {
-        const entity = this.#entityList[i]!;
-        if (this.#entityActive[entity] !== 1) continue;
-        if (visited.get(entity)) continue;
-        out.set(entity, true);
-        visited.set(entity, true);
-      }
-      return out;
-    }
-
-    for (let i = 0; i < this.#entityListCount; i++) {
-      const entity = this.#entityList[i]!;
-      if (this.#entityActive[entity] !== 1) continue;
-      out.set(entity, true);
-    }
-    return out;
   }
 
   /**
@@ -330,19 +304,5 @@ export class Archetype {
     }
     this.#populationCount--;
     return this;
-  }
-
-  /**
-   * Serialize the Archetype to a string
-   * @returns The serialized Archetype
-   */
-  stringify(): string {
-    return JSON.stringify(
-      {
-        id: this.id,
-        components: this.components.map((instance) => instance.id),
-        entities: [...this.getEntities()],
-      },
-    );
   }
 }

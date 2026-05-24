@@ -318,9 +318,9 @@ const gatherEntityPositions = (query: Query, includeEntity = false): Vec2Data[] 
 
   for (const entity of world.entities.query(query)) {
     posInstance.proxy.entity = entity;
-    const pos = includeEntity
-      ? { entity, x: posInstance.proxy.x, y: posInstance.proxy.y }
-      : { x: posInstance.proxy.x, y: posInstance.proxy.y };
+    const pos = includeEntity ?
+      { entity, x: posInstance.proxy.x, y: posInstance.proxy.y } :
+      { x: posInstance.proxy.x, y: posInstance.proxy.y };
     positions.push(pos);
   }
 
@@ -620,11 +620,11 @@ const renderPredatorSystem = new System({
       energyProxy.entity = entity;
 
       const energyPercent = (energyProxy.value / PREDATOR_MAX_ENERGY) * 100;
-      const char = energyPercent < 30
-        ? PREDATOR_CHAR_LOW
-        : energyPercent > 80
-        ? PREDATOR_CHAR_HIGH
-        : PREDATOR_CHAR_NORMAL;
+      const char = energyPercent < 30 ?
+        PREDATOR_CHAR_LOW :
+        energyPercent > 80 ?
+        PREDATOR_CHAR_HIGH :
+        PREDATOR_CHAR_NORMAL;
 
       placeOnGrid(
         interpolatePosition(prevPos.x, pos.x, alpha),

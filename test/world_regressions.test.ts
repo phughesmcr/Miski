@@ -14,6 +14,7 @@ import { EntityManager } from "../src/entity/entity-manager.ts";
 import type { QueryEntityList } from "../mod.ts";
 
 type Vec2 = { x: Float32ArrayConstructor; y: Float32ArrayConstructor };
+type MixedWidth = { flag: number; value: number };
 
 function assert(condition: boolean, message: string): asserts condition {
   if (!condition) {
@@ -110,6 +111,22 @@ Deno.test("component maxEntities slots can be reused after removal", async () =>
 
   assertEquals(world.components.getEntityData(position, second), { x: 3, y: 4 }, "Expected sparse slot reuse");
   assertEquals(ids(world.components.getOwners(position)), [second], "Expected only the second entity to own position");
+});
+
+Deno.test("world storage accounts for aligned mixed-width component schemas", async () => {
+  const mixed = new Component<MixedWidth>({
+    name: "mixed",
+    schema: { flag: Uint8Array, value: Float64Array },
+  });
+  const world = new World({ capacity: 9, components: [mixed] });
+  await world.init();
+
+  const entity = world.entities.create();
+  assert(entity !== undefined, "Expected entity to be created");
+
+  world.components.addToEntity(mixed, entity, { flag: 1, value: 2 });
+
+  assertEquals(world.components.getEntityData(mixed, entity), { flag: 1, value: 2 }, "Expected mixed-width data");
 });
 
 Deno.test("query entered and exited entities remain visible until explicit refresh", async () => {
@@ -272,6 +289,29 @@ Deno.test("component transitions update cached query results immediately", async
   assertEquals(ids(world.entities.query(moving)), [], "Expected remove transition to update cached query");
 });
 
+Deno.test("component query cache access does not freshen stale entity query results", async () => {
+  const position = new Component<Vec2>({ name: "position", schema: { x: Float32Array, y: Float32Array } });
+  const velocity = new Component<Vec2>({ name: "velocity", schema: { x: Float32Array, y: Float32Array } });
+  const world = new World({ capacity: 8, components: [position, velocity] });
+  await world.init();
+
+  const entity = world.entities.create();
+  assert(entity !== undefined, "Expected entity to be created");
+  const moving = new Query({ all: [position, velocity] });
+
+  world.components.addToEntity(position, entity, { x: 1, y: 2 });
+  assertEquals(ids(world.entities.query(moving)), [], "Expected moving query to cache an empty result");
+
+  world.components.addToEntity(velocity, entity, { x: 3, y: 4 });
+  world.components.query(moving);
+
+  assertEquals(
+    ids(world.entities.query(moving)),
+    [entity],
+    "Expected component query cache access to leave entity cache invalidation intact",
+  );
+});
+
 Deno.test("setEntityData marks the component changed when storage is updated", async () => {
   const position = new Component<Vec2>({ name: "position", schema: { x: Float32Array, y: Float32Array } });
   const world = new World({ capacity: 8, components: [position] });
@@ -364,7 +404,7 @@ Deno.test("component removal rejects inactive entities and stays idempotent for 
   assert(world.components.entityHas(position, owner), "Expected batch removal to leave other ownership intact");
 });
 
-Deno.test("batch component removal rejects inactive entities when encountered", async () => {
+Deno.test("batch component removal rejects inactive entities without partial mutation", async () => {
   const position = new Component<Vec2>({ name: "position", schema: { x: Float32Array, y: Float32Array } });
   const world = new World({ capacity: 8, components: [position] });
   await world.init();
@@ -379,7 +419,55 @@ Deno.test("batch component removal rejects inactive entities when encountered", 
     EntityNotFoundError,
     "Entity 7 is not active",
   );
-  assert(!world.components.entityHas(position, first), "Expected fail-fast batch removal to be non-atomic");
+  assert(world.components.entityHas(position, first), "Expected failed batch removal to leave ownership intact");
+  assertEquals(
+    ids(world.entities.query(new Query({ all: [position] }))),
+    [first],
+    "Expected query state to stay intact",
+  );
+});
+
+Deno.test("batch component add capacity failures leave all state unchanged", async () => {
+  const player = new Component<null>({ name: "player", maxEntities: 1 });
+  const world = new World({ capacity: 8, components: [player] });
+  await world.init();
+
+  const first = world.entities.create();
+  const second = world.entities.create();
+  assert(first !== undefined && second !== undefined, "Expected entities to be created");
+
+  const list: QueryEntityList = { count: 2, indices: new Uint32Array([first, second]) };
+  assertThrows(
+    () => world.components.addToEntities(player, list),
+    RangeError,
+    'Component "player" can only be added to 1 entities',
+  );
+
+  assert(!world.components.entityHas(player, first), "Expected first entity to remain without player");
+  assert(!world.components.entityHas(player, second), "Expected second entity to remain without player");
+  assertEquals(ids(world.components.getOwners(player)), [], "Expected owners to remain unchanged");
+  assertEquals(ids(world.entities.query(new Query({ all: [player] }))), [], "Expected query state to remain unchanged");
+});
+
+Deno.test("batch component transitions reject duplicate entity targets before mutation", async () => {
+  const position = new Component<Vec2>({ name: "position", schema: { x: Float32Array, y: Float32Array } });
+  const velocity = new Component<Vec2>({ name: "velocity", schema: { x: Float32Array, y: Float32Array } });
+  const world = new World({ capacity: 8, components: [position, velocity] });
+  await world.init();
+
+  const entity = world.entities.create();
+  assert(entity !== undefined, "Expected entity to be created");
+  world.components.addToEntity(position, entity, { x: 1, y: 2 });
+
+  const duplicateList: QueryEntityList = { count: 2, indices: new Uint32Array([entity, entity]) };
+  assertThrows(
+    () => world.components.addToEntities(velocity, duplicateList, { x: 3, y: 4 }),
+    RangeError,
+    "Duplicate entity",
+  );
+
+  assert(!world.components.entityHas(velocity, entity), "Expected duplicate batch add to leave ownership unchanged");
+  assertEquals(ids(world.entities.query(new Query({ all: [position, velocity] }))), [], "Expected query state intact");
 });
 
 Deno.test("public component data APIs reject inactive, unregistered, tag, and non-owner access", async () => {
