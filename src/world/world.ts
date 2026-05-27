@@ -106,10 +106,10 @@ export class World {
     return {
       getEntityArchetype: (entity: Entity) => this.#archetypeManager.getEntityArchetype(entity)?.id,
       isEntityInRoot: (entity: Entity) => this.#archetypeManager.isEntityInRoot(entity),
-      queryComponents: (query: Query) => this.#queryArchetypeComponents(query),
-      queryEntities: (query: Query) => this.#queryArchetypeEntities(query),
-      queryEntered: (query: Query) => this.#queryEnteredEntities(query),
-      queryExited: (query: Query) => this.#queryExitedEntities(query),
+      queryComponents: () => this.#rejectLifecycleAPI(),
+      queryEntities: () => this.#rejectLifecycleAPI(),
+      queryEntered: () => this.#rejectLifecycleAPI(),
+      queryExited: () => this.#rejectLifecycleAPI(),
     };
   }
 
@@ -118,16 +118,8 @@ export class World {
     return {
       count: this.#componentManager.count,
       registry: this.#componentManager.registry,
-      addToEntity: <T extends SchemaOrNull>(
-        component: Component<T> | string,
-        entity: Entity,
-        data?: { [k in keyof T]: number } | undefined,
-      ) => this.#addComponentToEntity(component, entity, data),
-      addToEntities: <T extends SchemaOrNull>(
-        component: Component<T> | string,
-        entities: QueryEntityList,
-        data?: { [k in keyof T]: number } | undefined,
-      ) => this.#addComponentToEntities(component, entities, data),
+      addToEntity: () => this.#rejectLifecycleAPI(),
+      addToEntities: () => this.#rejectLifecycleAPI(),
       entityHas: <T extends SchemaOrNull>(component: Component<T> | string, entity: Entity) =>
         this.#componentManager.entityHas(component, entity),
       getChanged: <T extends SchemaOrNull>(component: Component<T> | string) =>
@@ -138,22 +130,17 @@ export class World {
         this.#getComponentEntityData(component, entity),
       getInstance: <T extends SchemaOrNull>(component: Component<T> | string) =>
         this.#componentManager.getInstance(component),
-      getInstances: (array: DynamicComponent[]) => this.#componentManager.getInstances(array),
+      getInstances: (array: DynamicComponent[] | Readonly<DynamicComponent[]>) =>
+        this.#componentManager.getInstances(array),
       getOwners: <T extends SchemaOrNull>(component: Component<T> | string) =>
         this.#componentManager.getOwners(component),
       getOwnersSnapshot: <T extends SchemaOrNull>(component: Component<T> | string) =>
         this.#snapshotIterator(this.#componentManager.getOwners(component)),
       isRegistered: (component: DynamicComponent | string) => this.#componentManager.isRegistered(component),
-      query: (query: Query) => this.#queryManager.components(query),
-      removeFromEntity: <T extends SchemaOrNull>(component: string | Component<T>, entity: Entity) =>
-        this.#removeComponentFromEntity(component, entity),
-      removeFromEntities: <T extends SchemaOrNull>(component: Component<T> | string, entities: QueryEntityList) =>
-        this.#removeComponentFromEntities(component, entities),
-      setEntityData: <T extends SchemaOrNull>(
-        component: Component<T> | string,
-        entity: Entity,
-        value: Record<keyof T, number>,
-      ) => this.#setComponentEntityData(component, entity, value),
+      query: () => this.#rejectLifecycleAPI(),
+      removeFromEntity: () => this.#rejectLifecycleAPI(),
+      removeFromEntities: () => this.#rejectLifecycleAPI(),
+      setEntityData: () => this.#rejectLifecycleAPI(),
     };
   }
 
@@ -161,8 +148,8 @@ export class World {
   #constructEntityAPI(): WorldEntityAPI {
     return {
       capacity: this.#entityManager.capacity,
-      create: () => this.#entityManager.create(),
-      destroy: (entity: Entity) => this.#destroyEntity(entity),
+      create: () => this.#rejectLifecycleAPI(),
+      destroy: () => this.#rejectLifecycleAPI(),
       getActive: (startEntity?: Entity, endEntity?: Entity) => this.#entityManager.getActive(startEntity, endEntity),
       getActiveSnapshot: (startEntity?: Entity, endEntity?: Entity) =>
         this.#snapshotIterator(this.#entityManager.getActive(startEntity, endEntity)) ?? [],
@@ -170,9 +157,9 @@ export class World {
       getAvailableCount: () => this.#entityManager.getAvailableCount(),
       isActive: (entity: Entity) => this.#entityManager.isActive(entity),
       isEntity: (entity: Entity) => this.#entityManager.isEntity(entity),
-      query: (query: Query) => this.#queryManager.entities(query),
-      queryList: (query: Query) => this.#queryManager.entityList(query),
-      querySnapshot: (query: Query) => this.#copyEntityList(this.#queryManager.entityList(query)),
+      query: function* (): IterableIterator<Entity> {},
+      queryList: () => this.#rejectLifecycleAPI(),
+      querySnapshot: () => this.#rejectLifecycleAPI(),
       toArray: (list: QueryEntityList) => this.#copyEntityList(list),
     };
   }
@@ -191,101 +178,91 @@ export class World {
     };
   }
 
-  /** Throw the current lifecycle state's public API error. */
-  #throwUnavailable(): never {
+  /** Throw the lifecycle error appropriate for the current World state. */
+  #rejectLifecycleAPI(): never {
+    if (this.#state === "uninitialized") {
+      throw new WorldStateError("World has not been initialized");
+    }
     assertWorldState("initialized", this.#state);
     throw new WorldStateError("World is unavailable");
   }
 
-  /** Install facades for APIs that require an initialized World. */
-  #installUninitializedAPIs(): void {
-    const unavailable = () => {
-      throw new WorldStateError("World has not been initialized");
-    };
+  /** Bind lifecycle-sensitive public API methods for the current World state. */
+  #applyLifecycleAPIs(state: WorldState): void {
+    if (state === "initialized") {
+      this.archetypes.queryComponents = (query: Query) => this.#queryArchetypeComponents(query);
+      this.archetypes.queryEntities = (query: Query) => this.#queryArchetypeEntities(query);
+      this.archetypes.queryEntered = (query: Query) => this.#queryArchetypeEntered(query);
+      this.archetypes.queryExited = (query: Query) => this.#queryArchetypeExited(query);
 
-    this.archetypes.queryComponents = unavailable;
-    this.archetypes.queryEntities = unavailable;
-    this.archetypes.queryEntered = unavailable;
-    this.archetypes.queryExited = unavailable;
+      this.components.addToEntity = <T extends SchemaOrNull>(
+        component: Component<T> | string,
+        entity: Entity,
+        data?: { [k in keyof T]: number } | undefined,
+      ) => this.#addComponentToEntity(component, entity, data);
+      this.components.addToEntities = <T extends SchemaOrNull>(
+        component: Component<T> | string,
+        entities: QueryEntityList,
+        data?: { [k in keyof T]: number } | undefined,
+      ) => this.#addComponentToEntities(component, entities, data);
+      this.components.query = (query: Query) => this.#queryManager.components(query);
+      this.components.removeFromEntity = <T extends SchemaOrNull>(component: string | Component<T>, entity: Entity) =>
+        this.#removeComponentFromEntity(component, entity);
+      this.components.removeFromEntities = <T extends SchemaOrNull>(
+        component: Component<T> | string,
+        entities: QueryEntityList,
+      ) => this.#removeComponentFromEntities(component, entities);
+      this.components.setEntityData = <T extends SchemaOrNull>(
+        component: Component<T> | string,
+        entity: Entity,
+        value: Record<keyof T, number>,
+      ) => this.#setComponentEntityData(component, entity, value);
 
-    this.components.addToEntity = unavailable;
-    this.components.addToEntities = unavailable;
-    this.components.query = unavailable;
-    this.components.removeFromEntity = unavailable;
-    this.components.removeFromEntities = unavailable;
-    this.components.setEntityData = unavailable;
+      this.entities.create = () => this.#entityManager.create();
+      this.entities.destroy = (entity: Entity) => this.#destroyEntity(entity);
+      this.entities.query = (query: Query) => this.#queryManager.entities(query);
+      this.entities.queryList = (query: Query) => this.#queryManager.entityList(query);
+      this.entities.querySnapshot = (query: Query) => this.#copyEntityList(this.#queryManager.entityList(query));
 
-    this.entities.create = unavailable;
-    this.entities.destroy = unavailable;
-    this.entities.query = unavailable;
-    this.entities.queryList = unavailable;
-    this.entities.querySnapshot = unavailable;
+      this.systems.create = (system) => this.#systemManager.create(system);
+      this.systems.destroy = (system) => this.#systemManager.destroy(system);
+      return;
+    }
+
+    const reject = () => this.#rejectLifecycleAPI();
+    const rejectEntities = (): IterableIterator<Entity> => reject();
+    this.archetypes.queryComponents = reject;
+    this.archetypes.queryEntities = rejectEntities;
+    this.archetypes.queryEntered = rejectEntities;
+    this.archetypes.queryExited = rejectEntities;
+
+    this.components.addToEntity = reject;
+    this.components.addToEntities = reject;
+    this.components.query = reject;
+    this.components.removeFromEntity = reject;
+    this.components.removeFromEntities = reject;
+    this.components.setEntityData = reject;
+
+    this.entities.create = reject;
+    this.entities.destroy = reject;
+    this.entities.query = rejectEntities;
+    this.entities.queryList = reject;
+    this.entities.querySnapshot = reject;
+
+    if (state === "uninitialized") {
+      this.systems.create = (system) => this.#systemManager.create(system);
+      this.systems.destroy = (system) => this.#systemManager.destroy(system);
+      return;
+    }
+
+    this.systems.create = reject;
+    this.systems.destroy = reject;
   }
 
-  /** Install initialized fast-path facades with no lifecycle branch in public hot methods. */
-  #installInitializedAPIs(): void {
-    this.archetypes.queryComponents = (query: Query) => this.#queryArchetypeComponents(query);
-    this.archetypes.queryEntities = (query: Query) => this.#queryArchetypeEntities(query);
-    this.archetypes.queryEntered = (query: Query) => this.#queryEnteredEntities(query);
-    this.archetypes.queryExited = (query: Query) => this.#queryExitedEntities(query);
-
-    this.components.addToEntity = <T extends SchemaOrNull>(
-      component: Component<T> | string,
-      entity: Entity,
-      data?: { [k in keyof T]: number } | undefined,
-    ) => this.#addComponentToEntity(component, entity, data);
-    this.components.addToEntities = <T extends SchemaOrNull>(
-      component: Component<T> | string,
-      entities: QueryEntityList,
-      data?: { [k in keyof T]: number } | undefined,
-    ) => this.#addComponentToEntities(component, entities, data);
-    this.components.query = (query: Query) => this.#queryManager.components(query);
-    this.components.removeFromEntity = <T extends SchemaOrNull>(component: string | Component<T>, entity: Entity) =>
-      this.#removeComponentFromEntity(component, entity);
-    this.components.removeFromEntities = <T extends SchemaOrNull>(
-      component: Component<T> | string,
-      entities: QueryEntityList,
-    ) => this.#removeComponentFromEntities(component, entities);
-    this.components.setEntityData = <T extends SchemaOrNull>(
-      component: Component<T> | string,
-      entity: Entity,
-      value: Record<keyof T, number>,
-    ) => this.#setComponentEntityData(component, entity, value);
-
-    this.entities.create = () => this.#entityManager.create();
-    this.entities.destroy = (entity: Entity) => this.#destroyEntity(entity);
-    this.entities.query = (query: Query) => this.#queryManager.entities(query);
-    this.entities.queryList = (query: Query) => this.#queryManager.entityList(query);
-    this.entities.querySnapshot = (query: Query) => this.#copyEntityList(this.#queryManager.entityList(query));
-
-    this.systems.create = (system) => this.#systemManager.create(system);
-    this.systems.destroy = (system) => this.#systemManager.destroy(system);
-  }
-
-  /** Install facades for APIs that are unavailable after destroy or error. */
-  #installUnavailableAPIs(): void {
-    const unavailable = () => this.#throwUnavailable();
-
-    this.archetypes.queryComponents = unavailable;
-    this.archetypes.queryEntities = unavailable;
-    this.archetypes.queryEntered = unavailable;
-    this.archetypes.queryExited = unavailable;
-
-    this.components.addToEntity = unavailable;
-    this.components.addToEntities = unavailable;
-    this.components.query = unavailable;
-    this.components.removeFromEntity = unavailable;
-    this.components.removeFromEntities = unavailable;
-    this.components.setEntityData = unavailable;
-
-    this.entities.create = unavailable;
-    this.entities.destroy = unavailable;
-    this.entities.query = unavailable;
-    this.entities.queryList = unavailable;
-    this.entities.querySnapshot = unavailable;
-
-    this.systems.create = unavailable;
-    this.systems.destroy = unavailable;
+  /** Move the World into an error state and block lifecycle-sensitive APIs. */
+  #enterErrorState(): void {
+    this.#state = "error";
+    this.#applyLifecycleAPIs("error");
   }
 
   /** Copy an allocating stable array from a borrowed entity list. */
@@ -314,42 +291,28 @@ export class World {
 
   /** Get the entities for a query */
   *#queryArchetypeEntities(query: Query): IterableIterator<Entity> {
-    this.#visitedArchetypeEntities.clear();
-    const queryInstance = this.#queryManager.instanceWithMembership(query);
-    const archetypes = this.#archetypeManager.query(queryInstance);
-    if (archetypes === undefined) {
-      return;
-    }
-    for (const archetype of archetypes) {
-      for (const entity of archetype.getEntities()) {
-        if (this.#visitedArchetypeEntities.get(entity)) continue;
-        this.#visitedArchetypeEntities.set(entity, true);
-        yield entity;
-      }
-    }
-    this.#visitedArchetypeEntities.clear();
+    yield* this.#queryArchetypeMembership(query, "entities");
   }
 
   /** Get entities that entered a query since last refresh */
-  *#queryEnteredEntities(query: Query): IterableIterator<Entity> {
-    this.#visitedArchetypeEntities.clear();
-    const queryInstance = this.#queryManager.instanceWithMembership(query);
-    const archetypes = this.#archetypeManager.query(queryInstance);
-    if (archetypes === undefined) {
-      return;
-    }
-    for (const archetype of archetypes) {
-      for (const entity of archetype.getEntered()) {
-        if (this.#visitedArchetypeEntities.get(entity)) continue;
-        this.#visitedArchetypeEntities.set(entity, true);
-        yield entity;
-      }
-    }
-    this.#visitedArchetypeEntities.clear();
+  *#queryArchetypeEntered(query: Query): IterableIterator<Entity> {
+    yield* this.#queryArchetypeMembership(query, "entered");
   }
 
   /** Get entities that exited a query since last refresh */
-  *#queryExitedEntities(query: Query): IterableIterator<Entity> {
+  *#queryArchetypeExited(query: Query): IterableIterator<Entity> {
+    yield* this.#queryArchetypeMembership(query, "exited");
+  }
+
+  /**
+   * Iterate query membership with cross-archetype deduplication.
+   * @param query - The query to resolve
+   * @param mode - Which archetype entity stream to walk
+   */
+  *#queryArchetypeMembership(
+    query: Query,
+    mode: "entities" | "entered" | "exited",
+  ): IterableIterator<Entity> {
     this.#visitedArchetypeEntities.clear();
     const queryInstance = this.#queryManager.instanceWithMembership(query);
     const archetypes = this.#archetypeManager.query(queryInstance);
@@ -357,10 +320,18 @@ export class World {
       return;
     }
     for (const archetype of archetypes) {
-      for (const entity of archetype.getExited()) {
+      const entities = mode === "entities" ?
+        archetype.getEntities() :
+        mode === "entered" ?
+        archetype.getEntered() :
+        archetype.getExited();
+      for (const entity of entities) {
         if (this.#visitedArchetypeEntities.get(entity)) continue;
-        const currentArchetype = this.#archetypeManager.getEntityArchetype(entity);
-        if (currentArchetype?.isCandidate(queryInstance)) continue;
+        if (
+          mode === "exited" && this.#archetypeManager.getEntityArchetype(entity)?.isCandidate(queryInstance)
+        ) {
+          continue;
+        }
         this.#visitedArchetypeEntities.set(entity, true);
         yield entity;
       }
@@ -616,7 +587,12 @@ export class World {
     this.#batchSeen = new Uint8Array(capacity);
 
     this.#queryManager = new QueryManager(
-      this,
+      {
+        getInstances: (array: DynamicComponent[] | Readonly<DynamicComponent[]>) =>
+          this.#componentManager.getInstances(array),
+        componentCount: this.#componentManager.count,
+        isInitialized: () => this.#state === "initialized",
+      },
       capacity,
       (queries) => {
         this.#archetypeManager.ensureQueryMembership(queries, true);
@@ -633,7 +609,7 @@ export class World {
     this.components = APIs.components;
     this.entities = APIs.entities;
     this.systems = APIs.systems;
-    this.#installUninitializedAPIs();
+    this.#applyLifecycleAPIs("uninitialized");
   }
 
   /** The World's current state */
@@ -651,14 +627,13 @@ export class World {
     try {
       this.#archetypeManager.init();
       this.#state = "initialized";
-      this.#installInitializedAPIs();
+      this.#applyLifecycleAPIs("initialized");
       await this.#systemManager.init();
       this.#initResolver?.("initialized");
       this.refresh();
       assertWorldState("initialized", this.#state);
     } catch (error) {
-      this.#state = "error";
-      this.#installUnavailableAPIs();
+      this.#enterErrorState();
       this.#initResolver?.("error");
       throw error;
     }
@@ -673,10 +648,9 @@ export class World {
     try {
       await this.#systemManager.destroyAll();
       this.#state = "destroyed";
-      this.#installUnavailableAPIs();
+      this.#applyLifecycleAPIs("destroyed");
     } catch (error) {
-      this.#state = "error";
-      this.#installUnavailableAPIs();
+      this.#enterErrorState();
       throw error;
     }
   }
@@ -707,7 +681,7 @@ export class World {
       this.#archetypeManager.refresh(this.#queryManager.instancesByID.values(), retainTransitions);
       if (!retainChanged) this.#componentManager.refresh();
     } catch (error) {
-      this.#state = "error";
+      this.#enterErrorState();
       throw error;
     }
   }

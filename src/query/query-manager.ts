@@ -9,8 +9,13 @@ import { ID_KEY } from "@/constants.ts";
 import { BooleanArray } from "@phughesmcr/booleanarray";
 import { NotRegisteredError } from "@/errors.ts";
 import type { Archetype } from "@/archetype/archetype.ts";
-import type { ComponentInstanceGetter, DynamicComponentInstance, Entity, QueryInstance } from "@/types.ts";
-import type { World } from "@/world/world.ts";
+import type {
+  ComponentInstanceGetter,
+  DynamicComponentInstance,
+  Entity,
+  QueryInstance,
+  QueryManagerDependencies,
+} from "@/types.ts";
 import { QueryCache } from "./query-cache.ts";
 import { type QueryEntityResult, QueryResultPool } from "./query-pool.ts";
 import type { Query } from "./query.ts";
@@ -81,8 +86,8 @@ function createQueryInstance(getInstances: ComponentInstanceGetter, size: number
 
 /** The QueryManager is responsible for creating, registering, and destroying queries. */
 export class QueryManager {
-  /** The World that owns this query manager. */
-  #world: World;
+  /** Component registry accessors supplied by the owning World. */
+  #dependencies: QueryManagerDependencies;
 
   /** Callback for refreshing query-to-archetype membership. */
   #ensureQueryMembership: (queries: MapIterator<QueryInstance>) => void;
@@ -107,15 +112,15 @@ export class QueryManager {
 
   /**
    * Create a new QueryManager
-   * @param world - The World instance containing the component registry
+   * @param dependencies - Component registry accessors and lifecycle hooks
    */
   constructor(
-    world: World,
+    dependencies: QueryManagerDependencies,
     capacity: number,
     ensureQueryMembership: (queries: MapIterator<QueryInstance>) => void,
     registerQueryMembership: (query: QueryInstance) => void,
   ) {
-    this.#world = world;
+    this.#dependencies = dependencies;
     this.#ensureQueryMembership = ensureQueryMembership;
     this.#registerQueryMembership = registerQueryMembership;
     this.pool = new QueryResultPool(capacity);
@@ -176,8 +181,8 @@ export class QueryManager {
 
     // Create new instance
     const instance: QueryInstance = createQueryInstance(
-      this.#world.components.getInstances,
-      this.#world.components.count,
+      this.#dependencies.getInstances,
+      this.#dependencies.componentCount,
       query,
     );
     queryId = instance.id;
@@ -187,7 +192,7 @@ export class QueryManager {
     this.instancesByID.set(queryId, instance);
 
     // Refresh archetypes after query registration to update mappings
-    if (this.#world.state === "initialized") {
+    if (this.#dependencies.isInitialized()) {
       this.#registerQueryMembership(instance);
     }
 

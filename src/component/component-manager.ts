@@ -180,6 +180,28 @@ export class ComponentManager {
     return owners;
   }
 
+  /** Append an entity to a component's dense owner list. */
+  #appendOwner(instanceId: number, entity: Entity): void {
+    const ownerCount = this.#ownerCountsById[instanceId] ?? 0;
+    const ownerList = this.#ownerListsById[instanceId]!;
+    const ownerPositions = this.#ownerPositionsById[instanceId]!;
+    ownerList[ownerCount] = entity;
+    ownerPositions[entity] = ownerCount;
+    this.#ownerCountsById[instanceId] = ownerCount + 1;
+  }
+
+  /**
+   * Claim ownership for an entity when it is not already owned.
+   * @returns `true` when ownership changed from unowned to owned
+   */
+  #acquireOwnership(instanceId: number, entity: Entity, owners: Uint8Array): boolean {
+    const alreadyOwned = owners[entity] === 1;
+    if (alreadyOwned) return false;
+    owners[entity] = 1;
+    this.#appendOwner(instanceId, entity);
+    return true;
+  }
+
   /** Allocate changed tracking for data components only when a write marks them changed. */
   #ensureChangedState(instanceId: number): BooleanArray | undefined {
     let changed = this.#changedById[instanceId];
@@ -280,32 +302,8 @@ export class ComponentManager {
     }
     const owners = this.#ensureOwnershipState(id);
 
-    if (this.#isUncappedTagById[id]) {
-      const alreadyOwned = owners[entity] === 1;
-      if (!alreadyOwned) {
-        const ownerCount = this.#ownerCountsById[id] ?? 0;
-        const ownerList = this.#ownerListsById[id]!;
-        const ownerPositions = this.#ownerPositionsById[id]!;
-        ownerList[ownerCount] = entity;
-        ownerPositions[entity] = ownerCount;
-        this.#ownerCountsById[id] = ownerCount + 1;
-        owners[entity] = 1;
-      }
-      return !alreadyOwned;
-    }
-
-    if (data === undefined && this.#isUncappedDataById[id]) {
-      const alreadyOwned = owners[entity] === 1;
-      if (!alreadyOwned) {
-        const ownerCount = this.#ownerCountsById[id] ?? 0;
-        const ownerList = this.#ownerListsById[id]!;
-        const ownerPositions = this.#ownerPositionsById[id]!;
-        ownerList[ownerCount] = entity;
-        ownerPositions[entity] = ownerCount;
-        this.#ownerCountsById[id] = ownerCount + 1;
-        owners[entity] = 1;
-      }
-      return !alreadyOwned;
+    if (this.#isUncappedTagById[id] || (data === undefined && this.#isUncappedDataById[id])) {
+      return this.#acquireOwnership(id, entity, owners);
     }
 
     const alreadyOwned = owners[entity] === 1;
@@ -319,16 +317,7 @@ export class ComponentManager {
       }
     }
 
-    // Set ownership
-    owners[entity] = 1;
-    if (!alreadyOwned) {
-      const ownerCount = this.#ownerCountsById[id] ?? 0;
-      const ownerList = this.#ownerListsById[id]!;
-      const ownerPositions = this.#ownerPositionsById[id]!;
-      ownerList[ownerCount] = entity;
-      ownerPositions[entity] = ownerCount;
-      this.#ownerCountsById[id] = ownerCount + 1;
-    }
+    const ownershipChanged = this.#acquireOwnership(id, entity, owners);
 
     const storage = instance.storage;
     const hasData = isObject(data);
@@ -346,7 +335,7 @@ export class ComponentManager {
       }
     }
 
-    return !alreadyOwned;
+    return ownershipChanged;
   }
 
   /**
@@ -356,13 +345,7 @@ export class ComponentManager {
    * @returns `true` if the entity has the component, `false` otherwise
    */
   entityHas<T extends SchemaOrNull>(component: Component<T> | string, entity: Entity): boolean {
-    let proto;
-    if (typeof component === "string") {
-      proto = this.getInstance(component)?.type;
-    } else {
-      proto = component;
-    }
-    const instance = proto ? this.#registryByComponentId[proto[$_COMPONENT_ID_KEY]] : undefined;
+    const instance = this.getInstance(component);
     return instance ? this.#ownersById[instance.id]?.[entity] === 1 : false;
   }
 
@@ -541,40 +524,22 @@ export class ComponentManager {
     const id = instance.id;
     const owners = this.#ownersById[id];
     const wasOwned = owners?.[entity] === 1;
-    if (this.#isUncappedTagById[id]) {
-      if (!wasOwned) return false;
-      const ownerList = this.#ownerListsById[id]!;
-      const ownerPositions = this.#ownerPositionsById[id]!;
-      const ownerCount = this.#ownerCountsById[id] ?? 1;
-      const removeIndex = ownerPositions[entity]!;
-      const lastIndex = ownerCount - 1;
-      const lastEntity = ownerList[lastIndex]!;
-      if (removeIndex !== lastIndex) {
-        ownerList[removeIndex] = lastEntity;
-        ownerPositions[lastEntity] = removeIndex;
-      }
-      ownerList[lastIndex] = 0;
-      ownerPositions[entity] = 0;
-      this.#ownerCountsById[id] = lastIndex;
-      owners![entity] = 0;
-      return true;
-    }
+    if (!wasOwned) return false;
 
-    if (wasOwned) {
-      const ownerCount = this.#ownerCountsById[id] ?? 1;
-      const ownerList = this.#ownerListsById[id]!;
-      const ownerPositions = this.#ownerPositionsById[id]!;
-      const removeIndex = ownerPositions[entity]!;
-      const lastIndex = ownerCount - 1;
-      const lastEntity = ownerList[lastIndex]!;
-      if (removeIndex !== lastIndex) {
-        ownerList[removeIndex] = lastEntity;
-        ownerPositions[lastEntity] = removeIndex;
-      }
-      ownerList[lastIndex] = 0;
-      ownerPositions[entity] = 0;
-      this.#ownerCountsById[id] = lastIndex;
+    const ownerList = this.#ownerListsById[id]!;
+    const ownerPositions = this.#ownerPositionsById[id]!;
+    const ownerCount = this.#ownerCountsById[id] ?? 1;
+    const removeIndex = ownerPositions[entity]!;
+    const lastIndex = ownerCount - 1;
+    const lastEntity = ownerList[lastIndex]!;
+    if (removeIndex !== lastIndex) {
+      ownerList[removeIndex] = lastEntity;
+      ownerPositions[lastEntity] = removeIndex;
     }
+    ownerList[lastIndex] = 0;
+    ownerPositions[entity] = 0;
+    this.#ownerCountsById[id] = lastIndex;
+
     if (owners !== undefined && entity < owners.length) {
       owners[entity] = 0;
     }

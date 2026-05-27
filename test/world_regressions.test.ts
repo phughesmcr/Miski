@@ -10,6 +10,7 @@ import {
   World,
   WorldStateError,
 } from "../mod.ts";
+import { ArchetypeManager } from "../src/archetype/archetype-manager.ts";
 import { EntityManager } from "../src/entity/entity-manager.ts";
 import type { QueryEntityList } from "../mod.ts";
 
@@ -152,6 +153,29 @@ Deno.test("query entered and exited entities remain visible until explicit refre
 
   world.refresh();
   assertEquals(ids(world.archetypes.queryExited(query)), [], "Expected exited query to clear after refresh");
+});
+
+Deno.test("failed refresh blocks lifecycle APIs like destroy errors", async () => {
+  const position = new Component<Vec2>({ name: "position", schema: { x: Float32Array, y: Float32Array } });
+  const world = new World({ capacity: 8, components: [position] });
+  const query = new Query({ all: [position] });
+  const originalRefresh = ArchetypeManager.prototype.refresh;
+
+  await world.init();
+
+  ArchetypeManager.prototype.refresh = function refresh(): ArchetypeManager {
+    throw new Error("refresh failed");
+  };
+
+  try {
+    assertThrows(() => world.refresh(), Error, "refresh failed");
+    assertEquals(world.state, "error", "Expected failed refresh to move world into error state");
+    assertThrows(() => world.entities.create(), WorldStateError, "World has encountered an error");
+    assertThrows(() => world.components.addToEntity(position, 0), WorldStateError, "World has encountered an error");
+    assertThrows(() => ids(world.entities.query(query)), WorldStateError, "World has encountered an error");
+  } finally {
+    ArchetypeManager.prototype.refresh = originalRefresh;
+  }
 });
 
 Deno.test("queries reject components that are not registered in the world", async () => {

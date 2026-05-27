@@ -62,18 +62,23 @@ type LifetimeStore = {
 
 type DemoMode = "orbit" | "storm" | "lattice";
 
-const CAPACITY = 6_000;
+const CAPACITY = 32_000;
 const DEFAULT_DRONES = 1_450;
 const MIN_DRONES = 128;
-const MAX_DRONES = 5_000;
+const MAX_DRONES = 32_000;
 const SNAPSHOT_FPS = 12;
 const SIMULATION_FPS = 60;
+const SIMULATION_STEP_SECONDS = 1 / SIMULATION_FPS;
+const SIMULATION_STEP_MS = 1_000 / SIMULATION_FPS;
+const MAX_ACCUMULATED_SIMULATION_MS = SIMULATION_STEP_MS * 5;
 const WORLD_WIDTH = 1_920;
 const WORLD_HEIGHT = 1_080;
-const DEFAULT_RENDERED_ENTITIES = 900;
-const MAX_RENDERED_ENTITIES = 2_400;
+const DEFAULT_RENDERED_ENTITIES = 4096;
+const MAX_RENDERED_ENTITIES = 32_000;
 const ENCODER = new TextEncoder();
 const GC_SAMPLE_INTERVAL = 120;
+const TEAM_COUNT = 4;
+const TEAM_HUES = [175, 17, 48, 96] as const;
 
 const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value));
 
@@ -89,11 +94,11 @@ let desiredDroneCount = Math.round(clamp(numericArg("--drones") ?? DEFAULT_DRONE
 let renderedEntityLimit = Math.round(
   clamp(numericArg("--rendered") ?? DEFAULT_RENDERED_ENTITIES, MIN_DRONES, MAX_RENDERED_ENTITIES),
 );
+const profileFrames = Math.max(0, Math.round(numericArg("--profile-frames") ?? 0));
 
 const schemaVec2: Schema<Vec2Schema> = { x: Float32Array, y: Float32Array };
 
 const position = new Component<Vec2Schema>({ name: "position", schema: schemaVec2 });
-const previousPosition = new Component<Vec2Schema>({ name: "previousPosition", schema: schemaVec2 });
 const velocity = new Component<Vec2Schema>({ name: "velocity", schema: schemaVec2 });
 const visual = new Component<VisualSchema>({
   name: "visual",
@@ -126,35 +131,36 @@ const spark = new Component<null>({ name: "spark" });
 
 const world = new World({
   capacity: CAPACITY,
-  components: [position, previousPosition, velocity, visual, brain, lifetime, drone, spark],
+  components: [position, velocity, visual, brain, lifetime, drone, spark],
 });
 
 await world.init();
 
 const positionInstance = world.components.getInstance(position) as ComponentInstance<Vec2Schema>;
-const previousInstance = world.components.getInstance(previousPosition) as ComponentInstance<Vec2Schema>;
 const velocityInstance = world.components.getInstance(velocity) as ComponentInstance<Vec2Schema>;
 const visualInstance = world.components.getInstance(visual) as ComponentInstance<VisualSchema>;
 const brainInstance = world.components.getInstance(brain) as ComponentInstance<BrainSchema>;
 const lifetimeInstance = world.components.getInstance(lifetime) as ComponentInstance<LifetimeSchema>;
 
 const positionStore = positionInstance.storage!.partitions as Vec2Store;
-const previousStore = previousInstance.storage!.partitions as Vec2Store;
 const velocityStore = velocityInstance.storage!.partitions as Vec2Store;
 const visualStore = visualInstance.storage!.partitions as VisualStore;
 const brainStore = brainInstance.storage!.partitions as BrainStore;
 const lifetimeStore = lifetimeInstance.storage!.partitions as LifetimeStore;
 
-const droneQuery = new Query({ all: [position, previousPosition, velocity, visual, brain, drone] });
-const sparkQuery = new Query({ all: [position, previousPosition, velocity, visual, lifetime, spark] });
-const renderQuery = new Query({ all: [position, previousPosition, visual] });
-const movementQuery = new Query({ all: [position, previousPosition, velocity, visual] });
+const droneQuery = new Query({ all: [position, velocity, visual, brain, drone] });
+const sparkQuery = new Query({ all: [position, velocity, visual, lifetime, spark] });
+const renderQuery = new Query({ all: [position, visual] });
+const movementQuery = new Query({ all: [position, velocity, visual] });
 
 let mode: DemoMode = "orbit";
 let running = true;
 let intensity = 1.0;
 let lastTickDuration = 0;
 let frame = 0;
+let simulationTime = 0;
+let accumulatedSimulationMs = 0;
+let previousSimulationFrameMs = performance.now();
 let entered = 0;
 let exited = 0;
 let spawned = 0;
@@ -163,8 +169,12 @@ let pulseX = WORLD_WIDTH * 0.5;
 let pulseY = WORLD_HEIGHT * 0.5;
 let pulseAge = 99;
 let heapUsedMb = 0;
+let retainedTransitionMetrics = false;
 
 const expiredScratch = new Uint32Array(CAPACITY);
+const targetXByTeam = new Float32Array(TEAM_COUNT);
+const targetYByTeam = new Float32Array(TEAM_COUNT);
+const clients = new Set<ReadableStreamDefaultController<Uint8Array>>();
 
 const random = (min: number, max: number): number => min + Math.random() * (max - min);
 const round = (value: number): number => Math.round(value * 10) / 10;
@@ -183,10 +193,9 @@ const spawnDrone = (x: number, y: number, team: number): boolean => {
 
   const speed = random(35, 130);
   const angle = random(0, Math.PI * 2);
-  const hue = [175, 17, 48, 96][team] ?? 175;
+  const hue = TEAM_HUES[team] ?? TEAM_HUES[0];
 
   world.components.addToEntity(position, entity, { x, y });
-  world.components.addToEntity(previousPosition, entity, { x, y });
   world.components.addToEntity(velocity, entity, {
     x: Math.cos(angle) * speed,
     y: Math.sin(angle) * speed,
@@ -216,7 +225,6 @@ const spawnSpark = (x: number, y: number, hue: number, strength = 1): boolean =>
   const angle = random(0, Math.PI * 2);
   const speed = random(115, 520) * strength;
   world.components.addToEntity(position, entity, { x, y });
-  world.components.addToEntity(previousPosition, entity, { x, y });
   world.components.addToEntity(velocity, entity, {
     x: Math.cos(angle) * speed,
     y: Math.sin(angle) * speed,
@@ -242,6 +250,9 @@ const seedWorld = (droneCount = desiredDroneCount): void => {
   desiredDroneCount = Math.round(clamp(droneCount, MIN_DRONES, MAX_DRONES));
   spawned = 0;
   destroyed = 0;
+  simulationTime = 0;
+  accumulatedSimulationMs = 0;
+  previousSimulationFrameMs = performance.now();
   const rings = 4;
   for (let i = 0; i < desiredDroneCount; i++) {
     const team = i % rings;
@@ -268,65 +279,105 @@ const steeringSystem = world.systems.create(
   new System({
     name: "steeringSystem",
     query: droneQuery,
-    callback: (_components, _entities, dt: number, time: number) => {
-      const drones = world.entities.queryList(droneQuery);
+    callback: (_components, drones, dt: number, time: number) => {
       const cx = WORLD_WIDTH * 0.5;
       const cy = WORLD_HEIGHT * 0.5;
+      const currentMode = mode;
+      const currentIntensity = intensity;
       const pulsePower = Math.max(0, 1 - pulseAge / 1.8);
+      const maxSpeed = currentMode === "storm" ? 520 : 360;
 
-      for (let i = 0; i < drones.count; i++) {
-        const entity = drones.indices[i]!;
-        const x = positionStore.x[entity]!;
-        const y = positionStore.y[entity]!;
-        const team = visualStore.team[entity]!;
-        const teamPhase = team * Math.PI * 0.5;
-        const orbit = brainStore.orbit[entity]!;
-        const bias = brainStore.bias[entity]!;
+      if (currentMode === "lattice") {
+        for (let team = 0; team < TEAM_COUNT; team++) {
+          const teamPhase = team * Math.PI * 0.5;
+          targetXByTeam[team] = Math.sin(time + teamPhase) * 32;
+          targetYByTeam[team] = Math.cos(time * 0.7 + teamPhase) * 26;
+        }
+      } else if (currentMode === "storm") {
+        for (let team = 0; team < TEAM_COUNT; team++) {
+          targetXByTeam[team] = time * (0.95 + team * 0.08);
+          targetYByTeam[team] = time * (0.82 + team * 0.11);
+        }
+      } else {
+        for (let team = 0; team < TEAM_COUNT; team++) {
+          const teamPhase = team * Math.PI * 0.5;
+          targetXByTeam[team] = cx + Math.cos(time * 0.22 + teamPhase) * (330 + team * 42);
+          targetYByTeam[team] = cy + Math.sin(time * 0.27 + teamPhase) * (185 + team * 28);
+        }
+      }
 
-        let targetX = cx + Math.cos(time * 0.22 + teamPhase) * (330 + team * 42);
-        let targetY = cy + Math.sin(time * 0.27 + teamPhase) * (185 + team * 28);
+      const indices = drones.indices;
+      const count = drones.count;
+      const positionX = positionStore.x;
+      const positionY = positionStore.y;
+      const velocityX = velocityStore.x;
+      const velocityY = velocityStore.y;
+      const visualAlpha = visualStore.alpha;
+      const visualEnergy = visualStore.energy;
+      const visualTeam = visualStore.team;
+      const brainOrbit = brainStore.orbit;
+      const brainBias = brainStore.bias;
+      const brainDrag = brainStore.drag;
 
-        if (mode === "storm") {
-          targetX = cx + Math.cos(time * (0.95 + team * 0.08) + orbit * 5) * (120 + team * 95);
-          targetY = cy + Math.sin(time * (0.82 + team * 0.11) - orbit * 4) * (90 + team * 80);
-        } else if (mode === "lattice") {
+      for (let i = 0; i < count; i++) {
+        const entity = indices[i]!;
+        const x = positionX[entity]!;
+        const y = positionY[entity]!;
+        const team = visualTeam[entity]! | 0;
+        const orbit = brainOrbit[entity]!;
+        const bias = brainBias[entity]!;
+
+        let targetX = targetXByTeam[team]!;
+        let targetY = targetYByTeam[team]!;
+
+        if (currentMode === "storm") {
+          targetX = cx + Math.cos(targetX + orbit * 5) * (120 + team * 95);
+          targetY = cy + Math.sin(targetY - orbit * 4) * (90 + team * 80);
+        } else if (currentMode === "lattice") {
           const column = ((entity * 37) % 14) - 6.5;
           const row = ((entity * 19) % 9) - 4;
-          targetX = cx + column * 118 + Math.sin(time + teamPhase) * 32;
-          targetY = cy + row * 94 + Math.cos(time * 0.7 + teamPhase) * 26;
+          targetX = cx + column * 118 + targetX;
+          targetY = cy + row * 94 + targetY;
         }
 
         const dx = targetX - x;
         const dy = targetY - y;
-        const distance = Math.hypot(dx, dy) || 1;
-        const tangentX = -dy / distance;
-        const tangentY = dx / distance;
-        const pull = clamp(distance / 620, 0.08, 1.55) * intensity;
+        const distanceSquared = dx * dx + dy * dy;
+        const distance = distanceSquared > 0 ? Math.sqrt(distanceSquared) : 1;
+        const inverseDistance = 1 / distance;
+        const tangentX = -dy * inverseDistance;
+        const tangentY = dx * inverseDistance;
+        const pull = Math.max(0.08, Math.min(1.55, distance / 620)) * currentIntensity;
         const pulseDx = x - pulseX;
         const pulseDy = y - pulseY;
-        const pulseDistance = Math.hypot(pulseDx, pulseDy) || 1;
+        const pulseDistanceSquared = pulseDx * pulseDx + pulseDy * pulseDy;
+        const pulseDistance = pulseDistanceSquared > 0 ? Math.sqrt(pulseDistanceSquared) : 1;
+        const inversePulseDistance = 1 / pulseDistance;
         const pulseRadius = 60 + pulseAge * 470;
         const pulseRing = Math.max(0, 1 - Math.abs(pulseDistance - pulseRadius) / 130) * pulsePower;
 
-        velocityStore.x[entity] = (velocityStore.x[entity]! * brainStore.drag[entity]!) +
-          (dx / distance) * pull * 22 +
+        let nextVelocityX = (velocityX[entity]! * brainDrag[entity]!) +
+          dx * inverseDistance * pull * 22 +
           tangentX * orbit * 34 * bias +
-          (pulseDx / pulseDistance) * pulseRing * 285;
-        velocityStore.y[entity] = (velocityStore.y[entity]! * brainStore.drag[entity]!) +
-          (dy / distance) * pull * 22 +
+          pulseDx * inversePulseDistance * pulseRing * 285;
+        let nextVelocityY = (velocityY[entity]! * brainDrag[entity]!) +
+          dy * inverseDistance * pull * 22 +
           tangentY * orbit * 34 * bias +
-          (pulseDy / pulseDistance) * pulseRing * 285;
+          pulseDy * inversePulseDistance * pulseRing * 285;
 
-        const speed = Math.hypot(velocityStore.x[entity]!, velocityStore.y[entity]!);
-        const maxSpeed = mode === "storm" ? 520 : 360;
+        let speed = Math.sqrt(nextVelocityX * nextVelocityX + nextVelocityY * nextVelocityY);
         if (speed > maxSpeed) {
           const scale = maxSpeed / speed;
-          velocityStore.x[entity] *= scale;
-          velocityStore.y[entity] *= scale;
+          nextVelocityX *= scale;
+          nextVelocityY *= scale;
+          speed = maxSpeed;
         }
+        velocityX[entity] = nextVelocityX;
+        velocityY[entity] = nextVelocityY;
 
-        visualStore.energy[entity] = clamp(speed / maxSpeed + pulseRing * 0.65, 0.12, 1.3);
-        visualStore.alpha[entity] = clamp(0.45 + visualStore.energy[entity]! * 0.42, 0.35, 1);
+        const energy = Math.max(0.12, Math.min(1.3, speed / maxSpeed + pulseRing * 0.65));
+        visualEnergy[entity] = energy;
+        visualAlpha[entity] = Math.max(0.35, Math.min(1, 0.45 + energy * 0.42));
       }
 
       pulseAge += dt;
@@ -338,23 +389,35 @@ const movementSystem = world.systems.create(
   new System({
     name: "movementSystem",
     query: movementQuery,
-    callback: (_components, _entities, dt: number) => {
-      const movers = world.entities.queryList(movementQuery);
-      for (let i = 0; i < movers.count; i++) {
-        const entity = movers.indices[i]!;
-        previousStore.x[entity] = positionStore.x[entity]!;
-        previousStore.y[entity] = positionStore.y[entity]!;
-        positionStore.x[entity] = positionStore.x[entity]! + velocityStore.x[entity]! * dt;
-        positionStore.y[entity] = positionStore.y[entity]! + velocityStore.y[entity]! * dt;
+    callback: (_components, movers, dt: number) => {
+      const indices = movers.indices;
+      const count = movers.count;
+      const positionX = positionStore.x;
+      const positionY = positionStore.y;
+      const velocityX = velocityStore.x;
+      const velocityY = velocityStore.y;
 
-        if (positionStore.x[entity]! < 0 || positionStore.x[entity]! > WORLD_WIDTH) {
-          velocityStore.x[entity] = velocityStore.x[entity]! * -0.84;
-          positionStore.x[entity] = clamp(positionStore.x[entity]!, 0, WORLD_WIDTH);
+      for (let i = 0; i < count; i++) {
+        const entity = indices[i]!;
+        let x = positionX[entity]! + velocityX[entity]! * dt;
+        let y = positionY[entity]! + velocityY[entity]! * dt;
+
+        if (x < 0) {
+          velocityX[entity] = velocityX[entity]! * -0.84;
+          x = 0;
+        } else if (x > WORLD_WIDTH) {
+          velocityX[entity] = velocityX[entity]! * -0.84;
+          x = WORLD_WIDTH;
         }
-        if (positionStore.y[entity]! < 0 || positionStore.y[entity]! > WORLD_HEIGHT) {
-          velocityStore.y[entity] = velocityStore.y[entity]! * -0.84;
-          positionStore.y[entity] = clamp(positionStore.y[entity]!, 0, WORLD_HEIGHT);
+        if (y < 0) {
+          velocityY[entity] = velocityY[entity]! * -0.84;
+          y = 0;
+        } else if (y > WORLD_HEIGHT) {
+          velocityY[entity] = velocityY[entity]! * -0.84;
+          y = WORLD_HEIGHT;
         }
+        positionX[entity] = x;
+        positionY[entity] = y;
       }
     },
   }),
@@ -364,18 +427,27 @@ const lifetimeSystem = world.systems.create(
   new System({
     name: "lifetimeSystem",
     query: sparkQuery,
-    callback: (_components, _entities, dt: number) => {
-      const sparks = world.entities.queryList(sparkQuery);
+    callback: (_components, sparks, dt: number) => {
+      const indices = sparks.indices;
+      const count = sparks.count;
+      const age = lifetimeStore.age;
+      const ttl = lifetimeStore.ttl;
+      const visualAlpha = visualStore.alpha;
+      const visualEnergy = visualStore.energy;
+      const visualRadius = visualStore.radius;
+      const velocityX = velocityStore.x;
+      const velocityY = velocityStore.y;
       let expiredCount = 0;
-      for (let i = 0; i < sparks.count; i++) {
-        const entity = sparks.indices[i]!;
-        lifetimeStore.age[entity] = lifetimeStore.age[entity]! + dt;
-        const progress = lifetimeStore.age[entity]! / lifetimeStore.ttl[entity]!;
-        visualStore.alpha[entity] = Math.max(0, 1 - progress);
-        visualStore.energy[entity] = Math.max(0, 1 - progress * 0.7);
-        visualStore.radius[entity] = visualStore.radius[entity]! * 0.993;
-        velocityStore.x[entity] = velocityStore.x[entity]! * 0.985;
-        velocityStore.y[entity] = velocityStore.y[entity]! * 0.985;
+      for (let i = 0; i < count; i++) {
+        const entity = indices[i]!;
+        const nextAge = age[entity]! + dt;
+        age[entity] = nextAge;
+        const progress = nextAge / ttl[entity]!;
+        visualAlpha[entity] = Math.max(0, 1 - progress);
+        visualEnergy[entity] = Math.max(0, 1 - progress * 0.7);
+        visualRadius[entity] = visualRadius[entity]! * 0.993;
+        velocityX[entity] = velocityX[entity]! * 0.985;
+        velocityY[entity] = velocityY[entity]! * 0.985;
         if (progress >= 1) {
           expiredScratch[expiredCount++] = entity;
         }
@@ -394,8 +466,9 @@ seedWorld();
 const step = (): void => {
   if (!running) return;
   const started = performance.now();
-  const dt = 1 / SIMULATION_FPS;
-  const time = performance.now() / 1_000;
+  const dt = SIMULATION_STEP_SECONDS;
+  simulationTime += dt;
+  const time = simulationTime;
 
   steeringSystem(dt, time);
   movementSystem(dt);
@@ -405,9 +478,15 @@ const step = (): void => {
     burst(random(260, WORLD_WIDTH - 260), random(190, WORLD_HEIGHT - 190), 55, random(10, 190));
   }
 
-  entered = countEntities(world.archetypes.queryEntered(renderQuery));
-  exited = countEntities(world.archetypes.queryExited(renderQuery));
-  world.refresh();
+  const retainTransitions = clients.size > 0;
+  world.refresh(false, retainTransitions);
+  if (retainTransitions) {
+    retainedTransitionMetrics = true;
+  } else {
+    entered = 0;
+    exited = 0;
+    retainedTransitionMetrics = false;
+  }
   frame++;
   if (frame % GC_SAMPLE_INTERVAL === 0) {
     heapUsedMb = Deno.memoryUsage().heapUsed / 1_048_576;
@@ -415,7 +494,48 @@ const step = (): void => {
   lastTickDuration = performance.now() - started;
 };
 
+const requestSimulationFrame = (callback: FrameRequestCallback): number => {
+  if (typeof requestAnimationFrame === "function") {
+    return requestAnimationFrame(callback);
+  }
+  return setTimeout(() => callback(performance.now()), SIMULATION_STEP_MS);
+};
+
+const runSimulationFrame = (time: number): void => {
+  const elapsedMs = Math.max(0, time - previousSimulationFrameMs);
+  previousSimulationFrameMs = time;
+
+  if (running) {
+    accumulatedSimulationMs = Math.min(
+      accumulatedSimulationMs + elapsedMs,
+      MAX_ACCUMULATED_SIMULATION_MS,
+    );
+    while (accumulatedSimulationMs >= SIMULATION_STEP_MS) {
+      step();
+      accumulatedSimulationMs -= SIMULATION_STEP_MS;
+    }
+  } else {
+    accumulatedSimulationMs = 0;
+  }
+
+  requestSimulationFrame(runSimulationFrame);
+};
+
+const refreshTransitionMetrics = (): void => {
+  if (!retainedTransitionMetrics) {
+    entered = 0;
+    exited = 0;
+    return;
+  }
+
+  entered = countEntities(world.archetypes.queryEntered(renderQuery));
+  exited = countEntities(world.archetypes.queryExited(renderQuery));
+  world.refresh();
+  retainedTransitionMetrics = false;
+};
+
 const snapshot = (): string => {
+  refreshTransitionMetrics();
   const entities = world.entities.queryList(renderQuery);
   const limit = Math.min(entities.count, renderedEntityLimit);
   let payload =
@@ -429,13 +549,12 @@ const snapshot = (): string => {
   payload += `,"entered":${entered},"exited":${exited},"spawned":${spawned},"destroyed":${destroyed}`;
   payload += `,"tickMs":${metric(lastTickDuration)},"heapMb":${metric(heapUsedMb)},"rendered":${limit}`;
   payload += `,"renderLimit":${renderedEntityLimit}`;
-  payload += `,"droneTarget":${desiredDroneCount},"capacity":${CAPACITY}},"stride":12,"entities":[`;
+  payload += `,"droneTarget":${desiredDroneCount},"capacity":${CAPACITY}},"stride":10,"entities":[`;
 
   for (let i = 0; i < limit; i++) {
     const entity = entities.indices[i]!;
     if (i > 0) payload += ",";
     payload += `${metric(positionStore.x[entity]!)},${metric(positionStore.y[entity]!)}`;
-    payload += `,${metric(previousStore.x[entity]!)},${metric(previousStore.y[entity]!)}`;
     payload += `,${metric(velocityStore.x[entity]!)},${metric(velocityStore.y[entity]!)}`;
     payload += `,${metric(visualStore.hue[entity]!)},${metric(visualStore.radius[entity]!)}`;
     payload += `,${metric(visualStore.alpha[entity]!)},${metric(visualStore.energy[entity]!)}`;
@@ -445,7 +564,34 @@ const snapshot = (): string => {
   return `${payload}]}`;
 };
 
-const clients = new Set<ReadableStreamDefaultController<Uint8Array>>();
+const runProfile = (frames: number): void => {
+  const started = performance.now();
+  for (let i = 0; i < frames; i++) {
+    step();
+  }
+  const elapsedMs = performance.now() - started;
+  const snapshotStarted = performance.now();
+  const snapshotBytes = ENCODER.encode(snapshot()).byteLength;
+  const snapshotMs = performance.now() - snapshotStarted;
+  console.log(
+    JSON.stringify({
+      drones: desiredDroneCount,
+      rendered: renderedEntityLimit,
+      frames,
+      totalMs: round(elapsedMs),
+      avgStepMs: round(elapsedMs / frames),
+      lastTickMs: round(lastTickDuration),
+      snapshotMs: round(snapshotMs),
+      snapshotBytes,
+      active: world.entities.getActiveCount(),
+    }),
+  );
+};
+
+if (profileFrames > 0) {
+  runProfile(profileFrames);
+  Deno.exit(0);
+}
 
 const encodeEvent = (event: string, data: string): Uint8Array => ENCODER.encode(`event: ${event}\ndata: ${data}\n\n`);
 
@@ -532,7 +678,7 @@ Deno.serve({ hostname: "127.0.0.1", port: PORT }, (request) => {
   return new Response("Not found", { status: 404 });
 });
 
-setInterval(step, 1_000 / SIMULATION_FPS);
+requestSimulationFrame(runSimulationFrame);
 setInterval(broadcastSnapshot, 1_000 / SNAPSHOT_FPS);
 
 console.log(`Miski visual demo running at http://127.0.0.1:${PORT}`);
@@ -544,7 +690,7 @@ const INDEX_HTML = String.raw`<!doctype html>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Miski ECS Visual Demo</title>
   <style>
-    @layer reset, base, layout, components;
+    @layer reset, base, layout, components, utilities;
 
     @layer reset {
       *,
@@ -560,7 +706,8 @@ const INDEX_HTML = String.raw`<!doctype html>
       }
 
       button,
-      input {
+      input,
+      output {
         font: inherit;
       }
     }
@@ -568,49 +715,30 @@ const INDEX_HTML = String.raw`<!doctype html>
     @layer base {
       :root {
         color-scheme: dark;
-        --ink: oklch(94% 0.02 95);
-        --muted: oklch(73% 0.03 105);
-        --dim: oklch(55% 0.04 105);
-        --panel: rgb(9 12 12 / 0.66);
-        --line: rgb(240 245 229 / 0.16);
+        --ink: oklch(96% 0.018 98);
+        --muted: oklch(75% 0.028 112);
+        --dim: oklch(58% 0.035 112);
+        --panel: rgb(8 10 9 / 0.72);
+        --panel-strong: rgb(14 17 15 / 0.84);
+        --line: rgb(240 246 224 / 0.16);
+        --line-strong: rgb(240 246 224 / 0.28);
         --cyan: oklch(83% 0.15 190);
-        --red: oklch(65% 0.2 24);
-        --green: oklch(76% 0.17 145);
-        --gold: oklch(82% 0.15 83);
-        --shadow: rgb(0 0 0 / 0.36);
+        --coral: oklch(67% 0.21 31);
+        --leaf: oklch(76% 0.17 145);
+        --gold: oklch(84% 0.15 84);
+        --shadow: rgb(0 0 0 / 0.42);
       }
 
       body {
         overflow: hidden;
-        background:
-          linear-gradient(135deg, rgb(6 9 9), rgb(14 16 13) 46%, rgb(2 5 6)),
-          rgb(6 8 8);
+        background: rgb(3 4 4);
         color: var(--ink);
-        font-family: "Avenir Next", "DIN Alternate", "Gill Sans", sans-serif;
+        font-family: "Iowan Old Style", "Avenir Next", "Gill Sans", sans-serif;
       }
 
-      body::before {
-        position: fixed;
-        inset: 0;
-        z-index: 1;
-        pointer-events: none;
-        content: "";
-        background-image:
-          linear-gradient(rgb(255 255 255 / 0.035) 1px, transparent 1px),
-          linear-gradient(90deg, rgb(255 255 255 / 0.025) 1px, transparent 1px);
-        background-size: 48px 48px;
-        mask-image: linear-gradient(to bottom, transparent, black 14%, black 78%, transparent);
-      }
-
-      body::after {
-        position: fixed;
-        inset: 0;
-        z-index: 4;
-        pointer-events: none;
-        content: "";
-        opacity: 0.22;
-        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 220 220' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.82' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='220' height='220' filter='url(%23n)' opacity='.38'/%3E%3C/svg%3E");
-        mix-blend-mode: overlay;
+      ::selection {
+        background: color-mix(in oklch, var(--gold), transparent 48%);
+        color: var(--ink);
       }
     }
 
@@ -635,70 +763,93 @@ const INDEX_HTML = String.raw`<!doctype html>
         z-index: 3;
         display: grid;
         grid-template-rows: auto 1fr auto;
+        gap: 16px;
         min-height: 100dvh;
         padding: 22px;
         pointer-events: none;
       }
 
-      .topline,
+      .hud,
+      .inspector,
       .controlbar {
         pointer-events: auto;
       }
 
-      .topline {
+      .hud {
         display: grid;
-        grid-template-columns: minmax(220px, 0.8fr) minmax(300px, 1.4fr) auto;
+        grid-template-columns: minmax(260px, 0.9fr) minmax(360px, 1.3fr);
         gap: 16px;
         align-items: start;
       }
 
-      .brand {
-        display: grid;
+      .titlebar {
+        display: flex;
+        flex-wrap: wrap;
         gap: 8px;
+        align-items: center;
       }
 
-      .brand h1 {
+      .brand {
+        display: inline-grid;
+        grid-template-columns: 42px auto;
+        gap: 10px;
+        align-items: center;
+        min-height: 42px;
+        border: 1px solid var(--line);
+        padding: 6px 12px 6px 6px;
+        background: var(--panel);
+        box-shadow: 0 18px 48px var(--shadow);
+        backdrop-filter: blur(22px);
+      }
+
+      .mark {
+        display: grid;
+        place-items: center;
+        width: 30px;
+        aspect-ratio: 1;
+        background: linear-gradient(135deg, var(--gold), var(--cyan));
+        color: rgb(3 5 5);
+        font-family: "DIN Condensed", "Avenir Next Condensed", sans-serif;
+        font-size: 1.2rem;
+        font-weight: 800;
+        line-height: 1;
+      }
+
+      .brand h1,
+      .mode-pill {
         margin: 0;
-        max-width: 9ch;
-        font-family: "Copperplate", "Avenir Next Condensed", fantasy;
-        font-size: clamp(3.1rem, 7.5vw, 8.8rem);
+        font-family: "DIN Condensed", "Avenir Next Condensed", sans-serif;
+        font-size: 1.08rem;
         font-weight: 700;
-        line-height: 0.78;
+        line-height: 1;
         letter-spacing: 0;
         text-transform: uppercase;
-        text-shadow: 0 22px 45px var(--shadow);
-      }
-
-      .brand p {
-        margin: 0;
-        max-width: 34rem;
-        color: var(--muted);
-        font-size: 0.92rem;
-        line-height: 1.5;
       }
 
       .metrics {
         display: grid;
         grid-template-columns: repeat(4, minmax(92px, 1fr));
         gap: 1px;
+        justify-self: end;
+        width: min(100%, 690px);
         overflow: clip;
         border: 1px solid var(--line);
         background: var(--line);
         box-shadow: 0 18px 50px var(--shadow);
+        backdrop-filter: blur(20px);
       }
 
       .metric {
         min-width: 0;
-        padding: 14px 15px;
+        padding: 12px 14px;
         background: var(--panel);
-        backdrop-filter: blur(18px);
       }
 
       .metric span {
         display: block;
         color: var(--dim);
         font-size: 0.68rem;
-        letter-spacing: 0.13em;
+        letter-spacing: 0;
         text-transform: uppercase;
       }
 
@@ -706,64 +857,94 @@ const INDEX_HTML = String.raw`<!doctype html>
         display: block;
         margin-top: 7px;
         font-family: "DIN Condensed", "Avenir Next Condensed", sans-serif;
-        font-size: clamp(1.35rem, 2vw, 2.3rem);
+        font-size: 1.8rem;
         font-weight: 700;
         line-height: 0.9;
       }
 
-      .stack {
+      .chips {
         display: flex;
         flex-wrap: wrap;
-        justify-content: end;
         gap: 8px;
-        max-width: 26rem;
       }
 
       .chip {
         border: 1px solid var(--line);
-        padding: 9px 11px;
-        background: rgb(8 11 11 / 0.58);
+        padding: 8px 10px;
+        background: var(--panel);
         color: var(--muted);
         font-size: 0.72rem;
-        letter-spacing: 0.08em;
+        letter-spacing: 0;
         text-transform: uppercase;
         backdrop-filter: blur(18px);
       }
 
       .middle {
         display: grid;
-        place-items: end start;
-        padding-block: 4dvh;
+        grid-template-columns: minmax(188px, 248px) 1fr minmax(188px, 248px);
+        gap: 16px;
+        align-items: end;
+        min-height: 0;
       }
 
-      .readout {
+      .inspector {
         display: grid;
-        gap: 12px;
-        max-width: 28rem;
-        padding-inline-start: 5px;
+        gap: 1px;
+        overflow: clip;
+        align-self: end;
+        border: 1px solid var(--line);
+        background: var(--line);
+        box-shadow: 0 18px 54px var(--shadow);
+        backdrop-filter: blur(22px);
       }
 
-      .readout b {
+      .inspector--right {
+        justify-self: end;
+      }
+
+      .panel-label,
+      .kv {
+        background: var(--panel);
+      }
+
+      .panel-label {
+        padding: 10px 12px;
         color: var(--gold);
+        font-size: 0.72rem;
         font-weight: 700;
+        letter-spacing: 0;
+        text-transform: uppercase;
       }
 
-      .readout p {
-        margin: 0;
+      .kv {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 12px;
+        align-items: baseline;
+        padding: 10px 12px;
         color: var(--muted);
-        font-size: clamp(0.9rem, 1.5vw, 1.12rem);
-        line-height: 1.45;
+        font-size: 0.76rem;
+        line-height: 1.1;
+      }
+
+      .kv b {
+        color: var(--ink);
+        font-family: "DIN Condensed", "Avenir Next Condensed", sans-serif;
+        font-size: 1.15rem;
+        font-weight: 700;
+        line-height: 0.95;
       }
 
       .controlbar {
         display: grid;
-        grid-template-columns: auto minmax(170px, 1fr) minmax(190px, 1fr) auto;
-        gap: 14px;
+        grid-template-columns: auto minmax(150px, 1fr) minmax(150px, 1fr) minmax(150px, 1fr) auto;
+        gap: 12px;
         align-items: center;
-        width: min(100%, 1150px);
+        justify-self: center;
+        width: min(100%, 1280px);
         border: 1px solid var(--line);
         padding: 10px;
-        background: rgb(7 10 10 / 0.72);
+        background: var(--panel-strong);
         box-shadow: 0 22px 60px var(--shadow);
         backdrop-filter: blur(24px);
       }
@@ -777,32 +958,48 @@ const INDEX_HTML = String.raw`<!doctype html>
 
       .slider {
         display: grid;
-        grid-template-columns: auto 1fr;
-        gap: 12px;
+        grid-template-columns: 1fr;
+        gap: 7px;
         align-items: center;
-        min-width: min(28vw, 340px);
         padding-inline: 6px;
         color: var(--muted);
         font-size: 0.72rem;
-        letter-spacing: 0.12em;
+        letter-spacing: 0;
         text-transform: uppercase;
+      }
+
+      .slider span {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+      }
+
+      output {
+        color: var(--gold);
+        font-family: "DIN Condensed", "Avenir Next Condensed", sans-serif;
+        font-size: 1rem;
+        line-height: 1;
       }
 
       input[type="range"] {
         width: 100%;
         accent-color: var(--gold);
+        cursor: pointer;
       }
     }
 
     @layer components {
       button {
+        display: inline-grid;
+        place-items: center;
         min-height: 42px;
+        min-width: 76px;
         border: 1px solid rgb(255 255 255 / 0.15);
         padding: 0 15px;
         background: rgb(255 255 255 / 0.045);
         color: var(--ink);
         text-transform: uppercase;
-        letter-spacing: 0.1em;
+        letter-spacing: 0;
         font-size: 0.72rem;
         cursor: pointer;
         transition:
@@ -821,11 +1018,12 @@ const INDEX_HTML = String.raw`<!doctype html>
 
       button[aria-pressed="true"] {
         border-color: color-mix(in oklch, var(--cyan), white 16%);
-        background: color-mix(in oklch, var(--cyan), transparent 78%);
+        background: color-mix(in oklch, var(--cyan), transparent 80%);
+        box-shadow: inset 0 -2px 0 var(--cyan);
       }
 
       .danger {
-        border-color: color-mix(in oklch, var(--red), transparent 48%);
+        border-color: color-mix(in oklch, var(--coral), transparent 48%);
       }
 
       .accent {
@@ -843,29 +1041,68 @@ const INDEX_HTML = String.raw`<!doctype html>
         width: 9px;
         height: 9px;
         content: "";
-        background: var(--green);
-        box-shadow: 0 0 20px var(--green);
+        background: var(--leaf);
+        box-shadow: 0 0 20px var(--leaf);
       }
     }
 
-    @media (width < 840px) {
-      .chrome {
-        padding: 14px;
+    @layer utilities {
+      .hide-small {
+        display: inline;
+      }
+    }
+
+    @media (width < 1050px) {
+      .hud {
+        grid-template-columns: 1fr;
       }
 
-      .topline {
-        grid-template-columns: 1fr;
+      .metrics {
+        justify-self: stretch;
+        width: 100%;
+      }
+
+      .middle {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .inspector--right {
+        justify-self: stretch;
+      }
+
+      .controlbar {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .actions {
+        justify-content: end;
+      }
+    }
+
+    @media (width < 720px) {
+      .chrome {
+        gap: 10px;
+        padding: 12px;
+      }
+
+      .titlebar {
+        align-items: stretch;
       }
 
       .metrics {
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
 
-      .stack {
-        justify-content: start;
+      .metric {
+        padding: 10px;
       }
 
-      .readout {
+      .metric strong {
+        font-size: 1.45rem;
+      }
+
+      .chips,
+      .inspector {
         display: none;
       }
 
@@ -876,6 +1113,15 @@ const INDEX_HTML = String.raw`<!doctype html>
       .slider {
         grid-template-columns: 1fr;
         min-width: 100%;
+      }
+
+      .segmented button,
+      .actions button {
+        flex: 1 1 78px;
+      }
+
+      .hide-small {
+        display: none;
       }
     }
 
@@ -894,10 +1140,19 @@ const INDEX_HTML = String.raw`<!doctype html>
   <main class="app">
     <canvas id="stage" aria-label="Live Miski ECS particle simulation"></canvas>
     <section class="chrome" aria-label="Miski ECS demo controls">
-      <div class="topline">
-        <div class="brand">
-          <h1>Miski</h1>
-          <p>Data-oriented TypeScript ECS running a live world of dense queries, typed-array component stores, and zero-drama hot loops.</p>
+      <header class="hud">
+        <div class="titlebar">
+          <div class="brand">
+            <span class="mark" aria-hidden="true">M</span>
+            <h1>Miski ECS</h1>
+          </div>
+          <span class="chip status" id="status">streaming</span>
+          <span class="chip mode-pill" id="modeLabel">orbit</span>
+          <div class="chips">
+            <span class="chip">queryList</span>
+            <span class="chip">ArrayBuffer stores</span>
+            <span class="chip hide-small">archetype enter/exit</span>
+          </div>
         </div>
         <div class="metrics" aria-live="polite">
           <div class="metric"><span>Entities</span><strong id="entities">0</strong></div>
@@ -905,18 +1160,21 @@ const INDEX_HTML = String.raw`<!doctype html>
           <div class="metric"><span>Drones</span><strong id="drones">0</strong></div>
           <div class="metric"><span>Heap</span><strong id="heap">0mb</strong></div>
         </div>
-        <div class="stack">
-          <span class="chip status" id="status">streaming</span>
-          <span class="chip">queryList</span>
-          <span class="chip">ArrayBuffer stores</span>
-          <span class="chip">archetype enter/exit</span>
-        </div>
-      </div>
+      </header>
       <div class="middle">
-        <div class="readout">
-          <p><b id="modeLabel">orbit</b> mode is resolving <b id="rendered">0</b> renderables from Miski snapshots.</p>
-          <p>Last refresh saw <b id="entered">0</b> entries and <b id="exited">0</b> exits through the render query.</p>
-        </div>
+        <aside class="inspector" aria-label="Render query telemetry">
+          <div class="panel-label">Render query</div>
+          <div class="kv"><span>Rendered</span><b id="rendered">0</b></div>
+          <div class="kv"><span>Entered</span><b id="entered">0</b></div>
+          <div class="kv"><span>Exited</span><b id="exited">0</b></div>
+        </aside>
+        <div></div>
+        <aside class="inspector inspector--right" aria-label="World telemetry">
+          <div class="panel-label">World</div>
+          <div class="kv"><span>Capacity</span><b id="capacity">0</b></div>
+          <div class="kv"><span>Spawned</span><b id="spawned">0</b></div>
+          <div class="kv"><span>Destroyed</span><b id="destroyed">0</b></div>
+        </aside>
       </div>
       <div class="controlbar">
         <div class="segmented" role="group" aria-label="Simulation mode">
@@ -925,17 +1183,28 @@ const INDEX_HTML = String.raw`<!doctype html>
           <button data-mode="lattice" aria-pressed="false">Lattice</button>
         </div>
         <label class="slider">
-          Intensity
+          <span>Intensity</span>
           <input id="intensity" type="range" min="0.2" max="2.4" value="1" step="0.05">
         </label>
         <label class="slider">
-          Drones <output id="droneTarget">${desiredDroneCount}</output>
+          <span>Drones <output id="droneTarget">${desiredDroneCount}</output></span>
           <input
             id="droneControl"
             type="range"
             min="${MIN_DRONES}"
             max="${MAX_DRONES}"
             value="${desiredDroneCount}"
+            step="64"
+          >
+        </label>
+        <label class="slider">
+          <span>Render <output id="renderTarget">${renderedEntityLimit}</output></span>
+          <input
+            id="renderControl"
+            type="range"
+            min="${MIN_DRONES}"
+            max="${MAX_RENDERED_ENTITIES}"
+            value="${renderedEntityLimit}"
             step="64"
           >
         </label>
@@ -949,13 +1218,13 @@ const INDEX_HTML = String.raw`<!doctype html>
   </main>
   <script type="module">
     const canvas = document.querySelector("#stage");
-    const context = canvas.getContext("2d", { alpha: true });
+    const context = canvas.getContext("2d", { alpha: false });
     const pixelRatio = Math.min(devicePixelRatio || 1, 2);
     const state = {
       worldWidth: 1920,
       worldHeight: 1080,
       entities: [],
-      stride: 12,
+      stride: 10,
       renderBudget: 900,
       snapshotAt: 0,
       snapshotIntervalMs: 1000 / 12,
@@ -977,8 +1246,13 @@ const INDEX_HTML = String.raw`<!doctype html>
       rendered: document.querySelector("#rendered"),
       entered: document.querySelector("#entered"),
       exited: document.querySelector("#exited"),
+      capacity: document.querySelector("#capacity"),
+      spawned: document.querySelector("#spawned"),
+      destroyed: document.querySelector("#destroyed"),
       droneTarget: document.querySelector("#droneTarget"),
       droneControl: document.querySelector("#droneControl"),
+      renderTarget: document.querySelector("#renderTarget"),
+      renderControl: document.querySelector("#renderControl"),
       toggle: document.querySelector("#toggle"),
     };
 
@@ -997,6 +1271,18 @@ const INDEX_HTML = String.raw`<!doctype html>
         body: JSON.stringify(payload),
       }).catch(() => undefined);
 
+    let pendingIntensity = 1;
+    let intensityFrame = 0;
+
+    const scheduleIntensityCommand = (value) => {
+      pendingIntensity = value;
+      if (intensityFrame !== 0) return;
+      intensityFrame = requestAnimationFrame(() => {
+        intensityFrame = 0;
+        command({ action: "intensity", value: pendingIntensity });
+      });
+    };
+
     const updateHud = () => {
       const metrics = state.metrics;
       ids.entities.textContent = String(metrics.active ?? 0);
@@ -1006,11 +1292,18 @@ const INDEX_HTML = String.raw`<!doctype html>
       ids.rendered.textContent = String(metrics.rendered ?? 0);
       ids.entered.textContent = String(metrics.entered ?? 0);
       ids.exited.textContent = String(metrics.exited ?? 0);
+      ids.capacity.textContent = String(metrics.capacity ?? 0);
+      ids.spawned.textContent = String(metrics.spawned ?? 0);
+      ids.destroyed.textContent = String(metrics.destroyed ?? 0);
       ids.droneTarget.textContent = String(metrics.droneTarget ?? ids.droneControl.value);
       if (document.activeElement !== ids.droneControl && metrics.droneTarget) {
         ids.droneControl.value = String(metrics.droneTarget);
       }
       state.renderBudget = metrics.renderLimit ?? state.renderBudget;
+      ids.renderTarget.textContent = String(state.renderBudget);
+      if (document.activeElement !== ids.renderControl && metrics.renderLimit) {
+        ids.renderControl.value = String(metrics.renderLimit);
+      }
       ids.modeLabel.textContent = state.mode;
       ids.status.textContent = state.connected ? "streaming" : "reconnecting";
       ids.toggle.textContent = state.running ? "Pause" : "Resume";
@@ -1048,30 +1341,11 @@ const INDEX_HTML = String.raw`<!doctype html>
       });
     };
 
-    const drawBackground = (width, height, time) => {
+    const clearStage = (width, height) => {
       context.globalCompositeOperation = "source-over";
-      context.fillStyle = "rgb(4 7 7 / 0.34)";
+      context.globalAlpha = 1;
+      context.fillStyle = "rgb(3 4 4)";
       context.fillRect(0, 0, width, height);
-
-      context.save();
-      context.translate(width * 0.5, height * 0.52);
-      context.rotate(Math.sin(time * 0.07) * 0.018);
-      context.strokeStyle = "rgb(215 235 210 / 0.055)";
-      context.lineWidth = 1;
-      const gap = 42;
-      for (let x = -width; x <= width; x += gap) {
-        context.beginPath();
-        context.moveTo(x, -height);
-        context.lineTo(x * 0.32, height);
-        context.stroke();
-      }
-      for (let y = -height; y <= height; y += gap) {
-        context.beginPath();
-        context.moveTo(-width, y);
-        context.lineTo(width, y * 0.54);
-        context.stroke();
-      }
-      context.restore();
     };
 
     const drawPulse = (scaleX, scaleY) => {
@@ -1096,6 +1370,18 @@ const INDEX_HTML = String.raw`<!doctype html>
     };
 
     const colorCache = new Map();
+    const teamRotationCos = new Float32Array(4);
+    const teamRotationSin = new Float32Array(4);
+
+    const updateTeamRotations = (time) => {
+      const baseAngle = time * 0.35;
+      for (let team = 0; team < 4; team++) {
+        const angle = baseAngle + team * 0.18;
+        teamRotationCos[team] = Math.cos(angle);
+        teamRotationSin[team] = Math.sin(angle);
+      }
+    };
+
     const colorFor = (hue, lightness) => {
       const key = Math.round(hue) + ":" + lightness;
       let color = colorCache.get(key);
@@ -1106,21 +1392,21 @@ const INDEX_HTML = String.raw`<!doctype html>
       return color;
     };
 
-    const drawEntity = (entities, offset, scaleX, scaleY, time, leadSeconds) => {
+    const drawEntity = (entities, offset, scaleX, scaleY, leadSeconds) => {
       const baseX = entities[offset];
       const baseY = entities[offset + 1];
-      const velocityX = entities[offset + 4];
-      const velocityY = entities[offset + 5];
+      const velocityX = entities[offset + 2];
+      const velocityY = entities[offset + 3];
       const x = baseX + velocityX * leadSeconds;
       const y = baseY + velocityY * leadSeconds;
       const px = x - velocityX * 0.026;
       const py = y - velocityY * 0.026;
-      const hue = entities[offset + 6];
-      const size = entities[offset + 7];
-      const alpha = entities[offset + 8];
-      const energy = entities[offset + 9];
-      const team = entities[offset + 10];
-      const kind = entities[offset + 11];
+      const hue = entities[offset + 4];
+      const size = entities[offset + 5];
+      const alpha = entities[offset + 6];
+      const energy = entities[offset + 7];
+      const team = entities[offset + 8];
+      const kind = entities[offset + 9];
       const screenX = x * scaleX;
       const screenY = y * scaleY;
       const prevX = px * scaleX;
@@ -1129,7 +1415,6 @@ const INDEX_HTML = String.raw`<!doctype html>
       const glow = radius * (kind === 1 ? 5 : 3.5) * (0.6 + energy);
       const color = colorFor(hue + state.hueShift, kind === 1 ? 63 : 55);
 
-      context.globalCompositeOperation = "lighter";
       context.globalAlpha = alpha * 0.38;
       context.strokeStyle = color;
       context.lineWidth = Math.max(1, radius * (kind === 1 ? 0.75 : 0.45));
@@ -1149,9 +1434,19 @@ const INDEX_HTML = String.raw`<!doctype html>
       if (kind === 1) {
         context.arc(screenX, screenY, radius * 0.65, 0, Math.PI * 2);
       } else {
-        const angle = Math.atan2(screenY - prevY, screenX - prevX) + team * 0.18 + time * 0.35;
-        const forwardX = Math.cos(angle);
-        const forwardY = Math.sin(angle);
+        const directionX = screenX - prevX;
+        const directionY = screenY - prevY;
+        const directionLengthSquared = directionX * directionX + directionY * directionY;
+        const inverseDirectionLength = directionLengthSquared > 0.0001 ?
+          1 / Math.sqrt(directionLengthSquared) :
+          1;
+        const baseForwardX = directionLengthSquared > 0.0001 ? directionX * inverseDirectionLength : 1;
+        const baseForwardY = directionLengthSquared > 0.0001 ? directionY * inverseDirectionLength : 0;
+        const teamIndex = team & 3;
+        const rotationCos = teamRotationCos[teamIndex];
+        const rotationSin = teamRotationSin[teamIndex];
+        const forwardX = baseForwardX * rotationCos - baseForwardY * rotationSin;
+        const forwardY = baseForwardX * rotationSin + baseForwardY * rotationCos;
         const sideX = -forwardY;
         const sideY = forwardX;
         context.moveTo(screenX + forwardX * radius * 2.1, screenY + forwardY * radius * 2.1);
@@ -1160,6 +1455,11 @@ const INDEX_HTML = String.raw`<!doctype html>
         context.lineTo(screenX - forwardX * radius * 1.15 - sideX * radius * 0.92, screenY - forwardY * radius * 1.15 - sideY * radius * 0.92);
         context.closePath();
       }
+      context.fill();
+      context.globalAlpha = alpha * 0.76;
+      context.fillStyle = "rgb(255 252 226)";
+      context.beginPath();
+      context.arc(screenX, screenY, Math.max(0.8, radius * 0.38), 0, Math.PI * 2);
       context.fill();
       context.globalAlpha = 1;
     };
@@ -1175,16 +1475,19 @@ const INDEX_HTML = String.raw`<!doctype html>
       const offsetX = (width - state.worldWidth * scale) * 0.5;
       const offsetY = (height - state.worldHeight * scale) * 0.5;
 
-      drawBackground(width, height, time);
+      clearStage(width, height);
       context.save();
       context.translate(offsetX, offsetY);
       drawPulse(scaleX, scaleY);
+      updateTeamRotations(time);
+      context.globalCompositeOperation = "lighter";
+      context.lineCap = "round";
       const entities = state.entities;
       const maxOffset = Math.min(entities.length, state.renderBudget * state.stride);
       const snapshotAgeMs = state.snapshotAt === 0 ? 0 : timeStamp - state.snapshotAt;
       const leadSeconds = Math.min(snapshotAgeMs, state.snapshotIntervalMs * 1.15) / 1000;
       for (let offset = 0; offset < maxOffset; offset += state.stride) {
-        drawEntity(entities, offset, scaleX, scaleY, time, leadSeconds);
+        drawEntity(entities, offset, scaleX, scaleY, leadSeconds);
       }
       context.restore();
 
@@ -1203,13 +1506,19 @@ const INDEX_HTML = String.raw`<!doctype html>
       button.addEventListener("click", () => command({ action: "mode", mode: button.dataset.mode }));
     });
     document.querySelector("#intensity").addEventListener("input", (event) => {
-      command({ action: "intensity", value: Number(event.currentTarget.value) });
+      scheduleIntensityCommand(Number(event.currentTarget.value));
     });
     ids.droneControl.addEventListener("input", (event) => {
       ids.droneTarget.textContent = event.currentTarget.value;
     });
     ids.droneControl.addEventListener("change", (event) => {
       command({ action: "drones", value: Number(event.currentTarget.value) });
+    });
+    ids.renderControl.addEventListener("input", (event) => {
+      ids.renderTarget.textContent = event.currentTarget.value;
+    });
+    ids.renderControl.addEventListener("change", (event) => {
+      command({ action: "rendered", value: Number(event.currentTarget.value) });
     });
     document.querySelector("#burst").addEventListener("click", () => {
       command({ action: "burst", x: 960, y: 540, hue: 184 + Math.random() * 68 });
