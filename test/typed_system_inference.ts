@@ -42,6 +42,33 @@ movementInstance(1 / 60);
 // @ts-expect-error system instance arguments are inferred from the callback.
 movementInstance("fast");
 
+const manualTypedQuery = new Query({
+  all: { position, velocity },
+  any: { renderable },
+  none: { disabled },
+});
+const manualTypedSystem = new System({
+  name: "manualTypedMovement",
+  query: manualTypedQuery,
+  callback: (components, entities, dt: number): void => {
+    expectType<ComponentInstance<Vec2>>(components.position);
+    expectType<ComponentInstance<Vec2>>(components.velocity);
+    expectType<ComponentInstance<null>>(components.renderable);
+    expectType<BorrowedEntityList>(entities);
+    expectType<number>(dt);
+
+    components.position.partitions.x;
+    components.velocity.proxy?.x;
+
+    // @ts-expect-error none components are query filters, not callback components.
+    components.disabled;
+    // @ts-expect-error misspelled component keys are rejected.
+    components.postion;
+  },
+});
+const manualTypedInstance = world.systems.create(manualTypedSystem);
+manualTypedInstance(1 / 60);
+
 const asyncSystem = defineSystem({
   name: "asyncMovement",
   all: { position },

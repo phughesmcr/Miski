@@ -92,9 +92,9 @@
  * world.components.setEntityData<Vec2>(positionComponent, entity1, { x: 10, y: 20 });
  *
  * // Second way: type-unsafe and does not show the entity in changed tracking
- * const positionComponentInstance: ComponentInstance<Vec2> = world.components.getInstance("position");
- * positionComponentInstance.storage.partitions.x[entity1] = 10;
- * positionComponentInstance.storage.partitions.y[entity1] = 20;
+ * const positionComponentInstance = world.components.require("position");
+ * positionComponentInstance.partitions!.x[entity1] = 10;
+ * positionComponentInstance.partitions!.y[entity1] = 20;
  *
  * // Third way: Through the component proxy - type-safe and shows the entity in changed tracking
  * const positionComponentInstance: ComponentInstance<Vec2> = world.components.getInstance("position");
@@ -194,7 +194,7 @@ export {
   SpecError,
   WorldStateError,
 } from "@/errors.ts";
-export { isValidQuerySpec, Query } from "@/query/query.ts";
+export { isComponentMap, isValidQuerySpec, normalizeQuerySpec, Query, query } from "@/query/query.ts";
 export { defineSystem, isValidSystemSpec, System } from "@/system/system.ts";
 export { World } from "@/world/world.ts";
 export { isValidWorldSpec } from "@/world/utils.ts";
@@ -216,18 +216,22 @@ export type {
   ParametersExceptFirstTwo,
   Partition,
   PartitionStorage,
+  QueryCallbackComponents,
   QueryEntityList,
   QuerySpec,
   Schema,
   SchemaOrNull,
+  SchemaPartitions,
   StorageProxyWithProperties,
   SystemCallback,
   SystemFunction,
   SystemInstance,
   SystemRecord,
   SystemSpec,
+  TypedQuerySpec,
   TypedSystemCallback,
   TypedSystemSpec,
+  UntypedQueryComponents,
   WorldArchetypeAPI,
   WorldComponentAPI,
   WorldEntityAPI,

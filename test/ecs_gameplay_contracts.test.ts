@@ -179,6 +179,35 @@ Deno.test("proxy rejects out-of-range entity targets before mutating component s
   );
 });
 
+Deno.test("manual typed query and system expose keyed component instances in callbacks", async () => {
+  const position = vec2Component();
+  const velocity = vec2Component("velocity");
+  const world = new World({ capacity: 8, components: [position, velocity] });
+  await world.init();
+
+  const first = createEntity(world);
+  world.components.addToEntity(position, first, { x: 1, y: 2 });
+  world.components.addToEntity(velocity, first, { x: 3, y: 4 });
+
+  const movement = new System({
+    name: "movement",
+    query: new Query({ all: { position, velocity } }),
+    callback: (components, entities, dt: number) => {
+      for (let i = 0; i < entities.count; i++) {
+        const entity = entities.indices[i]!;
+        components.position.partitions.x[entity] = components.position.partitions.x[entity]! +
+          components.velocity.partitions.x[entity]! * dt;
+        components.position.partitions.y[entity] = components.position.partitions.y[entity]! +
+          components.velocity.partitions.y[entity]! * dt;
+      }
+    },
+  });
+
+  const updateMovement = world.systems.create(movement);
+  updateMovement(2);
+  assertEquals(world.components.getEntityData(position, first), { x: 7, y: 10 }, "Expected typed manual system update");
+});
+
 Deno.test("systems receive matching component instances, borrowed entity lists, and frame arguments", async () => {
   const position = vec2Component();
   const velocity = vec2Component("velocity");
@@ -258,7 +287,7 @@ Deno.test("defineSystem creates the same query behavior as manual System constru
   world.components.addToEntity(renderable, blocked);
   world.components.addToEntity(sleeping, blocked);
 
-  const manualQuery = new Query({ all: [position, velocity], any: [renderable], none: [sleeping] });
+  const manualQuery = new Query({ all: { position, velocity }, any: { renderable }, none: { sleeping } });
   const typedSystem = defineSystem({
     name: "typedMovement",
     all: { position, velocity },

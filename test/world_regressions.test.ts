@@ -585,6 +585,27 @@ Deno.test("failed guarded data access does not mark changed state or mutate stor
   assertEquals(ids(world.components.getChanged(position)), [], "Expected failed guarded access to stay untracked");
 });
 
+Deno.test("components.require returns registered instances and exposes partitions", async () => {
+  const position = new Component<Vec2>({ name: "position", schema: { x: Float32Array, y: Float32Array } });
+  const tag = new Component({ name: "tag" });
+  const world = new World({ capacity: 8, components: [position, tag] });
+  await world.init();
+
+  const instance = world.components.require(position);
+  assert(instance === world.components.getInstance(position), "Expected require to match getInstance");
+  assert(instance.partitions !== null, "Expected schema component partitions");
+  assert(instance.partitions === instance.storage?.partitions, "Expected partitions getter to forward storage");
+
+  const tagInstance = world.components.require(tag);
+  assertEquals(tagInstance.partitions, null, "Expected tag component partitions to be null");
+
+  assertThrows(
+    () => world.components.require("missing"),
+    NotRegisteredError,
+    'Component "missing" not registered.',
+  );
+});
+
 Deno.test("direct typed-array storage remains an unguarded data access escape hatch", async () => {
   const position = new Component<Vec2>({ name: "position", schema: { x: Float32Array, y: Float32Array } });
   const world = new World({ capacity: 8, components: [position] });

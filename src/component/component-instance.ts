@@ -10,6 +10,7 @@ import type {
   PartitionStorage,
   Schema,
   SchemaOrNull,
+  SchemaPartitions,
   StorageProxyWithProperties,
 } from "@/types.ts";
 import type { Component } from "./component.ts";
@@ -24,6 +25,11 @@ export class ComponentInstance<T extends SchemaOrNull> {
 
   /** The ComponentInstance's storage */
   readonly storage: T extends Schema<T> ? PartitionStorage<T> : null;
+
+  /** Typed-array partitions for direct storage access, or `null` for tag components */
+  get partitions(): T extends Schema<T> ? SchemaPartitions<T> : null {
+    return (this.storage?.partitions ?? null) as T extends Schema<T> ? SchemaPartitions<T> : null;
+  }
 
   /** The ComponentInstance's prototype */
   readonly type: Component<T>;

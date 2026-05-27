@@ -130,6 +130,7 @@ export class World {
         this.#getComponentEntityData(component, entity),
       getInstance: <T extends SchemaOrNull>(component: Component<T> | string) =>
         this.#componentManager.getInstance(component),
+      require: <T extends SchemaOrNull>(component: Component<T> | string) => this.#componentManager.require(component),
       getInstances: (array: DynamicComponent[] | Readonly<DynamicComponent[]>) =>
         this.#componentManager.getInstances(array),
       getOwners: <T extends SchemaOrNull>(component: Component<T> | string) =>

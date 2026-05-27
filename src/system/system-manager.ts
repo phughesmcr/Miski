@@ -7,16 +7,22 @@
 
 import { $_SYSTEM_DESTROY_KEY, $_SYSTEM_INIT_KEY } from "@/constants.ts";
 import { AlreadyRegisteredError, NotRegisteredError } from "@/errors.ts";
-import type { SystemCallback, SystemFunction, SystemInstance } from "@/types.ts";
+import type {
+  ComponentMap,
+  SystemCallback,
+  SystemInstance,
+  TypedSystemCallback,
+  UntypedQueryComponents,
+} from "@/types.ts";
 import type { World } from "@/world/world.ts";
 import { createSystemInstance, type System } from "./system.ts";
 
 type SystemRegistration = {
   destroy: (world: World) => void | Promise<void>;
   init: (world: World) => void | Promise<void>;
-  instance: SystemInstance<SystemFunction>;
+  instance: SystemInstance<TypedSystemCallback<UntypedQueryComponents, unknown[], unknown>>;
   name: string;
-  system: System<SystemFunction>;
+  system: System<UntypedQueryComponents, unknown[], unknown>;
 };
 
 /** The SystemManager is responsible for creating, registering, initializing, and destroying systems. */
@@ -64,7 +70,11 @@ export class SystemManager {
    * @returns The created system instance
    * @throws {NoComponentsFoundError} If the system query returns no components
    */
-  create<T extends SystemFunction>(system: System<T>): SystemInstance<T> {
+  create<
+    TComponents extends ComponentMap,
+    TArgs extends unknown[],
+    TReturn,
+  >(system: System<TComponents, TArgs, TReturn>): SystemInstance<TypedSystemCallback<TComponents, TArgs, TReturn>> {
     const existing = this.#records[system.name];
     if (existing) {
       throw new AlreadyRegisteredError(`System "${system.name}" is already registered in the world.`);
@@ -73,21 +83,25 @@ export class SystemManager {
     this.#records[system.name] = {
       destroy: system[$_SYSTEM_DESTROY_KEY],
       init: system[$_SYSTEM_INIT_KEY],
-      instance: instance as SystemInstance<SystemFunction>,
+      instance: instance as SystemInstance<TypedSystemCallback<UntypedQueryComponents, unknown[], unknown>>,
       name: system.name,
-      system: system as System<SystemFunction>,
+      system: system as System<UntypedQueryComponents, unknown[], unknown>,
     };
     this.#registry[system.name] = instance as unknown as SystemInstance<SystemCallback>;
     this.#refreshPublicRegistry();
-    return instance as SystemInstance<T>;
+    return instance;
   }
 
   /**
    * Destroy a system instance
    * @param system The system to destroy
    */
-  async destroy<T extends SystemFunction>(
-    system: System<T> | string,
+  async destroy<
+    TComponents extends ComponentMap,
+    TArgs extends unknown[],
+    TReturn,
+  >(
+    system: System<TComponents, TArgs, TReturn> | string,
     throwOnNotFound = true,
   ): Promise<void> {
     const record = this.#getRecord(system);
@@ -118,8 +132,18 @@ export class SystemManager {
    * @param system The system to get the instance of
    * @returns The system instance
    */
-  get<T extends SystemFunction>(system: string | System<T>): SystemInstance<T> | undefined {
-    return this.#getRecord(system)?.instance as SystemInstance<T> | undefined;
+  get<
+    TComponents extends ComponentMap,
+    TArgs extends unknown[],
+    TReturn,
+  >(system: string | System<TComponents, TArgs, TReturn>):
+    | SystemInstance<
+      TypedSystemCallback<TComponents, TArgs, TReturn>
+    >
+    | undefined {
+    return this.#getRecord(system)?.instance as
+      | SystemInstance<TypedSystemCallback<TComponents, TArgs, TReturn>>
+      | undefined;
   }
 
   /**
@@ -127,7 +151,11 @@ export class SystemManager {
    * @param system The system to check
    * @returns Whether the system is registered
    */
-  has<T extends SystemFunction>(system: string | System<T>): boolean {
+  has<
+    TComponents extends ComponentMap,
+    TArgs extends unknown[],
+    TReturn,
+  >(system: string | System<TComponents, TArgs, TReturn>): boolean {
     return this.get(system) !== undefined;
   }
 
@@ -143,7 +171,11 @@ export class SystemManager {
   }
 
   /** Resolve a registration by exact system object or name. */
-  #getRecord<T extends SystemFunction>(system: string | System<T>): SystemRegistration | undefined {
+  #getRecord<
+    TComponents extends ComponentMap,
+    TArgs extends unknown[],
+    TReturn,
+  >(system: string | System<TComponents, TArgs, TReturn>): SystemRegistration | undefined {
     if (typeof system === "string") {
       return this.#records[system];
     }

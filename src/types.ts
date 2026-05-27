@@ -70,6 +70,16 @@ export type ArchetypeSpec = {
 /** A Schema or null (null = tag component) */
 export type SchemaOrNull<T = unknown> = Schema<T> | null;
 
+/** Resolve the typed-array view type for one schema property definition */
+type SchemaPropertyArray<T> = T extends TypedArrayConstructor ? InstanceType<T> :
+  T extends [infer Constructor extends TypedArrayConstructor, number] ? InstanceType<Constructor> :
+  never;
+
+/** Typed-array partition views for a component schema */
+export type SchemaPartitions<T extends Schema<T>> = {
+  [K in keyof T]: SchemaPropertyArray<T[K]>;
+};
+
 /** A component definition whose schema is only known dynamically. */
 export type DynamicComponent = Component<SchemaOrNull>;
 
@@ -151,6 +161,29 @@ export type QuerySpec = {
   /** `NOT` - Gather entities as long as they don't have these components */
   none?: DynamicComponent[];
 };
+
+/** Keyed query specification used for typed query and system authoring. */
+export type TypedQuerySpec<
+  TAll extends ComponentMap = Record<never, never>,
+  TAny extends ComponentMap = Record<never, never>,
+  TNone extends ComponentMap = Record<never, never>,
+> = {
+  /** Components every matching entity must have. */
+  all?: TAll;
+  /** Components where at least one must be present when supplied. */
+  any?: TAny;
+  /** Components matching entities must not have. These are filters only. */
+  none?: TNone;
+};
+
+/** Components exposed to a system callback for a typed query. */
+export type QueryCallbackComponents<
+  TAll extends ComponentMap,
+  TAny extends ComponentMap,
+> = TAll & TAny;
+
+/** Dynamic query components used when a query is authored with component arrays. */
+export type UntypedQueryComponents = Record<string, DynamicComponent>;
 
 export type QueryInstance = {
   /** A BooleanArray for the AND match criteria */
@@ -249,16 +282,20 @@ export type SystemFunctionArgs<T extends SystemFunction> = ParametersExceptFirst
 
 /**
  * The specification for a System.
- * @param T The callback's type
- * @param U The parameters of the callback excluding the first two (which are always the components and entities)
+ * @param TComponents The query's typed component map
+ * @param TArgs The parameters of the callback excluding the first two
  */
-export type SystemSpec<T extends SystemFunction = SystemCallback> = {
+export type SystemSpec<
+  TComponents extends ComponentMap = UntypedQueryComponents,
+  TArgs extends unknown[] = unknown[],
+  TReturn = void,
+> = {
   /** The name of the system */
   name: string;
   /** The query which will provide the components and entities to the system. */
-  query: Query;
+  query: Query<TComponents>;
   /** The core function of the system. Called when this.exec is called. */
-  callback: T;
+  callback: TypedSystemCallback<TComponents, TArgs, TReturn>;
   /** The function to call when the system is initialized. */
   init?: (world: World) => void | Promise<void>;
   /** The function to call when the system is destroyed. */

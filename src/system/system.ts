@@ -4,15 +4,14 @@ import { NoComponentsFoundError, SpecError } from "@/errors.ts";
 import { Query } from "@/query/query.ts";
 import type {
   BorrowedEntityList,
+  ComponentInstances,
   ComponentMap,
-  SystemCallback,
-  SystemFunction,
-  SystemFunctionArgs,
   SystemInstance,
   SystemPrivateMethods,
   SystemSpec,
   TypedSystemCallback,
   TypedSystemSpec,
+  UntypedQueryComponents,
 } from "@/types.ts";
 import { isObject, noop } from "@/utils.ts";
 import type { World } from "@/world/world.ts";
@@ -24,29 +23,35 @@ import type { World } from "@/world/world.ts";
  * @returns The created system instance
  * @throws {NoComponentsFoundError} If the system query returned no components
  */
-type CallableSystem<T extends SystemFunction> = (
-  components: Parameters<T>[0],
+type CallableSystem<
+  TComponents extends ComponentMap,
+  TArgs extends unknown[],
+  TReturn,
+> = (
+  components: ComponentInstances<TComponents>,
   entities: BorrowedEntityList,
-  ...args: SystemFunctionArgs<T>
-) => ReturnType<T>;
+  ...args: TArgs
+) => TReturn;
 
-export function createSystemInstance<T extends SystemFunction>(
+export function createSystemInstance<
+  TComponents extends ComponentMap,
+  TArgs extends unknown[],
+  TReturn,
+>(
   world: World,
-  system: System<T>,
+  system: System<TComponents, TArgs, TReturn>,
   queryComponents: (query: Query) => Record<string, unknown> = (query) => world.components.query(query),
-): SystemInstance<T> {
-  // Collect all entries from the iterator into an array first
-  const components = queryComponents(system.query) as Parameters<T>[0];
-  const callback = system.callback as CallableSystem<T>;
+): SystemInstance<TypedSystemCallback<TComponents, TArgs, TReturn>> {
+  const components = queryComponents(system.query) as ComponentInstances<TComponents>;
+  const callback = system.callback as CallableSystem<TComponents, TArgs, TReturn>;
 
   if (Object.keys(components).length === 0) {
     throw new NoComponentsFoundError("System query returned no components");
   }
 
-  // Bind the callback with components and a getter that returns fresh entities on each call
-  const boundCallback = ((...args: SystemFunctionArgs<T>) => {
+  const boundCallback = ((...args: TArgs) => {
     return callback(components, world.entities.queryList(system.query), ...args);
-  }) as SystemInstance<T>;
+  }) as unknown as SystemInstance<TypedSystemCallback<TComponents, TArgs, TReturn>>;
   return boundCallback;
 }
 
@@ -75,15 +80,11 @@ export function defineSystem<
   TReturn = void,
 >(
   spec: TypedSystemSpec<TAll, TAny, TNone, TArgs, TReturn>,
-): System<TypedSystemCallback<TAll & TAny, TArgs, TReturn>> {
+): System<TAll & TAny, TArgs, TReturn> {
   const { name, all = {}, any = {}, none = {}, callback, destroy, init } = spec;
   return new System({
     name,
-    query: new Query({
-      all: Object.values(all),
-      any: Object.values(any),
-      none: Object.values(none),
-    }),
+    query: new Query({ all, any, none }) as Query<TAll & TAny>,
     callback,
     destroy,
     init,
@@ -91,7 +92,11 @@ export function defineSystem<
 }
 
 /** Systems are behaviours which affect components. */
-export class System<T extends SystemFunction = SystemCallback> implements SystemPrivateMethods {
+export class System<
+  TComponents extends ComponentMap = UntypedQueryComponents,
+  TArgs extends unknown[] = unknown[],
+  TReturn = void,
+> implements SystemPrivateMethods {
   /** The function to call when the system is destroyed. */
   readonly [$_SYSTEM_DESTROY_KEY]: (world: World) => void | Promise<void>;
 
@@ -102,10 +107,10 @@ export class System<T extends SystemFunction = SystemCallback> implements System
   readonly name: string;
 
   /** The query which will provide the components and entities to the system. */
-  readonly query: Query;
+  readonly query: Query<TComponents>;
 
   /** The core function of the system. Called when this.exec is called. */
-  readonly callback: T;
+  readonly callback: TypedSystemCallback<TComponents, TArgs, TReturn>;
 
   /**
    * Creates a new system.
@@ -115,7 +120,7 @@ export class System<T extends SystemFunction = SystemCallback> implements System
    * @param spec the system's specification object
    * @throws {SpecError} If the system specification is invalid
    */
-  constructor(spec: SystemSpec<T>) {
+  constructor(spec: SystemSpec<TComponents, TArgs, TReturn>) {
     if (isValidSystemSpec(spec) === false) {
       throw new SpecError("Invalid system specification");
     }

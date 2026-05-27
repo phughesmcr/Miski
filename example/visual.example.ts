@@ -8,7 +8,7 @@
  * @license MIT
  */
 
-import { Component, type ComponentInstance, Query, type Schema, System, World } from "../mod.ts";
+import { Component, Query, type Schema, System, World } from "../mod.ts";
 
 type Vec2Schema = {
   x: Float32ArrayConstructor;
@@ -33,31 +33,6 @@ type BrainSchema = {
 type LifetimeSchema = {
   age: Float32ArrayConstructor;
   ttl: Float32ArrayConstructor;
-};
-
-type Vec2Store = {
-  x: Float32Array;
-  y: Float32Array;
-};
-
-type VisualStore = {
-  hue: Float32Array;
-  radius: Float32Array;
-  alpha: Float32Array;
-  energy: Float32Array;
-  team: Float32Array;
-  kind: Float32Array;
-};
-
-type BrainStore = {
-  orbit: Float32Array;
-  bias: Float32Array;
-  drag: Float32Array;
-};
-
-type LifetimeStore = {
-  age: Float32Array;
-  ttl: Float32Array;
 };
 
 type DemoMode = "orbit" | "storm" | "lattice";
@@ -136,22 +111,14 @@ const world = new World({
 
 await world.init();
 
-const positionInstance = world.components.getInstance(position) as ComponentInstance<Vec2Schema>;
-const velocityInstance = world.components.getInstance(velocity) as ComponentInstance<Vec2Schema>;
-const visualInstance = world.components.getInstance(visual) as ComponentInstance<VisualSchema>;
-const brainInstance = world.components.getInstance(brain) as ComponentInstance<BrainSchema>;
-const lifetimeInstance = world.components.getInstance(lifetime) as ComponentInstance<LifetimeSchema>;
+const { partitions: positionStore } = world.components.require(position);
+const { partitions: velocityStore } = world.components.require(velocity);
+const { partitions: visualStore } = world.components.require(visual);
 
-const positionStore = positionInstance.storage!.partitions as Vec2Store;
-const velocityStore = velocityInstance.storage!.partitions as Vec2Store;
-const visualStore = visualInstance.storage!.partitions as VisualStore;
-const brainStore = brainInstance.storage!.partitions as BrainStore;
-const lifetimeStore = lifetimeInstance.storage!.partitions as LifetimeStore;
-
-const droneQuery = new Query({ all: [position, velocity, visual, brain, drone] });
-const sparkQuery = new Query({ all: [position, velocity, visual, lifetime, spark] });
-const renderQuery = new Query({ all: [position, visual] });
-const movementQuery = new Query({ all: [position, velocity, visual] });
+const droneQuery = new Query({ all: { position, velocity, visual, brain, drone } });
+const sparkQuery = new Query({ all: { position, velocity, visual, lifetime, spark } });
+const movementQuery = new Query({ all: { position, velocity, visual } });
+const renderQuery = new Query({ all: { position, visual } });
 
 let mode: DemoMode = "orbit";
 let running = true;
@@ -279,7 +246,7 @@ const steeringSystem = world.systems.create(
   new System({
     name: "steeringSystem",
     query: droneQuery,
-    callback: (_components, drones, dt: number, time: number) => {
+    callback: (components, drones, dt: number, time: number) => {
       const cx = WORLD_WIDTH * 0.5;
       const cy = WORLD_HEIGHT * 0.5;
       const currentMode = mode;
@@ -308,16 +275,16 @@ const steeringSystem = world.systems.create(
 
       const indices = drones.indices;
       const count = drones.count;
-      const positionX = positionStore.x;
-      const positionY = positionStore.y;
-      const velocityX = velocityStore.x;
-      const velocityY = velocityStore.y;
-      const visualAlpha = visualStore.alpha;
-      const visualEnergy = visualStore.energy;
-      const visualTeam = visualStore.team;
-      const brainOrbit = brainStore.orbit;
-      const brainBias = brainStore.bias;
-      const brainDrag = brainStore.drag;
+      const positionX = components.position.partitions.x;
+      const positionY = components.position.partitions.y;
+      const velocityX = components.velocity.partitions.x;
+      const velocityY = components.velocity.partitions.y;
+      const visualAlpha = components.visual.partitions.alpha;
+      const visualEnergy = components.visual.partitions.energy;
+      const visualTeam = components.visual.partitions.team;
+      const brainOrbit = components.brain.partitions.orbit;
+      const brainBias = components.brain.partitions.bias;
+      const brainDrag = components.brain.partitions.drag;
 
       for (let i = 0; i < count; i++) {
         const entity = indices[i]!;
@@ -389,13 +356,13 @@ const movementSystem = world.systems.create(
   new System({
     name: "movementSystem",
     query: movementQuery,
-    callback: (_components, movers, dt: number) => {
+    callback: (components, movers, dt: number) => {
       const indices = movers.indices;
       const count = movers.count;
-      const positionX = positionStore.x;
-      const positionY = positionStore.y;
-      const velocityX = velocityStore.x;
-      const velocityY = velocityStore.y;
+      const positionX = components.position.partitions.x;
+      const positionY = components.position.partitions.y;
+      const velocityX = components.velocity.partitions.x;
+      const velocityY = components.velocity.partitions.y;
 
       for (let i = 0; i < count; i++) {
         const entity = indices[i]!;
@@ -427,16 +394,16 @@ const lifetimeSystem = world.systems.create(
   new System({
     name: "lifetimeSystem",
     query: sparkQuery,
-    callback: (_components, sparks, dt: number) => {
+    callback: (components, sparks, dt: number) => {
       const indices = sparks.indices;
       const count = sparks.count;
-      const age = lifetimeStore.age;
-      const ttl = lifetimeStore.ttl;
-      const visualAlpha = visualStore.alpha;
-      const visualEnergy = visualStore.energy;
-      const visualRadius = visualStore.radius;
-      const velocityX = velocityStore.x;
-      const velocityY = velocityStore.y;
+      const age = components.lifetime.partitions.age;
+      const ttl = components.lifetime.partitions.ttl;
+      const visualAlpha = components.visual.partitions.alpha;
+      const visualEnergy = components.visual.partitions.energy;
+      const visualRadius = components.visual.partitions.radius;
+      const velocityX = components.velocity.partitions.x;
+      const velocityY = components.velocity.partitions.y;
       let expiredCount = 0;
       for (let i = 0; i < count; i++) {
         const entity = indices[i]!;

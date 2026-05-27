@@ -373,6 +373,22 @@ export class ComponentManager {
   }
 
   /**
+   * Get a registered component instance
+   * @param component - The component to get the instance of
+   * @returns The component instance
+   * @throws {NotRegisteredError} If the component is not registered
+   */
+  require<T extends SchemaOrNull>(component: Component<T> | string): ComponentInstance<T> {
+    const instance = this.getInstance(component);
+    if (!instance) {
+      throw new NotRegisteredError(
+        `Component ${typeof component === "string" ? `"${component}"` : component.name} not registered.`,
+      );
+    }
+    return instance;
+  }
+
+  /**
    * Get instances for an array of components
    * @param array - The array of components to get instances for
    * @returns An array of component instances

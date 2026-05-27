@@ -12,14 +12,15 @@ import type { System } from "@/system/system.ts";
 import type {
   BorrowedEntityIterator,
   BorrowedEntityList,
+  ComponentMap,
   DynamicComponent,
   DynamicComponentInstance,
   Entity,
   QueryEntityList,
   SchemaOrNull,
-  SystemFunction,
   SystemInstance,
   SystemRecord,
+  TypedSystemCallback,
 } from "@/types.ts";
 
 /** The specification for a World */
@@ -156,6 +157,13 @@ export type WorldComponentAPI = {
    */
   getInstance<T extends SchemaOrNull>(component: Component<T> | string): ComponentInstance<T> | undefined;
   /**
+   * Get a registered component instance
+   * @param component - The component to get the instance for
+   * @returns The registered instance of the component
+   * @throws {NotRegisteredError} - If the component is not registered
+   */
+  require<T extends SchemaOrNull>(component: Component<T> | string): ComponentInstance<T>;
+  /**
    * Get instances for an array of components
    * @param array - The array of components to get instances for
    * @returns An array of component instances
@@ -239,13 +247,31 @@ export type WorldSystemAPI = {
   /** The systems by name */
   readonly registry: SystemRecord;
   /** Create a system */
-  create<T extends SystemFunction>(system: System<T>): SystemInstance<T>;
+  create<
+    TComponents extends ComponentMap,
+    TArgs extends unknown[],
+    TReturn,
+  >(system: System<TComponents, TArgs, TReturn>): SystemInstance<TypedSystemCallback<TComponents, TArgs, TReturn>>;
   /** Get a system instance */
-  get<T extends SystemFunction>(system: System<T> | string): SystemInstance<T> | undefined;
+  get<
+    TComponents extends ComponentMap,
+    TArgs extends unknown[],
+    TReturn,
+  >(
+    system: System<TComponents, TArgs, TReturn> | string,
+  ): SystemInstance<TypedSystemCallback<TComponents, TArgs, TReturn>> | undefined;
   /** Check if a system is registered */
-  has<T extends SystemFunction>(system: System<T> | string): boolean;
+  has<
+    TComponents extends ComponentMap,
+    TArgs extends unknown[],
+    TReturn,
+  >(system: System<TComponents, TArgs, TReturn> | string): boolean;
   /** Destroy a system */
-  destroy<T extends SystemFunction>(system: System<T> | string): Promise<void>;
+  destroy<
+    TComponents extends ComponentMap,
+    TArgs extends unknown[],
+    TReturn,
+  >(system: System<TComponents, TArgs, TReturn> | string): Promise<void>;
 };
 
 /** The result of a World API constructor */
