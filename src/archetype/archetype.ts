@@ -141,13 +141,8 @@ export class Archetype {
     return this.#entityCapacity;
   }
 
-  /**
-   * Add an Entity to the Archetype
-   * @param entity - The Entity to add
-   * @returns The Archetype with the Entity added
-   */
-  addEntity(entity: Entity): Archetype {
-    if (hasFlag(this.#flags, entity, ENTITY_ACTIVE)) return this;
+  #activateEntity(entity: Entity): boolean {
+    if (hasFlag(this.#flags, entity, ENTITY_ACTIVE)) return false;
     if (!hasFlag(this.#flags, entity, ENTITY_LISTED)) {
       setFlag(this.#flags, entity, ENTITY_LISTED, true);
       this.#entityList[this.#entityListCount++] = entity;
@@ -162,6 +157,35 @@ export class Archetype {
       this.#enteredCount++;
     }
     this.#populationCount++;
+    return true;
+  }
+
+  #deactivateEntity(entity: Entity): boolean {
+    if (!hasFlag(this.#flags, entity, ENTITY_ACTIVE)) return false;
+    if (hasFlag(this.#flags, entity, ENTERED_ACTIVE)) {
+      setFlag(this.#flags, entity, ENTERED_ACTIVE, false);
+      this.#enteredCount--;
+    }
+    setFlag(this.#flags, entity, ENTITY_ACTIVE, false);
+    if (!hasFlag(this.#flags, entity, EXITED_ACTIVE)) {
+      if (!hasFlag(this.#flags, entity, EXITED_LISTED)) {
+        setFlag(this.#flags, entity, EXITED_LISTED, true);
+        this.#exitedList[this.#exitedListCount++] = entity;
+      }
+      setFlag(this.#flags, entity, EXITED_ACTIVE, true);
+      this.#exitedCount++;
+    }
+    this.#populationCount--;
+    return true;
+  }
+
+  /**
+   * Add an Entity to the Archetype
+   * @param entity - The Entity to add
+   * @returns The Archetype with the Entity added
+   */
+  addEntity(entity: Entity): Archetype {
+    this.#activateEntity(entity);
     return this;
   }
 
@@ -177,22 +201,7 @@ export class Archetype {
     const end = start + count;
     for (let i = start; i < end; i++) {
       const entity = entities[i]!;
-      if (hasFlag(this.#flags, entity, ENTITY_ACTIVE)) continue;
-      if (!hasFlag(this.#flags, entity, ENTITY_LISTED)) {
-        setFlag(this.#flags, entity, ENTITY_LISTED, true);
-        this.#entityList[this.#entityListCount++] = entity;
-      }
-      setFlag(this.#flags, entity, ENTITY_ACTIVE, true);
-      if (!hasFlag(this.#flags, entity, ENTERED_ACTIVE)) {
-        if (!hasFlag(this.#flags, entity, ENTERED_LISTED)) {
-          setFlag(this.#flags, entity, ENTERED_LISTED, true);
-          this.#enteredList[this.#enteredListCount++] = entity;
-        }
-        setFlag(this.#flags, entity, ENTERED_ACTIVE, true);
-        this.#enteredCount++;
-      }
-      this.#populationCount++;
-      added++;
+      if (this.#activateEntity(entity)) added++;
     }
     return added;
   }
@@ -321,21 +330,7 @@ export class Archetype {
    * @returns The Archetype with the Entity removed
    */
   removeEntity(entity: Entity): Archetype {
-    if (!hasFlag(this.#flags, entity, ENTITY_ACTIVE)) return this;
-    if (hasFlag(this.#flags, entity, ENTERED_ACTIVE)) {
-      setFlag(this.#flags, entity, ENTERED_ACTIVE, false);
-      this.#enteredCount--;
-    }
-    setFlag(this.#flags, entity, ENTITY_ACTIVE, false);
-    if (!hasFlag(this.#flags, entity, EXITED_ACTIVE)) {
-      if (!hasFlag(this.#flags, entity, EXITED_LISTED)) {
-        setFlag(this.#flags, entity, EXITED_LISTED, true);
-        this.#exitedList[this.#exitedListCount++] = entity;
-      }
-      setFlag(this.#flags, entity, EXITED_ACTIVE, true);
-      this.#exitedCount++;
-    }
-    this.#populationCount--;
+    this.#deactivateEntity(entity);
     return this;
   }
 
@@ -351,22 +346,7 @@ export class Archetype {
     const end = start + count;
     for (let i = start; i < end; i++) {
       const entity = entities[i]!;
-      if (!hasFlag(this.#flags, entity, ENTITY_ACTIVE)) continue;
-      if (hasFlag(this.#flags, entity, ENTERED_ACTIVE)) {
-        setFlag(this.#flags, entity, ENTERED_ACTIVE, false);
-        this.#enteredCount--;
-      }
-      setFlag(this.#flags, entity, ENTITY_ACTIVE, false);
-      if (!hasFlag(this.#flags, entity, EXITED_ACTIVE)) {
-        if (!hasFlag(this.#flags, entity, EXITED_LISTED)) {
-          setFlag(this.#flags, entity, EXITED_LISTED, true);
-          this.#exitedList[this.#exitedListCount++] = entity;
-        }
-        setFlag(this.#flags, entity, EXITED_ACTIVE, true);
-        this.#exitedCount++;
-      }
-      this.#populationCount--;
-      removed++;
+      if (this.#deactivateEntity(entity)) removed++;
     }
     return removed;
   }
