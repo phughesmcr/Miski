@@ -461,13 +461,6 @@ const step = (): void => {
   lastTickDuration = performance.now() - started;
 };
 
-const requestSimulationFrame = (callback: FrameRequestCallback): number => {
-  if (typeof requestAnimationFrame === "function") {
-    return requestAnimationFrame(callback);
-  }
-  return setTimeout(() => callback(performance.now()), SIMULATION_STEP_MS);
-};
-
 const runSimulationFrame = (time: number): void => {
   const elapsedMs = Math.max(0, time - previousSimulationFrameMs);
   previousSimulationFrameMs = time;
@@ -485,7 +478,7 @@ const runSimulationFrame = (time: number): void => {
     accumulatedSimulationMs = 0;
   }
 
-  requestSimulationFrame(runSimulationFrame);
+  requestAnimationFrame(runSimulationFrame);
 };
 
 const refreshTransitionMetrics = (): void => {
@@ -494,7 +487,6 @@ const refreshTransitionMetrics = (): void => {
     exited = 0;
     return;
   }
-
   entered = countEntities(world.archetypes.queryEntered(renderQuery));
   exited = countEntities(world.archetypes.queryExited(renderQuery));
   world.refresh();
@@ -645,7 +637,7 @@ Deno.serve({ hostname: "127.0.0.1", port: PORT }, (request) => {
   return new Response("Not found", { status: 404 });
 });
 
-requestSimulationFrame(runSimulationFrame);
+requestAnimationFrame(runSimulationFrame);
 setInterval(broadcastSnapshot, 1_000 / SNAPSHOT_FPS);
 
 console.log(`Miski visual demo running at http://127.0.0.1:${PORT}`);
