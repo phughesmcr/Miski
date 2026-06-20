@@ -175,7 +175,7 @@ Deno.test("proxy rejects out-of-range entity targets before mutating component s
       proxy.entity = 8;
     },
     EntityNotFoundError,
-    "Entity 8 not found",
+    "Entity 8 is out of range.",
   );
 });
 

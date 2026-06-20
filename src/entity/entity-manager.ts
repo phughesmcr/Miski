@@ -8,7 +8,7 @@
 import { BitPool } from "@phughesmcr/bitpool";
 import { BooleanArray } from "@phughesmcr/booleanarray";
 
-import { EntityNotFoundError } from "@/errors.ts";
+import { EntityNotFoundError, formatEntityNotActive } from "@/errors.ts";
 import type { Entity, EntityManagerSerialized } from "@/types.ts";
 import { isPositiveUint32, isUint32, numberArrayFromString } from "@/utils.ts";
 import { ReusableEntityIterator } from "./entity-list.ts";
@@ -90,7 +90,7 @@ export class EntityManager {
    */
   destroy(entity: Entity): void {
     if (this.isEntity(entity) === false) {
-      throw new EntityNotFoundError(entity);
+      throw new EntityNotFoundError(formatEntityNotActive(entity));
     }
     this.pool.release(entity);
   }

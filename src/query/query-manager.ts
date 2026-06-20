@@ -7,7 +7,7 @@
 
 import { ID_KEY } from "@/constants.ts";
 import { BooleanArray } from "@phughesmcr/booleanarray";
-import { NotRegisteredError } from "@/errors.ts";
+import { componentDisplayName, formatComponentNotRegistered, NotRegisteredError } from "@/errors.ts";
 import type { Archetype } from "@/archetype/archetype.ts";
 import type {
   ComponentInstanceGetter,
@@ -32,7 +32,7 @@ function getRegisteredInstances(
     const instance = instances[i];
     if (!instance) {
       const component = components[i];
-      throw new NotRegisteredError(`Component "${component?.name ?? "unknown"}" not registered in world.`);
+      throw new NotRegisteredError(formatComponentNotRegistered(componentDisplayName(component ?? "unknown")));
     }
   }
   return instances as RegisteredComponentInstance[];

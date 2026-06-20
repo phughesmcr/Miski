@@ -11,7 +11,7 @@ import { getPartitionByteSize, PartitionedBuffer } from "@phughesmcr/partitioned
 import { $_COMPONENT_ID_KEY, $_PARTITION_KEY } from "@/constants.ts";
 import { createEntityArray, type EntityArray } from "@/entity/entity-array.ts";
 import { ReusableEntityIterator } from "@/entity/entity-list.ts";
-import { NotRegisteredError } from "@/errors.ts";
+import { componentDisplayName, formatComponentNotRegistered, NotRegisteredError } from "@/errors.ts";
 import type { DynamicComponent, DynamicComponentInstance, Entity, SchemaOrNull, TypedArray } from "@/types.ts";
 import { isObject } from "@/utils.ts";
 import { ComponentInstance } from "./component-instance.ts";
@@ -379,9 +379,7 @@ export class ComponentManager {
   require<T extends SchemaOrNull>(component: Component<T> | string): ComponentInstance<T> {
     const instance = this.getInstance(component);
     if (!instance) {
-      throw new NotRegisteredError(
-        `Component ${typeof component === "string" ? `"${component}"` : component.name} not registered.`,
-      );
+      throw new NotRegisteredError(formatComponentNotRegistered(componentDisplayName(component)));
     }
     return instance;
   }

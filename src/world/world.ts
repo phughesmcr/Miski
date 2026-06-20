@@ -14,8 +14,11 @@ import { createEntityArray, type EntityArray } from "@/entity/entity-array.ts";
 import { EntityManager } from "@/entity/entity-manager.ts";
 import {
   ComponentDataError,
+  componentDisplayName,
   ComponentOwnershipError,
   EntityNotFoundError,
+  formatComponentNotRegistered,
+  formatEntityNotActive,
   NotRegisteredError,
   SpecError,
   WorldStateError,
@@ -333,8 +336,7 @@ export class World {
   #getRegisteredComponentInstance<T extends SchemaOrNull>(component: Component<T> | string): ComponentInstance<T> {
     const instance = this.#componentManager.getInstance(component);
     if (instance !== undefined) return instance;
-    const name = typeof component === "string" ? `"${component}"` : `"${component.name}"`;
-    throw new NotRegisteredError(`Component ${name} is not registered in this world.`);
+    throw new NotRegisteredError(formatComponentNotRegistered(componentDisplayName(component)));
   }
 
   /** Preflight a borrowed dense entity list before an atomic batch mutation. */
@@ -348,7 +350,7 @@ export class World {
       const entity = entities.indices[i]!;
       if (!this.#entityManager.isActive(entity)) {
         this.#clearBatchEntities(i);
-        throw new EntityNotFoundError(`Entity ${entity} is not active.`);
+        throw new EntityNotFoundError(formatEntityNotActive(entity));
       }
       if (this.#batchSeen[entity] === 1) {
         this.#clearBatchEntities(i);
@@ -409,7 +411,7 @@ export class World {
     data?: { [k in keyof T]: number } | undefined,
   ): void {
     if (!this.#entityManager.isActive(entity)) {
-      throw new EntityNotFoundError(`Entity ${entity} is not active.`);
+      throw new EntityNotFoundError(formatEntityNotActive(entity));
     }
     const changed = this.#commitAddComponent(this.#getRegisteredComponentInstance(component), entity, data);
     this.#invalidateCommittedTransition(changed);
@@ -462,7 +464,7 @@ export class World {
     entity: Entity,
   ): void {
     if (!this.#entityManager.isActive(entity)) {
-      throw new EntityNotFoundError(`Entity ${entity} is not active.`);
+      throw new EntityNotFoundError(formatEntityNotActive(entity));
     }
     const changed = this.#commitRemoveComponent(this.#getRegisteredComponentInstance(component), entity);
     this.#invalidateCommittedTransition(changed);
@@ -499,11 +501,11 @@ export class World {
     entity: Entity,
   ): ComponentInstance<T> {
     if (!this.#entityManager.isActive(entity)) {
-      throw new EntityNotFoundError(`Entity ${entity} is not active.`);
+      throw new EntityNotFoundError(formatEntityNotActive(entity));
     }
     const instance = this.#componentManager.getInstance(component);
     if (instance === undefined) {
-      throw new NotRegisteredError(`Component ${component} not registered in world`);
+      throw new NotRegisteredError(formatComponentNotRegistered(componentDisplayName(component)));
     }
     if (instance.storage === null) {
       throw new ComponentDataError(`Component ${instance.type.name} has no data storage.`);
@@ -534,7 +536,7 @@ export class World {
   /** Destroy an entity and clean up its components and archetype */
   #destroyEntity(entity: Entity): void {
     if (!this.#entityManager.isActive(entity)) {
-      throw new EntityNotFoundError(`Entity ${entity} is not active.`);
+      throw new EntityNotFoundError(formatEntityNotActive(entity));
     }
     // Get all components for this entity before destroying
     const archetype = this.#archetypeManager.getEntityArchetype(entity);

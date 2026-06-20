@@ -5,6 +5,33 @@
  * @license     MIT
  */
 
+import type { Entity } from "@/types.ts";
+
+/** Resolve a component reference to its display name */
+export function componentDisplayName(component: { readonly name: string } | string): string {
+  return typeof component === "string" ? component : component.name;
+}
+
+/** Format a not-registered component error message */
+export function formatComponentNotRegistered(name: string): string {
+  return `Component "${name}" is not registered in this world.`;
+}
+
+/** Format a not-registered system error message */
+export function formatSystemNotRegistered(name: string): string {
+  return `System "${name}" is not registered in this world.`;
+}
+
+/** Format an inactive-entity error message */
+export function formatEntityNotActive(entity: Entity): string {
+  return `Entity ${entity} is not active.`;
+}
+
+/** Format an out-of-range entity error message */
+export function formatEntityOutOfRange(entity: Entity): string {
+  return `Entity ${entity} is out of range.`;
+}
+
 /** The base error class for all Miski errors */
 export class MiskiError extends Error {
   /**

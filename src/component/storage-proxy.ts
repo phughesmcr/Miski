@@ -5,7 +5,7 @@
  * @license     MIT
  */
 
-import { EntityNotFoundError } from "@/errors.ts";
+import { EntityNotFoundError, formatEntityOutOfRange } from "@/errors.ts";
 import type { Entity, SchemaOrNull, StorageProxySpec, TypedArray } from "@/types.ts";
 import { hasOwnProperty } from "@/utils.ts";
 
@@ -52,7 +52,7 @@ export class StorageProxy<T extends SchemaOrNull> {
   /** Set the current entity ID the proxy is pointed at */
   set entity(value: Entity) {
     if (value < 0 || value >= this.#capacity) {
-      throw new EntityNotFoundError(`Entity ${value} not found`);
+      throw new EntityNotFoundError(formatEntityOutOfRange(value));
     }
     this.#entity = value;
   }

@@ -187,7 +187,7 @@ Deno.test("queries reject components that are not registered in the world", asyn
   assertThrows(
     () => ids(world.entities.query(new Query({ all: [unregistered] }))),
     NotRegisteredError,
-    'Component "unregistered" not registered',
+    'Component "unregistered" is not registered in this world.',
   );
 });
 
@@ -393,7 +393,7 @@ Deno.test("components cannot be added to inactive entities", async () => {
   assertThrows(
     () => world.components.addToEntity(position, 3, { x: 1, y: 2 }),
     EntityNotFoundError,
-    "Entity 3 is not active",
+    "Entity 3 is not active.",
   );
 
   assertEquals(ids(world.entities.query(new Query({ all: [position] }))), [], "Expected inactive entity to not match");
@@ -415,7 +415,7 @@ Deno.test("component removal rejects inactive entities and stays idempotent for 
   assertThrows(
     () => world.components.removeFromEntity(velocity, 7),
     EntityNotFoundError,
-    "Entity 7 is not active",
+    "Entity 7 is not active.",
   );
 
   world.components.removeFromEntity(velocity, nonOwner);
@@ -441,7 +441,7 @@ Deno.test("batch component removal rejects inactive entities without partial mut
   assertThrows(
     () => world.components.removeFromEntities(position, list),
     EntityNotFoundError,
-    "Entity 7 is not active",
+    "Entity 7 is not active.",
   );
   assert(world.components.entityHas(position, first), "Expected failed batch removal to leave ownership intact");
   assertEquals(
@@ -511,12 +511,12 @@ Deno.test("public component data APIs reject inactive, unregistered, tag, and no
   assertThrows(
     () => world.components.getEntityData(position, 7),
     EntityNotFoundError,
-    "Entity 7 is not active",
+    "Entity 7 is not active.",
   );
   assertThrows(
     () => world.components.setEntityData(position, 7, { x: 3, y: 4 }),
     EntityNotFoundError,
-    "Entity 7 is not active",
+    "Entity 7 is not active.",
   );
   assertThrows(
     () => world.components.getEntityData(unregistered, owner),
@@ -602,7 +602,7 @@ Deno.test("components.require returns registered instances and exposes partition
   assertThrows(
     () => world.components.require("missing"),
     NotRegisteredError,
-    'Component "missing" not registered.',
+    'Component "missing" is not registered in this world.',
   );
 });
 

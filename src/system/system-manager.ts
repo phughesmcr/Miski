@@ -6,7 +6,7 @@
  */
 
 import { $_SYSTEM_DESTROY_KEY, $_SYSTEM_INIT_KEY } from "@/constants.ts";
-import { AlreadyRegisteredError, NotRegisteredError } from "@/errors.ts";
+import { AlreadyRegisteredError, formatSystemNotRegistered, NotRegisteredError } from "@/errors.ts";
 import type {
   ComponentMap,
   SystemCallback,
@@ -108,7 +108,7 @@ export class SystemManager {
     if (record === undefined) {
       if (throwOnNotFound === false) return;
       const name = typeof system === "string" ? system : system.name;
-      throw new NotRegisteredError(`System "${name}" is not registered in the world`);
+      throw new NotRegisteredError(formatSystemNotRegistered(name));
     }
     await record.destroy(this.#world);
     delete this.#records[record.name];
