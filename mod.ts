@@ -190,6 +190,7 @@ export {
   EntityNotFoundError,
   isMiskiError,
   MiskiError,
+  NoComponentsFoundError,
   NotRegisteredError,
   SpecError,
   WorldStateError,
