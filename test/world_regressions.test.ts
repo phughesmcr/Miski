@@ -13,57 +13,10 @@ import {
 import { ArchetypeManager } from "../src/archetype/archetype-manager.ts";
 import { EntityManager } from "../src/entity/entity-manager.ts";
 import type { QueryEntityList } from "../mod.ts";
+import { assert, assertEquals, assertRejects, assertThrows, ids } from "./helpers.ts";
 
 type Vec2 = { x: Float32ArrayConstructor; y: Float32ArrayConstructor };
 type MixedWidth = { flag: number; value: number };
-
-function assert(condition: boolean, message: string): asserts condition {
-  if (!condition) {
-    throw new Error(message);
-  }
-}
-
-function assertEquals<T>(actual: T, expected: T, message: string): void {
-  if (JSON.stringify(actual) !== JSON.stringify(expected)) {
-    throw new Error(`${message}\nExpected: ${JSON.stringify(expected)}\nActual: ${JSON.stringify(actual)}`);
-  }
-}
-
-function assertThrows(fn: () => unknown, ErrorClass: new (...args: any[]) => Error, messageIncludes: string): void {
-  try {
-    fn();
-  } catch (error) {
-    assert(error instanceof ErrorClass, `Expected ${ErrorClass.name}, got ${error}`);
-    assert(
-      error instanceof Error && error.message.includes(messageIncludes),
-      `Expected error message to include "${messageIncludes}", got "${error instanceof Error ? error.message : error}"`,
-    );
-    return;
-  }
-  throw new Error(`Expected ${ErrorClass.name} to be thrown`);
-}
-
-async function assertRejects(
-  fn: () => Promise<unknown>,
-  ErrorClass: new (...args: any[]) => Error,
-  messageIncludes: string,
-): Promise<void> {
-  try {
-    await fn();
-  } catch (error) {
-    assert(error instanceof ErrorClass, `Expected ${ErrorClass.name}, got ${error}`);
-    assert(
-      error instanceof Error && error.message.includes(messageIncludes),
-      `Expected error message to include "${messageIncludes}", got "${error instanceof Error ? error.message : error}"`,
-    );
-    return;
-  }
-  throw new Error(`Expected ${ErrorClass.name} to be thrown`);
-}
-
-function ids(iterable: Iterable<number> | undefined): number[] {
-  return iterable ? [...iterable] : [];
-}
 
 Deno.test("tag components with maxEntities: 1 can be registered in a world", async () => {
   const player = new Component<null>({ name: "player", maxEntities: 1 });
