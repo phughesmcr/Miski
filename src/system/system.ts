@@ -9,7 +9,6 @@ import type {
   SystemPrivateMethods,
   SystemSpec,
   TypedSystemCallback,
-  TypedSystemSpec,
   UntypedQueryComponents,
 } from "@/types.ts";
 import { isObject, isValidName, noop } from "@/utils.ts";
@@ -68,26 +67,6 @@ export function isValidSystemSpec(spec: unknown): spec is SystemSpec {
   if (typeof destroy !== "undefined" && typeof destroy !== "function") return false;
   if (typeof init !== "undefined" && typeof init !== "function") return false;
   return true;
-}
-
-/** Define a typed system from keyed component maps. */
-export function defineSystem<
-  const TAll extends ComponentMap = Record<never, never>,
-  const TAny extends ComponentMap = Record<never, never>,
-  const TNone extends ComponentMap = Record<never, never>,
-  TArgs extends unknown[] = [],
-  TReturn = void,
->(
-  spec: TypedSystemSpec<TAll, TAny, TNone, TArgs, TReturn>,
-): System<TAll & TAny, TArgs, TReturn> {
-  const { name, all = {}, any = {}, none = {}, callback, destroy, init } = spec;
-  return new System({
-    name,
-    query: new Query({ all, any, none }) as Query<TAll & TAny>,
-    callback,
-    destroy,
-    init,
-  });
 }
 
 /** Systems are behaviours which affect components. */

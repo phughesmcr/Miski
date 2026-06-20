@@ -1,6 +1,6 @@
 /// <reference lib="deno.ns" />
 
-import { AlreadyRegisteredError, Component, defineSystem, Query, SpecError, System, World } from "../mod.ts";
+import { AlreadyRegisteredError, Component, Query, SpecError, System, World } from "../mod.ts";
 import { NoComponentsFoundError } from "../src/errors.ts";
 import { assert, assertEquals, assertThrows } from "./helpers.ts";
 import { createEntity, createTestWorld, tagComponent, vec2Component } from "./fixtures.ts";
@@ -96,15 +96,16 @@ Deno.test("systems cannot be created for queries that expose no component instan
   );
 });
 
-Deno.test("defineSystem with no component maps fails through existing system creation validation", async () => {
+Deno.test("system with empty typed query fails through existing system creation validation", async () => {
   const disabled = tagComponent("disabled");
   const world = await createTestWorld([disabled]);
 
   assertThrows(
     () =>
       world.systems.create(
-        defineSystem({
+        new System({
           name: "emptyTypedSystem",
+          query: new Query({ all: {}, any: {}, none: {} }),
           callback: () => {},
         }),
       ),

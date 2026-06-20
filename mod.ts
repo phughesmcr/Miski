@@ -68,8 +68,6 @@
  * const isActive2: boolean = world.entities.isActive(entity2); // false (destroyed)
  * ```
  *
- * @example
- *
  * @example Add a component to an Entity
  * ```ts
  * // Without setting initial values:
@@ -146,9 +144,9 @@
  *
  * @example Register a typed System
  * ```ts
- * const positionSystem = defineSystem({
+ * const positionSystem = new System({
  *   name: "positionSystem",
- *   all: { position: positionComponent },
+ *   query: new Query({ all: { position: positionComponent } }),
  *   // optional
  *   init: (world: World) => {
  *     // called once on world.init()
@@ -195,11 +193,14 @@ export {
   SpecError,
   WorldStateError,
 } from "@/errors.ts";
-export { isComponentMap, isValidQuerySpec, normalizeQuerySpec, Query, query } from "@/query/query.ts";
-export { defineSystem, isValidSystemSpec, System } from "@/system/system.ts";
+export { QueryRuntime } from "@/query/query.ts";
+export { isComponentMap, isValidQuerySpec, normalizeQuerySpec, Query } from "@/query/query.ts";
+export { isValidSystemSpec, System } from "@/system/system.ts";
 export { World } from "@/world/world.ts";
 export { isValidWorldSpec } from "@/world/utils.ts";
 export { isValidName } from "@/utils.ts";
+export type { NormalizedQuerySpec, QueryConstructor, QueryInputSpec } from "@/query/query.ts";
+export type { SchemaPropertyArray } from "@/types.ts";
 export type { ComponentInstance } from "@/component/component-instance.ts";
 export type { StorageProxy } from "@/component/storage-proxy.ts";
 export type {
@@ -209,7 +210,6 @@ export type {
   ComponentInstances,
   ComponentMap,
   ComponentRecord,
-  ComponentSchemaOf,
   ComponentSpec,
   DynamicComponent,
   DynamicComponentInstance,
@@ -217,7 +217,6 @@ export type {
   ParametersExceptFirstTwo,
   Partition,
   PartitionStorage,
-  QueryCallbackComponents,
   QueryEntityList,
   QuerySpec,
   Schema,
@@ -231,7 +230,6 @@ export type {
   SystemSpec,
   TypedQuerySpec,
   TypedSystemCallback,
-  TypedSystemSpec,
   UntypedQueryComponents,
   WorldArchetypeAPI,
   WorldComponentAPI,

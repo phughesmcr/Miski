@@ -57,21 +57,12 @@ export type EntityManagerSerialized = {
   entities: string;
 };
 
-/** The specification for an Archetype */
-export type ArchetypeSpec = {
-  /** The bitfield of the Archetype */
-  bitfield?: BooleanArray;
-  /** The components to include in the Archetype */
-  components: DynamicComponentInstance[];
-  /** The number of entities the Archetype can hold */
-  capacity: number;
-};
-
 /** A Schema or null (null = tag component) */
 export type SchemaOrNull<T = unknown> = Schema<T> | null;
 
 /** Resolve the typed-array view type for one schema property definition */
-type SchemaPropertyArray<T> = T extends TypedArrayConstructor ? InstanceType<T> :
+/** Resolve the typed-array view type for one schema property definition. */
+export type SchemaPropertyArray<T> = T extends TypedArrayConstructor ? InstanceType<T> :
   T extends [infer Constructor extends TypedArrayConstructor, number] ? InstanceType<Constructor> :
   never;
 
@@ -89,16 +80,8 @@ export type DynamicComponentInstance = ComponentInstance<SchemaOrNull>;
 /** A Record of ComponentInstances by Component name */
 export type ComponentRecord<T extends SchemaOrNull = SchemaOrNull> = Record<string, ComponentInstance<T>>;
 
-/** A type-safe component record for system callbacks */
-export type TypedComponentRecord<T> = {
-  [K in keyof T]: T[K] extends SchemaOrNull ? ComponentInstance<T[K]> : never;
-};
-
-/** A keyed map of component definitions used by typed system helpers. */
+/** A keyed map of component definitions used by typed query specs. */
 export type ComponentMap = Readonly<Record<string, DynamicComponent>>;
-
-/** Extract the schema type from a Component definition. */
-export type ComponentSchemaOf<TComponent> = TComponent extends Component<infer TSchema> ? TSchema : never;
 
 /** Convert a keyed Component map into the world-local ComponentInstance record for that map. */
 export type ComponentInstances<TMap extends ComponentMap> = {
@@ -162,7 +145,7 @@ export type QuerySpec = {
   none?: DynamicComponent[];
 };
 
-/** Keyed query specification used for typed query and system authoring. */
+/** Keyed query specification used for typed query authoring. */
 export type TypedQuerySpec<
   TAll extends ComponentMap = Record<never, never>,
   TAny extends ComponentMap = Record<never, never>,
@@ -175,12 +158,6 @@ export type TypedQuerySpec<
   /** Components matching entities must not have. These are filters only. */
   none?: TNone;
 };
-
-/** Components exposed to a system callback for a typed query. */
-export type QueryCallbackComponents<
-  TAll extends ComponentMap,
-  TAny extends ComponentMap,
-> = TAll & TAny;
 
 /** Dynamic query components used when a query is authored with component arrays. */
 export type UntypedQueryComponents = Record<string, DynamicComponent>;
@@ -275,12 +252,6 @@ export type TypedSystemCallback<
 ) => TReturn;
 
 /**
- * The parameters of a SystemCallback excluding the first two parameters
- * which are always the components and entities
- */
-export type SystemFunctionArgs<T extends SystemFunction> = ParametersExceptFirstTwo<T>;
-
-/**
  * The specification for a System.
  * @param TComponents The query's typed component map
  * @param TArgs The parameters of the callback excluding the first two
@@ -296,30 +267,6 @@ export type SystemSpec<
   query: Query<TComponents>;
   /** The core function of the system. Called when this.exec is called. */
   callback: TypedSystemCallback<TComponents, TArgs, TReturn>;
-  /** The function to call when the system is initialized. */
-  init?: (world: World) => void | Promise<void>;
-  /** The function to call when the system is destroyed. */
-  destroy?: (world: World) => void | Promise<void>;
-};
-
-/** The specification for the typed defineSystem helper. */
-export type TypedSystemSpec<
-  TAll extends ComponentMap,
-  TAny extends ComponentMap,
-  TNone extends ComponentMap,
-  TArgs extends unknown[] = [],
-  TReturn = void,
-> = {
-  /** The name of the system */
-  name: string;
-  /** Components every matching entity must have. */
-  all?: TAll;
-  /** Components where at least one must be present when supplied. */
-  any?: TAny;
-  /** Components matching entities must not have. These are filters only. */
-  none?: TNone;
-  /** The core function of the system. Called when the SystemInstance is called. */
-  callback: TypedSystemCallback<TAll & TAny, TArgs, TReturn>;
   /** The function to call when the system is initialized. */
   init?: (world: World) => void | Promise<void>;
   /** The function to call when the system is destroyed. */

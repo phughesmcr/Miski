@@ -20,19 +20,15 @@ import type {
 } from "@/types.ts";
 import { isObject } from "@/utils.ts";
 
-type NormalizedQuerySpec = {
+/** Normalized query clauses as component arrays. */
+export type NormalizedQuerySpec = {
   all: DynamicComponent[];
   any: DynamicComponent[];
   none: DynamicComponent[];
 };
 
-type QueryInputSpec = QuerySpec | TypedQuerySpec<ComponentMap, ComponentMap, ComponentMap>;
-
-/** Callback component map inferred from a typed query spec. */
-export type QueryCallbackComponentsFromSpec<
-  TAll extends ComponentMap,
-  TAny extends ComponentMap,
-> = TAll & TAny;
+/** Array- or map-based query specification accepted by {@link Query}. */
+export type QueryInputSpec = QuerySpec | TypedQuerySpec<ComponentMap, ComponentMap, ComponentMap>;
 
 /** Type guard for keyed component maps used in typed query specs. */
 export function isComponentMap(value: unknown): value is ComponentMap {
@@ -44,7 +40,9 @@ export function isComponentMap(value: unknown): value is ComponentMap {
 }
 
 /** Normalize array- or map-based query specs into component arrays. */
-export function normalizeQuerySpec(spec: QueryInputSpec): NormalizedQuerySpec {
+export function normalizeQuerySpec(
+  spec: QuerySpec | TypedQuerySpec<ComponentMap, ComponentMap, ComponentMap>,
+): NormalizedQuerySpec {
   const normalizeClause = (clause: DynamicComponent[] | ComponentMap | undefined): DynamicComponent[] => {
     if (clause === undefined) return [];
     return Array.isArray(clause) ? clause : Object.values(clause);
@@ -96,22 +94,10 @@ export const isValidQuerySpec = (spec: unknown): spec is QueryInputSpec => {
 };
 
 /** A Query is a collection of Components that can be used to find Entities */
-class QueryRuntime<TComponents extends ComponentMap = UntypedQueryComponents> {
+/** Query implementation used by the {@link Query} constructor. */
+export class QueryRuntime<TComponents extends ComponentMap = UntypedQueryComponents> {
   /** Carries the typed component map through to {@link System} inference. */
   declare readonly $inferComponents: ComponentInstances<TComponents>;
-
-  /**
-   * Create a typed query from keyed component maps.
-   * @param spec - The Query's keyed specification object
-   * @returns A typed Query object
-   */
-  static define<
-    const TAll extends ComponentMap,
-    const TAny extends ComponentMap,
-    const TNone extends ComponentMap,
-  >(spec: TypedQuerySpec<TAll, TAny, TNone>): Query<TAll & TAny> {
-    return new Query(spec) as Query<TAll & TAny>;
-  }
 
   /**
    * Compose a new Query from an array of Queries
@@ -157,18 +143,16 @@ class QueryRuntime<TComponents extends ComponentMap = UntypedQueryComponents> {
 
 /** Typed query constructor with array- and map-based overloads. */
 export interface QueryConstructor {
+  /** Create a query from an array-based specification. */
   new (spec: QuerySpec): Query<UntypedQueryComponents>;
+  /** Create a typed query from a keyed component-map specification. */
   new <
     const TAll extends ComponentMap,
     const TAny extends ComponentMap,
     const TNone extends ComponentMap,
   >(spec: TypedQuerySpec<TAll, TAny, TNone>): Query<TAll & TAny>;
+  /** Compose multiple queries into one combined query. */
   compose: typeof QueryRuntime.compose;
-  define<
-    const TAll extends ComponentMap,
-    const TAny extends ComponentMap,
-    const TNone extends ComponentMap,
-  >(spec: TypedQuerySpec<TAll, TAny, TNone>): Query<TAll & TAny>;
 }
 
 /** A Query is a collection of Components that can be used to find Entities */
@@ -176,18 +160,6 @@ export type Query<TComponents extends ComponentMap = UntypedQueryComponents> = Q
 
 /** A Query is a collection of Components that can be used to find Entities */
 export const Query: QueryConstructor = QueryRuntime;
-
-/**
- * Create a typed query from keyed component maps.
- * Alias for {@link Query.define}.
- */
-export function query<
-  const TAll extends ComponentMap,
-  const TAny extends ComponentMap,
-  const TNone extends ComponentMap,
->(spec: TypedQuerySpec<TAll, TAny, TNone>): Query<TAll & TAny> {
-  return new Query(spec);
-}
 
 /**
  * Check if a target bitfield matches query requirements

@@ -39,12 +39,6 @@ export const ID_KEY = "id" as const;
 
 /**
  * @internal
- * The key used to store the Entity's archetype
- */
-export const $_ARCHETYPE_KEY: unique symbol = Symbol(`$_ARCHETYPE_KEY_${randomString()}`);
-
-/**
- * @internal
  * The symbol used to store the component's partition
  */
 export const $_PARTITION_KEY: unique symbol = Symbol(`$_PARTITION_KEY_${randomString()}`);
@@ -54,12 +48,6 @@ export const $_PARTITION_KEY: unique symbol = Symbol(`$_PARTITION_KEY_${randomSt
  * The symbol used to store the component definition id
  */
 export const $_COMPONENT_ID_KEY: unique symbol = Symbol(`$_COMPONENT_ID_KEY_${randomString()}`);
-
-/**
- * @internal
- * The symbol used to store the query's instances
- */
-export const $_QUERY_KEY: unique symbol = Symbol(`$_QUERY_KEY_${randomString()}`);
 
 /**
  * @internal

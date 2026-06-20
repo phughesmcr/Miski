@@ -63,16 +63,6 @@ export function numberArrayFromString(str: string): number[] {
 export function noop(..._args: unknown[]): void {}
 
 /**
- * Intersect two bits
- * @param a The first bit
- * @param b The second bit
- * @returns The intersection of the two bits
- */
-export function intersectBits(a: number, b: number): number {
-  return a & b;
-}
-
-/**
  * Test if a name is valid
  * @param name The name to test
  * @returns `true` if the name is valid

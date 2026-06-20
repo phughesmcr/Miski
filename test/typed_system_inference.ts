@@ -2,7 +2,7 @@
  * Compile-only type inference checks. Included in `deno task check`, not `deno test`.
  * See test/README.md.
  */
-import { Component, defineSystem, Query, System, World } from "../mod.ts";
+import { Component, Query, System, World } from "../mod.ts";
 import type { BorrowedEntityList, ComponentInstance, QuerySpec, SchemaOrNull, SystemCallback } from "../mod.ts";
 import { tagComponent, type Vec2, vec2Component } from "./fixtures.ts";
 // @ts-expect-error AnySystemCallback is not exported from the public mod.ts surface.
@@ -16,34 +16,7 @@ const renderable = tagComponent("renderable");
 const disabled = tagComponent("disabled");
 const inferredTag = new Component({ name: "inferredTag" });
 
-const movement = defineSystem({
-  name: "movement",
-  all: { position, velocity },
-  any: { renderable },
-  none: { disabled },
-  callback: (components, entities, dt: number): void => {
-    expectType<ComponentInstance<Vec2>>(components.position);
-    expectType<ComponentInstance<Vec2>>(components.velocity);
-    expectType<ComponentInstance<null>>(components.renderable);
-    expectType<BorrowedEntityList>(entities);
-    entities.indices[0];
-    expectType<number>(dt);
-
-    components.position.storage?.partitions.x;
-    components.velocity.proxy?.x;
-
-    // @ts-expect-error none components are query filters, not callback components.
-    components.disabled;
-    // @ts-expect-error misspelled component keys are rejected.
-    components.postion;
-  },
-});
-
 const world = new World({ capacity: 8, components: [position, velocity, renderable, disabled] });
-const movementInstance = world.systems.create(movement);
-movementInstance(1 / 60);
-// @ts-expect-error system instance arguments are inferred from the callback.
-movementInstance("fast");
 
 const manualTypedQuery = new Query({
   all: { position, velocity },
@@ -58,6 +31,7 @@ const manualTypedSystem = new System({
     expectType<ComponentInstance<Vec2>>(components.velocity);
     expectType<ComponentInstance<null>>(components.renderable);
     expectType<BorrowedEntityList>(entities);
+    entities.indices[0];
     expectType<number>(dt);
 
     components.position.partitions.x;
@@ -71,10 +45,12 @@ const manualTypedSystem = new System({
 });
 const manualTypedInstance = world.systems.create(manualTypedSystem);
 manualTypedInstance(1 / 60);
+// @ts-expect-error system instance arguments are inferred from the callback.
+manualTypedInstance("fast");
 
-const asyncSystem = defineSystem({
+const asyncSystem = new System({
   name: "asyncMovement",
-  all: { position },
+  query: new Query({ all: { position } }),
   callback: async (components): Promise<void> => {
     await Promise.resolve();
     expectType<ComponentInstance<Vec2>>(components.position);

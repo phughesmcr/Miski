@@ -1,6 +1,6 @@
 /// <reference lib="deno.ns" />
 
-import { Component, defineSystem, EntityNotFoundError, Query, System, World, WorldStateError } from "../mod.ts";
+import { Component, EntityNotFoundError, Query, System, World, WorldStateError } from "../mod.ts";
 import { assert, assertEquals, assertRejects, assertStrictEquals, assertThrows, ids, listIds } from "./helpers.ts";
 import { createEntity, createTestWorld, tagComponent, type Vec2, vec2Component } from "./fixtures.ts";
 import type { BorrowedEntityIterator, BorrowedEntityList, ComponentInstance, Entity, QueryEntityList } from "../mod.ts";
@@ -249,44 +249,7 @@ Deno.test("systems receive matching component instances, borrowed entity lists, 
   assertStrictEquals(world.systems.get("movement"), updateMovement, "Expected systems to be retrievable by name");
 });
 
-Deno.test("defineSystem creates the same query behavior as manual System construction", async () => {
-  const position = vec2Component();
-  const velocity = vec2Component("velocity");
-  const renderable = tagComponent("renderable");
-  const sleeping = tagComponent("sleeping");
-  const world = await createTestWorld([position, velocity, renderable, sleeping]);
-
-  const matching = createEntity(world);
-  const missingAny = createEntity(world);
-  const blocked = createEntity(world);
-  world.components.addToEntity(position, matching);
-  world.components.addToEntity(velocity, matching);
-  world.components.addToEntity(renderable, matching);
-  world.components.addToEntity(position, missingAny);
-  world.components.addToEntity(velocity, missingAny);
-  world.components.addToEntity(position, blocked);
-  world.components.addToEntity(velocity, blocked);
-  world.components.addToEntity(renderable, blocked);
-  world.components.addToEntity(sleeping, blocked);
-
-  const manualQuery = new Query({ all: { position, velocity }, any: { renderable }, none: { sleeping } });
-  const typedSystem = defineSystem({
-    name: "typedMovement",
-    all: { position, velocity },
-    any: { renderable },
-    none: { sleeping },
-    callback: () => {},
-  });
-
-  assertEquals(
-    ids(world.entities.query(typedSystem.query)),
-    ids(world.entities.query(manualQuery)),
-    "Expected query match",
-  );
-  assertEquals(ids(world.entities.query(typedSystem.query)), [matching], "Expected all/any/none behavior to match");
-});
-
-Deno.test("defineSystem instances receive keyed component records and borrowed entity lists", async () => {
+Deno.test("typed systems receive keyed component records and borrowed entity lists", async () => {
   const position = vec2Component();
   const velocity = vec2Component("velocity");
   const world = await createTestWorld([position, velocity]);
@@ -296,9 +259,9 @@ Deno.test("defineSystem instances receive keyed component records and borrowed e
   world.components.addToEntity(velocity, first, { x: 3, y: 4 });
 
   const seen: Entity[][] = [];
-  const movement = defineSystem({
+  const movement = new System({
     name: "typedMovement",
-    all: { position, velocity },
+    query: new Query({ all: { position, velocity } }),
     callback: (components, entities, dt: number) => {
       const current = listIds(entities);
       seen.push(current);

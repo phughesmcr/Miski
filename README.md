@@ -479,13 +479,14 @@ Systems are functions which use queries to modify entity properties.
 
 It is recommended (but not necessary) that all data mutation take place inside a system.
 
-For new code, `defineSystem` is the recommended typed authoring path. It accepts keyed component maps and gives the
-callback a typed component instance record:
+Author systems with `new System` and keyed component maps in `new Query`. The callback receives a typed component instance record:
 
 ```typescript
-const movementSystem = defineSystem({
+const movementSystem = new System({
   name: "movementSystem",
-  all: { position: positionComponent, velocity: velocityComponent },
+  query: new Query({
+    all: { position: positionComponent, velocity: velocityComponent },
+  }),
   callback: (components, entities, dt: number) => {
     const { position, velocity } = components;
     const positionStorage = position.storage.partitions;
@@ -523,11 +524,13 @@ for (let i = 0; i < entities.count; i++) {
 `any` components are also exposed in the callback record. `none` components are query filters only:
 
 ```typescript
-const renderSystem = defineSystem({
+const renderSystem = new System({
   name: "renderSystem",
-  all: { position: positionComponent },
-  any: { sprite: spriteComponent },
-  none: { hidden: hiddenComponent },
+  query: new Query({
+    all: { position: positionComponent },
+    any: { sprite: spriteComponent },
+    none: { hidden: hiddenComponent },
+  }),
   callback: (components, entities) => {
     components.position; // ComponentInstance<Vec2>
     components.sprite; // ComponentInstance<Sprite>
@@ -542,7 +545,7 @@ const renderSystem = defineSystem({
 
 #### Dynamic compatibility
 
-The lower-level `System` constructor remains available for legacy dynamic string/query based code. Dynamic component
+Array-based `QuerySpec` values and `SystemCallback` remain supported for dynamic string/query based code. Dynamic component
 records intentionally expose unknown schemas, so cast or narrow a component instance before touching concrete storage
 properties:
 

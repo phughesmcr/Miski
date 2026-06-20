@@ -17,7 +17,7 @@ Assertion helpers live in `helpers.ts`.
 
 These files are type-checked by `deno task check` but are **not** executed by `deno test`:
 
-- `typed_system_inference.ts` — `defineSystem` callback and query-map inference
+- `typed_system_inference.ts` — `new System` / `new Query` callback and query-map inference
 - `query_constructor_inference.ts` — typed `Query({ all: { … } })` constructor inference
 
 They use `@ts-expect-error` to assert that invalid access is rejected at compile time.
