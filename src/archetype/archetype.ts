@@ -8,9 +8,11 @@
 import { BooleanArray } from "@phughesmcr/booleanarray";
 import { ID_KEY } from "@/constants.ts";
 import { createEntityArray, type EntityArray } from "@/entity/entity-array.ts";
-import { isQueryMatch } from "@/query/query.ts";
-import type { QueryEntityResult } from "@/query/query-pool.ts";
-import type { DynamicComponentInstance, Entity, QueryInstance } from "@/types.ts";
+import type { Entity } from "@/entity/entity-id.ts";
+import type { EntityResultSink } from "@/entity/entity-result-sink.ts";
+import { isQueryMatch } from "@/query/match.ts";
+import type { DynamicComponentInstance } from "@/types/component.ts";
+import type { QueryInstance } from "@/types/query.ts";
 
 const ENTERED_ACTIVE = 1 << 0;
 const ENTERED_LISTED = 1 << 1;
@@ -244,7 +246,7 @@ export class Archetype {
    * @param visited - Optional bitfield used to deduplicate entities across archetypes
    * @returns The destination result
    */
-  writeEntitiesIntoResult(out: QueryEntityResult, visited?: BooleanArray): QueryEntityResult {
+  writeEntitiesIntoResult(out: EntityResultSink, visited?: BooleanArray): EntityResultSink {
     if (visited) {
       for (let i = 0; i < this.#entityListCount; i++) {
         const entity = this.#entityList[i]!;

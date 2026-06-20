@@ -1,4 +1,4 @@
-import type { Entity } from "@/types.ts";
+import type { Entity } from "@/entity/entity-id.ts";
 import type { EntityArray } from "./entity-array.ts";
 
 export class ReusableEntityIterator implements IterableIterator<Entity> {

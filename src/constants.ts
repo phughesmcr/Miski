@@ -5,7 +5,10 @@
  * @license     MIT
  */
 
-import { randomString } from "./utils.ts";
+/** @returns a random string (base-36) */
+function randomString(): string {
+  return Math.random().toString(36).substring(2, 15);
+}
 
 /**
  * @public

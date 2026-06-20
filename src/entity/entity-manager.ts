@@ -9,7 +9,8 @@ import { BitPool } from "@phughesmcr/bitpool";
 import { BooleanArray } from "@phughesmcr/booleanarray";
 
 import { EntityNotFoundError, formatEntityNotActive } from "@/errors.ts";
-import type { Entity, EntityManagerSerialized } from "@/types.ts";
+import type { Entity } from "@/entity/entity-id.ts";
+import type { EntityManagerSerialized } from "@/types/component.ts";
 import { isPositiveUint32, isUint32, numberArrayFromString } from "@/utils.ts";
 import { ReusableEntityIterator } from "./entity-list.ts";
 

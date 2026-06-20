@@ -9,13 +9,10 @@ import { ID_KEY } from "@/constants.ts";
 import { BooleanArray } from "@phughesmcr/booleanarray";
 import { componentDisplayName, formatComponentNotRegistered, NotRegisteredError } from "@/errors.ts";
 import type { Archetype } from "@/archetype/archetype.ts";
-import type {
-  ComponentInstanceGetter,
-  DynamicComponentInstance,
-  Entity,
-  QueryInstance,
-  QueryManagerDependencies,
-} from "@/types.ts";
+import type { DynamicComponentInstance } from "@/types/component.ts";
+import type { Entity } from "@/entity/entity-id.ts";
+import type { QueryInstance } from "@/types/query.ts";
+import type { ComponentInstanceGetter, QueryManagerDependencies } from "@/types/world-api.ts";
 import { QueryCache } from "./query-cache.ts";
 import { type QueryEntityResult, QueryResultPool } from "./query-pool.ts";
 import type { Query } from "./query.ts";

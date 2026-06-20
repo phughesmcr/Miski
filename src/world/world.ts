@@ -28,11 +28,11 @@ import { SystemManager } from "@/system/system-manager.ts";
 import type { Component } from "@/component/component.ts";
 import type { ComponentInstance } from "@/component/component-instance.ts";
 import type { Query } from "@/query/query.ts";
+import type { DynamicComponent } from "@/types/component.ts";
+import type { Entity } from "@/entity/entity-id.ts";
+import type { QueryEntityList } from "@/types/entity-views.ts";
+import type { SchemaOrNull } from "@/types/partitions.ts";
 import type {
-  DynamicComponent,
-  Entity,
-  QueryEntityList,
-  SchemaOrNull,
   WorldAPIResult,
   WorldArchetypeAPI,
   WorldComponentAPI,
@@ -40,7 +40,7 @@ import type {
   WorldSpec,
   WorldState,
   WorldSystemAPI,
-} from "@/types.ts";
+} from "@/types/world-api.ts";
 import { assertWorldState, isValidWorldSpec } from "./utils.ts";
 
 /** The World is the central context in which all Entities and Components exist. */
@@ -593,7 +593,13 @@ export class World {
         this.#archetypeManager.registerQuery(query, true);
       },
     );
-    this.#systemManager = new SystemManager(this, (query: Query) => this.#queryManager.components(query));
+    this.#systemManager = new SystemManager(this, {
+      queryComponents: (query: Query) => this.#queryManager.components(query),
+      queryEntityList: (query: Query) => {
+        this.#assertInitialized();
+        return this.#queryManager.entityList(query);
+      },
+    });
 
     // Public APIs
     const APIs: WorldAPIResult = this.#constructAPIs();

@@ -1,7 +1,7 @@
 import { isValidComponentArray } from "@/component/component.ts";
 import { MIN_WORLD_CAPACITY } from "@/constants.ts";
 import { WorldStateError } from "@/errors.ts";
-import type { WorldSpec, WorldState } from "@/types.ts";
+import type { WorldSpec, WorldState } from "@/types/world-api.ts";
 import { isObject, isPositiveUint32 } from "@/utils.ts";
 
 function hasUniqueComponentNames(components: WorldSpec["components"]): boolean {

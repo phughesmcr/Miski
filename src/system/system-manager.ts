@@ -7,19 +7,16 @@
 
 import { $_SYSTEM_DESTROY_KEY, $_SYSTEM_INIT_KEY } from "@/constants.ts";
 import { AlreadyRegisteredError, formatSystemNotRegistered, NotRegisteredError } from "@/errors.ts";
-import type {
-  ComponentMap,
-  SystemCallback,
-  SystemInstance,
-  TypedSystemCallback,
-  UntypedQueryComponents,
-} from "@/types.ts";
-import type { World } from "@/world/world.ts";
+import type { ComponentMap } from "@/types/component.ts";
+import type { SystemBindings } from "@/types/system-bindings.ts";
+import type { SystemCallback, SystemInstance, TypedSystemCallback } from "@/types/system.ts";
+import type { UntypedQueryComponents } from "@/types/query.ts";
+import type { WorldContext } from "@/types/world-api.ts";
 import { createSystemInstance, type System } from "./system.ts";
 
 type SystemRegistration = {
-  destroy: (world: World) => void | Promise<void>;
-  init: (world: World) => void | Promise<void>;
+  destroy: (world: WorldContext) => void | Promise<void>;
+  init: (world: WorldContext) => void | Promise<void>;
   instance: SystemInstance<TypedSystemCallback<UntypedQueryComponents, unknown[], unknown>>;
   name: string;
   system: System<UntypedQueryComponents, unknown[], unknown>;
@@ -28,10 +25,10 @@ type SystemRegistration = {
 /** The SystemManager is responsible for creating, registering, initializing, and destroying systems. */
 export class SystemManager {
   /** The World that owns this system manager. */
-  #world: World;
+  #world: WorldContext;
 
-  /** Internal component query callback used while public query APIs are unavailable. */
-  #queryComponents: Parameters<typeof createSystemInstance>[2];
+  /** Internal world bindings used while constructing system instances. */
+  #bindings: SystemBindings;
 
   /** Internal system registration records keyed by system name. */
   #records: Record<string, SystemRegistration>;
@@ -45,10 +42,11 @@ export class SystemManager {
   /**
    * Create a new SystemManager
    * @param world The world to create the system manager in
+   * @param bindings Internal bindings used to resolve query data for systems
    */
-  constructor(world: World, queryComponents: Parameters<typeof createSystemInstance>[2]) {
+  constructor(world: WorldContext, bindings: SystemBindings) {
     this.#world = world;
-    this.#queryComponents = queryComponents;
+    this.#bindings = bindings;
     this.#records = {};
     this.#registry = {};
     this.#publicRegistry = Object.freeze({});
@@ -79,7 +77,7 @@ export class SystemManager {
     if (existing) {
       throw new AlreadyRegisteredError(`System "${system.name}" is already registered in the world.`);
     }
-    const instance = createSystemInstance(this.#world, system, this.#queryComponents);
+    const instance = createSystemInstance(this.#bindings, system);
     this.#records[system.name] = {
       destroy: system[$_SYSTEM_DESTROY_KEY],
       init: system[$_SYSTEM_INIT_KEY],

@@ -5,7 +5,7 @@
  * @license     MIT
  */
 
-import type { Entity } from "@/types.ts";
+import type { Entity } from "@/entity/entity-id.ts";
 
 /** Resolve a component reference to its display name */
 export function componentDisplayName(component: { readonly name: string } | string): string {

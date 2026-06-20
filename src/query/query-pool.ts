@@ -1,9 +1,10 @@
 import { ReusableEntityIterator } from "@/entity/entity-list.ts";
 import { createEntityArray, type EntityArray } from "@/entity/entity-array.ts";
-import type { Entity } from "@/types.ts";
+import type { Entity } from "@/entity/entity-id.ts";
+import type { EntityResultSink } from "@/entity/entity-result-sink.ts";
 
 /** Mutable pooled backing store for the public borrowed QueryEntityList view. */
-export class QueryEntityResult {
+export class QueryEntityResult implements EntityResultSink {
   #iterator: ReusableEntityIterator;
   count: number = 0;
   readonly indices: EntityArray;

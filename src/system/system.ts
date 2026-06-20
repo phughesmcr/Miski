@@ -1,22 +1,17 @@
 import { $_SYSTEM_DESTROY_KEY, $_SYSTEM_INIT_KEY } from "@/constants.ts";
 import { NoComponentsFoundError, SpecError } from "@/errors.ts";
 import { Query } from "@/query/query.ts";
-import type {
-  BorrowedEntityList,
-  ComponentInstances,
-  ComponentMap,
-  SystemInstance,
-  SystemPrivateMethods,
-  SystemSpec,
-  TypedSystemCallback,
-  UntypedQueryComponents,
-} from "@/types.ts";
+import type { ComponentInstances, ComponentMap } from "@/types/component.ts";
+import type { BorrowedEntityList } from "@/types/entity-views.ts";
+import type { SystemBindings } from "@/types/system-bindings.ts";
+import type { SystemInstance, SystemPrivateMethods, SystemSpec, TypedSystemCallback } from "@/types/system.ts";
+import type { UntypedQueryComponents } from "@/types/query.ts";
+import type { WorldContext } from "@/types/world-api.ts";
 import { isObject, isValidName, noop } from "@/utils.ts";
-import type { World } from "@/world/world.ts";
 
 /**
  * Create a system instance
- * @param world The world to create the system instance in
+ * @param bindings The world bindings used to resolve query data
  * @param system The system to create the instance of
  * @returns The created system instance
  * @throws {NoComponentsFoundError} If the system query returned no components
@@ -36,11 +31,10 @@ export function createSystemInstance<
   TArgs extends unknown[],
   TReturn,
 >(
-  world: World,
+  bindings: SystemBindings,
   system: System<TComponents, TArgs, TReturn>,
-  queryComponents: (query: Query) => Record<string, unknown> = (query) => world.components.query(query),
 ): SystemInstance<TypedSystemCallback<TComponents, TArgs, TReturn>> {
-  const components = queryComponents(system.query) as ComponentInstances<TComponents>;
+  const components = bindings.queryComponents(system.query) as ComponentInstances<TComponents>;
   const callback = system.callback as CallableSystem<TComponents, TArgs, TReturn>;
 
   if (Object.keys(components).length === 0) {
@@ -48,7 +42,7 @@ export function createSystemInstance<
   }
 
   const boundCallback = ((...args: TArgs) => {
-    return callback(components, world.entities.queryList(system.query), ...args);
+    return callback(components, bindings.queryEntityList(system.query), ...args);
   }) as unknown as SystemInstance<TypedSystemCallback<TComponents, TArgs, TReturn>>;
   return boundCallback;
 }
@@ -76,10 +70,10 @@ export class System<
   TReturn = void,
 > implements SystemPrivateMethods {
   /** The function to call when the system is destroyed. */
-  readonly [$_SYSTEM_DESTROY_KEY]: (world: World) => void | Promise<void>;
+  readonly [$_SYSTEM_DESTROY_KEY]: (world: WorldContext) => void | Promise<void>;
 
   /** The function to call when the system is initialized. */
-  readonly [$_SYSTEM_INIT_KEY]: (world: World) => void | Promise<void>;
+  readonly [$_SYSTEM_INIT_KEY]: (world: WorldContext) => void | Promise<void>;
 
   /** The name of the system */
   readonly name: string;

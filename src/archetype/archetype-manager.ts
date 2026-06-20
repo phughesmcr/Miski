@@ -9,7 +9,9 @@ import { BooleanArray } from "@phughesmcr/booleanarray";
 
 import { createEntityArray, type EntityArray } from "@/entity/entity-array.ts";
 import { NotRegisteredError } from "@/errors.ts";
-import type { DynamicComponentInstance, Entity, QueryInstance } from "@/types.ts";
+import type { DynamicComponentInstance } from "@/types/component.ts";
+import type { Entity } from "@/entity/entity-id.ts";
+import type { QueryInstance } from "@/types/query.ts";
 import { Archetype } from "./archetype.ts";
 
 /** ArchetypeManager handles creation and allocation of Archetypes */

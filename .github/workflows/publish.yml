@@ -1,8 +1,8 @@
 name: Publish
 on:
   push:
-    branches:
-      - main
+    tags:
+      - "v*"
 
 jobs:
   publish:
@@ -18,6 +18,15 @@ jobs:
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
+
+      - name: Verify tag matches deno.json version
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          VERSION=$(deno eval "console.log(JSON.parse(Deno.readTextFileSync('deno.json')).version)")
+          if [ "$TAG" != "$VERSION" ]; then
+            echo "Tag v$TAG does not match deno.json version $VERSION"
+            exit 1
+          fi
 
       - name: Run CI checks
         run: deno task ci

@@ -5,19 +5,10 @@
  * @license     MIT
  */
 
-import type { BooleanArray } from "@phughesmcr/booleanarray";
-
 import { Component, isValidComponentArray } from "@/component/component.ts";
 import { SpecError } from "@/errors.ts";
-import type {
-  ComponentInstances,
-  ComponentMap,
-  DynamicComponent,
-  QueryInstance,
-  QuerySpec,
-  TypedQuerySpec,
-  UntypedQueryComponents,
-} from "@/types.ts";
+import type { ComponentInstances, ComponentMap, DynamicComponent } from "@/types/component.ts";
+import type { QuerySpec, TypedQuerySpec, UntypedQueryComponents } from "@/types/query.ts";
 import { isObject } from "@/utils.ts";
 
 /** Normalized query clauses as component arrays. */
@@ -160,16 +151,3 @@ export type Query<TComponents extends ComponentMap = UntypedQueryComponents> = Q
 
 /** A Query is a collection of Components that can be used to find Entities */
 export const Query: QueryConstructor = QueryRuntime;
-
-/**
- * Check if a target bitfield matches query requirements
- * @param target The target bitfield to check
- * @param query The query instance to match against
- * @returns true if the target matches the query requirements
- */
-export function isQueryMatch(target: BooleanArray, query: QueryInstance): boolean {
-  if (target.isEmpty()) return false;
-  if (!target.containsAll(query.and)) return false;
-  if (target.intersects(query.not)) return false;
-  return query.or.isEmpty() || target.intersects(query.or);
-}

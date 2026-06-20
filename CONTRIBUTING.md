@@ -50,3 +50,21 @@ lexical `this`.
 Inside `src`, use `@/` imports for cross-folder modules and `./` imports for
 same-folder modules. Keep external package imports first, then a blank line,
 then internal imports.
+
+## Releasing
+
+JSR publishing is triggered by semver git tags, not by merging to `main`.
+
+1. Bump `"version"` in `deno.json`.
+2. Merge to `main` (CI must pass).
+3. Create and push a matching tag:
+
+   ```sh
+   git tag v0.1.0
+   git push origin v0.1.0
+   ```
+
+4. The Publish workflow runs automatically on the tag push.
+
+The tag (without the `v` prefix) must match the version in `deno.json`. Run
+`deno task publish:dry-run` locally before tagging to validate the package.

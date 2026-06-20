@@ -6,7 +6,8 @@
  */
 
 import { EntityNotFoundError, formatEntityOutOfRange } from "@/errors.ts";
-import type { Entity, SchemaOrNull, StorageProxySpec, TypedArray } from "@/types.ts";
+import type { Entity } from "@/entity/entity-id.ts";
+import type { SchemaOrNull, StorageProxySpec, TypedArray } from "@/types/partitions.ts";
 import { hasOwnProperty } from "@/utils.ts";
 
 /** A StorageProxy is a wrapper around a component's storage */

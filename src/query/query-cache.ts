@@ -1,4 +1,4 @@
-import type { DynamicComponentInstance } from "@/types.ts";
+import type { DynamicComponentInstance } from "@/types/component.ts";
 import type { QueryEntityResult, QueryResultPool } from "./query-pool.ts";
 
 type EntityCacheEntry = {

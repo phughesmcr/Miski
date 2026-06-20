@@ -7,21 +7,13 @@
 
 import type { Component } from "@/component/component.ts";
 import type { ComponentInstance } from "@/component/component-instance.ts";
+import type { Entity } from "@/entity/entity-id.ts";
 import type { Query } from "@/query/query.ts";
 import type { System } from "@/system/system.ts";
-import type {
-  BorrowedEntityIterator,
-  BorrowedEntityList,
-  ComponentMap,
-  DynamicComponent,
-  DynamicComponentInstance,
-  Entity,
-  QueryEntityList,
-  SchemaOrNull,
-  SystemInstance,
-  SystemRecord,
-  TypedSystemCallback,
-} from "@/types.ts";
+import type { ComponentMap, DynamicComponent, DynamicComponentInstance } from "@/types/component.ts";
+import type { SchemaOrNull } from "@/types/partitions.ts";
+import type { BorrowedEntityIterator, BorrowedEntityList, QueryEntityList } from "@/types/entity-views.ts";
+import type { SystemInstance, SystemRecord, TypedSystemCallback } from "@/types/system.ts";
 
 /** The specification for a World */
 export type WorldSpec = {
@@ -33,6 +25,18 @@ export type WorldSpec = {
 
 /** The state of a World */
 export type WorldState = "uninitialized" | "initialized" | "destroyed" | "error";
+
+/** Public world surface available to systems and external callers. */
+export type WorldContext = {
+  readonly state: WorldState;
+  readonly components: WorldComponentAPI;
+  readonly entities: WorldEntityAPI;
+  readonly systems: WorldSystemAPI;
+  readonly archetypes: WorldArchetypeAPI;
+  init(): Promise<void>;
+  destroy(): Promise<void>;
+  refresh(): void;
+};
 
 /** The public archetype transition and query membership API. */
 export type WorldArchetypeAPI = {

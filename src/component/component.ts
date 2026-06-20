@@ -20,7 +20,8 @@
 
 import { isSchema, Partition, type PartitionSpec } from "@phughesmcr/partitionedbuffer";
 import { $_COMPONENT_ID_KEY, $_PARTITION_KEY } from "@/constants.ts";
-import type { ComponentPrivateMethods, ComponentSpec, DynamicComponent, Schema, SchemaOrNull } from "@/types.ts";
+import type { ComponentPrivateMethods, ComponentSpec, DynamicComponent } from "@/types/component.ts";
+import type { Schema, SchemaOrNull } from "@/types/partitions.ts";
 import { isPositiveUint32, isValidName } from "@/utils.ts";
 
 /**

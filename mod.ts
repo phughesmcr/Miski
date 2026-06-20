@@ -233,6 +233,7 @@ export type {
   UntypedQueryComponents,
   WorldArchetypeAPI,
   WorldComponentAPI,
+  WorldContext,
   WorldEntityAPI,
   WorldSpec,
   WorldState,
