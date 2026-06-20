@@ -1,4 +1,3 @@
-import { isValidName } from "@phughesmcr/partitionedbuffer";
 import { $_SYSTEM_DESTROY_KEY, $_SYSTEM_INIT_KEY } from "@/constants.ts";
 import { NoComponentsFoundError, SpecError } from "@/errors.ts";
 import { Query } from "@/query/query.ts";
@@ -13,7 +12,7 @@ import type {
   TypedSystemSpec,
   UntypedQueryComponents,
 } from "@/types.ts";
-import { isObject, noop } from "@/utils.ts";
+import { isObject, isValidName, noop } from "@/utils.ts";
 import type { World } from "@/world/world.ts";
 
 /**
