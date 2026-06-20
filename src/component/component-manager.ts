@@ -190,6 +190,20 @@ export class ComponentManager {
     this.#ownerCountsById[instanceId] = ownerCount + 1;
   }
 
+  /** Remove an entity from a dense list whose membership was already checked. */
+  #removeFromDenseList(list: EntityArray, positions: EntityArray, count: number, entity: Entity): number {
+    const removeIndex = positions[entity]!;
+    const lastIndex = count - 1;
+    const lastEntity = list[lastIndex]!;
+    if (removeIndex !== lastIndex) {
+      list[removeIndex] = lastEntity;
+      positions[lastEntity] = removeIndex;
+    }
+    list[lastIndex] = 0;
+    positions[entity] = 0;
+    return lastIndex;
+  }
+
   /**
    * Claim ownership for an entity when it is not already owned.
    * @returns `true` when ownership changed from unowned to owned
@@ -249,16 +263,12 @@ export class ComponentManager {
     }
 
     const changedCount = this.#changedCountsById[instanceId] ?? 1;
-    const removeIndex = changedPositions[entity]!;
-    const lastIndex = changedCount - 1;
-    const lastEntity = changedList[lastIndex]!;
-    if (removeIndex !== lastIndex) {
-      changedList[removeIndex] = lastEntity;
-      changedPositions[lastEntity] = removeIndex;
-    }
-    changedList[lastIndex] = 0;
-    changedPositions[entity] = 0;
-    this.#changedCountsById[instanceId] = lastIndex;
+    this.#changedCountsById[instanceId] = this.#removeFromDenseList(
+      changedList,
+      changedPositions,
+      changedCount,
+      entity,
+    );
     changed.set(entity, false);
   }
 
@@ -545,16 +555,7 @@ export class ComponentManager {
     const ownerList = this.#ownerListsById[id]!;
     const ownerPositions = this.#ownerPositionsById[id]!;
     const ownerCount = this.#ownerCountsById[id] ?? 1;
-    const removeIndex = ownerPositions[entity]!;
-    const lastIndex = ownerCount - 1;
-    const lastEntity = ownerList[lastIndex]!;
-    if (removeIndex !== lastIndex) {
-      ownerList[removeIndex] = lastEntity;
-      ownerPositions[lastEntity] = removeIndex;
-    }
-    ownerList[lastIndex] = 0;
-    ownerPositions[entity] = 0;
-    this.#ownerCountsById[id] = lastIndex;
+    this.#ownerCountsById[id] = this.#removeFromDenseList(ownerList, ownerPositions, ownerCount, entity);
 
     if (owners !== undefined && entity < owners.length) {
       owners[entity] = 0;
