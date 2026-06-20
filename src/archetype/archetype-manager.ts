@@ -247,6 +247,43 @@ export class ArchetypeManager {
   }
 
   /**
+   * Rebuild query membership while preserving the caller's transition lifecycle.
+   * @param queries - Query instances whose archetype membership should be rebuilt
+   * @param includeDirtyArchetypes - Include dirty empty archetypes for entered/exited views
+   * @param refreshArchetypes - Clear archetype transition state after membership is rebuilt
+   */
+  #rebuildQueryMembership(
+    queries: readonly QueryInstance[],
+    includeDirtyArchetypes: boolean,
+    refreshArchetypes: boolean,
+  ): void {
+    for (const query of queries) {
+      let archetypeSet = this.queryArchetypes.get(query);
+      if (!archetypeSet) {
+        archetypeSet = new Set();
+        this.queryArchetypes.set(query, archetypeSet);
+      } else {
+        archetypeSet.clear();
+      }
+      query.archetypes.clear();
+      query.isDirty = false;
+    }
+
+    for (const archetype of this.registry.values()) {
+      for (const query of queries) {
+        if (!archetype.isCandidate(query)) continue;
+
+        const archetypeSet = this.queryArchetypes.get(query)!;
+        if (archetype.getPopulationCount() > 0 || (includeDirtyArchetypes && archetype.isDirty())) {
+          archetypeSet.add(archetype);
+          query.archetypes.add(archetype);
+        }
+      }
+      if (refreshArchetypes) archetype.refresh();
+    }
+  }
+
+  /**
    * Create a new ArchetypeManager
    * @param capacity - The maximum number of entities this manager can handle
    * @param componentCount - The number of components registered in the world
@@ -390,23 +427,7 @@ export class ArchetypeManager {
    * @returns this
    */
   registerQuery(query: QueryInstance, retainTransitions: boolean = true): this {
-    let archetypeSet = this.queryArchetypes.get(query);
-    if (!archetypeSet) {
-      archetypeSet = new Set();
-      this.queryArchetypes.set(query, archetypeSet);
-    } else {
-      archetypeSet.clear();
-    }
-
-    query.archetypes.clear();
-    for (const archetype of this.registry.values()) {
-      if (!archetype.isCandidate(query)) continue;
-      if (archetype.getPopulationCount() > 0 || (retainTransitions && archetype.isDirty())) {
-        archetypeSet.add(archetype);
-        query.archetypes.add(archetype);
-      }
-    }
-    query.isDirty = false;
+    this.#rebuildQueryMembership([query], retainTransitions, false);
     return this;
   }
 
@@ -422,33 +443,7 @@ export class ArchetypeManager {
       queryArray.push(query);
     }
 
-    // Initialize query archetype sets
-    for (const query of queryArray) {
-      let archetypeSet = this.queryArchetypes.get(query);
-      if (!archetypeSet) {
-        archetypeSet = new Set();
-        this.queryArchetypes.set(query, archetypeSet);
-      } else {
-        archetypeSet.clear();
-      }
-      query.archetypes.clear(); // Clear the QueryInstance's archetypes set
-      query.isDirty = false;
-    }
-
-    // For each archetype
-    for (const archetype of this.registry.values()) {
-      // Check against each query
-      for (const query of queryArray) {
-        if (archetype.isCandidate(query)) {
-          const archetypeSet = this.queryArchetypes.get(query)!;
-          if (archetype.getPopulationCount() > 0 || (retainTransitions && archetype.isDirty())) {
-            archetypeSet.add(archetype);
-            query.archetypes.add(archetype); // Update the QueryInstance's archetypes set
-          }
-        }
-      }
-      if (!retainTransitions) archetype.refresh();
-    }
+    this.#rebuildQueryMembership(queryArray, retainTransitions, !retainTransitions);
     this.#queryMembershipDirty = false;
     return this;
   }
