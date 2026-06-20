@@ -29,7 +29,12 @@ function getComponentStorageSize(component: DynamicComponent, capacity: number):
   return getPartitionByteSize(schema, component.maxEntities ?? capacity);
 }
 
-/** A component manager is responsible for managing the components of a world. */
+/**
+ * A component manager owns component registration, storage, ownership flags, owner iteration, and changed tracking.
+ *
+ * World-level mutation semantics live in `World`: active-entity validation, archetype transitions, and query-cache
+ * invalidation must happen before/after calling the registered-instance methods on this manager.
+ */
 export class ComponentManager {
   /** The storage buffer for the component manager */
   #buffer: PartitionedBuffer;
@@ -273,28 +278,11 @@ export class ComponentManager {
   }
 
   /**
-   * Add a component to an entity
-   * @param component - The component to add to the entity
-   * @param entity - The entity to add the component to
-   * @param data - Optional data to set for the component
-   * @returns `true` if the component ownership changed
-   */
-  addToEntity<T extends SchemaOrNull>(
-    component: Component<T> | string,
-    entity: Entity,
-    data?: { [k in keyof T]: number },
-  ): boolean {
-    const instance = this.getInstance(component);
-    if (!instance) {
-      throw new NotRegisteredError(
-        `Component ${typeof component === "string" ? `"${component}"` : component.name} not registered.`,
-      );
-    }
-    return this.addInstanceToEntity(instance, entity, data);
-  }
-
-  /**
    * Add a registered component instance to an entity.
+   *
+   * This updates only component ownership/data/changed state. Callers that expose world-level mutations must handle
+   * entity liveness, archetype transitions, and query-cache invalidation separately.
+   *
    * @param instance - The registered component instance
    * @param entity - The entity to add the component to
    * @param data - Optional data to set for the component
@@ -464,24 +452,11 @@ export class ComponentManager {
   }
 
   /**
-   * Get the data for a component on an entity
-   * @param component - The component to get the data for
-   * @param entity - The entity to get the data for
-   * @returns The data for the component or `undefined` if the component is not registered
-   */
-  getEntityData<T extends SchemaOrNull>(
-    component: Component<T> | string,
-    entity: Entity,
-  ): Record<keyof T, number> | undefined {
-    const instance = this.getInstance(component);
-    if (!instance) {
-      return undefined;
-    }
-    return this.getInstanceEntityData(instance, entity);
-  }
-
-  /**
    * Get the data for a registered data component instance on an entity.
+   *
+   * This reads raw storage by entity id. Callers that expose public data access must verify entity liveness, component
+   * registration, data storage, and ownership separately.
+   *
    * @param instance - The registered component instance
    * @param entity - The entity to get the data for
    * @returns The data for the component or `undefined` if the instance has no storage
@@ -522,22 +497,11 @@ export class ComponentManager {
   }
 
   /**
-   * Remove a component from an entity
-   * @param component - The component to remove from the entity
-   * @param entity - The entity to remove the component from
-   * @returns `true` if the component ownership changed, or `undefined` if the component is not registered
-   */
-  removeFromEntity<T extends SchemaOrNull>(
-    component: string | Component<T>,
-    entity: Entity,
-  ): boolean | undefined {
-    const instance = this.getInstance(component);
-    if (!instance) return undefined;
-    return this.removeInstanceFromEntity(instance, entity);
-  }
-
-  /**
    * Remove a registered component instance from an entity.
+   *
+   * This updates only component ownership/data/changed state. Callers that expose world-level mutations must handle
+   * entity liveness, archetype transitions, and query-cache invalidation separately.
+   *
    * @param instance - The registered component instance
    * @param entity - The entity to remove the component from
    * @returns `true` if the component ownership changed
@@ -577,25 +541,11 @@ export class ComponentManager {
   }
 
   /**
-   * Set the data for a component on an entity
-   * @param component - The component to set the data for
-   * @param entity - The entity to set the data for
-   * @param value - The data to set for the component
-   */
-  setEntityData<T extends SchemaOrNull>(
-    component: Component<T> | string,
-    entity: Entity,
-    value: Record<keyof T, number>,
-  ): this {
-    const instance = this.getInstance(component);
-    if (!instance || !value) {
-      return this;
-    }
-    return this.setInstanceEntityData(instance, entity, value);
-  }
-
-  /**
    * Set data for a registered data component instance on an entity.
+   *
+   * This writes raw storage by entity id. Callers that expose public data mutation must verify entity liveness,
+   * component registration, data storage, and ownership separately.
+   *
    * @param instance - The registered component instance
    * @param entity - The entity to set the data for
    * @param value - The data to set
