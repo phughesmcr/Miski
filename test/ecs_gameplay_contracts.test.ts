@@ -732,6 +732,37 @@ Deno.test("systems can be registered before init but cannot run outside the init
   assertEquals(calls, ["init", "callback"], "Expected guarded system calls to skip the callback");
 });
 
+Deno.test("captured lifecycle API methods observe the current world state", async () => {
+  const position = vec2Component();
+  const world = new World({ capacity: 8, components: [position] });
+  const query = new Query({ all: [position] });
+  const system = new System({
+    name: "capturedLifecycle",
+    query,
+    callback: () => {},
+  });
+
+  await world.init();
+
+  const createEntity = world.entities.create;
+  const queryList = world.entities.queryList;
+  const addToEntity = world.components.addToEntity;
+  const queryComponents = world.components.query;
+  const queryEntities = world.archetypes.queryEntities;
+  const createSystem = world.systems.create;
+  const destroySystem = world.systems.destroy;
+
+  await world.destroy();
+
+  assertThrows(() => createEntity(), WorldStateError, "World has already been destroyed");
+  assertThrows(() => queryList(query), WorldStateError, "World has already been destroyed");
+  assertThrows(() => addToEntity(position, 0), WorldStateError, "World has already been destroyed");
+  assertThrows(() => queryComponents(query), WorldStateError, "World has already been destroyed");
+  assertThrows(() => queryEntities(query), WorldStateError, "World has already been destroyed");
+  assertThrows(() => createSystem(system), WorldStateError, "World has already been destroyed");
+  await assertRejects(() => destroySystem(system), WorldStateError, "World has already been destroyed");
+});
+
 Deno.test("a component definition can back independent worlds without shared ownership or changed state", async () => {
   const player = new Component<null>({ name: "player", maxEntities: 1 });
   const health = new Component<Health>({ name: "health", schema: { current: Uint16Array, max: Uint16Array } });

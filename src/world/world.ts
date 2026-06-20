@@ -27,7 +27,6 @@ import type { ComponentInstance } from "@/component/component-instance.ts";
 import type { Query } from "@/query/query.ts";
 import type {
   DynamicComponent,
-  DynamicComponentInstance,
   Entity,
   QueryEntityList,
   SchemaOrNull,
@@ -106,10 +105,22 @@ export class World {
     return {
       getEntityArchetype: (entity: Entity) => this.#archetypeManager.getEntityArchetype(entity)?.id,
       isEntityInRoot: (entity: Entity) => this.#archetypeManager.isEntityInRoot(entity),
-      queryComponents: () => this.#rejectLifecycleAPI(),
-      queryEntities: () => this.#rejectLifecycleAPI(),
-      queryEntered: () => this.#rejectLifecycleAPI(),
-      queryExited: () => this.#rejectLifecycleAPI(),
+      queryComponents: (query: Query) => {
+        this.#assertInitialized();
+        return this.#queryManager.components(query);
+      },
+      queryEntities: (query: Query) => {
+        this.#assertInitialized();
+        return this.#queryArchetypeEntities(query);
+      },
+      queryEntered: (query: Query) => {
+        this.#assertInitialized();
+        return this.#queryArchetypeEntered(query);
+      },
+      queryExited: (query: Query) => {
+        this.#assertInitialized();
+        return this.#queryArchetypeExited(query);
+      },
     };
   }
 
@@ -118,8 +129,22 @@ export class World {
     return {
       count: this.#componentManager.count,
       registry: this.#componentManager.registry,
-      addToEntity: () => this.#rejectLifecycleAPI(),
-      addToEntities: () => this.#rejectLifecycleAPI(),
+      addToEntity: <T extends SchemaOrNull>(
+        component: Component<T> | string,
+        entity: Entity,
+        data?: { [k in keyof T]: number } | undefined,
+      ) => {
+        this.#assertInitialized();
+        this.#addComponentToEntity(component, entity, data);
+      },
+      addToEntities: <T extends SchemaOrNull>(
+        component: Component<T> | string,
+        entities: QueryEntityList,
+        data?: { [k in keyof T]: number } | undefined,
+      ) => {
+        this.#assertInitialized();
+        return this.#addComponentToEntities(component, entities, data);
+      },
       entityHas: <T extends SchemaOrNull>(component: Component<T> | string, entity: Entity) =>
         this.#componentManager.entityHas(component, entity),
       getChanged: <T extends SchemaOrNull>(component: Component<T> | string) =>
@@ -138,10 +163,29 @@ export class World {
       getOwnersSnapshot: <T extends SchemaOrNull>(component: Component<T> | string) =>
         this.#snapshotIterator(this.#componentManager.getOwners(component)),
       isRegistered: (component: DynamicComponent | string) => this.#componentManager.isRegistered(component),
-      query: () => this.#rejectLifecycleAPI(),
-      removeFromEntity: () => this.#rejectLifecycleAPI(),
-      removeFromEntities: () => this.#rejectLifecycleAPI(),
-      setEntityData: () => this.#rejectLifecycleAPI(),
+      query: (query: Query) => {
+        this.#assertInitialized();
+        return this.#queryManager.components(query);
+      },
+      removeFromEntity: <T extends SchemaOrNull>(component: string | Component<T>, entity: Entity) => {
+        this.#assertInitialized();
+        this.#removeComponentFromEntity(component, entity);
+      },
+      removeFromEntities: <T extends SchemaOrNull>(
+        component: Component<T> | string,
+        entities: QueryEntityList,
+      ) => {
+        this.#assertInitialized();
+        return this.#removeComponentFromEntities(component, entities);
+      },
+      setEntityData: <T extends SchemaOrNull>(
+        component: Component<T> | string,
+        entity: Entity,
+        value: Record<keyof T, number>,
+      ) => {
+        this.#assertInitialized();
+        this.#setComponentEntityData(component, entity, value);
+      },
     };
   }
 
@@ -149,8 +193,14 @@ export class World {
   #constructEntityAPI(): WorldEntityAPI {
     return {
       capacity: this.#entityManager.capacity,
-      create: () => this.#rejectLifecycleAPI(),
-      destroy: () => this.#rejectLifecycleAPI(),
+      create: () => {
+        this.#assertInitialized();
+        return this.#entityManager.create();
+      },
+      destroy: (entity: Entity) => {
+        this.#assertInitialized();
+        this.#destroyEntity(entity);
+      },
       getActive: (startEntity?: Entity, endEntity?: Entity) => this.#entityManager.getActive(startEntity, endEntity),
       getActiveSnapshot: (startEntity?: Entity, endEntity?: Entity) =>
         this.#snapshotIterator(this.#entityManager.getActive(startEntity, endEntity)) ?? [],
@@ -158,9 +208,18 @@ export class World {
       getAvailableCount: () => this.#entityManager.getAvailableCount(),
       isActive: (entity: Entity) => this.#entityManager.isActive(entity),
       isEntity: (entity: Entity) => this.#entityManager.isEntity(entity),
-      query: function* (): IterableIterator<Entity> {},
-      queryList: () => this.#rejectLifecycleAPI(),
-      querySnapshot: () => this.#rejectLifecycleAPI(),
+      query: (query: Query) => {
+        this.#assertInitialized();
+        return this.#queryManager.entities(query);
+      },
+      queryList: (query: Query) => {
+        this.#assertInitialized();
+        return this.#queryManager.entityList(query);
+      },
+      querySnapshot: (query: Query) => {
+        this.#assertInitialized();
+        return this.#copyEntityList(this.#queryManager.entityList(query));
+      },
       toArray: (list: QueryEntityList) => this.#copyEntityList(list),
     };
   }
@@ -172,98 +231,33 @@ export class World {
       get registry() {
         return systemManager.registry;
       },
-      create: (system) => this.#systemManager.create(system),
+      create: (system) => {
+        this.#assertSystemRegistrationAvailable();
+        return this.#systemManager.create(system);
+      },
       get: (system) => this.#systemManager.get(system),
       has: (system) => this.#systemManager.has(system),
-      destroy: (system) => this.#systemManager.destroy(system),
+      destroy: (system) => {
+        this.#assertSystemRegistrationAvailable();
+        return this.#systemManager.destroy(system);
+      },
     };
   }
 
-  /** Throw the lifecycle error appropriate for the current World state. */
-  #rejectLifecycleAPI(): never {
-    if (this.#state === "uninitialized") {
-      throw new WorldStateError("World has not been initialized");
-    }
+  /** Assert that initialized-only public APIs can run. */
+  #assertInitialized(): void {
     assertWorldState("initialized", this.#state);
-    throw new WorldStateError("World is unavailable");
   }
 
-  /** Bind lifecycle-sensitive public API methods for the current World state. */
-  #applyLifecycleAPIs(state: WorldState): void {
-    if (state === "initialized") {
-      this.archetypes.queryComponents = (query: Query) => this.#queryArchetypeComponents(query);
-      this.archetypes.queryEntities = (query: Query) => this.#queryArchetypeEntities(query);
-      this.archetypes.queryEntered = (query: Query) => this.#queryArchetypeEntered(query);
-      this.archetypes.queryExited = (query: Query) => this.#queryArchetypeExited(query);
-
-      this.components.addToEntity = <T extends SchemaOrNull>(
-        component: Component<T> | string,
-        entity: Entity,
-        data?: { [k in keyof T]: number } | undefined,
-      ) => this.#addComponentToEntity(component, entity, data);
-      this.components.addToEntities = <T extends SchemaOrNull>(
-        component: Component<T> | string,
-        entities: QueryEntityList,
-        data?: { [k in keyof T]: number } | undefined,
-      ) => this.#addComponentToEntities(component, entities, data);
-      this.components.query = (query: Query) => this.#queryManager.components(query);
-      this.components.removeFromEntity = <T extends SchemaOrNull>(component: string | Component<T>, entity: Entity) =>
-        this.#removeComponentFromEntity(component, entity);
-      this.components.removeFromEntities = <T extends SchemaOrNull>(
-        component: Component<T> | string,
-        entities: QueryEntityList,
-      ) => this.#removeComponentFromEntities(component, entities);
-      this.components.setEntityData = <T extends SchemaOrNull>(
-        component: Component<T> | string,
-        entity: Entity,
-        value: Record<keyof T, number>,
-      ) => this.#setComponentEntityData(component, entity, value);
-
-      this.entities.create = () => this.#entityManager.create();
-      this.entities.destroy = (entity: Entity) => this.#destroyEntity(entity);
-      this.entities.query = (query: Query) => this.#queryManager.entities(query);
-      this.entities.queryList = (query: Query) => this.#queryManager.entityList(query);
-      this.entities.querySnapshot = (query: Query) => this.#copyEntityList(this.#queryManager.entityList(query));
-
-      this.systems.create = (system) => this.#systemManager.create(system);
-      this.systems.destroy = (system) => this.#systemManager.destroy(system);
-      return;
-    }
-
-    const reject = () => this.#rejectLifecycleAPI();
-    const rejectEntities = (): IterableIterator<Entity> => reject();
-    this.archetypes.queryComponents = reject;
-    this.archetypes.queryEntities = rejectEntities;
-    this.archetypes.queryEntered = rejectEntities;
-    this.archetypes.queryExited = rejectEntities;
-
-    this.components.addToEntity = reject;
-    this.components.addToEntities = reject;
-    this.components.query = reject;
-    this.components.removeFromEntity = reject;
-    this.components.removeFromEntities = reject;
-    this.components.setEntityData = reject;
-
-    this.entities.create = reject;
-    this.entities.destroy = reject;
-    this.entities.query = rejectEntities;
-    this.entities.queryList = reject;
-    this.entities.querySnapshot = reject;
-
-    if (state === "uninitialized") {
-      this.systems.create = (system) => this.#systemManager.create(system);
-      this.systems.destroy = (system) => this.#systemManager.destroy(system);
-      return;
-    }
-
-    this.systems.create = reject;
-    this.systems.destroy = reject;
+  /** Assert that system registration APIs have not been closed permanently. */
+  #assertSystemRegistrationAvailable(): void {
+    if (this.#state === "uninitialized" || this.#state === "initialized") return;
+    assertWorldState("initialized", this.#state);
   }
 
   /** Move the World into an error state and block lifecycle-sensitive APIs. */
   #enterErrorState(): void {
     this.#state = "error";
-    this.#applyLifecycleAPIs("error");
   }
 
   /** Copy an allocating stable array from a borrowed entity list. */
@@ -283,11 +277,6 @@ export class World {
       result.push(entity);
     }
     return result;
-  }
-
-  /** Get the components for a query */
-  #queryArchetypeComponents(query: Query): Record<string, DynamicComponentInstance> {
-    return this.#queryManager.components(query);
   }
 
   /** Get the entities for a query */
@@ -610,7 +599,6 @@ export class World {
     this.components = APIs.components;
     this.entities = APIs.entities;
     this.systems = APIs.systems;
-    this.#applyLifecycleAPIs("uninitialized");
   }
 
   /** The World's current state */
@@ -628,7 +616,6 @@ export class World {
     try {
       this.#archetypeManager.init();
       this.#state = "initialized";
-      this.#applyLifecycleAPIs("initialized");
       await this.#systemManager.init();
       this.#initResolver?.("initialized");
       this.refresh();
@@ -649,7 +636,6 @@ export class World {
     try {
       await this.#systemManager.destroyAll();
       this.#state = "destroyed";
-      this.#applyLifecycleAPIs("destroyed");
     } catch (error) {
       this.#enterErrorState();
       throw error;
