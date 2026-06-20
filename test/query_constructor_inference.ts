@@ -1,9 +1,12 @@
-import { Component, Query, System } from "../mod.ts";
+/**
+ * Compile-only type inference checks. Included in `deno task check`, not `deno test`.
+ * See test/README.md.
+ */
+import { Query, System } from "../mod.ts";
+import { vec2Component } from "./fixtures.ts";
 
-type Vec2 = { x: Float32ArrayConstructor; y: Float32ArrayConstructor };
-
-const position = new Component<Vec2>({ name: "position", schema: { x: Float32Array, y: Float32Array } });
-const velocity = new Component<Vec2>({ name: "velocity", schema: { x: Float32Array, y: Float32Array } });
+const position = vec2Component();
+const velocity = vec2Component("velocity");
 
 const movement = new System({
   name: "movement",

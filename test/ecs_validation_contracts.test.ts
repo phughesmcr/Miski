@@ -3,11 +3,10 @@
 import { AlreadyRegisteredError, Component, defineSystem, Query, SpecError, System, World } from "../mod.ts";
 import { NoComponentsFoundError } from "../src/errors.ts";
 import { assert, assertEquals, assertThrows } from "./helpers.ts";
-
-type Vec2 = { x: Float32ArrayConstructor; y: Float32ArrayConstructor };
+import { createEntity, createTestWorld, tagComponent, vec2Component } from "./fixtures.ts";
 
 Deno.test("component, world, query, and system specifications reject invalid shapes", () => {
-  const position = new Component<Vec2>({ name: "position", schema: { x: Float32Array, y: Float32Array } });
+  const position = vec2Component();
 
   assertThrows(
     () => new Component<null>({ name: "bad component name" }),
@@ -70,7 +69,7 @@ Deno.test("component, world, query, and system specifications reject invalid sha
 });
 
 Deno.test("world capacity validation does not expose storage-layer errors", () => {
-  const position = new Component<Vec2>({ name: "position", schema: { x: Float32Array, y: Float32Array } });
+  const position = vec2Component();
 
   assertThrows(
     () => new World({ capacity: 7, components: [position] }),
@@ -80,9 +79,8 @@ Deno.test("world capacity validation does not expose storage-layer errors", () =
 });
 
 Deno.test("systems cannot be created for queries that expose no component instances", async () => {
-  const disabled = new Component<null>({ name: "disabled" });
-  const world = new World({ capacity: 8, components: [disabled] });
-  await world.init();
+  const disabled = tagComponent("disabled");
+  const world = await createTestWorld([disabled]);
 
   assertThrows(
     () =>
@@ -99,9 +97,8 @@ Deno.test("systems cannot be created for queries that expose no component instan
 });
 
 Deno.test("defineSystem with no component maps fails through existing system creation validation", async () => {
-  const disabled = new Component<null>({ name: "disabled" });
-  const world = new World({ capacity: 8, components: [disabled] });
-  await world.init();
+  const disabled = tagComponent("disabled");
+  const world = await createTestWorld([disabled]);
 
   assertThrows(
     () =>
@@ -117,9 +114,8 @@ Deno.test("defineSystem with no component maps fails through existing system cre
 });
 
 Deno.test("component registry lookups by name and prototype stay consistent", async () => {
-  const position = new Component<Vec2>({ name: "position", schema: { x: Float32Array, y: Float32Array } });
-  const world = new World({ capacity: 8, components: [position] });
-  await world.init();
+  const position = vec2Component();
+  const world = await createTestWorld([position]);
 
   assert(world.components.isRegistered(position), "Expected component prototype to be registered");
   assert(world.components.isRegistered("position"), "Expected component name to be registered");
@@ -130,8 +126,8 @@ Deno.test("component registry lookups by name and prototype stay consistent", as
 });
 
 Deno.test("world specifications reject duplicate component names", () => {
-  const first = new Component<Vec2>({ name: "position", schema: { x: Float32Array, y: Float32Array } });
-  const second = new Component<null>({ name: "position" });
+  const first = vec2Component();
+  const second = tagComponent("position");
 
   assertThrows(
     () => new World({ capacity: 8, components: [first, second] }),
@@ -146,9 +142,8 @@ Deno.test("world specifications reject duplicate component names", () => {
 });
 
 Deno.test("component registry exposes a frozen snapshot without backing lookup mutation", async () => {
-  const position = new Component<Vec2>({ name: "position", schema: { x: Float32Array, y: Float32Array } });
-  const world = new World({ capacity: 8, components: [position] });
-  await world.init();
+  const position = vec2Component();
+  const world = await createTestWorld([position]);
 
   const registered = world.components.getInstance("position");
   assert(Object.isFrozen(world.components.registry), "Expected public component registry to be frozen");
@@ -167,16 +162,14 @@ Deno.test("component registry exposes a frozen snapshot without backing lookup m
   assert(world.components.isRegistered("position"), "Expected string lookup to survive registry mutation attempt");
   assert(world.components.getInstance("position") === registered, "Expected string lookup to retain original instance");
 
-  const entity = world.entities.create();
-  assert(entity !== undefined, "Expected entity creation to succeed");
+  const entity = createEntity(world);
   world.components.addToEntity(position, entity, { x: 1, y: 2 });
   assertEquals([...world.entities.query(new Query({ all: [position] }))], [entity], "Expected query to still work");
 });
 
 Deno.test("system registry exposes a frozen live view without backing lookup mutation", async () => {
-  const position = new Component<Vec2>({ name: "position", schema: { x: Float32Array, y: Float32Array } });
-  const world = new World({ capacity: 8, components: [position] });
-  await world.init();
+  const position = vec2Component();
+  const world = await createTestWorld([position]);
   const movement = new System({
     name: "movement",
     query: new Query({ all: [position] }),
@@ -212,9 +205,8 @@ Deno.test("system registry exposes a frozen live view without backing lookup mut
 });
 
 Deno.test("duplicate system names are rejected explicitly", async () => {
-  const position = new Component<Vec2>({ name: "position", schema: { x: Float32Array, y: Float32Array } });
-  const world = new World({ capacity: 8, components: [position] });
-  await world.init();
+  const position = vec2Component();
+  const world = await createTestWorld([position]);
 
   const first = new System({
     name: "movement",

@@ -2,26 +2,15 @@
 
 import { Component, defineSystem, EntityNotFoundError, Query, System, World, WorldStateError } from "../mod.ts";
 import { assert, assertEquals, assertRejects, assertStrictEquals, assertThrows, ids, listIds } from "./helpers.ts";
+import { createEntity, createTestWorld, tagComponent, type Vec2, vec2Component } from "./fixtures.ts";
 import type { BorrowedEntityIterator, BorrowedEntityList, ComponentInstance, Entity, QueryEntityList } from "../mod.ts";
 
-type Vec2 = { x: Float32ArrayConstructor; y: Float32ArrayConstructor };
 type Health = { current: Uint16ArrayConstructor; max: Uint16ArrayConstructor };
-
-function vec2Component(name = "position"): Component<Vec2> {
-  return new Component<Vec2>({ name, schema: { x: Float32Array, y: Float32Array } });
-}
-
-function createEntity(world: World): Entity {
-  const entity = world.entities.create();
-  assert(entity !== undefined, "Expected entity to be created");
-  return entity;
-}
 
 Deno.test("world enforces entity capacity and reuses destroyed entity slots without stale components", async () => {
   const position = vec2Component();
-  const renderable = new Component<null>({ name: "renderable" });
-  const world = new World({ capacity: 8, components: [position, renderable] });
-  await world.init();
+  const renderable = tagComponent("renderable");
+  const world = await createTestWorld([position, renderable]);
 
   const entities = Array.from({ length: 8 }, () => createEntity(world));
   const first = entities[0]!;
@@ -58,9 +47,8 @@ Deno.test("world enforces entity capacity and reuses destroyed entity slots with
 
 Deno.test("component data APIs expose initial data, mutation, and per-frame dense changed tracking", async () => {
   const position = vec2Component();
-  const renderable = new Component<null>({ name: "renderable" });
-  const world = new World({ capacity: 8, components: [position, renderable] });
-  await world.init();
+  const renderable = tagComponent("renderable");
+  const world = await createTestWorld([position, renderable]);
 
   const entity = createEntity(world);
   world.components.addToEntity(position, entity, { x: 1.5, y: -2 });
@@ -93,8 +81,7 @@ Deno.test("component data APIs expose initial data, mutation, and per-frame dens
 
 Deno.test("component proxy tracks only real writes and direct storage access remains an opt-out fast path", async () => {
   const position = vec2Component();
-  const world = new World({ capacity: 8, components: [position] });
-  await world.init();
+  const world = await createTestWorld([position]);
 
   const entity = createEntity(world);
   world.components.addToEntity(position, entity, { x: 0, y: 0 });
@@ -127,8 +114,7 @@ Deno.test("component proxy tracks only real writes and direct storage access rem
 
 Deno.test("changed iteration reuses dense storage and tracks each entity once per frame", async () => {
   const position = vec2Component();
-  const world = new World({ capacity: 8, components: [position] });
-  await world.init();
+  const world = await createTestWorld([position]);
 
   const first = createEntity(world);
   const second = createEntity(world);
@@ -162,8 +148,7 @@ Deno.test("changed iteration reuses dense storage and tracks each entity once pe
 
 Deno.test("proxy rejects out-of-range entity targets before mutating component storage", async () => {
   const position = vec2Component();
-  const world = new World({ capacity: 8, components: [position] });
-  await world.init();
+  const world = await createTestWorld([position]);
 
   const instance = world.components.getInstance(position);
   assert(instance !== undefined, "Expected component instance to exist");
@@ -182,8 +167,7 @@ Deno.test("proxy rejects out-of-range entity targets before mutating component s
 Deno.test("manual typed query and system expose keyed component instances in callbacks", async () => {
   const position = vec2Component();
   const velocity = vec2Component("velocity");
-  const world = new World({ capacity: 8, components: [position, velocity] });
-  await world.init();
+  const world = await createTestWorld([position, velocity]);
 
   const first = createEntity(world);
   world.components.addToEntity(position, first, { x: 1, y: 2 });
@@ -211,8 +195,7 @@ Deno.test("manual typed query and system expose keyed component instances in cal
 Deno.test("systems receive matching component instances, borrowed entity lists, and frame arguments", async () => {
   const position = vec2Component();
   const velocity = vec2Component("velocity");
-  const world = new World({ capacity: 8, components: [position, velocity] });
-  await world.init();
+  const world = await createTestWorld([position, velocity]);
 
   const first = createEntity(world);
   world.components.addToEntity(position, first, { x: 10, y: 20 });
@@ -269,10 +252,9 @@ Deno.test("systems receive matching component instances, borrowed entity lists, 
 Deno.test("defineSystem creates the same query behavior as manual System construction", async () => {
   const position = vec2Component();
   const velocity = vec2Component("velocity");
-  const renderable = new Component<null>({ name: "renderable" });
-  const sleeping = new Component<null>({ name: "sleeping" });
-  const world = new World({ capacity: 8, components: [position, velocity, renderable, sleeping] });
-  await world.init();
+  const renderable = tagComponent("renderable");
+  const sleeping = tagComponent("sleeping");
+  const world = await createTestWorld([position, velocity, renderable, sleeping]);
 
   const matching = createEntity(world);
   const missingAny = createEntity(world);
@@ -307,8 +289,7 @@ Deno.test("defineSystem creates the same query behavior as manual System constru
 Deno.test("defineSystem instances receive keyed component records and borrowed entity lists", async () => {
   const position = vec2Component();
   const velocity = vec2Component("velocity");
-  const world = new World({ capacity: 8, components: [position, velocity] });
-  await world.init();
+  const world = await createTestWorld([position, velocity]);
 
   const first = createEntity(world);
   world.components.addToEntity(position, first, { x: 1, y: 2 });
@@ -377,10 +358,9 @@ Deno.test("system lifecycle hooks run during world initialization and destructio
 Deno.test("query compose supports reusable filters for renderable active movers", async () => {
   const position = vec2Component();
   const velocity = vec2Component("velocity");
-  const renderable = new Component<null>({ name: "renderable" });
-  const sleeping = new Component<null>({ name: "sleeping" });
-  const world = new World({ capacity: 8, components: [position, velocity, renderable, sleeping] });
-  await world.init();
+  const renderable = tagComponent("renderable");
+  const sleeping = tagComponent("sleeping");
+  const world = await createTestWorld([position, velocity, renderable, sleeping]);
 
   const movingSprite = createEntity(world);
   const sleepingSprite = createEntity(world);
@@ -410,9 +390,8 @@ Deno.test("query compose supports reusable filters for renderable active movers"
 Deno.test("queryList exposes dense live entity IDs for index-based hot loops", async () => {
   const position = vec2Component();
   const velocity = vec2Component("velocity");
-  const sleeping = new Component<null>({ name: "sleeping" });
-  const world = new World({ capacity: 8, components: [position, velocity, sleeping] });
-  await world.init();
+  const sleeping = tagComponent("sleeping");
+  const world = await createTestWorld([position, velocity, sleeping]);
 
   const first = createEntity(world);
   const second = createEntity(world);
@@ -441,8 +420,7 @@ Deno.test("queryList exposes dense live entity IDs for index-based hot loops", a
 Deno.test("queryList returns a borrowed pooled view, not a stable snapshot", async () => {
   const position = vec2Component();
   const velocity = vec2Component("velocity");
-  const world = new World({ capacity: 8, components: [position, velocity] });
-  await world.init();
+  const world = await createTestWorld([position, velocity]);
 
   const first = createEntity(world);
   const second = createEntity(world);
@@ -465,8 +443,7 @@ Deno.test("queryList returns a borrowed pooled view, not a stable snapshot", asy
 Deno.test("snapshot helpers return stable arrays across retained and nested use", async () => {
   const position = vec2Component();
   const velocity = vec2Component("velocity");
-  const world = new World({ capacity: 8, components: [position, velocity] });
-  await world.init();
+  const world = await createTestWorld([position, velocity]);
 
   const first = createEntity(world);
   const second = createEntity(world);
@@ -508,8 +485,7 @@ Deno.test("queryList indices are readonly at the public type boundary", () => {
 Deno.test("batch component transitions mutate dense query lists", async () => {
   const position = vec2Component();
   const velocity = vec2Component("velocity");
-  const world = new World({ capacity: 8, components: [position, velocity] });
-  await world.init();
+  const world = await createTestWorld([position, velocity]);
 
   const first = createEntity(world);
   const second = createEntity(world);
@@ -538,8 +514,7 @@ Deno.test("batch component transitions mutate dense query lists", async () => {
 Deno.test("batch component transitions preserve entered and exited visibility until refresh", async () => {
   const position = vec2Component();
   const velocity = vec2Component("velocity");
-  const world = new World({ capacity: 8, components: [position, velocity] });
-  await world.init();
+  const world = await createTestWorld([position, velocity]);
 
   const first = createEntity(world);
   const second = createEntity(world);
@@ -574,8 +549,7 @@ Deno.test("batch component transitions preserve entered and exited visibility un
 Deno.test("queries remain live across add, remove, destroy, and recreate operations", async () => {
   const position = vec2Component();
   const velocity = vec2Component("velocity");
-  const world = new World({ capacity: 8, components: [position, velocity] });
-  await world.init();
+  const world = await createTestWorld([position, velocity]);
 
   const query = new Query({ all: [position], any: [velocity] });
   const first = createEntity(world);
@@ -605,9 +579,8 @@ Deno.test("queries remain live across add, remove, destroy, and recreate operati
 Deno.test("entered and exited query views deduplicate entities that match through multiple archetypes", async () => {
   const position = vec2Component();
   const velocity = vec2Component("velocity");
-  const renderable = new Component<null>({ name: "renderable" });
-  const world = new World({ capacity: 8, components: [position, velocity, renderable] });
-  await world.init();
+  const renderable = tagComponent("renderable");
+  const world = await createTestWorld([position, velocity, renderable]);
 
   const entity = createEntity(world);
   const query = new Query({ any: [position, velocity] });
@@ -764,7 +737,7 @@ Deno.test("captured lifecycle API methods observe the current world state", asyn
 });
 
 Deno.test("a component definition can back independent worlds without shared ownership or changed state", async () => {
-  const player = new Component<null>({ name: "player", maxEntities: 1 });
+  const player = tagComponent("player", { maxEntities: 1 });
   const health = new Component<Health>({ name: "health", schema: { current: Uint16Array, max: Uint16Array } });
   const firstWorld = new World({ capacity: 8, components: [player, health] });
   const secondWorld = new World({ capacity: 8, components: [player, health] });
@@ -824,9 +797,8 @@ Deno.test("queries support worlds with more than 32 component types", async () =
 Deno.test("high-volume game-loop smoke test keeps query results deterministic under churn", async () => {
   const position = vec2Component();
   const velocity = vec2Component("velocity");
-  const sleeping = new Component<null>({ name: "sleeping" });
-  const world = new World({ capacity: 2048, components: [position, velocity, sleeping] });
-  await world.init();
+  const sleeping = tagComponent("sleeping");
+  const world = await createTestWorld([position, velocity, sleeping], 2048);
 
   const expectedMovers: number[] = [];
   for (let i = 0; i < 1024; i++) {

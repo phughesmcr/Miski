@@ -1,16 +1,19 @@
+/**
+ * Compile-only type inference checks. Included in `deno task check`, not `deno test`.
+ * See test/README.md.
+ */
 import { Component, defineSystem, Query, System, World } from "../mod.ts";
 import type { BorrowedEntityList, ComponentInstance, QuerySpec, SchemaOrNull, SystemCallback } from "../mod.ts";
+import { tagComponent, type Vec2, vec2Component } from "./fixtures.ts";
 // @ts-expect-error AnySystemCallback is not exported from the public mod.ts surface.
 import type { AnySystemCallback } from "../mod.ts";
 
-type Vec2 = { x: Float32ArrayConstructor; y: Float32ArrayConstructor };
-
 function expectType<T>(_value: T): void {}
 
-const position = new Component<Vec2>({ name: "position", schema: { x: Float32Array, y: Float32Array } });
-const velocity = new Component<Vec2>({ name: "velocity", schema: { x: Float32Array, y: Float32Array } });
-const renderable = new Component<null>({ name: "renderable" });
-const disabled = new Component<null>({ name: "disabled" });
+const position = vec2Component();
+const velocity = vec2Component("velocity");
+const renderable = tagComponent("renderable");
+const disabled = tagComponent("disabled");
 const inferredTag = new Component({ name: "inferredTag" });
 
 const movement = defineSystem({
