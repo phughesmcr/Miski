@@ -13,6 +13,7 @@ import { ComponentManager } from "@/component/component-manager.ts";
 import { createEntityArray, type EntityArray } from "@/entity/entity-array.ts";
 import { EntityManager } from "@/entity/entity-manager.ts";
 import {
+  CapacityError,
   ComponentDataError,
   componentDisplayName,
   ComponentOwnershipError,
@@ -31,7 +32,7 @@ import type { Query } from "@/query/query.ts";
 import type { DynamicComponent } from "@/types/component.ts";
 import type { Entity } from "@/entity/entity-id.ts";
 import type { QueryEntityList } from "@/types/entity-views.ts";
-import type { SchemaOrNull } from "@/types/partitions.ts";
+import type { SchemaOrNull, SchemaValues } from "@/types/partitions.ts";
 import type {
   WorldAPIResult,
   WorldArchetypeAPI,
@@ -135,18 +136,19 @@ export class World {
       addToEntity: <T extends SchemaOrNull>(
         component: Component<T> | string,
         entity: Entity,
-        data?: { [k in keyof T]: number } | undefined,
+        data?: Partial<SchemaValues<T>> | undefined,
       ) => {
         this.#assertInitialized();
-        this.#addComponentToEntity(component, entity, data);
+        // SchemaValues<T> values are always numeric; storage internals speak plain numbers.
+        this.#addComponentToEntity(component, entity, data as Partial<Record<keyof T, number>> | undefined);
       },
       addToEntities: <T extends SchemaOrNull>(
         component: Component<T> | string,
         entities: QueryEntityList,
-        data?: { [k in keyof T]: number } | undefined,
+        data?: Partial<SchemaValues<T>> | undefined,
       ) => {
         this.#assertInitialized();
-        return this.#addComponentToEntities(component, entities, data);
+        return this.#addComponentToEntities(component, entities, data as Partial<Record<keyof T, number>> | undefined);
       },
       entityHas: <T extends SchemaOrNull>(component: Component<T> | string, entity: Entity) =>
         this.#componentManager.entityHas(component, entity),
@@ -156,6 +158,8 @@ export class World {
         this.#snapshotIterator(this.#componentManager.getChanged(component)),
       getEntityData: <T extends SchemaOrNull>(component: Component<T> | string, entity: Entity) =>
         this.#getComponentEntityData(component, entity),
+      readEntityData: <T extends SchemaOrNull>(component: Component<T> | string, entity: Entity) =>
+        this.#readComponentEntityData(component, entity),
       getInstance: <T extends SchemaOrNull>(component: Component<T> | string) =>
         this.#componentManager.getInstance(component),
       require: <T extends SchemaOrNull>(component: Component<T> | string) => this.#componentManager.require(component),
@@ -184,10 +188,11 @@ export class World {
       setEntityData: <T extends SchemaOrNull>(
         component: Component<T> | string,
         entity: Entity,
-        value: Record<keyof T, number>,
+        value: Partial<SchemaValues<T>>,
       ) => {
         this.#assertInitialized();
-        this.#setComponentEntityData(component, entity, value);
+        // SchemaValues<T> values are always numeric; storage internals speak plain numbers.
+        this.#setComponentEntityData(component, entity, value as Partial<Record<keyof T, number>>);
       },
     };
   }
@@ -199,6 +204,14 @@ export class World {
       create: () => {
         this.#assertInitialized();
         return this.#entityManager.create();
+      },
+      createOrThrow: () => {
+        this.#assertInitialized();
+        const entity = this.#entityManager.create();
+        if (entity === undefined) {
+          throw new CapacityError(`World is at capacity (${this.#entityManager.capacity} entities).`);
+        }
+        return entity;
       },
       destroy: (entity: Entity) => {
         this.#assertInitialized();
@@ -376,7 +389,7 @@ export class World {
   #commitAddComponent<T extends SchemaOrNull>(
     instance: ComponentInstance<T>,
     entity: Entity,
-    data?: { [k in keyof T]: number },
+    data?: Partial<Record<keyof T, number>>,
   ): boolean {
     const changed = this.#componentManager.addInstanceToEntity(instance, entity, data);
     if (changed) {
@@ -408,7 +421,7 @@ export class World {
   #addComponentToEntity<T extends SchemaOrNull>(
     component: Component<T> | string,
     entity: Entity,
-    data?: { [k in keyof T]: number } | undefined,
+    data?: Partial<Record<keyof T, number>> | undefined,
   ): void {
     if (!this.#entityManager.isActive(entity)) {
       throw new EntityNotFoundError(formatEntityNotActive(entity));
@@ -421,7 +434,7 @@ export class World {
   #addComponentToEntities<T extends SchemaOrNull>(
     component: Component<T> | string,
     entities: QueryEntityList,
-    data?: { [k in keyof T]: number } | undefined,
+    data?: Partial<Record<keyof T, number>> | undefined,
   ): number {
     const instance = this.#getRegisteredComponentInstance(component);
     const count = this.#preflightBatchEntities(entities);
@@ -528,9 +541,26 @@ export class World {
   #setComponentEntityData<T extends SchemaOrNull>(
     component: Component<T> | string,
     entity: Entity,
-    value: Record<keyof T, number>,
+    value: Partial<Record<keyof T, number>>,
   ): void {
     this.#componentManager.setInstanceEntityData(this.#getGuardedDataComponent(component, entity), entity, value);
+  }
+
+  /**
+   * Read component data for an entity without throwing.
+   * @returns the component data, or `undefined` if the entity is inactive, does not own the component,
+   * or the component is a tag component with no data storage
+   * @throws {NotRegisteredError} - If the component is not registered
+   */
+  #readComponentEntityData<T extends SchemaOrNull>(
+    component: Component<T> | string,
+    entity: Entity,
+  ): Record<keyof T, number> | undefined {
+    const instance = this.#getRegisteredComponentInstance(component);
+    if (instance.storage === null) return undefined;
+    if (!this.#entityManager.isActive(entity)) return undefined;
+    if (!this.#componentManager.entityOwnsInstance(instance, entity)) return undefined;
+    return this.#componentManager.getInstanceEntityData(instance, entity);
   }
 
   /** Destroy an entity and clean up its components and archetype */

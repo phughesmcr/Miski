@@ -436,13 +436,14 @@ Deno.test("queryList indices are readonly at the public type boundary", () => {
     // @ts-expect-error QueryEntityList exposes a borrowed read-only index view.
     list.indices[0] = 1;
   };
-  const assertBorrowedAlias = (list: QueryEntityList, iterator: BorrowedEntityIterator): void => {
-    const borrowed: BorrowedEntityList = list;
-    borrowed.indices[0];
+  const assertBorrowedSubtype = (list: BorrowedEntityList, iterator: BorrowedEntityIterator): void => {
+    // Borrowed (iterable) lists remain valid inputs for the minimal batch list shape.
+    const minimal: QueryEntityList = list;
+    minimal.indices[0];
     iterator.next();
   };
   void assertReadonlyIndices;
-  void assertBorrowedAlias;
+  void assertBorrowedSubtype;
 });
 
 Deno.test("batch component transitions mutate dense query lists", async () => {

@@ -9,6 +9,7 @@ import type {
   Partition,
   PartitionStorage,
   Schema,
+  SchemaProperty,
   TypedArray,
   TypedArrayConstructor,
 } from "@phughesmcr/partitionedbuffer";
@@ -16,7 +17,7 @@ import type {
 import type { Entity } from "@/entity/entity-id.ts";
 import type { StorageProxy } from "@/component/storage-proxy.ts";
 
-export type { Partition, PartitionStorage, Schema, TypedArray, TypedArrayConstructor };
+export type { Partition, PartitionStorage, Schema, SchemaProperty, TypedArray, TypedArrayConstructor };
 
 /**
  * The specification for a StorageProxy
@@ -45,15 +46,28 @@ export type SchemaPartitions<T extends Schema<T>> = {
 };
 
 /**
- * Typed-array partition views keyed by a component's value schema.
+ * Typed-array partition views keyed by a component's schema.
  *
- * A component's generic parameter is the value shape (e.g. `{ x: number }`),
- * so the concrete typed-array constructor per key is not recoverable at the
- * type level; each partition is exposed as the general {@link TypedArray}.
- * Tag components (`null` schema) have no partitions.
+ * When the component's generic parameter is constructor-shaped
+ * (e.g. `{ x: Float32ArrayConstructor }`) each partition resolves to the exact
+ * typed-array type. When it is value-shaped (e.g. `{ x: number }`) the concrete
+ * constructor is not recoverable at the type level, so each partition is
+ * exposed as the general {@link TypedArray}. Tag components (`null` schema)
+ * have no partitions.
  */
 export type ComponentPartitions<T extends SchemaOrNull> = T extends null ? null : {
-  readonly [K in keyof T]: TypedArray;
+  readonly [K in keyof T]: [SchemaPropertyArray<T[K]>] extends [never] ? TypedArray : SchemaPropertyArray<T[K]>;
+};
+
+/**
+ * The writable value shape for a component's schema.
+ *
+ * Constructor-shaped keys (e.g. `x: Float32ArrayConstructor`) accept any
+ * `number`. Value-shaped keys keep their declared value type, so branded
+ * numeric types (e.g. `dir: 0 | 1 | 2 | 3`) are enforced at the write site.
+ */
+export type SchemaValues<T> = T extends null ? Record<never, number> : {
+  [K in keyof T]: T[K] extends SchemaProperty ? number : T[K] & number;
 };
 
 /**

@@ -294,7 +294,7 @@ export class ComponentManager {
   addInstanceToEntity<T extends SchemaOrNull>(
     instance: ComponentInstance<T>,
     entity: Entity,
-    data?: { [k in keyof T]: number },
+    data?: Partial<Record<keyof T, number>>,
   ): boolean {
     const id = instance.id;
     if (entity >= this.#capacity) {
@@ -329,8 +329,9 @@ export class ComponentManager {
     if (hasData && storage !== null) {
       const partitions = storage.partitions as Record<keyof T, TypedArray>;
       for (const key in data) {
-        if (key in partitions) {
-          partitions[key][entity] = data[key];
+        const value = data[key];
+        if (value !== undefined && key in partitions) {
+          partitions[key][entity] = value;
         }
       }
     }
@@ -555,16 +556,17 @@ export class ComponentManager {
   setInstanceEntityData<T extends SchemaOrNull>(
     instance: ComponentInstance<T>,
     entity: Entity,
-    value: Record<keyof T, number>,
+    value: Partial<Record<keyof T, number>>,
   ): this {
     if (!value) return this;
     const storage = instance.storage?.partitions as Record<keyof T, TypedArray> | undefined;
     if (!storage) return this;
     let changed = false;
     for (const key in value) {
-      if (key in storage) {
-        changed ||= storage[key][entity] !== value[key];
-        storage[key][entity] = value[key];
+      const propertyValue = value[key];
+      if (propertyValue !== undefined && key in storage) {
+        changed ||= storage[key][entity] !== propertyValue;
+        storage[key][entity] = propertyValue;
       }
     }
     if (changed && this.#ownersById[instance.id]?.[entity] === 1) {

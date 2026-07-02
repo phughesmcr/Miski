@@ -98,3 +98,6 @@ export const NoComponentsFoundError: typeof MiskiError = createErrorClass(
 
 /** An error thrown when something is not registered */
 export const NotRegisteredError: typeof MiskiError = createErrorClass("NotRegisteredError", "Not registered");
+
+/** An error thrown when the world's entity capacity is exhausted */
+export const CapacityError: typeof MiskiError = createErrorClass("CapacityError", "World is at capacity");

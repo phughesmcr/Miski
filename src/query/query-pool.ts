@@ -25,6 +25,18 @@ export class QueryEntityResult implements EntityResultSink {
   iterate(): IterableIterator<Entity> {
     return this.#iterator.reset(this.count);
   }
+
+  /**
+   * Iterate the valid entity IDs.
+   *
+   * Unlike {@link QueryEntityResult.iterate}, each call returns a fresh
+   * iterator, so nested iteration of the same list is safe.
+   */
+  *[Symbol.iterator](): IterableIterator<Entity> {
+    for (let i = 0; i < this.count; i++) {
+      yield this.indices[i]!;
+    }
+  }
 }
 
 /** Pool for reusing query result objects */

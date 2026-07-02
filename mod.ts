@@ -48,7 +48,8 @@
  * ```ts
  * const entity1: Entity | undefined = world.entities.create(); // 0
  * const entity2: Entity | undefined = world.entities.create(); // 1
- * const entity3: Entity | undefined = world.entities.create(); // 2
+ * // Or, if capacity exhaustion should be an error rather than a soft failure:
+ * const entity3: Entity = world.entities.createOrThrow(); // 2 (throws CapacityError when full)
  * // To create multiple entities, call create() in a loop
  * const entities: Entity[] = [];
  * for (let i = 0; i < 7; i++) {
@@ -75,6 +76,10 @@
  *
  * // With setting initial values:
  * world.components.addToEntity(positionComponent, entity2, { x: 10, y: 20 });
+ *
+ * // addToEntity is an upsert: if the entity already owns the component,
+ * // ownership is unchanged and any provided data is merged.
+ * world.components.addToEntity(positionComponent, entity2, { x: 15 }); // y stays 20
  * ```
  *
  * @example Remove a component from an Entity
@@ -88,6 +93,8 @@
  *
  * // First way: type-safe and shows the entity in changed tracking
  * world.components.setEntityData<Vec2>(positionComponent, entity1, { x: 10, y: 20 });
+ * // Partial updates are supported; omitted keys keep their current values:
+ * world.components.setEntityData<Vec2>(positionComponent, entity1, { x: 15 });
  *
  * // Second way: type-unsafe and does not show the entity in changed tracking
  * const positionComponentInstance = world.components.require("position");
@@ -111,12 +118,26 @@
  * }
  * ```
  *
+ * @example Read a component's data without throwing
+ * ```ts
+ * // Returns undefined if the entity is inactive, does not own the component,
+ * // or the component is a tag. Only unregistered components throw.
+ * const data = world.components.readEntityData(positionComponent, entity1);
+ * if (data !== undefined) {
+ *   console.log(data.x, data.y);
+ * }
+ * ```
+ *
  * @example Query entities by component for hot loops
  * ```ts
  * const positionQuery = new Query({ all: [positionComponent] });
  * const positionView = world.entities.queryList(positionQuery);
  * for (let i = 0; i < positionView.count; i++) {
  *   const entity = positionView.indices[i]!;
+ *   console.log(entity);
+ * }
+ * // Or, on cold paths, borrowed lists are directly iterable:
+ * for (const entity of positionView) {
  *   console.log(entity);
  * }
  * ```
@@ -183,6 +204,7 @@
 export { Component, isValidComponentSpec } from "@/component/component.ts";
 export {
   AlreadyRegisteredError,
+  CapacityError,
   ComponentDataError,
   ComponentOwnershipError,
   EntityNotFoundError,
@@ -209,6 +231,7 @@ export type {
   BorrowedEntityList,
   ComponentInstances,
   ComponentMap,
+  ComponentPartitions,
   ComponentRecord,
   ComponentSpec,
   DynamicComponent,
@@ -222,12 +245,15 @@ export type {
   Schema,
   SchemaOrNull,
   SchemaPartitions,
+  SchemaValues,
   StorageProxyWithProperties,
   SystemCallback,
   SystemFunction,
   SystemInstance,
   SystemRecord,
   SystemSpec,
+  TypedArray,
+  TypedArrayConstructor,
   TypedQuerySpec,
   TypedSystemCallback,
   UntypedQueryComponents,

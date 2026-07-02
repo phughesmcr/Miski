@@ -17,18 +17,29 @@ export type BorrowedEntityIndices = {
 };
 
 /**
- * A borrowed, reusable view of entity IDs.
+ * The minimal dense entity list shape accepted by batch mutation APIs.
  *
- * The view is pooled and valid only until the next world mutation, query
- * invalidation, or `world.refresh()`. Copy the valid prefix when a stable
- * snapshot is required.
+ * Anywhere this type appears as an input, a plain `{ count, indices }` object
+ * is sufficient; iteration support is not required.
  */
-export type BorrowedEntityList = {
-  /** Number of valid entity IDs in {@link BorrowedEntityList.indices}. */
+export type QueryEntityList = {
+  /** Number of valid entity IDs in {@link QueryEntityList.indices}. */
   readonly count: number;
   /** Borrowed dense entity IDs. Read only entries `0 <= i < count`. */
   readonly indices: BorrowedEntityIndices;
 };
 
-/** Backwards-compatible name for the borrowed dense query result. */
-export type QueryEntityList = BorrowedEntityList;
+/**
+ * A borrowed, reusable view of entity IDs.
+ *
+ * The view is pooled and valid only until the next world mutation, query
+ * invalidation, or `world.refresh()`. Copy the valid prefix when a stable
+ * snapshot is required.
+ *
+ * Iterable for convenience (`for (const entity of list)`); use the
+ * `count`/`indices` pair directly in hot loops to avoid iterator overhead.
+ */
+export type BorrowedEntityList = QueryEntityList & {
+  /** Iterate the valid entity IDs `0 <= i < count`. */
+  [Symbol.iterator](): IterableIterator<Entity>;
+};

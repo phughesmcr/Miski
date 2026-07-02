@@ -24,12 +24,15 @@ export type {
   QueryEntityList,
 } from "@/types/entity-views.ts";
 export type {
+  ComponentPartitions,
   Partition,
   PartitionStorage,
   Schema,
   SchemaOrNull,
   SchemaPartitions,
+  SchemaProperty,
   SchemaPropertyArray,
+  SchemaValues,
   StorageProxySpec,
   StorageProxyWithProperties,
   TypedArray,
