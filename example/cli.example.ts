@@ -147,12 +147,12 @@ const velocity = new Component<Vec2>({
   schema: schemaVec2,
 });
 
-const position = new Component({
+const position = new Component<Vec2>({
   name: "position",
   schema: schemaVec2,
 });
 
-const previousPosition = new Component({
+const previousPosition = new Component<Vec2>({
   name: "previousPosition",
   schema: schemaVec2,
 });

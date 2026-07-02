@@ -15,7 +15,7 @@ import type { QueryInstance } from "@/types/query.ts";
 import type { ComponentInstanceGetter, QueryManagerDependencies } from "@/types/world-api.ts";
 import { QueryCache } from "./query-cache.ts";
 import { type QueryEntityResult, QueryResultPool } from "./query-pool.ts";
-import type { Query } from "./query.ts";
+import type { NormalizedQueryComponentEntry, Query } from "./query.ts";
 
 type QueryComponent = Parameters<ComponentInstanceGetter>[0][number];
 type RegisteredComponentInstance = DynamicComponentInstance;
@@ -37,11 +37,12 @@ function getRegisteredInstances(
 
 function addComponentsToLookup(
   lookup: Record<string, RegisteredComponentInstance>,
+  entries: readonly NormalizedQueryComponentEntry[],
   instances: readonly RegisteredComponentInstance[],
 ): void {
   for (let i = 0; i < instances.length; i++) {
     const instance = instances[i]!;
-    lookup[instance.name] = instance;
+    lookup[entries[i]!.key] = instance;
   }
 }
 
@@ -55,30 +56,35 @@ function addComponentsToLookup(
  */
 function createQueryInstance(getInstances: ComponentInstanceGetter, size: number, query: Query): QueryInstance {
   // Create AND bit array - marks required components
-  const andInstances = getRegisteredInstances(getInstances, query.all);
+  const andInstances = getRegisteredInstances(getInstances, query.allEntries.map((entry) => entry.component));
   const and = new BooleanArray(size).setFromObjects(ID_KEY, andInstances, true);
 
   // Create OR bit array - when present, at least one component must match
-  const orInstances = getRegisteredInstances(getInstances, query.any);
+  const orInstances = getRegisteredInstances(getInstances, query.anyEntries.map((entry) => entry.component));
   const or = new BooleanArray(size).setFromObjects(ID_KEY, orInstances, true);
 
   // Create NOT bit array - marks forbidden components
-  const notInstances = getRegisteredInstances(getInstances, query.none);
+  const notInstances = getRegisteredInstances(getInstances, query.noneEntries.map((entry) => entry.component));
   const not = new BooleanArray(size).setFromObjects(ID_KEY, notInstances, true);
+
+  // Create include bit array - marks non-filtering components exposed to callbacks
+  const includeInstances = getRegisteredInstances(getInstances, query.includeEntries.map((entry) => entry.component));
+  const include = new BooleanArray(size).setFromObjects(ID_KEY, includeInstances, true);
 
   // Build lookup table for quick component access
   const components: Record<string, RegisteredComponentInstance> = {};
-  addComponentsToLookup(components, andInstances);
-  addComponentsToLookup(components, orInstances);
+  addComponentsToLookup(components, query.allEntries, andInstances);
+  addComponentsToLookup(components, query.anyEntries, orInstances);
+  addComponentsToLookup(components, query.includeEntries, includeInstances);
   Object.freeze(components);
 
   // Initialize empty set for matching archetypes
   const archetypes = new Set<Archetype>();
 
   // turn the three arrays into a string
-  const id = `${and.toString()}:${or.toString()}:${not.toString()}`;
+  const id = `${and.toString()}:${or.toString()}:${not.toString()}:${include.toString()}`;
 
-  return { and, or, not, archetypes, components, isDirty: true, id };
+  return { and, or, not, include, archetypes, components, isDirty: true, id };
 }
 
 /** The QueryManager is responsible for creating, registering, and destroying queries. */

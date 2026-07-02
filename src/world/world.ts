@@ -9,7 +9,7 @@ import { BooleanArray } from "@phughesmcr/booleanarray";
 
 import { VERSION } from "@/constants.ts";
 import { ArchetypeManager } from "@/archetype/archetype-manager.ts";
-import { ComponentManager } from "@/component/component-manager.ts";
+import { type ComponentBundleCommitEntry, ComponentManager } from "@/component/component-manager.ts";
 import { createEntityArray, type EntityArray } from "@/entity/entity-array.ts";
 import { EntityManager } from "@/entity/entity-manager.ts";
 import {
@@ -26,14 +26,17 @@ import {
 } from "@/errors.ts";
 import { QueryManager } from "@/query/query-manager.ts";
 import { SystemManager } from "@/system/system-manager.ts";
+import { isObject } from "@/utils.ts";
 import type { Component } from "@/component/component.ts";
 import type { ComponentInstance } from "@/component/component-instance.ts";
 import type { Query } from "@/query/query.ts";
 import type { DynamicComponent } from "@/types/component.ts";
 import type { Entity } from "@/entity/entity-id.ts";
 import type { QueryEntityList } from "@/types/entity-views.ts";
-import type { SchemaOrNull, SchemaValues } from "@/types/partitions.ts";
+import type { ComponentData, SchemaOrNull, SchemaValues } from "@/types/partitions.ts";
 import type {
+  ComponentBundle,
+  ComponentBundleEntryInput,
   WorldAPIResult,
   WorldArchetypeAPI,
   WorldComponentAPI,
@@ -72,6 +75,12 @@ export class World {
 
   /** Duplicate-detection scratch flags for preflighted batch component transitions */
   #batchSeen: Uint8Array;
+
+  /** Reusable preflighted bundle entries */
+  #bundleEntries: ComponentBundleCommitEntry[];
+
+  /** Duplicate-detection scratch flags for bundle component instances */
+  #bundleSeenComponents: Uint8Array;
 
   /** The World's current state */
   #state: WorldState;
@@ -133,66 +142,108 @@ export class World {
     return {
       count: this.#componentManager.count,
       registry: this.#componentManager.registry,
-      addToEntity: <T extends SchemaOrNull>(
-        component: Component<T> | string,
+      addToEntity: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
+        component: Component<TValue, TStorage> | string,
         entity: Entity,
-        data?: Partial<SchemaValues<T>> | undefined,
+        data?: Partial<SchemaValues<TValue>> | undefined,
       ) => {
         this.#assertInitialized();
         // SchemaValues<T> values are always numeric; storage internals speak plain numbers.
-        this.#addComponentToEntity(component, entity, data as Partial<Record<keyof T, number>> | undefined);
+        this.#addComponentToEntity(component, entity, data as Partial<Record<keyof TValue, number>> | undefined);
       },
-      addToEntities: <T extends SchemaOrNull>(
-        component: Component<T> | string,
+      addToEntities: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
+        component: Component<TValue, TStorage> | string,
         entities: QueryEntityList,
-        data?: Partial<SchemaValues<T>> | undefined,
+        data?: Partial<SchemaValues<TValue>> | undefined,
       ) => {
         this.#assertInitialized();
-        return this.#addComponentToEntities(component, entities, data as Partial<Record<keyof T, number>> | undefined);
+        return this.#addComponentToEntities(
+          component,
+          entities,
+          data as Partial<Record<keyof TValue, number>> | undefined,
+        );
       },
-      entityHas: <T extends SchemaOrNull>(component: Component<T> | string, entity: Entity) =>
-        this.#componentManager.entityHas(component, entity),
-      getChanged: <T extends SchemaOrNull>(component: Component<T> | string) =>
-        this.#componentManager.getChanged(component),
-      getChangedSnapshot: <T extends SchemaOrNull>(component: Component<T> | string) =>
-        this.#snapshotIterator(this.#componentManager.getChanged(component)),
-      getEntityData: <T extends SchemaOrNull>(component: Component<T> | string, entity: Entity) =>
-        this.#getComponentEntityData(component, entity),
-      readEntityData: <T extends SchemaOrNull>(component: Component<T> | string, entity: Entity) =>
-        this.#readComponentEntityData(component, entity),
-      getInstance: <T extends SchemaOrNull>(component: Component<T> | string) =>
-        this.#componentManager.getInstance(component),
-      require: <T extends SchemaOrNull>(component: Component<T> | string) => this.#componentManager.require(component),
+      addBundle: <const TBundle extends readonly ComponentBundleEntryInput[]>(
+        entity: Entity,
+        bundle: TBundle & ComponentBundle<TBundle>,
+      ) => {
+        this.#assertInitialized();
+        this.#addBundleToEntity(entity, bundle);
+      },
+      entityHas: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
+        component: Component<TValue, TStorage> | string,
+        entity: Entity,
+      ) => this.#componentManager.entityHas(component, entity),
+      getChanged: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
+        component: Component<TValue, TStorage> | string,
+      ) => this.#componentManager.getChanged(component),
+      getChangedSnapshot: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
+        component: Component<TValue, TStorage> | string,
+      ) => this.#snapshotIterator(this.#componentManager.getChanged(component)),
+      getEntityData: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
+        component: Component<TValue, TStorage> | string,
+        entity: Entity,
+      ) => this.#getComponentEntityData(component, entity),
+      readEntityData: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
+        component: Component<TValue, TStorage> | string,
+        entity: Entity,
+      ) => this.#readComponentEntityData(component, entity),
+      readEntityDataInto: <
+        TValue extends SchemaOrNull,
+        TStorage extends SchemaOrNull = TValue,
+      >(
+        component: Component<TValue, TStorage> | string,
+        entity: Entity,
+        out: Partial<ComponentData<TValue>>,
+      ) => this.#readComponentEntityDataInto(component, entity, out),
+      getInstance: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
+        component: Component<TValue, TStorage> | string,
+      ) => this.#componentManager.getInstance(component),
+      require: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
+        component: Component<TValue, TStorage> | string,
+      ) => this.#componentManager.require(component),
       getInstances: (array: DynamicComponent[] | Readonly<DynamicComponent[]>) =>
         this.#componentManager.getInstances(array),
-      getOwners: <T extends SchemaOrNull>(component: Component<T> | string) =>
-        this.#componentManager.getOwners(component),
-      getOwnersSnapshot: <T extends SchemaOrNull>(component: Component<T> | string) =>
-        this.#snapshotIterator(this.#componentManager.getOwners(component)),
+      getOwners: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
+        component: Component<TValue, TStorage> | string,
+      ) => this.#componentManager.getOwners(component),
+      getOwnersSnapshot: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
+        component: Component<TValue, TStorage> | string,
+      ) => this.#snapshotIterator(this.#componentManager.getOwners(component)),
       isRegistered: (component: DynamicComponent | string) => this.#componentManager.isRegistered(component),
+      markChanged: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
+        component: Component<TValue, TStorage> | string,
+        entity: Entity,
+      ) => {
+        this.#assertInitialized();
+        this.#markComponentChanged(component, entity);
+      },
       query: (query: Query) => {
         this.#assertInitialized();
         return this.#queryManager.components(query);
       },
-      removeFromEntity: <T extends SchemaOrNull>(component: string | Component<T>, entity: Entity) => {
+      removeFromEntity: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
+        component: string | Component<TValue, TStorage>,
+        entity: Entity,
+      ) => {
         this.#assertInitialized();
         this.#removeComponentFromEntity(component, entity);
       },
-      removeFromEntities: <T extends SchemaOrNull>(
-        component: Component<T> | string,
+      removeFromEntities: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
+        component: Component<TValue, TStorage> | string,
         entities: QueryEntityList,
       ) => {
         this.#assertInitialized();
         return this.#removeComponentFromEntities(component, entities);
       },
-      setEntityData: <T extends SchemaOrNull>(
-        component: Component<T> | string,
+      setEntityData: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
+        component: Component<TValue, TStorage> | string,
         entity: Entity,
-        value: Partial<SchemaValues<T>>,
+        value: Partial<SchemaValues<TValue>>,
       ) => {
         this.#assertInitialized();
         // SchemaValues<T> values are always numeric; storage internals speak plain numbers.
-        this.#setComponentEntityData(component, entity, value as Partial<Record<keyof T, number>>);
+        this.#setComponentEntityData(component, entity, value as Partial<Record<keyof TValue, number>>);
       },
     };
   }
@@ -205,6 +256,12 @@ export class World {
         this.#assertInitialized();
         return this.#entityManager.create();
       },
+      createWith: <const TBundle extends readonly ComponentBundleEntryInput[]>(
+        bundle: TBundle & ComponentBundle<TBundle>,
+      ) => {
+        this.#assertInitialized();
+        return this.#createEntityWithBundle(bundle, false);
+      },
       createOrThrow: () => {
         this.#assertInitialized();
         const entity = this.#entityManager.create();
@@ -212,6 +269,12 @@ export class World {
           throw new CapacityError(`World is at capacity (${this.#entityManager.capacity} entities).`);
         }
         return entity;
+      },
+      createWithOrThrow: <const TBundle extends readonly ComponentBundleEntryInput[]>(
+        bundle: TBundle & ComponentBundle<TBundle>,
+      ) => {
+        this.#assertInitialized();
+        return this.#createEntityWithBundle(bundle, true)!;
       },
       destroy: (entity: Entity) => {
         this.#assertInitialized();
@@ -346,7 +409,10 @@ export class World {
   }
 
   /** Resolve a registered component instance for mutation paths. */
-  #getRegisteredComponentInstance<T extends SchemaOrNull>(component: Component<T> | string): ComponentInstance<T> {
+  #getRegisteredComponentInstance<
+    TValue extends SchemaOrNull,
+    TStorage extends SchemaOrNull = TValue,
+  >(component: Component<TValue, TStorage> | string): ComponentInstance<TValue, TStorage> {
     const instance = this.#componentManager.getInstance(component);
     if (instance !== undefined) return instance;
     throw new NotRegisteredError(formatComponentNotRegistered(componentDisplayName(component)));
@@ -385,11 +451,113 @@ export class World {
     }
   }
 
+  /** Clear bundle duplicate-detection scratch state. */
+  #clearBundleEntries(): void {
+    for (let i = 0; i < this.#bundleEntries.length; i++) {
+      const instance = this.#bundleEntries[i]!.instance;
+      this.#bundleSeenComponents[instance.id] = 0;
+    }
+    this.#bundleEntries.length = 0;
+  }
+
+  /** Resolve, validate, and stage a user-provided bundle before mutation. */
+  #preflightBundle(bundle: readonly ComponentBundleEntryInput[]): readonly ComponentBundleCommitEntry[] {
+    try {
+      for (let i = 0; i < bundle.length; i++) {
+        const entry = bundle[i];
+        if (!Array.isArray(entry) || (entry.length !== 1 && entry.length !== 2)) {
+          throw new TypeError("Bundle entries must be [component] or [component, data] tuples.");
+        }
+        const instance = this.#getRegisteredComponentInstance(entry[0]);
+        if (this.#bundleSeenComponents[instance.id] === 1) {
+          throw new RangeError(`Duplicate component "${instance.type.name}" in bundle.`);
+        }
+        this.#bundleSeenComponents[instance.id] = 1;
+
+        let data: Partial<Record<string, number>> | undefined;
+        if (entry.length === 2) {
+          if (instance.storage === null) {
+            throw new ComponentDataError(`Component ${instance.type.name} has no data storage.`);
+          }
+          if (entry[1] !== undefined && !isObject(entry[1])) {
+            throw new TypeError(`Bundle data for component "${instance.type.name}" must be an object.`);
+          }
+          data = entry[1] as Partial<Record<string, number>> | undefined;
+        }
+
+        this.#bundleEntries.push({ instance, data });
+      }
+      return this.#bundleEntries;
+    } catch (error) {
+      this.#clearBundleEntries();
+      throw error;
+    }
+  }
+
+  /** Add a preflighted component bundle to an active entity. */
+  #addBundleToEntity(entity: Entity, bundle: readonly ComponentBundleEntryInput[]): void {
+    if (!this.#entityManager.isActive(entity)) {
+      throw new EntityNotFoundError(formatEntityNotActive(entity));
+    }
+    const entries = this.#preflightBundle(bundle);
+    try {
+      this.#componentManager.preflightAddBundleToEntity(entries, entity);
+      const added = this.#componentManager.addBundleToEntity(entries, entity);
+      if (added.length > 0) {
+        this.#archetypeManager.addComponentSet(entity, added);
+      }
+      this.#invalidateCommittedTransition(added.length > 0);
+    } finally {
+      this.#clearBundleEntries();
+    }
+  }
+
+  /** Roll back a newly-created entity after bundle preflight fails. */
+  #rollbackCreatedEntity(entity: Entity): void {
+    let changed = false;
+    const archetype = this.#archetypeManager.getEntityArchetype(entity);
+    if (archetype) {
+      for (const componentInstance of archetype.components) {
+        changed ||= this.#componentManager.removeInstanceFromEntity(componentInstance, entity);
+      }
+    }
+    this.#archetypeManager.reset(entity);
+    if (this.#entityManager.isActive(entity)) {
+      this.#entityManager.destroy(entity);
+    }
+    this.#invalidateCommittedTransition(changed);
+  }
+
+  /** Create an entity and atomically attach a bundle. */
+  #createEntityWithBundle(
+    bundle: readonly ComponentBundleEntryInput[],
+    throwOnCapacity: boolean,
+  ): Entity | undefined {
+    const entity = this.#entityManager.create();
+    if (entity === undefined) {
+      if (throwOnCapacity) {
+        throw new CapacityError(`World is at capacity (${this.#entityManager.capacity} entities).`);
+      }
+      return undefined;
+    }
+
+    try {
+      this.#addBundleToEntity(entity, bundle);
+      return entity;
+    } catch (error) {
+      this.#rollbackCreatedEntity(entity);
+      throw error;
+    }
+  }
+
   /** Commit an already preflighted component add. */
-  #commitAddComponent<T extends SchemaOrNull>(
-    instance: ComponentInstance<T>,
+  #commitAddComponent<
+    TValue extends SchemaOrNull,
+    TStorage extends SchemaOrNull = TValue,
+  >(
+    instance: ComponentInstance<TValue, TStorage>,
     entity: Entity,
-    data?: Partial<Record<keyof T, number>>,
+    data?: Partial<Record<keyof TValue, number>>,
   ): boolean {
     const changed = this.#componentManager.addInstanceToEntity(instance, entity, data);
     if (changed) {
@@ -399,8 +567,11 @@ export class World {
   }
 
   /** Commit an already preflighted component removal. */
-  #commitRemoveComponent<T extends SchemaOrNull>(
-    instance: ComponentInstance<T>,
+  #commitRemoveComponent<
+    TValue extends SchemaOrNull,
+    TStorage extends SchemaOrNull = TValue,
+  >(
+    instance: ComponentInstance<TValue, TStorage>,
     entity: Entity,
   ): boolean {
     const changed = this.#componentManager.removeInstanceFromEntity(instance, entity);
@@ -418,10 +589,13 @@ export class World {
   }
 
   /** Add a component to an entity */
-  #addComponentToEntity<T extends SchemaOrNull>(
-    component: Component<T> | string,
+  #addComponentToEntity<
+    TValue extends SchemaOrNull,
+    TStorage extends SchemaOrNull = TValue,
+  >(
+    component: Component<TValue, TStorage> | string,
     entity: Entity,
-    data?: Partial<Record<keyof T, number>> | undefined,
+    data?: Partial<Record<keyof TValue, number>> | undefined,
   ): void {
     if (!this.#entityManager.isActive(entity)) {
       throw new EntityNotFoundError(formatEntityNotActive(entity));
@@ -431,10 +605,13 @@ export class World {
   }
 
   /** Add a component to every entity in a dense query list. */
-  #addComponentToEntities<T extends SchemaOrNull>(
-    component: Component<T> | string,
+  #addComponentToEntities<
+    TValue extends SchemaOrNull,
+    TStorage extends SchemaOrNull = TValue,
+  >(
+    component: Component<TValue, TStorage> | string,
     entities: QueryEntityList,
-    data?: Partial<Record<keyof T, number>> | undefined,
+    data?: Partial<Record<keyof TValue, number>> | undefined,
   ): number {
     const instance = this.#getRegisteredComponentInstance(component);
     const count = this.#preflightBatchEntities(entities);
@@ -472,8 +649,11 @@ export class World {
   }
 
   /** Remove a component from an entity */
-  #removeComponentFromEntity<T extends SchemaOrNull>(
-    component: string | Component<T>,
+  #removeComponentFromEntity<
+    TValue extends SchemaOrNull,
+    TStorage extends SchemaOrNull = TValue,
+  >(
+    component: string | Component<TValue, TStorage>,
     entity: Entity,
   ): void {
     if (!this.#entityManager.isActive(entity)) {
@@ -484,8 +664,11 @@ export class World {
   }
 
   /** Remove a component from every entity in a dense query list. */
-  #removeComponentFromEntities<T extends SchemaOrNull>(
-    component: Component<T> | string,
+  #removeComponentFromEntities<
+    TValue extends SchemaOrNull,
+    TStorage extends SchemaOrNull = TValue,
+  >(
+    component: Component<TValue, TStorage> | string,
     entities: QueryEntityList,
   ): number {
     const instance = this.#getRegisteredComponentInstance(component);
@@ -509,10 +692,13 @@ export class World {
   }
 
   /** Resolve a registered data component instance for guarded public data access. */
-  #getGuardedDataComponent<T extends SchemaOrNull>(
-    component: Component<T> | string,
+  #getGuardedDataComponent<
+    TValue extends SchemaOrNull,
+    TStorage extends SchemaOrNull = TValue,
+  >(
+    component: Component<TValue, TStorage> | string,
     entity: Entity,
-  ): ComponentInstance<T> {
+  ): ComponentInstance<TValue, TStorage> {
     if (!this.#entityManager.isActive(entity)) {
       throw new EntityNotFoundError(formatEntityNotActive(entity));
     }
@@ -530,20 +716,37 @@ export class World {
   }
 
   /** Get guarded component data for an active owning entity. */
-  #getComponentEntityData<T extends SchemaOrNull>(
-    component: Component<T> | string,
+  #getComponentEntityData<
+    TValue extends SchemaOrNull,
+    TStorage extends SchemaOrNull = TValue,
+  >(
+    component: Component<TValue, TStorage> | string,
     entity: Entity,
-  ): Record<keyof T, number> {
+  ): ComponentData<TValue> {
     return this.#componentManager.getInstanceEntityData(this.#getGuardedDataComponent(component, entity), entity)!;
   }
 
   /** Set guarded component data for an active owning entity. */
-  #setComponentEntityData<T extends SchemaOrNull>(
-    component: Component<T> | string,
+  #setComponentEntityData<
+    TValue extends SchemaOrNull,
+    TStorage extends SchemaOrNull = TValue,
+  >(
+    component: Component<TValue, TStorage> | string,
     entity: Entity,
-    value: Partial<Record<keyof T, number>>,
+    value: Partial<Record<keyof TValue, number>>,
   ): void {
     this.#componentManager.setInstanceEntityData(this.#getGuardedDataComponent(component, entity), entity, value);
+  }
+
+  /** Mark guarded component data changed for an active owning entity. */
+  #markComponentChanged<TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
+    component: Component<TValue, TStorage> | string,
+    entity: Entity,
+  ): void {
+    const instance = this.#getGuardedDataComponent(component, entity);
+    if (!this.#componentManager.markInstanceChanged(instance, entity)) {
+      throw new ComponentOwnershipError(`Entity ${entity} does not own component ${instance.type.name}.`);
+    }
   }
 
   /**
@@ -552,15 +755,37 @@ export class World {
    * or the component is a tag component with no data storage
    * @throws {NotRegisteredError} - If the component is not registered
    */
-  #readComponentEntityData<T extends SchemaOrNull>(
-    component: Component<T> | string,
+  #readComponentEntityData<
+    TValue extends SchemaOrNull,
+    TStorage extends SchemaOrNull = TValue,
+  >(
+    component: Component<TValue, TStorage> | string,
     entity: Entity,
-  ): Record<keyof T, number> | undefined {
+  ): ComponentData<TValue> | undefined {
     const instance = this.#getRegisteredComponentInstance(component);
     if (instance.storage === null) return undefined;
     if (!this.#entityManager.isActive(entity)) return undefined;
     if (!this.#componentManager.entityOwnsInstance(instance, entity)) return undefined;
     return this.#componentManager.getInstanceEntityData(instance, entity);
+  }
+
+  /**
+   * Read component data for an entity into a caller-owned object without throwing for absence.
+   * @returns `true` when data was written, otherwise `false`
+   * @throws {NotRegisteredError} - If the component is not registered
+   */
+  #readComponentEntityDataInto<
+    TValue extends SchemaOrNull,
+    TStorage extends SchemaOrNull = TValue,
+  >(
+    component: Component<TValue, TStorage> | string,
+    entity: Entity,
+    out: Partial<ComponentData<TValue>>,
+  ): boolean {
+    const instance = this.#getRegisteredComponentInstance(component);
+    if (instance.storage === null) return false;
+    if (!this.#entityManager.isActive(entity)) return false;
+    return this.#componentManager.getInstanceEntityDataInto(instance, entity, out);
   }
 
   /** Destroy an entity and clean up its components and archetype */
@@ -607,6 +832,8 @@ export class World {
     this.#visitedArchetypeEntities = new BooleanArray(capacity);
     this.#batchEntities = createEntityArray(capacity);
     this.#batchSeen = new Uint8Array(capacity);
+    this.#bundleEntries = [];
+    this.#bundleSeenComponents = new Uint8Array(components.length);
 
     this.#queryManager = new QueryManager(
       {

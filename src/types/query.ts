@@ -18,6 +18,8 @@ export type QuerySpec = {
   any?: DynamicComponent[];
   /** `NOT` - Gather entities as long as they don't have these components */
   none?: DynamicComponent[];
+  /** Component instances exposed to callbacks without affecting entity membership */
+  include?: DynamicComponent[];
 };
 
 /** Keyed query specification used for typed query authoring. */
@@ -25,6 +27,7 @@ export type TypedQuerySpec<
   TAll extends ComponentMap = Record<never, never>,
   TAny extends ComponentMap = Record<never, never>,
   TNone extends ComponentMap = Record<never, never>,
+  TInclude extends ComponentMap = Record<never, never>,
 > = {
   /** Components every matching entity must have. */
   all?: TAll;
@@ -32,6 +35,8 @@ export type TypedQuerySpec<
   any?: TAny;
   /** Components matching entities must not have. These are filters only. */
   none?: TNone;
+  /** Components exposed to callbacks without changing entity membership. */
+  include?: TInclude;
 };
 
 /** Dynamic query components used when a query is authored with component arrays. */
@@ -56,4 +61,6 @@ export type QueryInstance = {
   or: BooleanArray;
   /** A BooleanArray for the NOT match criteria */
   not: BooleanArray;
+  /** A BooleanArray for non-filtering included components */
+  include: BooleanArray;
 };

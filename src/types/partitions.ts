@@ -14,8 +14,8 @@ import type {
   TypedArrayConstructor,
 } from "@phughesmcr/partitionedbuffer";
 
-import type { Entity } from "@/entity/entity-id.ts";
 import type { StorageProxy } from "@/component/storage-proxy.ts";
+import type { Entity } from "@/entity/entity-id.ts";
 
 export type { Partition, PartitionStorage, Schema, SchemaProperty, TypedArray, TypedArrayConstructor };
 
@@ -59,16 +59,18 @@ export type ComponentPartitions<T extends SchemaOrNull> = T extends null ? null 
   readonly [K in keyof T]: [SchemaPropertyArray<T[K]>] extends [never] ? TypedArray : SchemaPropertyArray<T[K]>;
 };
 
-/**
- * The writable value shape for a component's schema.
- *
- * Constructor-shaped keys (e.g. `x: Float32ArrayConstructor`) accept any
- * `number`. Value-shaped keys keep their declared value type, so branded
- * numeric types (e.g. `dir: 0 | 1 | 2 | 3`) are enforced at the write site.
- */
-export type SchemaValues<T> = T extends null ? Record<never, number> : {
+/** The public write/proxy value shape for a component. */
+export type ComponentValue<T> = T extends null ? Record<never, number> : {
   [K in keyof T]: T[K] extends SchemaProperty ? number : T[K] & number;
 };
+
+/** Numeric data read out of component storage. */
+export type ComponentData<T> = T extends null ? Record<never, number> : {
+  [K in keyof T]: number;
+};
+
+/** Compatibility alias for component write/proxy values. */
+export type SchemaValues<T> = ComponentValue<T>;
 
 /**
  * A StorageProxy with properties
@@ -79,5 +81,5 @@ export type StorageProxyWithProperties<T extends SchemaOrNull> =
   & StorageProxy<T>
   & {
     /** The properties of the StorageProxy */
-    [key in keyof T]: number;
+    [key in keyof T]: key extends keyof ComponentValue<T> ? ComponentValue<T>[key] : never;
   };

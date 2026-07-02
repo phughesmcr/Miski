@@ -24,14 +24,23 @@ import type { ComponentPrivateMethods, ComponentSpec, DynamicComponent } from "@
 import type { Schema, SchemaOrNull } from "@/types/partitions.ts";
 import { isPositiveUint32, isValidName } from "@/utils.ts";
 
+type ComponentSpecRuntime<TStorage extends SchemaOrNull> = {
+  name: string;
+  schema?: Schema<TStorage> | null;
+  maxEntities?: number | null;
+};
+
 /**
  * Component specification type guard.
  * @param spec - The component's specification.
  * @returns `true` if the spec is valid, `false` otherwise
  */
-export function isValidComponentSpec<T extends SchemaOrNull>(spec: unknown): spec is ComponentSpec<T> {
+export function isValidComponentSpec<
+  TValue extends SchemaOrNull,
+  TStorage extends SchemaOrNull = TValue,
+>(spec: unknown): spec is ComponentSpec<TValue, TStorage> {
   if (!spec || typeof spec !== "object") return false;
-  const s = spec as ComponentSpec<T>;
+  const s = spec as ComponentSpec<TValue, TStorage>;
   if (!isValidName(s.name)) return false;
   if (s.maxEntities != null && (!isPositiveUint32(s.maxEntities) || s.maxEntities === 0)) return false;
   if (s.schema && !isSchema(s.schema)) return false;
@@ -53,7 +62,10 @@ export function isValidComponentArray(array: unknown): array is Array<DynamicCom
 }
 
 /** A Component is a collection of properties that are stored in a world */
-export class Component<T extends SchemaOrNull = null> implements ComponentPrivateMethods<T> {
+export class Component<
+  TValue extends SchemaOrNull = null,
+  TStorage extends SchemaOrNull = TValue,
+> implements ComponentPrivateMethods<TStorage> {
   /** Next stable id for component definitions */
   static #nextId = 0;
 
@@ -61,7 +73,7 @@ export class Component<T extends SchemaOrNull = null> implements ComponentPrivat
   readonly #id: number;
 
   /** The component's storage partition */
-  readonly #partition: Partition<T>;
+  readonly #partition: Partition<TStorage>;
 
   /** `true` if the component has no schema */
   readonly #isTag: boolean;
@@ -71,19 +83,20 @@ export class Component<T extends SchemaOrNull = null> implements ComponentPrivat
    * @param spec - The component's specification.
    * @throws {TypeError} - If the spec is invalid
    */
-  constructor(spec: ComponentSpec<T>) {
+  constructor(spec: ComponentSpec<TValue, TStorage>) {
     if (!isValidComponentSpec(spec)) {
       throw new TypeError("Invalid component specification.");
     }
+    const runtimeSpec = spec as ComponentSpecRuntime<TStorage>;
 
     this.#id = Component.#nextId++;
-    this.#partition = new Partition<T>({
-      name: spec.name,
-      schema: spec.schema as Schema<T> | null,
-      maxOwners: spec.maxEntities ?? null,
-    } as unknown as PartitionSpec<T>);
+    this.#partition = new Partition<TStorage>({
+      name: runtimeSpec.name,
+      schema: runtimeSpec.schema as Schema<TStorage> | null,
+      maxOwners: runtimeSpec.maxEntities ?? null,
+    } as unknown as PartitionSpec<TStorage>);
 
-    this.#isTag = !spec.schema;
+    this.#isTag = !runtimeSpec.schema;
   }
 
   /** The maximum number of entities able to equip this component per world */
@@ -97,8 +110,8 @@ export class Component<T extends SchemaOrNull = null> implements ComponentPrivat
   }
 
   /** The component's property definitions */
-  get schema(): Schema<T> | null {
-    return this.#partition.schema as Schema<T> | null;
+  get schema(): Schema<TStorage> | null {
+    return this.#partition.schema as Schema<TStorage> | null;
   }
 
   /** The component's size in bytes for a single entity */
@@ -122,7 +135,7 @@ export class Component<T extends SchemaOrNull = null> implements ComponentPrivat
   }
 
   /** Internal partition definition used to allocate world-local storage. */
-  get [$_PARTITION_KEY](): Partition<T> {
+  get [$_PARTITION_KEY](): Partition<TStorage> {
     return this.#partition;
   }
 }

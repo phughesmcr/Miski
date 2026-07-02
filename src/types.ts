@@ -24,7 +24,9 @@ export type {
   QueryEntityList,
 } from "@/types/entity-views.ts";
 export type {
+  ComponentData,
   ComponentPartitions,
+  ComponentValue,
   Partition,
   PartitionStorage,
   Schema,
@@ -51,6 +53,9 @@ export type {
   TypedSystemCallback,
 } from "@/types/system.ts";
 export type {
+  ComponentBundle,
+  ComponentBundleEntryFor,
+  ComponentBundleEntryInput,
   ComponentInstanceGetter,
   QueryManagerDependencies,
   WorldAPIResult,

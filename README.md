@@ -71,38 +71,50 @@ Because Miski is designed to be used inside your own projects, we let you config
 
 Miski is optimized for Deno game-loop workloads where predictable frame time and low GC pressure matter.
 
-Recent local benchmark results on Deno 2.8.0, aarch64 macOS:
+Recent local benchmark results on Deno 2.9.0, aarch64 macOS:
 
 | Benchmark | Result |
 | --- | ---: |
-| `isActive` hot check | 6.9 ns |
-| `entityHas` ownership check | 6.3 ns |
-| Add/remove tag component | 72.3 ns |
-| Add/remove data component | 113.2 ns |
-| Move entity across common gameplay archetypes | 287.8 ns |
-| Bulk add/remove tag component - 7,168 entities | 429.2 us, 59.9 ns/entity |
-| Bulk add/remove data component - 7,168 entities | 642.6 us, 89.7 ns/entity |
-| Query cache miss after refresh | 2.0 us |
-| Cached dense `queryList` iteration | 941.1 ns |
-| Dense changed iteration with no changed entities | 9.3 ns |
-| Spawn/despawn 128 projectiles with 6 components | 60.4 us |
-| Game frame - move, query renderables, refresh | 7.3 us |
+| `isActive` hot check | 6.8 ns |
+| `entityHas` ownership check | 6.1 ns |
+| `instance.has` ownership check | 4.1 ns |
+| Direct typed-array write + `instance.markChanged` | 9.4 ns |
+| `readEntityDataInto` reused object | 21.4 ns |
+| Add/remove tag component | 68.0 ns |
+| Add/remove data component | 111.6 ns |
+| Move entity across common gameplay archetypes | 271.4 ns |
+| Bulk add/remove tag component - 7,168 entities | 439.7 us, 61.3 ns/entity |
+| Bulk add/remove data component - 7,168 entities | 630.1 us, 87.9 ns/entity |
+| Query cache miss after refresh | 1.9 us |
+| Cached dense `queryList` iteration | 958.6 ns |
+| Cached dense `queryList` iteration with `include` | 2.0 us |
+| Dense changed iteration with no changed entities | 10.0 ns |
+| Spawn/despawn 128 projectiles - repeated `addToEntity` | 60.7 us |
+| Spawn/despawn 128 projectiles - `createWith` bundle | 85.1 us |
+| Game frame - move, query renderables, refresh | 7.1 us |
 
 GC allocation pressure is budgeted separately. Hot entity, component check, direct write, cached query list, changed,
 and owner iteration paths are effectively allocation-free in steady state. The current `deno task bench:gc` run reports:
 
 | Allocation Scenario | Steady-State Allocation |
 | --- | ---: |
-| Entity create/destroy recycled hot path | 0.0360 B/iter |
-| `isActive` and `entityHas` hot checks | 0.0008 B/iter |
-| Direct typed-array component writes | 0.0008 B/iter |
-| Cached `queryList` entity iteration | 0.0020 B/iter |
+| Entity create/destroy recycled hot path | 0.0402 B/iter |
+| `isActive` and `entityHas` hot checks | 0.0000 B/iter |
+| `instance.has` hot ownership check | 0.0000 B/iter |
+| Direct typed-array component writes | 0.0000 B/iter |
+| Direct typed-array writes + `instance.markChanged` | 0.0000 B/iter |
+| `readEntityDataInto` reused output object | 0.0000 B/iter |
+| Cached `queryList` entity iteration | 0.0000 B/iter |
+| Cached `queryList` entity iteration with `include` | 0.0000 B/iter |
+| Included-component render loop | 0.0000 B/iter |
 | Component changed dense iterator | 0.0486 B/iter |
 | Component owners iterator | 0.0000 B/iter |
-| Add/remove data component runtime transition | 40.0016 B/iter |
-| Bulk add/remove tag component - 896 entities | 1.64 KiB/iter |
-| Bulk add/remove data component - 896 entities | 1.64 KiB/iter |
-| Game frame system + cached render query + refresh | 0.99 KiB/iter |
+| Spawn/despawn 128 projectiles - repeated `addToEntity` | 0.0000 B/iter |
+| Spawn/despawn 128 projectiles - `createWith` bundle | 936.5920 B/iter |
+| Add/remove data component runtime transition | 40.0012 B/iter |
+| Bulk add/remove tag component - 896 entities | 1.56 KiB/iter |
+| Bulk add/remove data component - 896 entities | 1.56 KiB/iter |
+| Game frame system + cached render query + refresh | 896.0464 B/iter |
 
 Against a local ECS benchmark shape derived from `noctjs/ecs-benchmark`, Miski ranks in the top three by normalized
 geomean when using Deno and Miski's dense/bulk APIs for hot query loops. Cross-library benchmark numbers are sensitive
@@ -242,6 +254,23 @@ const positionComponent = new Component<Vec2>({
 });
 ```
 
+When the public write type is narrower than the storage schema, provide both shapes. `TValue` is what callers may write
+through `addToEntity`, `setEntityData`, bundle data, and the proxy; `TStorage` is the runtime schema that determines the
+typed-array partitions:
+
+```typescript
+type FacingValue = { dir: 0 | 1 | 2 | 3 };
+type FacingStorage = { dir: Uint8ArrayConstructor };
+
+const facingComponent = new Component<FacingValue, FacingStorage>({
+  name: "facing",
+  schema: { dir: Uint8Array },
+});
+
+world.components.addToEntity(facingComponent, entity, { dir: 2 }); // ok
+// world.components.addToEntity(facingComponent, entity, { dir: 7 }); // type error
+```
+
 #### Tags
 
 We can create a tag component by omitting the schema object and (optionally) providing a null type:
@@ -280,6 +309,29 @@ world.components.addToEntity(positionComponent, entity, { x: 10, y: 20 });
 world.components.removeFromEntity(positionComponent, entity);
 ```
 
+Bundles add or upsert multiple components atomically and move the entity once to its final archetype:
+
+```typescript
+world.components.addBundle(entity, [
+  [positionComponent, { x: 10, y: 20 }],
+  [facingComponent, { dir: 0 }],
+  [renderableComponent],
+]);
+
+const spawned = world.entities.createWith([
+  [positionComponent, { x: 1, y: 2 }],
+  [renderableComponent],
+]);
+
+const spawnedOrThrow = world.entities.createWithOrThrow([
+  [positionComponent, { x: 1, y: 2 }],
+  [renderableComponent],
+]);
+```
+
+Bundle preflight rejects duplicate components, unregistered components, inactive target entities, tag data, and component
+owner-capacity overflow before mutating ownership, data, changed state, archetypes, or query caches.
+
 For spawn, load, and other bulk transitions across a dense query result, resolve the query once and use the batch APIs:
 
 ```typescript
@@ -310,6 +362,12 @@ We can also test if entities have components:
 const hasPosition: boolean = world.components.entityHas(positionComponent, entity);
 ```
 
+Inside hot loops that already hold a component instance, use the direct instance check:
+
+```typescript
+const hasFacing = facingInstance.has(entity);
+```
+
 #### Modifying an Entity's Component properties
 
 To access the component's data from a specific world, we have to get the ComponentInstance, like so:
@@ -332,10 +390,11 @@ Once we have the component instance we can modify entity properties.
 
 There are two ways to do this:
 
-The first is quick but unsafe (no change tracking and no ownership checks):
+The first is quick but unsafe (no automatic change tracking and no ownership checks):
 
 ```typescript
 positionInstance.storage.partitions.x[entity] = 1;
+positionInstance.markChanged(entity); // ownership-guarded manual changed mark
 ```
 
 The second is slower but safer (with change tracking and type guards):
@@ -353,6 +412,7 @@ For convenience, the public data APIs perform ownership and data-storage checks:
 ```typescript
 const data = world.components.getEntityData(positionComponent, entity);
 world.components.setEntityData(positionComponent, entity, { x: 10, y: 20 });
+world.components.markChanged(positionComponent, entity);
 ```
 
 These public methods throw Miski errors for inactive entities, unregistered components, tag components, and active
@@ -392,6 +452,19 @@ const changed = world.components.getChanged(positionComponent);
 refresh window, even when multiple fields change. Tag components currently return an empty changed iterator. Use
 `getChangedSnapshot(...)` when retained stable IDs are needed.
 
+For non-throwing reads, use `readEntityData(...)`. To avoid allocating a fresh data object in hot paths, reuse an output
+object with `readEntityDataInto(...)`:
+
+```typescript
+const out = { x: 0, y: 0 };
+if (world.components.readEntityDataInto(positionComponent, entity, out)) {
+  // out.x and out.y were overwritten.
+}
+```
+
+`readEntityDataInto(...)` returns `false` for inactive entities, non-owners, and tag components without changing `out`.
+Only unregistered components throw.
+
 ### Entities
 
 Entities are just integers. They are essentially indexes or pointers into various arrays in the world.
@@ -420,8 +493,13 @@ const positionQuery = new Query({
   all: [positionComponent],
   any: [...],
   none: [...],
+  include: [...],
 });
 ```
+
+`all` is an AND filter. `any` is an OR filter: when supplied, an entity must have at least one of those components.
+`none` is a NOT filter. `include` is non-filtering: included component instances are exposed to callbacks and component
+queries but do not change entity membership.
 
 We can then access the entities and components which match our query:
 
@@ -521,7 +599,8 @@ for (let i = 0; i < entities.count; i++) {
 
 `world.entities.query(...)` remains available as a convenience iterator API outside the system hot path.
 
-`any` components are also exposed in the callback record. `none` components are query filters only:
+`any` components are OR filters and are also exposed in the callback record. `include` components are exposed without
+filtering membership. `none` components are query filters only:
 
 ```typescript
 const renderSystem = new System({
@@ -529,14 +608,19 @@ const renderSystem = new System({
   query: new Query({
     all: { position: positionComponent },
     any: { sprite: spriteComponent },
+    include: { facing: facingComponent },
     none: { hidden: hiddenComponent },
   }),
   callback: (components, entities) => {
     components.position; // ComponentInstance<Vec2>
     components.sprite; // ComponentInstance<Sprite>
+    components.facing; // ComponentInstance<FacingValue, FacingStorage>
     // components.hidden is intentionally unavailable here.
     for (let i = 0; i < entities.count; i++) {
       const entity = entities.indices[i];
+      if (components.facing.has(entity)) {
+        const dir = components.facing.partitions.dir[entity];
+      }
       // render...
     }
   },
@@ -582,11 +666,12 @@ systemInstance();
 
 Contributions are welcome and encouraged. The aim of the project is performance - both in terms of speed and GC allocation pressure.
 
-The benchmark suite covers the gameplay paths ECS users usually care about: world setup, spawn/despawn lifecycle,
-multi-component destroy cleanup, archetype transitions, component storage access, owner and changed iteration, cached
-and invalidated queries, entered/exited query tracking, 64-component worlds, plain TypeScript data-layout baselines,
-system updates, and whole-frame loops. It also has dedicated internal manager/cache throughput coverage plus retained
-memory and GC allocation budget checks. Run public and internal throughput benchmarks with:
+The benchmark suite covers the gameplay paths ECS users usually care about: world setup, repeated-add versus bundle
+spawn/despawn lifecycle, multi-component destroy cleanup, archetype transitions, direct writes with manual changed
+marking, allocation-free reads, included-component render loops, owner and changed iteration, cached and invalidated
+queries, entered/exited query tracking, 64-component worlds, plain TypeScript data-layout baselines, system updates, and
+whole-frame loops. It also has dedicated internal manager/cache throughput coverage plus retained memory and GC
+allocation budget checks. Run public and internal throughput benchmarks with:
 
 ```bash
 deno task bench

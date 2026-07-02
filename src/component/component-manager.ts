@@ -14,7 +14,7 @@ import { ReusableEntityIterator } from "@/entity/entity-list.ts";
 import { componentDisplayName, formatComponentNotRegistered, NotRegisteredError } from "@/errors.ts";
 import type { DynamicComponent, DynamicComponentInstance } from "@/types/component.ts";
 import type { Entity } from "@/entity/entity-id.ts";
-import type { SchemaOrNull, TypedArray } from "@/types/partitions.ts";
+import type { ComponentData, SchemaOrNull, TypedArray } from "@/types/partitions.ts";
 import { isObject } from "@/utils.ts";
 import { ComponentInstance } from "./component-instance.ts";
 import { StorageProxy } from "./storage-proxy.ts";
@@ -30,6 +30,14 @@ function getComponentStorageSize(component: DynamicComponent, capacity: number):
   if (schema === null) return 0;
   return getPartitionByteSize(schema, component.maxEntities ?? capacity);
 }
+
+/** A preflighted bundle entry ready for component-manager commit. */
+export type ComponentBundleCommitEntry = {
+  /** The registered component instance to add or update. */
+  readonly instance: DynamicComponentInstance;
+  /** Optional numeric data to merge into component storage. */
+  readonly data: Partial<Record<string, number>> | undefined;
+};
 
 /**
  * A component manager owns component registration, storage, ownership flags, owner iteration, and changed tracking.
@@ -132,7 +140,14 @@ export class ComponentManager {
         }) :
         null;
       // register component instance
-      const instance = new ComponentInstance({ id: instanceId, proxy, storage, type: component });
+      const instance = new ComponentInstance({
+        id: instanceId,
+        has: (entity: Entity): boolean => this.#ownersById[instanceId]?.[entity] === 1,
+        markChanged: (entity: Entity): boolean => this.#markInstanceIdChanged(instanceId, entity),
+        proxy,
+        storage,
+        type: component,
+      });
       let usesSparseStorage = false;
       if (storage !== null) {
         const partitions = storage.partitions as Record<string, unknown>;
@@ -258,6 +273,15 @@ export class ComponentManager {
     this.#changedCountsById[instanceId] = changedCount + 1;
   }
 
+  /** Mark a data component changed by instance id if the entity owns it. */
+  #markInstanceIdChanged(instanceId: number, entity: Entity): boolean {
+    const instance = this.#instancesById[instanceId];
+    if (instance === undefined || instance.storage === null) return false;
+    if (this.#ownersById[instanceId]?.[entity] !== 1) return false;
+    this.#markChanged(instanceId, entity);
+    return true;
+  }
+
   /** Remove a data component from changed iteration if present. */
   #unmarkChanged(instanceId: number, entity: Entity): void {
     const changed = this.#changedById[instanceId];
@@ -291,10 +315,13 @@ export class ComponentManager {
    * @returns `true` if the component ownership changed
    * @internal
    */
-  addInstanceToEntity<T extends SchemaOrNull>(
-    instance: ComponentInstance<T>,
+  addInstanceToEntity<
+    TValue extends SchemaOrNull,
+    TStorage extends SchemaOrNull = TValue,
+  >(
+    instance: ComponentInstance<TValue, TStorage>,
     entity: Entity,
-    data?: Partial<Record<keyof T, number>>,
+    data?: Partial<Record<keyof TValue, number>>,
   ): boolean {
     const id = instance.id;
     if (entity >= this.#capacity) {
@@ -327,11 +354,11 @@ export class ComponentManager {
 
     // Set data if provided
     if (hasData && storage !== null) {
-      const partitions = storage.partitions as Record<keyof T, TypedArray>;
+      const partitions = storage.partitions as Record<string, TypedArray>;
       for (const key in data) {
         const value = data[key];
         if (value !== undefined && key in partitions) {
-          partitions[key][entity] = value;
+          partitions[key]![entity] = value;
         }
       }
     }
@@ -345,7 +372,10 @@ export class ComponentManager {
    * @param entity - The entity to check for the component on
    * @returns `true` if the entity has the component, `false` otherwise
    */
-  entityHas<T extends SchemaOrNull>(component: Component<T> | string, entity: Entity): boolean {
+  entityHas<
+    TValue extends SchemaOrNull,
+    TStorage extends SchemaOrNull = TValue,
+  >(component: Component<TValue, TStorage> | string, entity: Entity): boolean {
     const instance = this.getInstance(component);
     return instance ? this.#ownersById[instance.id]?.[entity] === 1 : false;
   }
@@ -357,8 +387,25 @@ export class ComponentManager {
    * @returns `true` if the entity owns the component instance
    * @internal
    */
-  entityOwnsInstance<T extends SchemaOrNull>(instance: ComponentInstance<T>, entity: Entity): boolean {
+  entityOwnsInstance<
+    TValue extends SchemaOrNull,
+    TStorage extends SchemaOrNull = TValue,
+  >(instance: ComponentInstance<TValue, TStorage>, entity: Entity): boolean {
     return this.#ownersById[instance.id]?.[entity] === 1;
+  }
+
+  /**
+   * Mark a registered data component instance as changed if the entity owns it.
+   * @param instance - The registered component instance
+   * @param entity - The entity to mark
+   * @returns `true` when an owning data component was marked, otherwise `false`
+   * @internal
+   */
+  markInstanceChanged<
+    TValue extends SchemaOrNull,
+    TStorage extends SchemaOrNull = TValue,
+  >(instance: ComponentInstance<TValue, TStorage>, entity: Entity): boolean {
+    return this.#markInstanceIdChanged(instance.id, entity);
   }
 
   /**
@@ -366,11 +413,16 @@ export class ComponentManager {
    * @param component - The component to get the instance of
    * @returns The component instance or `undefined` if the component is not registered
    */
-  getInstance<T extends SchemaOrNull>(component: Component<T> | string): ComponentInstance<T> | undefined {
+  getInstance<
+    TValue extends SchemaOrNull,
+    TStorage extends SchemaOrNull = TValue,
+  >(component: Component<TValue, TStorage> | string): ComponentInstance<TValue, TStorage> | undefined {
     if (typeof component === "string") {
-      return this.#registryByName[component] as ComponentInstance<T> | undefined;
+      return this.#registryByName[component] as ComponentInstance<TValue, TStorage> | undefined;
     }
-    return this.#registryByComponentId[component[$_COMPONENT_ID_KEY]] as ComponentInstance<T> | undefined;
+    return this.#registryByComponentId[component[$_COMPONENT_ID_KEY]] as
+      | ComponentInstance<TValue, TStorage>
+      | undefined;
   }
 
   /**
@@ -379,7 +431,10 @@ export class ComponentManager {
    * @returns The component instance
    * @throws {NotRegisteredError} If the component is not registered
    */
-  require<T extends SchemaOrNull>(component: Component<T> | string): ComponentInstance<T> {
+  require<
+    TValue extends SchemaOrNull,
+    TStorage extends SchemaOrNull = TValue,
+  >(component: Component<TValue, TStorage> | string): ComponentInstance<TValue, TStorage> {
     const instance = this.getInstance(component);
     if (!instance) {
       throw new NotRegisteredError(formatComponentNotRegistered(componentDisplayName(component)));
@@ -403,7 +458,10 @@ export class ComponentManager {
    * @param component The component to get changed entities for
    * @returns An iterable of entities or `undefined` if the component is not registered
    */
-  getChanged<T extends SchemaOrNull>(component: Component<T> | string): IterableIterator<Entity> | undefined {
+  getChanged<
+    TValue extends SchemaOrNull,
+    TStorage extends SchemaOrNull = TValue,
+  >(component: Component<TValue, TStorage> | string): IterableIterator<Entity> | undefined {
     const instance = this.getInstance(component);
     if (!instance) return;
     const iterator = this.#changedIteratorsById[instance.id];
@@ -416,7 +474,10 @@ export class ComponentManager {
    * @param component The component to get entities for
    * @returns An iterable of entities or `undefined` if the component is not registered
    */
-  getOwners<T extends SchemaOrNull>(component: Component<T> | string): IterableIterator<Entity> | undefined {
+  getOwners<
+    TValue extends SchemaOrNull,
+    TStorage extends SchemaOrNull = TValue,
+  >(component: Component<TValue, TStorage> | string): IterableIterator<Entity> | undefined {
     const instance = this.getInstance(component);
     if (!instance) return;
     return (this.#ownerIteratorsById[instance.id] ?? this.#emptyOwnerIterator).reset(
@@ -425,14 +486,69 @@ export class ComponentManager {
   }
 
   /** Get the current owner count for a registered component instance. */
-  getInstanceOwnerCount<T extends SchemaOrNull>(instance: ComponentInstance<T>): number {
+  getInstanceOwnerCount<
+    TValue extends SchemaOrNull,
+    TStorage extends SchemaOrNull = TValue,
+  >(instance: ComponentInstance<TValue, TStorage>): number {
     return this.#ownerCountsById[instance.id] ?? 0;
   }
 
   /** Get the owner limit for a registered component instance, or `null` when uncapped. */
-  getInstanceMaxEntities<T extends SchemaOrNull>(instance: ComponentInstance<T>): number | null {
+  getInstanceMaxEntities<
+    TValue extends SchemaOrNull,
+    TStorage extends SchemaOrNull = TValue,
+  >(instance: ComponentInstance<TValue, TStorage>): number | null {
     const maxEntities = this.#maxEntitiesById[instance.id] ?? 0;
     return maxEntities === 0 ? null : maxEntities;
+  }
+
+  /**
+   * Preflight capacity for adding a set of registered component instances to one entity.
+   * @param entries - Unique registered component instances and optional data
+   * @param entity - The target entity
+   * @throws {RangeError} If the entity is out of component capacity or any max owner count would overflow
+   * @internal
+   */
+  preflightAddBundleToEntity(entries: readonly ComponentBundleCommitEntry[], entity: Entity): void {
+    if (entity >= this.#capacity) {
+      throw new RangeError(`Entity ${entity} is outside component capacity.`);
+    }
+    for (let i = 0; i < entries.length; i++) {
+      const instance = entries[i]!.instance;
+      if (this.entityOwnsInstance(instance, entity)) continue;
+      const maxEntities = this.getInstanceMaxEntities(instance);
+      if (maxEntities === null) continue;
+      const ownerCount = this.getInstanceOwnerCount(instance);
+      if (ownerCount >= maxEntities) {
+        throw new RangeError(
+          `Component "${instance.type.name}" can only be added to ${maxEntities} entities.`,
+        );
+      }
+    }
+  }
+
+  /**
+   * Commit a preflighted set of component additions/upserts for one entity.
+   * @param entries - Unique registered component instances and optional data
+   * @param entity - The target entity
+   * @returns Component instances whose ownership changed from unowned to owned
+   * @internal
+   */
+  addBundleToEntity(entries: readonly ComponentBundleCommitEntry[], entity: Entity): DynamicComponentInstance[] {
+    const added: DynamicComponentInstance[] = [];
+    for (let i = 0; i < entries.length; i++) {
+      const { data, instance } = entries[i]!;
+      if (
+        this.addInstanceToEntity(
+          instance,
+          entity,
+          data as Partial<Record<PropertyKey, number>> | undefined,
+        )
+      ) {
+        added.push(instance);
+      }
+    }
+    return added;
   }
 
   /**
@@ -463,17 +579,50 @@ export class ComponentManager {
    * @returns The data for the component or `undefined` if the instance has no storage
    * @internal
    */
-  getInstanceEntityData<T extends SchemaOrNull>(
-    instance: ComponentInstance<T>,
+  getInstanceEntityData<
+    TValue extends SchemaOrNull,
+    TStorage extends SchemaOrNull = TValue,
+  >(
+    instance: ComponentInstance<TValue, TStorage>,
     entity: Entity,
-  ): Record<keyof T, number> | undefined {
-    const storage = instance.storage?.partitions as Record<keyof T, TypedArray> | undefined;
+  ): ComponentData<TValue> | undefined {
+    const storage = instance.storage?.partitions as Record<string, TypedArray> | undefined;
     if (!storage) return undefined;
-    const result: Record<keyof T, number> = {} as Record<keyof T, number>;
+    const result: Record<string, number> = {};
     for (const key in storage) {
-      result[key] = storage[key][entity] ?? Number.NaN;
+      result[key] = storage[key]![entity] ?? Number.NaN;
     }
-    return result;
+    return result as ComponentData<TValue>;
+  }
+
+  /**
+   * Copy a registered data component instance's entity data into a caller-owned object.
+   *
+   * This reads raw storage by entity id. Callers that expose public data access must verify entity liveness and
+   * component registration separately. Non-owners and tag components return `false` without mutating `out`.
+   *
+   * @param instance - The registered component instance
+   * @param entity - The entity to read
+   * @param out - Caller-owned object to overwrite
+   * @returns `true` if all component keys were written into `out`
+   * @internal
+   */
+  getInstanceEntityDataInto<
+    TValue extends SchemaOrNull,
+    TStorage extends SchemaOrNull = TValue,
+  >(
+    instance: ComponentInstance<TValue, TStorage>,
+    entity: Entity,
+    out: Partial<ComponentData<TValue>>,
+  ): boolean {
+    const storage = instance.storage?.partitions as Record<string, TypedArray> | undefined;
+    if (!storage) return false;
+    if (!this.entityOwnsInstance(instance, entity)) return false;
+    const target = out as Record<string, number>;
+    for (const key in storage) {
+      target[key] = storage[key]![entity] ?? Number.NaN;
+    }
+    return true;
   }
 
   /**
@@ -508,8 +657,11 @@ export class ComponentManager {
    * @returns `true` if the component ownership changed
    * @internal
    */
-  removeInstanceFromEntity<T extends SchemaOrNull>(
-    instance: ComponentInstance<T>,
+  removeInstanceFromEntity<
+    TValue extends SchemaOrNull,
+    TStorage extends SchemaOrNull = TValue,
+  >(
+    instance: ComponentInstance<TValue, TStorage>,
     entity: Entity,
   ): boolean {
     const id = instance.id;
@@ -553,20 +705,23 @@ export class ComponentManager {
    * @returns This component manager
    * @internal
    */
-  setInstanceEntityData<T extends SchemaOrNull>(
-    instance: ComponentInstance<T>,
+  setInstanceEntityData<
+    TValue extends SchemaOrNull,
+    TStorage extends SchemaOrNull = TValue,
+  >(
+    instance: ComponentInstance<TValue, TStorage>,
     entity: Entity,
-    value: Partial<Record<keyof T, number>>,
+    value: Partial<Record<keyof TValue, number>>,
   ): this {
     if (!value) return this;
-    const storage = instance.storage?.partitions as Record<keyof T, TypedArray> | undefined;
+    const storage = instance.storage?.partitions as Record<string, TypedArray> | undefined;
     if (!storage) return this;
     let changed = false;
     for (const key in value) {
       const propertyValue = value[key];
       if (propertyValue !== undefined && key in storage) {
-        changed ||= storage[key][entity] !== propertyValue;
-        storage[key][entity] = propertyValue;
+        changed ||= storage[key]![entity] !== propertyValue;
+        storage[key]![entity] = propertyValue;
       }
     }
     if (changed && this.#ownersById[instance.id]?.[entity] === 1) {

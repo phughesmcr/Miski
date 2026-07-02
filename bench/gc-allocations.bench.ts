@@ -9,12 +9,14 @@ import {
   createMovementQuery,
   createRenderableQuery,
   createWideQuery,
+  type Health,
   MEDIUM_CAPACITY,
   mustCreateEntity,
   populateMixedWorld,
   populateMovementWorld,
   populateSparseLifecycleWorld,
   populateWideWorld,
+  type RenderState,
   SMALL_CAPACITY,
   type Vec2,
 } from "./fixtures.ts";
@@ -229,12 +231,18 @@ function budgeted(name: string, iterations: number, fn: () => void): Scenario {
 const mixed = await populateMixedWorld(MEDIUM_CAPACITY);
 const movement = await populateMovementWorld(MEDIUM_CAPACITY);
 const lifecycle = await populateSparseLifecycleWorld(MEDIUM_CAPACITY);
+const repeatedSpawnLifecycle = await populateSparseLifecycleWorld(MEDIUM_CAPACITY);
+const bundledSpawnLifecycle = await populateSparseLifecycleWorld(MEDIUM_CAPACITY);
 const batchTagTransitions = await populateSparseLifecycleWorld(SMALL_CAPACITY);
 const batchDataTransitions = await populateSparseLifecycleWorld(SMALL_CAPACITY);
 const transitionTracking = await populateSparseLifecycleWorld(SMALL_CAPACITY);
 const wide = await populateWideWorld(SMALL_CAPACITY);
 const movementQuery = createMovementQuery(mixed.components);
 const renderableQuery = createRenderableQuery(mixed.components);
+const renderIncludeQuery = new Query({
+  all: [mixed.components.position],
+  include: [mixed.components.health, mixed.components.renderState],
+});
 const movementFrameQuery = createMovementQuery(movement.components);
 const renderableFrameQuery = createRenderableQuery(movement.components);
 const batchTagPositionQuery = new Query({ all: [batchTagTransitions.components.position] });
@@ -243,6 +251,8 @@ const transitionTrackingQuery = createMovementQuery(transitionTracking.component
 const wideQuery = createWideQuery(wide.components);
 mixed.world.entities.query(movementQuery);
 mixed.world.entities.query(renderableQuery);
+mixed.world.entities.query(renderIncludeQuery);
+mixed.world.components.query(renderIncludeQuery);
 movement.world.entities.query(movementFrameQuery);
 movement.world.entities.query(renderableFrameQuery);
 batchTagTransitions.world.entities.query(batchTagPositionQuery);
@@ -256,8 +266,16 @@ const positionProxy = positionInstance.proxy;
 if (positionStorage === null || positionProxy === null) {
   throw new Error("GC benchmark expected position component storage");
 }
+const healthInstance = mixed.world.components.getInstance(mixed.components.health) as ComponentInstance<Health>;
+const healthPartitions = healthInstance.partitions;
+const renderStateInstance = mixed.world.components.getInstance(mixed.components.renderState) as ComponentInstance<
+  RenderState
+>;
+const renderStatePartitions = renderStateInstance.partitions;
 const positionData = { x: 0, y: 0 };
+const positionReadOut = { x: 0, y: 0 };
 const mutationEntity = mixed.entities[128]!;
+const healthOwnerEntity = mixed.entities[129]!;
 const transitionEntity = mustCreateEntity(lifecycle.world);
 const enteredExitedEntity = mustCreateEntity(transitionTracking.world);
 const wideTransitionEntity = mustCreateEntity(wide.world);
@@ -273,27 +291,86 @@ wide.world.components.addToEntity(wide.components.all[0]!, wideTransitionEntity)
 wide.world.components.addToEntity(wide.components.all[31]!, wideTransitionEntity);
 wide.world.refresh();
 const batchEntities = new Array<Entity>(128);
-const fullSpawnEntities = new Array<Entity>(128);
+const repeatedSpawnEntities = new Array<Entity>(128);
+const bundledSpawnEntities = new Array<Entity>(128);
+const repeatedProjectilePositionData = { x: 0, y: 0 };
+const repeatedProjectileVelocityData = { x: 10, y: -2 };
+const repeatedProjectileLifetimeData = { ttl: 2 };
+const repeatedProjectileRenderData = { sprite: 0, layer: 2 };
+const bundledProjectilePositionData = { x: 0, y: 0 };
+const bundledProjectileVelocityData = { x: 10, y: -2 };
+const bundledProjectileLifetimeData = { ttl: 2 };
+const bundledProjectileRenderData = { sprite: 0, layer: 2 };
+const bundledProjectileBundle = [
+  [bundledSpawnLifecycle.components.position, bundledProjectilePositionData],
+  [bundledSpawnLifecycle.components.velocity, bundledProjectileVelocityData],
+  [bundledSpawnLifecycle.components.lifetime, bundledProjectileLifetimeData],
+  [bundledSpawnLifecycle.components.renderState, bundledProjectileRenderData],
+  [bundledSpawnLifecycle.components.renderable],
+  [bundledSpawnLifecycle.components.projectile],
+] as const;
 let entitySink = 0;
 let numericSink = 0;
 let objectSink: unknown;
 
-function spawnProjectileBatch(out: Entity[]): void {
+function setRepeatedProjectileData(i: number): void {
+  repeatedProjectilePositionData.x = i;
+  repeatedProjectilePositionData.y = i;
+  repeatedProjectileRenderData.sprite = i & 255;
+}
+
+function setBundledProjectileData(i: number): void {
+  bundledProjectilePositionData.x = i;
+  bundledProjectilePositionData.y = i;
+  bundledProjectileRenderData.sprite = i & 255;
+}
+
+function spawnProjectileBatchRepeated(out: Entity[]): void {
   for (let i = 0; i < out.length; i++) {
-    const entity = mustCreateEntity(lifecycle.world);
+    const entity = mustCreateEntity(repeatedSpawnLifecycle.world);
     out[i] = entity;
-    lifecycle.world.components.addToEntity(lifecycle.components.position, entity, { x: i, y: i });
-    lifecycle.world.components.addToEntity(lifecycle.components.velocity, entity, { x: 10, y: -2 });
-    lifecycle.world.components.addToEntity(lifecycle.components.lifetime, entity, { ttl: 2 });
-    lifecycle.world.components.addToEntity(lifecycle.components.renderState, entity, { sprite: i & 255, layer: 2 });
-    lifecycle.world.components.addToEntity(lifecycle.components.renderable, entity);
-    lifecycle.world.components.addToEntity(lifecycle.components.projectile, entity);
+    setRepeatedProjectileData(i);
+    repeatedSpawnLifecycle.world.components.addToEntity(
+      repeatedSpawnLifecycle.components.position,
+      entity,
+      repeatedProjectilePositionData,
+    );
+    repeatedSpawnLifecycle.world.components.addToEntity(
+      repeatedSpawnLifecycle.components.velocity,
+      entity,
+      repeatedProjectileVelocityData,
+    );
+    repeatedSpawnLifecycle.world.components.addToEntity(
+      repeatedSpawnLifecycle.components.lifetime,
+      entity,
+      repeatedProjectileLifetimeData,
+    );
+    repeatedSpawnLifecycle.world.components.addToEntity(
+      repeatedSpawnLifecycle.components.renderState,
+      entity,
+      repeatedProjectileRenderData,
+    );
+    repeatedSpawnLifecycle.world.components.addToEntity(repeatedSpawnLifecycle.components.renderable, entity);
+    repeatedSpawnLifecycle.world.components.addToEntity(repeatedSpawnLifecycle.components.projectile, entity);
   }
 }
 
-function destroyBatch(entities: Entity[]): void {
+function spawnProjectileBatchWithCreateWith(out: Entity[]): void {
+  for (let i = 0; i < out.length; i++) {
+    setBundledProjectileData(i);
+    out[i] = bundledSpawnLifecycle.world.entities.createWithOrThrow(bundledProjectileBundle);
+  }
+}
+
+function destroyRepeatedBatch(entities: Entity[]): void {
   for (let i = 0; i < entities.length; i++) {
-    lifecycle.world.entities.destroy(entities[i]!);
+    repeatedSpawnLifecycle.world.entities.destroy(entities[i]!);
+  }
+}
+
+function destroyBundledBatch(entities: Entity[]): void {
+  for (let i = 0; i < entities.length; i++) {
+    bundledSpawnLifecycle.world.entities.destroy(entities[i]!);
   }
 }
 
@@ -315,6 +392,9 @@ const scenarios: Scenario[] = [
     numericSink ^= mixed.world.entities.isActive(mutationEntity) ? 1 : 0;
     numericSink ^= mixed.world.components.entityHas(mixed.components.position, mutationEntity) ? 1 : 0;
   }),
+  budgeted("instance.has hot ownership check", 250_000, () => {
+    numericSink ^= healthInstance.has(healthOwnerEntity) ? 1 : 0;
+  }),
   {
     name: "batch create/destroy 128 allocating control array reused",
     iterations: 50_000,
@@ -330,18 +410,33 @@ const scenarios: Scenario[] = [
     },
   },
   {
-    name: "spawn/despawn 128 projectiles with 6 components",
+    name: "spawn/despawn 128 projectiles - repeated addToEntity",
     iterations: 10_000,
     maxSteadyStateBeforeGcBytesPerIter: PROJECTILE_SPAWN_DESPAWN_BUDGET_BYTES_PER_ITER,
     fn: () => {
-      spawnProjectileBatch(fullSpawnEntities);
-      destroyBatch(fullSpawnEntities);
-      entitySink ^= fullSpawnEntities[0]!;
+      spawnProjectileBatchRepeated(repeatedSpawnEntities);
+      destroyRepeatedBatch(repeatedSpawnEntities);
+      entitySink ^= repeatedSpawnEntities[0]!;
+    },
+  },
+  {
+    name: "spawn/despawn 128 projectiles - createWith bundle",
+    iterations: 10_000,
+    maxSteadyStateBeforeGcBytesPerIter: PROJECTILE_SPAWN_DESPAWN_BUDGET_BYTES_PER_ITER,
+    fn: () => {
+      spawnProjectileBatchWithCreateWith(bundledSpawnEntities);
+      destroyBundledBatch(bundledSpawnEntities);
+      entitySink ^= bundledSpawnEntities[0]!;
     },
   },
   budgeted("direct typed-array component writes", 250_000, () => {
     positionStorage.partitions.x[mutationEntity] = (positionStorage.partitions.x[mutationEntity] ?? 0) + 1;
     positionStorage.partitions.y[mutationEntity] = (positionStorage.partitions.y[mutationEntity] ?? 0) - 1;
+  }),
+  budgeted("direct typed-array writes + instance.markChanged", 250_000, () => {
+    positionStorage.partitions.x[mutationEntity] = (positionStorage.partitions.x[mutationEntity] ?? 0) + 1;
+    positionStorage.partitions.y[mutationEntity] = (positionStorage.partitions.y[mutationEntity] ?? 0) - 1;
+    numericSink ^= positionInstance.markChanged(mutationEntity) ? 1 : 0;
   }),
   budgeted("proxy component writes with changed tracking", 250_000, () => {
     positionProxy.entity = mutationEntity;
@@ -361,6 +456,10 @@ const scenarios: Scenario[] = [
       objectSink = mixed.world.components.getEntityData(mixed.components.position, mutationEntity);
     },
   },
+  budgeted("readEntityDataInto reused output object", 250_000, () => {
+    numericSink ^=
+      mixed.world.components.readEntityDataInto(mixed.components.position, mutationEntity, positionReadOut) ? 1 : 0;
+  }),
   {
     name: "cached query entity iteration",
     iterations: 100_000,
@@ -378,6 +477,36 @@ const scenarios: Scenario[] = [
       let count = 0;
       for (let i = 0; i < result.count; i++) count++;
       entitySink ^= count;
+    },
+  },
+  {
+    name: "queryList cached entity iteration - all + include",
+    iterations: 100_000,
+    maxSteadyStateBeforeGcBytesPerIter: ZERO_ALLOC_BUDGET_BYTES_PER_ITER,
+    fn: () => {
+      const result = mixed.world.entities.queryList(renderIncludeQuery);
+      let count = 0;
+      for (let i = 0; i < result.count; i++) count++;
+      entitySink ^= count;
+    },
+  },
+  {
+    name: "render loop direct partitions + include ownership checks",
+    iterations: 10_000,
+    maxSteadyStateBeforeGcBytesPerIter: ZERO_ALLOC_BUDGET_BYTES_PER_ITER,
+    fn: () => {
+      const result = mixed.world.entities.queryList(renderIncludeQuery);
+      const px = positionStorage.partitions.x;
+      const current = healthPartitions.current;
+      const sprite = renderStatePartitions.sprite;
+      let total = 0;
+      for (let i = 0; i < result.count; i++) {
+        const entity = result.indices[i]!;
+        total += px[entity] ?? 0;
+        if (healthInstance.has(entity)) total += current[entity] ?? 0;
+        if (renderStateInstance.has(entity)) total += sprite[entity] ?? 0;
+      }
+      numericSink ^= total;
     },
   },
   {

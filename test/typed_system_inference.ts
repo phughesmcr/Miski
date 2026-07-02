@@ -3,15 +3,7 @@
  * See test/README.md.
  */
 import { Component, Query, System, World } from "../mod.ts";
-import type {
-  BorrowedEntityList,
-  ComponentInstance,
-  Entity,
-  QuerySpec,
-  SchemaOrNull,
-  SystemCallback,
-  TypedArray,
-} from "../mod.ts";
+import type { BorrowedEntityList, ComponentInstance, Entity, QuerySpec, SchemaOrNull, SystemCallback } from "../mod.ts";
 import { tagComponent, type Vec2, vec2Component } from "./fixtures.ts";
 // @ts-expect-error AnySystemCallback is not exported from the public mod.ts surface.
 import type { AnySystemCallback } from "../mod.ts";
@@ -100,19 +92,28 @@ const dynamicInstance = dynamicWorld.systems.create(dynamicSystem);
 dynamicInstance("label");
 
 // -- Partition typing: constructor-shaped generics resolve exact typed arrays,
-// value-shaped generics (as documented in mod.ts) resolve the general TypedArray.
+// dual-shape generics keep branded writes while exposing exact storage partitions.
 type GridPosValues = { x: number; y: number };
+type GridPosStorage = { x: Int16ArrayConstructor; y: Int16ArrayConstructor };
 type FacingValues = { dir: 0 | 1 | 2 | 3 };
-const gridPos = new Component<GridPosValues>({ name: "gridPos", schema: { x: Int16Array, y: Int16Array } });
-const facing = new Component<FacingValues>({ name: "facing", schema: { dir: Uint8Array } });
+type FacingStorage = { dir: Uint8ArrayConstructor };
+const gridPos = new Component<GridPosValues, GridPosStorage>({
+  name: "gridPos",
+  schema: { x: Int16Array, y: Int16Array },
+});
+const facing = new Component<FacingValues, FacingStorage>({ name: "facing", schema: { dir: Uint8Array } });
+const health = new Component<{ hp: number }, { hp: Uint16ArrayConstructor }>({
+  name: "health",
+  schema: { hp: Uint16Array },
+});
 
 const valueShapedQuery = new Query({ all: { gridPos, facing } });
 const valueShapedSystem = new System({
   name: "valueShapedMovement",
   query: valueShapedQuery,
   callback: (components, _entities): void => {
-    expectType<TypedArray>(components.gridPos.partitions.x);
-    expectType<TypedArray>(components.facing.partitions.dir);
+    expectType<Int16Array>(components.gridPos.partitions.x);
+    expectType<Uint8Array>(components.facing.partitions.dir);
     // @ts-expect-error data component partitions are never null.
     expectType<null>(components.gridPos.partitions);
   },
@@ -140,6 +141,11 @@ expectType<Entity>(brandedEntity);
 brandedWorld.components.addToEntity(facing, brandedEntity, { dir: 2 });
 // @ts-expect-error 7 is not a valid FacingValues["dir"] literal.
 brandedWorld.components.addToEntity(facing, brandedEntity, { dir: 7 });
+brandedWorld.components.addBundle(brandedEntity, [[facing, { dir: 1 }]]);
+// @ts-expect-error 7 is not a valid FacingValues["dir"] literal in bundles.
+brandedWorld.components.addBundle(brandedEntity, [[facing, { dir: 7 }]]);
+// @ts-expect-error tag bundle entries do not accept data.
+brandedWorld.components.addBundle(brandedEntity, [[renderable, {}]]);
 
 // Partial writes: omitted keys are allowed.
 brandedWorld.components.setEntityData(gridPos, brandedEntity, { x: 4 });
@@ -155,3 +161,54 @@ const readResult = brandedWorld.components.readEntityData(gridPos, brandedEntity
 expectType<Record<"x" | "y", number> | undefined>(readResult);
 // @ts-expect-error readEntityData results must be narrowed before property access.
 readResult.x;
+
+const readOut = { x: 0, y: 0, label: "kept" };
+expectType<boolean>(brandedWorld.components.readEntityDataInto(gridPos, brandedEntity, readOut));
+
+const includeQuery = new Query({
+  all: { gridPos },
+  include: { facing, health },
+  none: { disabled },
+});
+const includeSystem = new System({
+  name: "includeRender",
+  query: includeQuery,
+  callback: (components): void => {
+    expectType<ComponentInstance<GridPosValues, GridPosStorage>>(components.gridPos);
+    expectType<ComponentInstance<FacingValues, FacingStorage>>(components.facing);
+    expectType<ComponentInstance<{ hp: number }, { hp: Uint16ArrayConstructor }>>(components.health);
+    // @ts-expect-error none components are filters, not callback components.
+    components.disabled;
+  },
+});
+void includeSystem;
+
+const composedWithInclude = Query.compose([
+  new Query({ all: { gridPos }, include: { facing } }),
+  new Query({ all: { renderable }, include: { health } }),
+]);
+const composedSystem = new System({
+  name: "composedInclude",
+  query: composedWithInclude,
+  callback: (components): void => {
+    expectType<ComponentInstance<GridPosValues, GridPosStorage>>(components.gridPos);
+    expectType<ComponentInstance<null>>(components.renderable);
+    expectType<ComponentInstance<FacingValues, FacingStorage>>(components.facing);
+    expectType<ComponentInstance<{ hp: number }, { hp: Uint16ArrayConstructor }>>(components.health);
+  },
+});
+void composedSystem;
+
+const plainAnnotatedQuery: Query = new Query({ all: { gridPos }, include: { facing } });
+const plainAnnotatedSystem = new System({
+  name: "plainAnnotated",
+  query: plainAnnotatedQuery,
+  callback: (components): void => {
+    const dynamicFacing = components["facing"];
+    if (!dynamicFacing) return;
+    expectType<ComponentInstance<SchemaOrNull, SchemaOrNull>>(dynamicFacing);
+    // @ts-expect-error plain Query annotations intentionally erase concrete include inference.
+    dynamicFacing.partitions.dir;
+  },
+});
+void plainAnnotatedSystem;

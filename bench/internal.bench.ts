@@ -158,13 +158,15 @@ function createQueryInstance(
   const and = bitfieldFor(size, ...all);
   const or = bitfieldFor(size, ...any);
   const not = bitfieldFor(size, ...none);
+  const include = new BooleanArray(size);
   return {
     and,
     or,
     not,
+    include,
     archetypes: new Set<Archetype>(),
     components: Object.freeze(componentsByName),
-    id: `${and.toString()}:${or.toString()}:${not.toString()}`,
+    id: `${and.toString()}:${or.toString()}:${not.toString()}:${include.toString()}`,
     isDirty: true,
   };
 }

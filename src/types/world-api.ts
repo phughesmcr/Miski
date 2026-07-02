@@ -11,7 +11,7 @@ import type { Entity } from "@/entity/entity-id.ts";
 import type { Query } from "@/query/query.ts";
 import type { System } from "@/system/system.ts";
 import type { ComponentMap, DynamicComponent, DynamicComponentInstance } from "@/types/component.ts";
-import type { SchemaOrNull, SchemaValues } from "@/types/partitions.ts";
+import type { ComponentData, SchemaOrNull, SchemaValues } from "@/types/partitions.ts";
 import type { BorrowedEntityIterator, BorrowedEntityList, QueryEntityList } from "@/types/entity-views.ts";
 import type { SystemInstance, SystemRecord, TypedSystemCallback } from "@/types/system.ts";
 
@@ -21,6 +21,26 @@ export type WorldSpec = {
   capacity: number;
   /** The components to register in the World */
   components: DynamicComponent[];
+};
+
+/** Runtime-compatible component bundle tuple. */
+export type ComponentBundleEntryInput =
+  | readonly [DynamicComponent]
+  | readonly [DynamicComponent, Partial<Record<string, number>>];
+
+/** A bundle tuple checked against one concrete component definition. */
+export type ComponentBundleEntryFor<TComponent extends DynamicComponent> = TComponent extends
+  Component<infer TValue, infer TStorage> ? TStorage extends null ? readonly [TComponent] :
+  readonly [TComponent] | readonly [TComponent, Partial<SchemaValues<TValue>>] :
+  never;
+
+/** A component bundle whose entries are checked component-by-component. */
+export type ComponentBundle<TBundle extends readonly ComponentBundleEntryInput[]> = {
+  readonly [I in keyof TBundle]: TBundle[I] extends readonly [infer TComponent extends DynamicComponent] ?
+    ComponentBundleEntryFor<TComponent> :
+    TBundle[I] extends readonly [infer TComponent extends DynamicComponent, unknown] ?
+      ComponentBundleEntryFor<TComponent> :
+    never;
 };
 
 /** The state of a World */
@@ -60,11 +80,22 @@ export type WorldEntityAPI = {
   readonly capacity: number;
   /** Create an entity, or return `undefined` if the world is at capacity */
   create(): Entity | undefined;
+  /** Create an entity with a preflighted component bundle, or return `undefined` if the world is at capacity */
+  createWith<const TBundle extends readonly ComponentBundleEntryInput[]>(
+    bundle: TBundle & ComponentBundle<TBundle>,
+  ): Entity | undefined;
   /**
    * Create an entity
    * @throws {CapacityError} - If the world's entity capacity is exhausted
    */
   createOrThrow(): Entity;
+  /**
+   * Create an entity with a preflighted component bundle
+   * @throws {CapacityError} - If the world's entity capacity is exhausted
+   */
+  createWithOrThrow<const TBundle extends readonly ComponentBundleEntryInput[]>(
+    bundle: TBundle & ComponentBundle<TBundle>,
+  ): Entity;
   /** Destroy an entity */
   destroy(entity: Entity): void;
   /** Get an iterable of all active entities */
@@ -104,10 +135,10 @@ export type WorldComponentAPI = {
    * @throws {NotRegisteredError} - If the component is not registered
    * @throws {EntityNotFoundError} - If the entity is inactive
    */
-  addToEntity<T extends SchemaOrNull>(
-    component: Component<T> | string,
+  addToEntity<TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
+    component: Component<TValue, TStorage> | string,
     entity: Entity,
-    data?: Partial<SchemaValues<T>>,
+    data?: Partial<SchemaValues<TValue>>,
   ): void;
   /**
    * Add a component to every entity in a dense query list, updating data for entities that already own it (upsert)
@@ -120,30 +151,48 @@ export type WorldComponentAPI = {
    * @throws {NotRegisteredError} - If the component is not registered
    * @throws {EntityNotFoundError} - If any entity is inactive
    */
-  addToEntities<T extends SchemaOrNull>(
-    component: Component<T> | string,
+  addToEntities<TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
+    component: Component<TValue, TStorage> | string,
     entities: QueryEntityList,
-    data?: Partial<SchemaValues<T>>,
+    data?: Partial<SchemaValues<TValue>>,
   ): number;
+  /**
+   * Add or update a component bundle on one active entity.
+   * @param entity - The entity to mutate
+   * @param bundle - Unique component tuples, with optional data for data components
+   * @throws {NotRegisteredError} - If any component is not registered
+   * @throws {EntityNotFoundError} - If the entity is inactive
+   */
+  addBundle<const TBundle extends readonly ComponentBundleEntryInput[]>(
+    entity: Entity,
+    bundle: TBundle & ComponentBundle<TBundle>,
+  ): void;
   /**
    * Check if an entity has a component
    * @param component - The component to check for
    * @param entity - The entity to check
    * @returns `true` if the entity has the component, `false` otherwise
    */
-  entityHas<T extends SchemaOrNull>(component: Component<T> | string, entity: Entity): boolean;
+  entityHas<TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
+    component: Component<TValue, TStorage> | string,
+    entity: Entity,
+  ): boolean;
   /**
    * Get an iterable of all entities with one or more changed properties for a given component
    * @param component - The component to get changed entities for
    * @returns An iterable of entities or `undefined` if the component is not registered
    */
-  getChanged<T extends SchemaOrNull>(component: Component<T> | string): IterableIterator<Entity> | undefined;
+  getChanged<TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
+    component: Component<TValue, TStorage> | string,
+  ): IterableIterator<Entity> | undefined;
   /**
    * Get a stable snapshot of all entities with one or more changed properties for a component
    * @param component - The component to get changed entities for
    * @returns An array of entities or `undefined` if the component is not registered
    */
-  getChangedSnapshot<T extends SchemaOrNull>(component: Component<T> | string): Entity[] | undefined;
+  getChangedSnapshot<TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
+    component: Component<TValue, TStorage> | string,
+  ): Entity[] | undefined;
   /**
    * Get the data of a component from an entity
    * @param component - The component to get the data for
@@ -154,7 +203,10 @@ export type WorldComponentAPI = {
    * @throws {ComponentDataError} - If the component has no data storage
    * @throws {ComponentOwnershipError} - If the active entity does not own the component
    */
-  getEntityData<T extends SchemaOrNull>(component: Component<T> | string, entity: Entity): Record<keyof T, number>;
+  getEntityData<
+    TValue extends SchemaOrNull,
+    TStorage extends SchemaOrNull = TValue,
+  >(component: Component<TValue, TStorage> | string, entity: Entity): ComponentData<TValue>;
   /**
    * Read the data of a component from an entity without throwing
    * @param component - The component to read the data for
@@ -163,29 +215,67 @@ export type WorldComponentAPI = {
    * or the component is a tag component with no data storage
    * @throws {NotRegisteredError} - If the component is not registered
    */
-  readEntityData<T extends SchemaOrNull>(
-    component: Component<T> | string,
+  readEntityData<
+    TValue extends SchemaOrNull,
+    TStorage extends SchemaOrNull = TValue,
+  >(
+    component: Component<TValue, TStorage> | string,
     entity: Entity,
-  ): Record<keyof T, number> | undefined;
+  ): ComponentData<TValue> | undefined;
+  /**
+   * Read component data into a caller-owned object without allocating.
+   * @param component - The component to read
+   * @param entity - The entity to read
+   * @param out - Object to overwrite with all component keys on success
+   * @returns `true` when data was written; `false` for inactive entities, non-owners, and tag components
+   * @throws {NotRegisteredError} - If the component is not registered
+   */
+  readEntityDataInto<
+    TValue extends SchemaOrNull,
+    TStorage extends SchemaOrNull = TValue,
+  >(
+    component: Component<TValue, TStorage> | string,
+    entity: Entity,
+    out: Partial<ComponentData<TValue>>,
+  ): boolean;
   /**
    * Check if a component is registered
    * @param component - The component to check
    * @returns `true` if the component is registered, `false` otherwise
    */
-  isRegistered<T extends SchemaOrNull>(component: Component<T> | string): boolean;
+  isRegistered<TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
+    component: Component<TValue, TStorage> | string,
+  ): boolean;
   /**
    * Get the registered instance of a given component
    * @param component - The component to get the instance for
    * @returns The registered instance of the component or `undefined` if the component is not registered
    */
-  getInstance<T extends SchemaOrNull>(component: Component<T> | string): ComponentInstance<T> | undefined;
+  getInstance<
+    TValue extends SchemaOrNull,
+    TStorage extends SchemaOrNull = TValue,
+  >(component: Component<TValue, TStorage> | string): ComponentInstance<TValue, TStorage> | undefined;
   /**
    * Get a registered component instance
    * @param component - The component to get the instance for
    * @returns The registered instance of the component
    * @throws {NotRegisteredError} - If the component is not registered
    */
-  require<T extends SchemaOrNull>(component: Component<T> | string): ComponentInstance<T>;
+  require<
+    TValue extends SchemaOrNull,
+    TStorage extends SchemaOrNull = TValue,
+  >(component: Component<TValue, TStorage> | string): ComponentInstance<TValue, TStorage>;
+  /**
+   * Mark an owning data component entity as changed.
+   * @throws {EntityNotFoundError} - If the entity is inactive
+   * @throws {NotRegisteredError} - If the component is not registered
+   * @throws {ComponentDataError} - If the component has no data storage
+   * @throws {ComponentOwnershipError} - If the active entity does not own the component
+   */
+  markChanged<TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
+    component: Component<TValue, TStorage> | string,
+    entity: Entity,
+  ): void;
   /**
    * Get instances for an array of components
    * @param array - The array of components to get instances for
@@ -199,13 +289,17 @@ export type WorldComponentAPI = {
    * @param component - The component to get entities for
    * @returns An iterable of entities or `undefined` if the component is not registered
    */
-  getOwners<T extends SchemaOrNull>(component: Component<T> | string): IterableIterator<Entity> | undefined;
+  getOwners<TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
+    component: Component<TValue, TStorage> | string,
+  ): IterableIterator<Entity> | undefined;
   /**
    * Get a stable snapshot of all entities with a given component
    * @param component - The component to get entities for
    * @returns An array of entities or `undefined` if the component is not registered
    */
-  getOwnersSnapshot<T extends SchemaOrNull>(component: Component<T> | string): Entity[] | undefined;
+  getOwnersSnapshot<TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
+    component: Component<TValue, TStorage> | string,
+  ): Entity[] | undefined;
   /**
    * Query for components
    * @param query - The query to use
@@ -220,7 +314,10 @@ export type WorldComponentAPI = {
    * @throws {EntityNotFoundError} - If the entity is inactive
    * @throws {NotRegisteredError} - If the component is not registered
    */
-  removeFromEntity<T extends SchemaOrNull>(component: Component<T> | string, entity: Entity): void;
+  removeFromEntity<TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
+    component: Component<TValue, TStorage> | string,
+    entity: Entity,
+  ): void;
   /**
    * Remove a component from every entity in a dense query list
    * @param component - The component to remove
@@ -231,8 +328,8 @@ export type WorldComponentAPI = {
    * @throws {NotRegisteredError} - If the component is not registered
    * @throws {EntityNotFoundError} - If any entity is inactive
    */
-  removeFromEntities<T extends SchemaOrNull>(
-    component: Component<T> | string,
+  removeFromEntities<TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
+    component: Component<TValue, TStorage> | string,
     entities: QueryEntityList,
   ): number;
   /**
@@ -245,10 +342,10 @@ export type WorldComponentAPI = {
    * @throws {ComponentDataError} - If the component has no data storage
    * @throws {ComponentOwnershipError} - If the active entity does not own the component
    */
-  setEntityData<T extends SchemaOrNull>(
-    component: Component<T> | string,
+  setEntityData<TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
+    component: Component<TValue, TStorage> | string,
     entity: Entity,
-    value: Partial<SchemaValues<T>>,
+    value: Partial<SchemaValues<TValue>>,
   ): void;
 };
 

@@ -249,6 +249,72 @@ export class ArchetypeManager {
   }
 
   /**
+   * Build a component list with multiple components inserted by registry id.
+   * @param components - The source component list
+   * @param added - Components to add
+   * @returns A sorted component list for the target archetype
+   */
+  #componentsWithAddedSet(
+    components: readonly DynamicComponentInstance[],
+    added: readonly DynamicComponentInstance[],
+  ): DynamicComponentInstance[] {
+    const byId: DynamicComponentInstance[] = [];
+    let maxId = -1;
+    for (let i = 0; i < components.length; i++) {
+      const component = components[i]!;
+      byId[component.id] = component;
+      if (component.id > maxId) maxId = component.id;
+    }
+    for (let i = 0; i < added.length; i++) {
+      const component = added[i]!;
+      byId[component.id] = component;
+      if (component.id > maxId) maxId = component.id;
+    }
+
+    const result: DynamicComponentInstance[] = [];
+    for (let id = 0; id <= maxId; id++) {
+      const component = byId[id];
+      if (component) result.push(component);
+    }
+    return result;
+  }
+
+  /**
+   * Get or create the archetype reached by adding a set of components.
+   * @param from - The source archetype
+   * @param instances - Components being added
+   * @returns The target archetype
+   */
+  #getSetTransitionArchetype(
+    from: Archetype,
+    instances: readonly DynamicComponentInstance[],
+  ): Archetype {
+    if (instances.length === 0) return from;
+
+    const bitfield = from.bitfield.clone();
+    let changed = false;
+    for (let i = 0; i < instances.length; i++) {
+      const instance = instances[i]!;
+      if (bitfield.get(instance.id)) continue;
+      bitfield.set(instance.id, true);
+      changed = true;
+    }
+    if (!changed) return from;
+
+    const archetypeId = bitfield.buffer.toString();
+    let archetype = this.registry.get(archetypeId);
+    if (!archetype) {
+      archetype = new Archetype(
+        this.#capacity,
+        this.#componentsWithAddedSet(from.components, instances),
+        bitfield,
+      );
+      this.registry.set(archetypeId, archetype);
+    }
+    return archetype;
+  }
+
+  /**
    * Rebuild query membership while preserving the caller's transition lifecycle.
    * @param queries - Query instances whose archetype membership should be rebuilt
    * @param includeDirtyArchetypes - Include dirty empty archetypes for entered/exited views
@@ -331,6 +397,17 @@ export class ArchetypeManager {
    */
   addComponents(entities: EntityArray, count: number, instance: DynamicComponentInstance): number {
     return this.#moveEntities(entities, count, instance, true);
+  }
+
+  /**
+   * Move an entity once to the archetype reached by adding a component set.
+   * @param entity - The entity to move
+   * @param instances - Components whose ownership changed to owned
+   * @returns The target archetype
+   */
+  addComponentSet(entity: Entity, instances: readonly DynamicComponentInstance[]): Archetype {
+    const oldArchetype = this.entityArchetypes[entity] ?? this.root;
+    return this.#moveEntity(entity, this.#getSetTransitionArchetype(oldArchetype, instances));
   }
 
   /**

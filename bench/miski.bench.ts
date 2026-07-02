@@ -9,6 +9,7 @@ import {
   createProjectileQuery,
   createRenderableQuery,
   createWideQuery,
+  type Health,
   LARGE_CAPACITY,
   MEDIUM_CAPACITY,
   mustCreateEntity,
@@ -16,6 +17,7 @@ import {
   populateMovementWorld,
   populateSparseLifecycleWorld,
   populateWideWorld,
+  type RenderState,
   SMALL_CAPACITY,
   type Vec2,
 } from "./fixtures.ts";
@@ -30,6 +32,8 @@ const movementSmall = await populateMovementWorld(SMALL_CAPACITY);
 const movementMedium = await populateMovementWorld(MEDIUM_CAPACITY);
 const movementLarge = await populateMovementWorld(LARGE_CAPACITY);
 const lifecycle = await populateSparseLifecycleWorld(MEDIUM_CAPACITY);
+const repeatedSpawnLifecycle = await populateSparseLifecycleWorld(MEDIUM_CAPACITY);
+const bundledSpawnLifecycle = await populateSparseLifecycleWorld(MEDIUM_CAPACITY);
 const batchTransitions = await populateSparseLifecycleWorld(MEDIUM_CAPACITY);
 const batchDataTransitions = await populateSparseLifecycleWorld(MEDIUM_CAPACITY);
 const queryInvalidation = await populateMovementWorld(SMALL_CAPACITY);
@@ -38,6 +42,10 @@ const wide = await populateWideWorld(SMALL_CAPACITY);
 
 const movementQuery = createMovementQuery(mixed.components);
 const renderableQuery = createRenderableQuery(mixed.components);
+const renderIncludeQuery = new Query({
+  all: [mixed.components.position],
+  include: [mixed.components.health, mixed.components.renderState],
+});
 const projectileQuery = createProjectileQuery(mixed.components);
 const movementFrameRenderableQuery = createRenderableQuery(movementMedium.components);
 const invalidationMovementQuery = createMovementQuery(queryInvalidation.components);
@@ -47,6 +55,8 @@ const batchPositionQuery = new Query({ all: [batchTransitions.components.positio
 const batchDataPositionQuery = new Query({ all: [batchDataTransitions.components.position] });
 mixed.world.entities.query(movementQuery);
 mixed.world.entities.query(renderableQuery);
+mixed.world.entities.query(renderIncludeQuery);
+mixed.world.components.query(renderIncludeQuery);
 mixed.world.entities.query(projectileQuery);
 movementMedium.world.entities.query(movementFrameRenderableQuery);
 queryInvalidation.world.entities.query(invalidationMovementQuery);
@@ -61,18 +71,56 @@ const positionProxy = positionInstance.proxy;
 if (positionStorage === null || positionProxy === null) {
   throw new Error("benchmark expected position component storage");
 }
+const healthInstance = mixed.world.components.getInstance(mixed.components.health) as ComponentInstance<Health>;
+const healthPartitions = healthInstance.partitions;
+const renderStateInstance = mixed.world.components.getInstance(mixed.components.renderState) as ComponentInstance<
+  RenderState
+>;
+const renderStatePartitions = renderStateInstance.partitions;
+const readDataOut = { x: 0, y: 0 };
 
 const mutationEntity = mixed.entities[128]!;
+const healthOwnerEntity = mixed.entities[129]!;
 const addRemoveEntity = mustCreateEntity(lifecycle.world);
 const lifecycleEntity = mustCreateEntity(lifecycle.world);
-const fullSpawnEntities = new Array<Entity>(128);
+const repeatedSpawnEntities = new Array<Entity>(128);
+const bundledSpawnEntities = new Array<Entity>(128);
 let destroyOneComponentEntity = mustCreateEntity(lifecycle.world);
 let destroyThreeComponentEntity = mustCreateEntity(lifecycle.world);
 let destroySixComponentEntity = mustCreateEntity(lifecycle.world);
+let destroySixBundleEntity = mustCreateEntity(lifecycle.world);
 const transitionQueryEntity = queryInvalidation.entities[1]!;
 const enteredExitedEntity = mustCreateEntity(transitionTracking.world);
 const wideTransitionEntity = mustCreateEntity(wide.world);
 const batchData = { x: 1, y: -1 };
+const repeatedProjectilePositionData = { x: 0, y: 0 };
+const repeatedProjectileVelocityData = { x: 10, y: -2 };
+const repeatedProjectileLifetimeData = { ttl: 2 };
+const repeatedProjectileRenderData = { sprite: 0, layer: 2 };
+const bundledProjectilePositionData = { x: 0, y: 0 };
+const bundledProjectileVelocityData = { x: 10, y: -2 };
+const bundledProjectileLifetimeData = { ttl: 2 };
+const bundledProjectileRenderData = { sprite: 0, layer: 2 };
+const bundledProjectileBundle = [
+  [bundledSpawnLifecycle.components.position, bundledProjectilePositionData],
+  [bundledSpawnLifecycle.components.velocity, bundledProjectileVelocityData],
+  [bundledSpawnLifecycle.components.lifetime, bundledProjectileLifetimeData],
+  [bundledSpawnLifecycle.components.renderState, bundledProjectileRenderData],
+  [bundledSpawnLifecycle.components.renderable],
+  [bundledSpawnLifecycle.components.projectile],
+] as const;
+const sixBundlePositionData = { x: 0, y: 0 };
+const sixBundleVelocityData = { x: 1, y: 1 };
+const sixBundleHealthData = { current: 100, max: 100 };
+const sixBundleRenderData = { sprite: 1, layer: 1 };
+const sixComponentBundle = [
+  [lifecycle.components.position, sixBundlePositionData],
+  [lifecycle.components.velocity, sixBundleVelocityData],
+  [lifecycle.components.health, sixBundleHealthData],
+  [lifecycle.components.renderState, sixBundleRenderData],
+  [lifecycle.components.renderable],
+  [lifecycle.components.projectile],
+] as const;
 lifecycle.world.components.addToEntity(lifecycle.components.position, addRemoveEntity, { x: 0, y: 0 });
 lifecycle.world.components.addToEntity(lifecycle.components.position, lifecycleEntity, { x: 0, y: 0 });
 lifecycle.world.components.addToEntity(lifecycle.components.position, destroyOneComponentEntity, { x: 0, y: 0 });
@@ -91,6 +139,7 @@ lifecycle.world.components.addToEntity(lifecycle.components.renderState, destroy
 });
 lifecycle.world.components.addToEntity(lifecycle.components.renderable, destroySixComponentEntity);
 lifecycle.world.components.addToEntity(lifecycle.components.projectile, destroySixComponentEntity);
+lifecycle.world.components.addBundle(destroySixBundleEntity, sixComponentBundle);
 lifecycle.world.refresh();
 queryInvalidation.world.components.removeFromEntity(queryInvalidation.components.velocity, transitionQueryEntity);
 queryInvalidation.world.refresh();
@@ -118,22 +167,64 @@ for (let i = 0; i < MEDIUM_CAPACITY; i++) {
   aosEntities[i] = { x: i, y: i, vx: 1, vy: -1, renderable: (i & 1) === 0 };
 }
 
-function spawnProjectileBatch(out: Entity[]): void {
+function setRepeatedProjectileData(i: number): void {
+  repeatedProjectilePositionData.x = i;
+  repeatedProjectilePositionData.y = i;
+  repeatedProjectileRenderData.sprite = i & 255;
+}
+
+function setBundledProjectileData(i: number): void {
+  bundledProjectilePositionData.x = i;
+  bundledProjectilePositionData.y = i;
+  bundledProjectileRenderData.sprite = i & 255;
+}
+
+function spawnProjectileBatchRepeated(out: Entity[]): void {
   for (let i = 0; i < out.length; i++) {
-    const entity = mustCreateEntity(lifecycle.world);
+    const entity = mustCreateEntity(repeatedSpawnLifecycle.world);
     out[i] = entity;
-    lifecycle.world.components.addToEntity(lifecycle.components.position, entity, { x: i, y: i });
-    lifecycle.world.components.addToEntity(lifecycle.components.velocity, entity, { x: 10, y: -2 });
-    lifecycle.world.components.addToEntity(lifecycle.components.lifetime, entity, { ttl: 2 });
-    lifecycle.world.components.addToEntity(lifecycle.components.renderState, entity, { sprite: i & 255, layer: 2 });
-    lifecycle.world.components.addToEntity(lifecycle.components.renderable, entity);
-    lifecycle.world.components.addToEntity(lifecycle.components.projectile, entity);
+    setRepeatedProjectileData(i);
+    repeatedSpawnLifecycle.world.components.addToEntity(
+      repeatedSpawnLifecycle.components.position,
+      entity,
+      repeatedProjectilePositionData,
+    );
+    repeatedSpawnLifecycle.world.components.addToEntity(
+      repeatedSpawnLifecycle.components.velocity,
+      entity,
+      repeatedProjectileVelocityData,
+    );
+    repeatedSpawnLifecycle.world.components.addToEntity(
+      repeatedSpawnLifecycle.components.lifetime,
+      entity,
+      repeatedProjectileLifetimeData,
+    );
+    repeatedSpawnLifecycle.world.components.addToEntity(
+      repeatedSpawnLifecycle.components.renderState,
+      entity,
+      repeatedProjectileRenderData,
+    );
+    repeatedSpawnLifecycle.world.components.addToEntity(repeatedSpawnLifecycle.components.renderable, entity);
+    repeatedSpawnLifecycle.world.components.addToEntity(repeatedSpawnLifecycle.components.projectile, entity);
   }
 }
 
-function destroyBatch(entities: Entity[]): void {
+function spawnProjectileBatchWithCreateWith(out: Entity[]): void {
+  for (let i = 0; i < out.length; i++) {
+    setBundledProjectileData(i);
+    out[i] = bundledSpawnLifecycle.world.entities.createWithOrThrow(bundledProjectileBundle);
+  }
+}
+
+function destroyRepeatedBatch(entities: Entity[]): void {
   for (let i = 0; i < entities.length; i++) {
-    lifecycle.world.entities.destroy(entities[i]!);
+    repeatedSpawnLifecycle.world.entities.destroy(entities[i]!);
+  }
+}
+
+function destroyBundledBatch(entities: Entity[]): void {
+  for (let i = 0; i < entities.length; i++) {
+    bundledSpawnLifecycle.world.entities.destroy(entities[i]!);
   }
 }
 
@@ -144,6 +235,10 @@ function addSixComponentEntity(entity: Entity): void {
   lifecycle.world.components.addToEntity(lifecycle.components.renderState, entity, { sprite: 1, layer: 1 });
   lifecycle.world.components.addToEntity(lifecycle.components.renderable, entity);
   lifecycle.world.components.addToEntity(lifecycle.components.projectile, entity);
+}
+
+function addSixComponentBundle(entity: Entity): void {
+  lifecycle.world.components.addBundle(entity, sixComponentBundle);
 }
 
 Deno.bench({
@@ -174,6 +269,17 @@ Deno.bench({
       all: [mixed.components.position, mixed.components.velocity],
       any: [mixed.components.renderable, mixed.components.projectile],
       none: [mixed.components.sleeping],
+    });
+  },
+});
+
+Deno.bench({
+  name: "Query constructor - all + include render components",
+  group: "definition construction",
+  fn: () => {
+    objectSink = new Query({
+      all: [mixed.components.position],
+      include: [mixed.components.health, mixed.components.renderState],
     });
   },
 });
@@ -236,12 +342,23 @@ Deno.bench({
 });
 
 Deno.bench({
-  name: "spawn/despawn 128 projectiles with 6 components",
+  name: "spawn/despawn 128 projectiles - repeated addToEntity",
+  group: "entity lifecycle",
+  baseline: true,
+  fn: () => {
+    spawnProjectileBatchRepeated(repeatedSpawnEntities);
+    destroyRepeatedBatch(repeatedSpawnEntities);
+    entitySink ^= repeatedSpawnEntities[0]!;
+  },
+});
+
+Deno.bench({
+  name: "spawn/despawn 128 projectiles - createWith bundle",
   group: "entity lifecycle",
   fn: () => {
-    spawnProjectileBatch(fullSpawnEntities);
-    destroyBatch(fullSpawnEntities);
-    entitySink ^= fullSpawnEntities[0]!;
+    spawnProjectileBatchWithCreateWith(bundledSpawnEntities);
+    destroyBundledBatch(bundledSpawnEntities);
+    entitySink ^= bundledSpawnEntities[0]!;
   },
 });
 
@@ -280,11 +397,23 @@ Deno.bench({
 Deno.bench({
   name: "destroy entity with 6 components and respawn",
   group: "entity lifecycle",
+  baseline: true,
   fn: () => {
     lifecycle.world.entities.destroy(destroySixComponentEntity);
     destroySixComponentEntity = mustCreateEntity(lifecycle.world);
     addSixComponentEntity(destroySixComponentEntity);
     entitySink ^= destroySixComponentEntity;
+  },
+});
+
+Deno.bench({
+  name: "destroy entity with 6 components and respawn via addBundle",
+  group: "entity lifecycle",
+  fn: () => {
+    lifecycle.world.entities.destroy(destroySixBundleEntity);
+    destroySixBundleEntity = mustCreateEntity(lifecycle.world);
+    addSixComponentBundle(destroySixBundleEntity);
+    entitySink ^= destroySixBundleEntity;
   },
 });
 
@@ -370,6 +499,16 @@ Deno.bench({
 });
 
 Deno.bench({
+  name: "direct typed-array write + instance.markChanged",
+  group: "component data hot path",
+  fn: () => {
+    positionStorage.partitions.x[mutationEntity] = (positionStorage.partitions.x[mutationEntity] ?? 0) + 1;
+    positionStorage.partitions.y[mutationEntity] = (positionStorage.partitions.y[mutationEntity] ?? 0) - 1;
+    numericSink ^= positionInstance.markChanged(mutationEntity) ? 1 : 0;
+  },
+});
+
+Deno.bench({
   name: "setEntityData component write with changed tracking",
   group: "component data hot path",
   fn: () => {
@@ -399,6 +538,16 @@ Deno.bench({
 });
 
 Deno.bench({
+  name: "readEntityDataInto reused object",
+  group: "component data hot path",
+  fn: () => {
+    numericSink ^= mixed.world.components.readEntityDataInto(mixed.components.position, mutationEntity, readDataOut) ?
+      1 :
+      0;
+  },
+});
+
+Deno.bench({
   name: "entityHas component ownership check",
   group: "component data hot path",
   fn: () => {
@@ -407,10 +556,37 @@ Deno.bench({
 });
 
 Deno.bench({
+  name: "instance.has component ownership check",
+  group: "component data hot path",
+  fn: () => {
+    numericSink ^= healthInstance.has(healthOwnerEntity) ? 1 : 0;
+  },
+});
+
+Deno.bench({
   name: "iterate dense changed component entities",
   group: "component data hot path",
   fn: () => {
     numericSink ^= countEntities(mixed.world.components.getChanged(mixed.components.position));
+  },
+});
+
+Deno.bench({
+  name: "render loop direct partitions + include ownership checks",
+  group: "component data hot path",
+  fn: () => {
+    const result = mixed.world.entities.queryList(renderIncludeQuery);
+    const px = positionStorage.partitions.x;
+    const current = healthPartitions.current;
+    const sprite = renderStatePartitions.sprite;
+    let total = 0;
+    for (let i = 0; i < result.count; i++) {
+      const entity = result.indices[i]!;
+      total += px[entity] ?? 0;
+      if (healthInstance.has(entity)) total += current[entity] ?? 0;
+      if (renderStateInstance.has(entity)) total += sprite[entity] ?? 0;
+    }
+    numericSink ^= total;
   },
 });
 
@@ -444,6 +620,19 @@ Deno.bench({
   group: "queries",
   fn: () => {
     const result = mixed.world.entities.queryList(movementQuery);
+    let count = 0;
+    for (let i = 0; i < result.count; i++) {
+      count++;
+    }
+    entitySink ^= count;
+  },
+});
+
+Deno.bench({
+  name: "queryList cached - all + include",
+  group: "queries",
+  fn: () => {
+    const result = mixed.world.entities.queryList(renderIncludeQuery);
     let count = 0;
     for (let i = 0; i < result.count; i++) {
       count++;
@@ -497,6 +686,14 @@ Deno.bench({
   group: "queries",
   fn: () => {
     objectSink = mixed.world.components.query(movementQuery);
+  },
+});
+
+Deno.bench({
+  name: "query component record lookup - include",
+  group: "queries",
+  fn: () => {
+    objectSink = mixed.world.components.query(renderIncludeQuery);
   },
 });
 
