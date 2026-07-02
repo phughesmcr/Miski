@@ -23,25 +23,6 @@ export type EntityManagerSerialized = {
   entities: string;
 };
 
-type ComponentKeysMatch<TValue, TStorage> = [
-  Exclude<keyof TValue, keyof TStorage> | Exclude<keyof TStorage, keyof TValue>,
-] extends [never] ? true : false;
-
-type ComponentValueKeysAreNumeric<TValue> = TValue extends object ? {
-    [K in keyof TValue]: TValue[K] extends number | SchemaProperty ? true : false;
-  }[keyof TValue] extends false ? false : true :
-  false;
-
-type ComponentShapeIsValid<TValue, TStorage> = [TValue, TStorage] extends [null, null] ? true :
-  TValue extends null ? false :
-  TStorage extends null ? false :
-  ComponentKeysMatch<TValue, TStorage> extends true ? ComponentValueKeysAreNumeric<TValue> :
-  false;
-
-/** Reject component value/storage pairs that cannot describe one component. */
-export type ComponentShapeGuard<TValue, TStorage> = ComponentShapeIsValid<TValue, TStorage> extends true ? unknown :
-  never;
-
 /** A component definition whose value/storage shape is only known dynamically. */
 export type DynamicComponent = Component<SchemaOrNull, SchemaOrNull>;
 
@@ -67,7 +48,18 @@ export type ComponentSpec<
   TValue extends SchemaOrNull = null,
   TStorage extends SchemaOrNull = TValue,
 > =
-  & ComponentShapeGuard<TValue, TStorage>
+  & (
+    [TValue, TStorage] extends [null, null] ? unknown :
+      TValue extends null ? never :
+      TStorage extends null ? never :
+      [
+        Exclude<keyof TValue, keyof TStorage> | Exclude<keyof TStorage, keyof TValue>,
+      ] extends [never] ? TValue extends object ? {
+            [K in keyof TValue]: TValue[K] extends number | SchemaProperty ? true : false;
+          }[keyof TValue] extends false ? never : unknown :
+        never :
+      never
+  )
   & {
     /** The component's label */
     name: string;

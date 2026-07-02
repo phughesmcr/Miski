@@ -1,6 +1,6 @@
 {
   "name": "@phughesmcr/miski",
-  "version": "1.0.0-alpha.2",
+  "version": "1.0.0-alpha.3",
   "license": "MIT",
   "exports": "./mod.ts",
   "lock": true,
