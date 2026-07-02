@@ -45,6 +45,18 @@ export type SchemaPartitions<T extends Schema<T>> = {
 };
 
 /**
+ * Typed-array partition views keyed by a component's value schema.
+ *
+ * A component's generic parameter is the value shape (e.g. `{ x: number }`),
+ * so the concrete typed-array constructor per key is not recoverable at the
+ * type level; each partition is exposed as the general {@link TypedArray}.
+ * Tag components (`null` schema) have no partitions.
+ */
+export type ComponentPartitions<T extends SchemaOrNull> = T extends null ? null : {
+  readonly [K in keyof T]: TypedArray;
+};
+
+/**
  * A StorageProxy with properties
  * @param T The Schema / Partition type of the StorageProxy
  */

@@ -138,9 +138,9 @@ export interface QueryConstructor {
   new (spec: QuerySpec): Query<UntypedQueryComponents>;
   /** Create a typed query from a keyed component-map specification. */
   new <
-    const TAll extends ComponentMap,
-    const TAny extends ComponentMap,
-    const TNone extends ComponentMap,
+    const TAll extends ComponentMap = Record<never, never>,
+    const TAny extends ComponentMap = Record<never, never>,
+    const TNone extends ComponentMap = Record<never, never>,
   >(spec: TypedQuerySpec<TAll, TAny, TNone>): Query<TAll & TAny>;
   /** Compose multiple queries into one combined query. */
   compose: typeof QueryRuntime.compose;
