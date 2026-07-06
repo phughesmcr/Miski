@@ -1,10 +1,3 @@
-/**
- * @module      constants
- * @description Constant values used throughout the library.
- * @copyright   2024 the Miski authors. All rights reserved.
- * @license     MIT
- */
-
 /** @returns a random string (base-36) */
 function randomString(): string {
   return Math.random().toString(36).substring(2, 15);

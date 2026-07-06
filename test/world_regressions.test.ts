@@ -151,6 +151,94 @@ Deno.test("query any and none clauses match through component bitfields", async 
   );
 });
 
+Deno.test("none-only queries include active entities in the root archetype", async () => {
+  const disabled = tagComponent("disabled");
+  const marker = tagComponent("marker");
+  const world = await createTestWorld([disabled, marker], 8);
+
+  const rootEntity = createEntity(world);
+  const disabledEntity = createEntity(world);
+  world.components.addToEntity(disabled, disabledEntity);
+
+  const active = new Query({ none: [disabled] });
+
+  assertEquals(
+    ids(world.entities.query(active)),
+    [rootEntity],
+    "Expected componentless active entities to match none-only queries",
+  );
+  assertEquals(
+    ids(world.archetypes.queryEntities(active)),
+    [rootEntity],
+    "Expected archetype query path to agree with entity query path for root entities",
+  );
+});
+
+Deno.test("destroyed entities are removed from archetype membership", async () => {
+  const disabled = tagComponent("disabled");
+  const marker = tagComponent("marker");
+  const world = await createTestWorld([disabled, marker], 8);
+
+  const entity = createEntity(world);
+  world.entities.destroy(entity);
+
+  assertEquals(world.archetypes.isEntityInRoot(entity), false, "Expected destroyed entity to leave root membership");
+  assertEquals(
+    ids(world.entities.query(new Query({ none: [disabled] }))),
+    [],
+    "Expected destroyed componentless entities not to match none-only queries",
+  );
+});
+
+Deno.test("public component writes reject invalid data instead of silently discarding it", async () => {
+  const position = vec2Component();
+  const renderable = tagComponent("renderable");
+  const renderableAsData = renderable as unknown as typeof position;
+  const world = await createTestWorld([position, renderable], 8);
+  const entity = createEntity(world);
+
+  assertThrows(
+    () => world.components.addToEntity(renderableAsData, entity, {}),
+    ComponentDataError,
+    "has no data storage",
+  );
+  assertThrows(
+    () => world.components.addToEntity(position, entity, { z: 1 } as never),
+    ComponentDataError,
+    'does not define data field "z"',
+  );
+  assertThrows(
+    () => world.components.addToEntity(position, entity, { constructor: 1 } as never),
+    ComponentDataError,
+    'does not define data field "constructor"',
+  );
+
+  world.components.addToEntity(position, entity, { x: 1, y: 2 });
+
+  assertThrows(
+    () => world.components.setEntityData(position, entity, { x: undefined } as never),
+    ComponentDataError,
+    'data field "x" cannot be undefined',
+  );
+  assertThrows(
+    () => world.components.setEntityData(position, entity, { constructor: 1 } as never),
+    ComponentDataError,
+    'does not define data field "constructor"',
+  );
+  const inheritedData = Object.create({ x: 99, z: 3 }) as Partial<{ x: number; y: number }>;
+  world.components.setEntityData(position, entity, inheritedData);
+  assertThrows(
+    () => world.components.addToEntities(renderableAsData, { count: 1, indices: [entity] }, {}),
+    ComponentDataError,
+    "has no data storage",
+  );
+  assertEquals(
+    world.components.getEntityData(position, entity),
+    { x: 1, y: 2 },
+    "Expected failed and inherited-property writes to be inert",
+  );
+});
+
 Deno.test("query registered after init sees existing matching entities", async () => {
   const position = vec2Component();
   const world = await createTestWorld([position], 8);
@@ -440,7 +528,7 @@ Deno.test("public component data APIs reject inactive, unregistered, tag, and no
     "has no data storage",
   );
   assertThrows(
-    () => world.components.setEntityData(tag, owner, {}),
+    () => world.components.setEntityData(tag as unknown as typeof position, owner, {}),
     ComponentDataError,
     "has no data storage",
   );

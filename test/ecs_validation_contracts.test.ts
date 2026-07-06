@@ -42,6 +42,11 @@ Deno.test("component, world, query, and system specifications reject invalid sha
     "Query specification object is invalid",
   );
   assertThrows(
+    () => new Query({ all: {}, any: {}, none: {} }),
+    SpecError,
+    "Query specification object is invalid",
+  );
+  assertThrows(
     () => new Query({ all: [position], none: [position] }),
     SpecError,
     "Query specification object is invalid",
@@ -53,6 +58,11 @@ Deno.test("component, world, query, and system specifications reject invalid sha
   );
   assertThrows(
     () => new Query({ any: [position], none: [position] }),
+    SpecError,
+    "Query specification object is invalid",
+  );
+  assertThrows(
+    () => new Query({ all: { same: position }, include: { same: vec2Component("velocity") } }),
     SpecError,
     "Query specification object is invalid",
   );
@@ -96,21 +106,11 @@ Deno.test("systems cannot be created for queries that expose no component instan
   );
 });
 
-Deno.test("system with empty typed query fails through existing system creation validation", async () => {
-  const disabled = tagComponent("disabled");
-  const world = await createTestWorld([disabled]);
-
+Deno.test("empty typed query fails at query construction", () => {
   assertThrows(
-    () =>
-      world.systems.create(
-        new System({
-          name: "emptyTypedSystem",
-          query: new Query({ all: {}, any: {}, none: {} }),
-          callback: () => {},
-        }),
-      ),
-    NoComponentsFoundError,
-    "System query returned no components",
+    () => new Query({ all: {}, any: {}, none: {} }),
+    SpecError,
+    "Query specification object is invalid",
   );
 });
 

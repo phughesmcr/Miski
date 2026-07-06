@@ -1,12 +1,5 @@
-/**
- * @module      StorageProxy
- * @description A StorageProxy is a wrapper around a component's storage for shorter access paths and change detection
- * @copyright   2024 the Miski authors. All rights reserved.
- * @license     MIT
- */
-
 import { EntityNotFoundError, formatEntityOutOfRange } from "@/errors.ts";
-import type { Entity } from "@/entity/entity-id.ts";
+import type { Entity } from "@/entity/entity.ts";
 import type { SchemaOrNull, StorageProxySpec, TypedArray } from "@/types/partitions.ts";
 import { hasOwnProperty } from "@/utils.ts";
 

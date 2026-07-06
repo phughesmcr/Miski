@@ -1,23 +1,14 @@
-/**
- * @module      Archetype
- * @description An Archetype is a collection of ComponentInstances which define the schema of an Entity.
- * @copyright   2024 the Miski authors. All rights reserved.
- * @license     MIT
- */
-
 import { BooleanArray } from "@phughesmcr/booleanarray";
 import { ID_KEY } from "@/constants.ts";
-import { createEntityArray, type EntityArray } from "@/entity/entity-array.ts";
-import type { Entity } from "@/entity/entity-id.ts";
-import type { EntityResultSink } from "@/entity/entity-result-sink.ts";
-import { isQueryMatch } from "@/query/match.ts";
+import { createEntityArray, type EntityArray } from "@/entity/entity.ts";
+import type { Entity } from "@/entity/entity.ts";
+import type { EntityResultSink } from "@/entity/entity.ts";
 import type { DynamicComponentInstance } from "@/types/component.ts";
 import type { QueryInstance } from "@/types/query.ts";
 
 const ENTERED_ACTIVE = 1 << 0;
 const ENTERED_LISTED = 1 << 1;
 const ENTITY_ACTIVE = 1 << 2;
-const ENTITY_LISTED = 1 << 3;
 const EXITED_ACTIVE = 1 << 4;
 const EXITED_LISTED = 1 << 5;
 
@@ -43,6 +34,12 @@ function setFlag(flags: Uint8Array, entity: Entity, mask: number, value: boolean
   } else {
     flags[entity]! &= ~mask;
   }
+}
+
+function isQueryMatch(target: BooleanArray, query: QueryInstance): boolean {
+  if (!target.containsAll(query.and)) return false;
+  if (target.intersects(query.not)) return false;
+  return query.or.isEmpty() || target.intersects(query.or);
 }
 
 /** An Archetype is a collection of ComponentInstances which define the schema of an Entity. */
@@ -71,11 +68,11 @@ export class Archetype {
   /** The world's entity capacity (used for entity tracking arrays) */
   #entityCapacity: number;
 
-  /** Entities that have ever inhabited this archetype, in first-entry order */
+  /** Dense currently-active entities in this archetype */
   #entityList: EntityArray;
 
-  /** Number of entries in the entity list */
-  #entityListCount: number;
+  /** Dense entity-list positions indexed by entity ID */
+  #entityPositions: EntityArray;
 
   /** Entity state flags packed by entity id. */
   #flags: Uint8Array;
@@ -124,7 +121,7 @@ export class Archetype {
     this.#enteredListCount = 0;
     this.#flags = new Uint8Array(capacity);
     this.#entityList = createEntityArray(capacity);
-    this.#entityListCount = 0;
+    this.#entityPositions = createEntityArray(capacity);
     this.#exitedCount = 0;
     this.#exitedList = createEntityArray(capacity);
     this.#exitedListCount = 0;
@@ -133,22 +130,11 @@ export class Archetype {
     this.removeTransitions = [];
   }
 
-  /** The maximum id number of the components this Archetype can represent */
-  get capacity(): number {
-    return this.bitfield.size;
-  }
-
-  /** The world's entity capacity */
-  get entityCapacity(): number {
-    return this.#entityCapacity;
-  }
-
   #activateEntity(entity: Entity): boolean {
     if (hasFlag(this.#flags, entity, ENTITY_ACTIVE)) return false;
-    if (!hasFlag(this.#flags, entity, ENTITY_LISTED)) {
-      setFlag(this.#flags, entity, ENTITY_LISTED, true);
-      this.#entityList[this.#entityListCount++] = entity;
-    }
+    const position = this.#populationCount;
+    this.#entityList[position] = entity;
+    this.#entityPositions[entity] = position;
     setFlag(this.#flags, entity, ENTITY_ACTIVE, true);
     if (!hasFlag(this.#flags, entity, ENTERED_ACTIVE)) {
       if (!hasFlag(this.#flags, entity, ENTERED_LISTED)) {
@@ -168,6 +154,15 @@ export class Archetype {
       setFlag(this.#flags, entity, ENTERED_ACTIVE, false);
       this.#enteredCount--;
     }
+    const removeIndex = this.#entityPositions[entity]!;
+    const lastIndex = this.#populationCount - 1;
+    const lastEntity = this.#entityList[lastIndex]!;
+    if (removeIndex !== lastIndex) {
+      this.#entityList[removeIndex] = lastEntity;
+      this.#entityPositions[lastEntity] = removeIndex;
+    }
+    this.#entityList[lastIndex] = 0;
+    this.#entityPositions[entity] = 0;
     setFlag(this.#flags, entity, ENTITY_ACTIVE, false);
     if (!hasFlag(this.#flags, entity, EXITED_ACTIVE)) {
       if (!hasFlag(this.#flags, entity, EXITED_LISTED)) {
@@ -237,7 +232,7 @@ export class Archetype {
    * @returns An iterator of Entities which inhabit the Archetype
    */
   getEntities(): IterableIterator<Entity> {
-    return activeListIterator(this.#entityList, this.#flags, ENTITY_ACTIVE, this.#entityListCount);
+    return activeListIterator(this.#entityList, this.#flags, ENTITY_ACTIVE, this.#populationCount);
   }
 
   /**
@@ -248,9 +243,8 @@ export class Archetype {
    */
   writeEntitiesIntoResult(out: EntityResultSink, visited?: BooleanArray): EntityResultSink {
     if (visited) {
-      for (let i = 0; i < this.#entityListCount; i++) {
+      for (let i = 0; i < this.#populationCount; i++) {
         const entity = this.#entityList[i]!;
-        if (!hasFlag(this.#flags, entity, ENTITY_ACTIVE)) continue;
         if (visited.get(entity)) continue;
         out.add(entity);
         visited.set(entity, true);
@@ -258,9 +252,8 @@ export class Archetype {
       return out;
     }
 
-    for (let i = 0; i < this.#entityListCount; i++) {
+    for (let i = 0; i < this.#populationCount; i++) {
       const entity = this.#entityList[i]!;
-      if (!hasFlag(this.#flags, entity, ENTITY_ACTIVE)) continue;
       out.add(entity);
     }
     return out;

@@ -1,16 +1,9 @@
-/**
- * @module      ArchetypeManager
- * @description The ArchetypeManager is responsible for managing Archetypes and their associated Entities.
- * @copyright   2024 the Miski authors. All rights reserved.
- * @license     MIT
- */
-
 import { BooleanArray } from "@phughesmcr/booleanarray";
 
-import { createEntityArray, type EntityArray } from "@/entity/entity-array.ts";
+import { createEntityArray, type EntityArray } from "@/entity/entity.ts";
 import { NotRegisteredError } from "@/errors.ts";
 import type { DynamicComponentInstance } from "@/types/component.ts";
-import type { Entity } from "@/entity/entity-id.ts";
+import type { Entity } from "@/entity/entity.ts";
 import type { QueryInstance } from "@/types/query.ts";
 import { Archetype } from "./archetype.ts";
 
@@ -399,6 +392,11 @@ export class ArchetypeManager {
     return this.#moveEntities(entities, count, instance, true);
   }
 
+  /** Add a newly-created active entity to the root archetype. */
+  createEntity(entity: Entity): Archetype {
+    return this.set(this.root, entity);
+  }
+
   /**
    * Move an entity once to the archetype reached by adding a component set.
    * @param entity - The entity to move
@@ -449,6 +447,17 @@ export class ArchetypeManager {
     return this;
   }
 
+  /** Remove a destroyed entity from whichever archetype currently owns it. */
+  destroyEntity(entity: Entity): this {
+    const archetype = this.entityArchetypes[entity];
+    if (archetype !== undefined) {
+      archetype.removeEntity(entity);
+      delete this.entityArchetypes[entity];
+      this.#queryMembershipDirty = true;
+    }
+    return this;
+  }
+
   /**
    * Get the Archetype associated with an Entity
    * @param entity The Entity
@@ -466,9 +475,6 @@ export class ArchetypeManager {
    */
   init(): this {
     this.entityArchetypes.length = this.#capacity;
-    for (let i = 0; i < this.#capacity; i++) {
-      this.entityArchetypes[i] = this.set(this.root, i);
-    }
     return this;
   }
 
@@ -515,15 +521,21 @@ export class ArchetypeManager {
    * @returns this
    */
   refresh(queries: MapIterator<QueryInstance>, retainTransitions: boolean = false): this {
-    // Convert queries iterator to a reusable array to avoid exhausting it.
-    const queryArray = this.#queryScratch;
-    queryArray.length = 0;
-    for (const query of queries) {
-      queryArray.push(query);
-    }
+    if (this.#queryMembershipDirty) {
+      // Convert queries iterator to a reusable array to avoid exhausting it.
+      const queryArray = this.#queryScratch;
+      queryArray.length = 0;
+      for (const query of queries) {
+        queryArray.push(query);
+      }
 
-    this.#rebuildQueryMembership(queryArray, retainTransitions, !retainTransitions);
-    this.#queryMembershipDirty = false;
+      this.#rebuildQueryMembership(queryArray, retainTransitions, !retainTransitions);
+      this.#queryMembershipDirty = false;
+    } else if (!retainTransitions) {
+      for (const archetype of this.registry.values()) {
+        archetype.refresh();
+      }
+    }
     return this;
   }
 

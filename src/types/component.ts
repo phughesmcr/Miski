@@ -1,16 +1,9 @@
-/**
- * @module      types/component
- * @description Component-related type definitions.
- * @copyright   2024 the Miski authors. All rights reserved.
- * @license     MIT
- */
-
 import type { Partition, Schema, SchemaProperty } from "@phughesmcr/partitionedbuffer";
 
 import type { $_COMPONENT_ID_KEY, $_PARTITION_KEY } from "@/constants.ts";
 import type { ComponentInstance } from "@/component/component-instance.ts";
 import type { Component } from "@/component/component.ts";
-import type { Entity } from "@/entity/entity-id.ts";
+import type { Entity } from "@/entity/entity.ts";
 import type { PartitionStorage, SchemaOrNull, StorageProxyWithProperties } from "@/types/partitions.ts";
 
 /** The stringified JSON format of an EntityManager */

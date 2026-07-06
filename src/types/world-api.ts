@@ -1,19 +1,12 @@
-/**
- * @module      types/world-api
- * @description Public World facade and lifecycle type definitions.
- * @copyright   2024 the Miski authors. All rights reserved.
- * @license     MIT
- */
-
 import type { Component } from "@/component/component.ts";
 import type { ComponentInstance } from "@/component/component-instance.ts";
-import type { Entity } from "@/entity/entity-id.ts";
+import type { Entity } from "@/entity/entity.ts";
 import type { Query } from "@/query/query.ts";
 import type { System } from "@/system/system.ts";
 import type { ComponentMap, DynamicComponent, DynamicComponentInstance } from "@/types/component.ts";
 import type { ComponentData, SchemaOrNull, SchemaValues } from "@/types/partitions.ts";
-import type { BorrowedEntityIterator, BorrowedEntityList, QueryEntityList } from "@/types/entity-views.ts";
-import type { SystemInstance, SystemRecord, TypedSystemCallback } from "@/types/system.ts";
+import type { BorrowedEntityIterator, BorrowedEntityList, QueryEntityList } from "@/entity/entity.ts";
+import type { SystemCallback, SystemInstance, SystemRecord, TypedSystemCallback } from "@/types/system.ts";
 
 /** The specification for a World */
 export type WorldSpec = {
@@ -135,8 +128,9 @@ export type WorldComponentAPI = {
    * @throws {NotRegisteredError} - If the component is not registered
    * @throws {EntityNotFoundError} - If the entity is inactive
    */
-  addToEntity<TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
-    component: Component<TValue, TStorage> | string,
+  addToEntity(component: Component<null, null> | string, entity: Entity): void;
+  addToEntity<TValue extends Exclude<SchemaOrNull, null>, TStorage extends Exclude<SchemaOrNull, null> = TValue>(
+    component: Component<TValue, TStorage>,
     entity: Entity,
     data?: Partial<SchemaValues<TValue>>,
   ): void;
@@ -151,8 +145,9 @@ export type WorldComponentAPI = {
    * @throws {NotRegisteredError} - If the component is not registered
    * @throws {EntityNotFoundError} - If any entity is inactive
    */
-  addToEntities<TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
-    component: Component<TValue, TStorage> | string,
+  addToEntities(component: Component<null, null> | string, entities: QueryEntityList): number;
+  addToEntities<TValue extends Exclude<SchemaOrNull, null>, TStorage extends Exclude<SchemaOrNull, null> = TValue>(
+    component: Component<TValue, TStorage>,
     entities: QueryEntityList,
     data?: Partial<SchemaValues<TValue>>,
   ): number;
@@ -203,10 +198,11 @@ export type WorldComponentAPI = {
    * @throws {ComponentDataError} - If the component has no data storage
    * @throws {ComponentOwnershipError} - If the active entity does not own the component
    */
+  getEntityData(component: string, entity: Entity): ComponentData<SchemaOrNull>;
   getEntityData<
     TValue extends SchemaOrNull,
     TStorage extends SchemaOrNull = TValue,
-  >(component: Component<TValue, TStorage> | string, entity: Entity): ComponentData<TValue>;
+  >(component: Component<TValue, TStorage>, entity: Entity): ComponentData<TValue>;
   /**
    * Read the data of a component from an entity without throwing
    * @param component - The component to read the data for
@@ -215,11 +211,12 @@ export type WorldComponentAPI = {
    * or the component is a tag component with no data storage
    * @throws {NotRegisteredError} - If the component is not registered
    */
+  readEntityData(component: string, entity: Entity): ComponentData<SchemaOrNull> | undefined;
   readEntityData<
     TValue extends SchemaOrNull,
     TStorage extends SchemaOrNull = TValue,
   >(
-    component: Component<TValue, TStorage> | string,
+    component: Component<TValue, TStorage>,
     entity: Entity,
   ): ComponentData<TValue> | undefined;
   /**
@@ -230,11 +227,16 @@ export type WorldComponentAPI = {
    * @returns `true` when data was written; `false` for inactive entities, non-owners, and tag components
    * @throws {NotRegisteredError} - If the component is not registered
    */
+  readEntityDataInto(
+    component: string,
+    entity: Entity,
+    out: Partial<ComponentData<SchemaOrNull>>,
+  ): boolean;
   readEntityDataInto<
     TValue extends SchemaOrNull,
     TStorage extends SchemaOrNull = TValue,
   >(
-    component: Component<TValue, TStorage> | string,
+    component: Component<TValue, TStorage>,
     entity: Entity,
     out: Partial<ComponentData<TValue>>,
   ): boolean;
@@ -251,20 +253,22 @@ export type WorldComponentAPI = {
    * @param component - The component to get the instance for
    * @returns The registered instance of the component or `undefined` if the component is not registered
    */
+  getInstance(component: string): DynamicComponentInstance | undefined;
   getInstance<
     TValue extends SchemaOrNull,
     TStorage extends SchemaOrNull = TValue,
-  >(component: Component<TValue, TStorage> | string): ComponentInstance<TValue, TStorage> | undefined;
+  >(component: Component<TValue, TStorage>): ComponentInstance<TValue, TStorage> | undefined;
   /**
    * Get a registered component instance
    * @param component - The component to get the instance for
    * @returns The registered instance of the component
    * @throws {NotRegisteredError} - If the component is not registered
    */
+  require(component: string): DynamicComponentInstance;
   require<
     TValue extends SchemaOrNull,
     TStorage extends SchemaOrNull = TValue,
-  >(component: Component<TValue, TStorage> | string): ComponentInstance<TValue, TStorage>;
+  >(component: Component<TValue, TStorage>): ComponentInstance<TValue, TStorage>;
   /**
    * Mark an owning data component entity as changed.
    * @throws {EntityNotFoundError} - If the entity is inactive
@@ -342,8 +346,8 @@ export type WorldComponentAPI = {
    * @throws {ComponentDataError} - If the component has no data storage
    * @throws {ComponentOwnershipError} - If the active entity does not own the component
    */
-  setEntityData<TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
-    component: Component<TValue, TStorage> | string,
+  setEntityData<TValue extends Exclude<SchemaOrNull, null>, TStorage extends Exclude<SchemaOrNull, null> = TValue>(
+    component: Component<TValue, TStorage>,
     entity: Entity,
     value: Partial<SchemaValues<TValue>>,
   ): void;
@@ -373,12 +377,13 @@ export type WorldSystemAPI = {
     TReturn,
   >(system: System<TComponents, TArgs, TReturn>): SystemInstance<TypedSystemCallback<TComponents, TArgs, TReturn>>;
   /** Get a system instance */
+  get(system: string): SystemInstance<SystemCallback> | undefined;
   get<
     TComponents extends ComponentMap,
     TArgs extends unknown[],
     TReturn,
   >(
-    system: System<TComponents, TArgs, TReturn> | string,
+    system: System<TComponents, TArgs, TReturn>,
   ): SystemInstance<TypedSystemCallback<TComponents, TArgs, TReturn>> | undefined;
   /** Check if a system is registered */
   has<

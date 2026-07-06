@@ -1,23 +1,8 @@
-/**
- * @module      Query
- * @description A Query is a collection of Components that can be used to find Entities
- * @copyright   2024 the Miski authors. All rights reserved.
- * @license     MIT
- */
-
 import { Component, isValidComponentArray } from "@/component/component.ts";
 import { SpecError } from "@/errors.ts";
 import type { ComponentInstances, ComponentMap, DynamicComponent } from "@/types/component.ts";
 import type { QuerySpec, TypedQuerySpec, UntypedQueryComponents } from "@/types/query.ts";
 import { isObject } from "@/utils.ts";
-
-/** Normalized query clauses as component arrays. */
-export type NormalizedQuerySpec = {
-  all: DynamicComponent[];
-  any: DynamicComponent[];
-  none: DynamicComponent[];
-  include: DynamicComponent[];
-};
 
 /** A normalized query component with the callback key authored by the user. */
 export type NormalizedQueryComponentEntry = {
@@ -36,29 +21,12 @@ type NormalizedQueryEntrySpec = {
 export type QueryInputSpec = QuerySpec | TypedQuerySpec<ComponentMap, ComponentMap, ComponentMap, ComponentMap>;
 
 /** Type guard for keyed component maps used in typed query specs. */
-export function isComponentMap(value: unknown): value is ComponentMap {
+function isComponentMap(value: unknown): value is ComponentMap {
   if (!isObject(value)) return false;
   for (const component of Object.values(value)) {
     if (!(component instanceof Component)) return false;
   }
   return true;
-}
-
-/** Normalize array- or map-based query specs into component arrays. */
-export function normalizeQuerySpec(
-  spec: QuerySpec | TypedQuerySpec<ComponentMap, ComponentMap, ComponentMap, ComponentMap>,
-): NormalizedQuerySpec {
-  const normalizeClause = (clause: DynamicComponent[] | ComponentMap | undefined): DynamicComponent[] => {
-    if (clause === undefined) return [];
-    return Array.isArray(clause) ? clause : Object.values(clause);
-  };
-
-  return {
-    all: normalizeClause(spec.all),
-    any: normalizeClause(spec.any),
-    none: normalizeClause(spec.none),
-    include: normalizeClause(spec.include),
-  };
 }
 
 /** Normalize array- or map-based query specs into keyed component entries. */
@@ -87,18 +55,49 @@ function entriesToComponentMap(entries: readonly NormalizedQueryComponentEntry[]
   const result: Record<string, DynamicComponent> = {};
   for (let i = 0; i < entries.length; i++) {
     const entry = entries[i]!;
-    let key = entry.key;
+    const key = entry.key;
     const existing = result[key];
     if (existing === entry.component) continue;
     if (existing !== undefined) {
-      key = `${key}:${entry.component.name}:${i}`;
-    }
-    while (result[key] !== undefined && result[key] !== entry.component) {
-      key = `${key}:${i}`;
+      throw new SpecError(`Duplicate query component key "${key}".`);
     }
     result[key] = entry.component;
   }
   return result;
+}
+
+function uniqueEntryComponents(entries: readonly NormalizedQueryComponentEntry[]): Readonly<DynamicComponent[]> {
+  const result: DynamicComponent[] = [];
+  for (let i = 0; i < entries.length; i++) {
+    const component = entries[i]!.component;
+    if (!result.includes(component)) result.push(component);
+  }
+  return Object.freeze(result);
+}
+
+function hasComponentOverlap(
+  left: readonly NormalizedQueryComponentEntry[],
+  right: readonly NormalizedQueryComponentEntry[],
+): boolean {
+  for (let i = 0; i < left.length; i++) {
+    const component = left[i]!.component;
+    for (let j = 0; j < right.length; j++) {
+      if (right[j]!.component === component) return true;
+    }
+  }
+  return false;
+}
+
+function hasDuplicateCallbackKeys(entries: NormalizedQueryEntrySpec): boolean {
+  const seen = new Set<string>();
+  for (const clause of [entries.all, entries.any, entries.include]) {
+    for (let i = 0; i < clause.length; i++) {
+      const key = clause[i]!.key;
+      if (seen.has(key)) return true;
+      seen.add(key);
+    }
+  }
+  return false;
 }
 
 /**
@@ -139,23 +138,52 @@ export const isValidQuerySpec = (spec: unknown): spec is QueryInputSpec => {
     }
   }
 
-  const normalized = normalizeQuerySpec(spec as QueryInputSpec);
+  const entries = normalizeQueryEntries(spec as QueryInputSpec);
   if (
-    normalized.all.length === 0 && normalized.any.length === 0 && normalized.none.length === 0 &&
-    include !== undefined
+    entries.all.length === 0 && entries.any.length === 0 && entries.none.length === 0
   ) return false;
-  if (normalized.all.some((component) => normalized.any.includes(component))) return false;
-  if (normalized.all.some((component) => normalized.none.includes(component))) return false;
-  if (normalized.all.some((component) => normalized.include.includes(component))) return false;
-  if (normalized.any.some((component) => normalized.none.includes(component))) return false;
-  if (normalized.any.some((component) => normalized.include.includes(component))) return false;
-  if (normalized.none.some((component) => normalized.include.includes(component))) return false;
+  if (hasComponentOverlap(entries.all, entries.any)) return false;
+  if (hasComponentOverlap(entries.all, entries.none)) return false;
+  if (hasComponentOverlap(entries.all, entries.include)) return false;
+  if (hasComponentOverlap(entries.any, entries.none)) return false;
+  if (hasComponentOverlap(entries.any, entries.include)) return false;
+  if (hasComponentOverlap(entries.none, entries.include)) return false;
+  if (hasDuplicateCallbackKeys(entries)) return false;
   return true;
 };
 
-/** A Query is a collection of Components that can be used to find Entities */
+/** A Query is a collection of Components that can be used to find Entities. */
+export interface Query<TComponents extends ComponentMap = UntypedQueryComponents> {
+  /** Carries the typed component map through to {@link System} inference. */
+  readonly $inferComponents: ComponentInstances<TComponents>;
+
+  /** `AND` - Gather entities as long as they have all these components */
+  readonly all: Readonly<DynamicComponent[]>;
+
+  /** `OR` - When present, gather entities that have at least one of these components */
+  readonly any: Readonly<DynamicComponent[]>;
+
+  /** `NOT` - Gather entities as long as they don't have these components */
+  readonly none: Readonly<DynamicComponent[]>;
+
+  /** Non-filtering component instances exposed to callbacks */
+  readonly include: Readonly<DynamicComponent[]>;
+
+  /** `all` entries keyed as authored for component callbacks. */
+  readonly allEntries: Readonly<NormalizedQueryComponentEntry[]>;
+
+  /** `any` entries keyed as authored for component callbacks. */
+  readonly anyEntries: Readonly<NormalizedQueryComponentEntry[]>;
+
+  /** `none` entries keyed as authored for validation/debugging only. */
+  readonly noneEntries: Readonly<NormalizedQueryComponentEntry[]>;
+
+  /** `include` entries keyed as authored for component callbacks. */
+  readonly includeEntries: Readonly<NormalizedQueryComponentEntry[]>;
+}
+
 /** Query implementation used by the {@link Query} constructor. */
-export class QueryRuntime<TComponents extends ComponentMap = UntypedQueryComponents> {
+class QueryRuntime<TComponents extends ComponentMap = UntypedQueryComponents> implements Query<TComponents> {
   /** Carries the typed component map through to {@link System} inference. */
   declare readonly $inferComponents: ComponentInstances<TComponents>;
 
@@ -220,12 +248,11 @@ export class QueryRuntime<TComponents extends ComponentMap = UntypedQueryCompone
     if (isValidQuerySpec(spec) === false) {
       throw new SpecError("Query specification object is invalid.");
     }
-    const normalized = normalizeQuerySpec(spec);
     const entries = normalizeQueryEntries(spec);
-    this.all = Object.freeze([...new Set(normalized.all)]);
-    this.any = Object.freeze([...new Set(normalized.any)]);
-    this.none = Object.freeze([...new Set(normalized.none)]);
-    this.include = Object.freeze([...new Set(normalized.include)]);
+    this.all = uniqueEntryComponents(entries.all);
+    this.any = uniqueEntryComponents(entries.any);
+    this.none = uniqueEntryComponents(entries.none);
+    this.include = uniqueEntryComponents(entries.include);
     this.allEntries = Object.freeze(entries.all);
     this.anyEntries = Object.freeze(entries.any);
     this.noneEntries = Object.freeze(entries.none);
@@ -233,16 +260,17 @@ export class QueryRuntime<TComponents extends ComponentMap = UntypedQueryCompone
   }
 }
 
-type QueryComponents<TQuery> = TQuery extends Query<infer TComponents extends ComponentMap> ? TComponents : never;
-
-type ComposedQueryComponents<TQueries extends readonly Query<ComponentMap>[]> =
-  UnionToIntersection<QueryComponents<TQueries[number]>> extends infer TComponents extends ComponentMap ? TComponents :
-    UntypedQueryComponents;
-
-type UnionToIntersection<TUnion> = (
-  TUnion extends unknown ? (value: TUnion) => void : never
-) extends (value: infer TIntersection) => void ? TIntersection :
+/** Extract the typed component map carried by a query. */
+export type QueryComponents<TQuery> = TQuery extends Query<infer TComponents extends ComponentMap> ? TComponents :
   never;
+
+/** Component map produced by composing several typed queries. */
+export type ComposedQueryComponents<TQueries extends readonly Query<ComponentMap>[]> =
+  QueryComponents<TQueries[number]> extends infer TUnion ?
+    (TUnion extends unknown ? (value: TUnion) => void : never) extends (value: infer TIntersection) => void ?
+      TIntersection extends ComponentMap ? TIntersection : UntypedQueryComponents :
+    UntypedQueryComponents :
+    UntypedQueryComponents;
 
 /** Typed query constructor with array- and map-based overloads. */
 export interface QueryConstructor {
@@ -256,11 +284,10 @@ export interface QueryConstructor {
     const TInclude extends ComponentMap = Record<never, never>,
   >(spec: TypedQuerySpec<TAll, TAny, TNone, TInclude>): Query<TAll & TAny & TInclude>;
   /** Compose multiple queries into one combined query. */
-  compose: typeof QueryRuntime.compose;
+  compose<const TQueries extends readonly Query<ComponentMap>[]>(
+    queries: TQueries,
+  ): Query<ComposedQueryComponents<TQueries>>;
 }
-
-/** A Query is a collection of Components that can be used to find Entities */
-export type Query<TComponents extends ComponentMap = UntypedQueryComponents> = QueryRuntime<TComponents>;
 
 /** A Query is a collection of Components that can be used to find Entities */
 export const Query: QueryConstructor = QueryRuntime;

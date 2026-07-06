@@ -1,10 +1,3 @@
-/**
- * @module      types/partitions
- * @description Partition and schema type definitions.
- * @copyright   2024 the Miski authors. All rights reserved.
- * @license     MIT
- */
-
 import type {
   Partition,
   PartitionStorage,
@@ -15,7 +8,7 @@ import type {
 } from "@phughesmcr/partitionedbuffer";
 
 import type { StorageProxy } from "@/component/storage-proxy.ts";
-import type { Entity } from "@/entity/entity-id.ts";
+import type { Entity } from "@/entity/entity.ts";
 
 export type { Partition, PartitionStorage, Schema, SchemaProperty, TypedArray, TypedArrayConstructor };
 
@@ -60,7 +53,7 @@ export type ComponentPartitions<T extends SchemaOrNull> = T extends null ? null 
 };
 
 /** The public write/proxy value shape for a component. */
-export type ComponentValue<T> = T extends null ? Record<never, number> : {
+export type ComponentValue<T> = T extends null ? never : {
   [K in keyof T]: T[K] extends SchemaProperty ? number : T[K] & number;
 };
 

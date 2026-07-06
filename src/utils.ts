@@ -1,10 +1,3 @@
-/**
- * @module      utils
- * @description Utility functions
- * @copyright   2024 the Miski authors. All rights reserved.
- * @license     MIT
- */
-
 import { isValidName as isValidNamePartitionedBuffer } from "@phughesmcr/partitionedbuffer";
 
 import { INVALID_NAMES, MAX_UINT32, MIN_UINT32 } from "./constants.ts";

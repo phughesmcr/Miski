@@ -1,15 +1,8 @@
-/**
- * @module      types/system
- * @description System-related type definitions.
- * @copyright   2024 the Miski authors. All rights reserved.
- * @license     MIT
- */
-
 import type { $_SYSTEM_DESTROY_KEY, $_SYSTEM_INIT_KEY } from "@/constants.ts";
 import type { Query } from "@/query/query.ts";
-import type { ComponentInstances, ComponentMap, ComponentRecord } from "@/types/component.ts";
+import type { ComponentInstances, ComponentMap, ComponentRecord, DynamicComponentInstance } from "@/types/component.ts";
 import type { SchemaOrNull } from "@/types/partitions.ts";
-import type { BorrowedEntityList } from "@/types/entity-views.ts";
+import type { BorrowedEntityList } from "@/entity/entity.ts";
 import type { UntypedQueryComponents } from "@/types/query.ts";
 import type { WorldContext } from "@/types/world-api.ts";
 
@@ -51,6 +44,12 @@ export type TypedSystemCallback<
   entities: BorrowedEntityList,
   ...args: TArgs
 ) => TReturn;
+
+/** Internal world bindings used while constructing a system instance. */
+export type SystemBindings = {
+  queryComponents(query: Query): Record<string, DynamicComponentInstance>;
+  queryEntityList(query: Query): BorrowedEntityList;
+};
 
 /**
  * The specification for a System.

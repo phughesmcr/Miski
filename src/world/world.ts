@@ -1,16 +1,9 @@
-/**
- * @module      World
- * @description The World is the central context in which all Entities and Components exist.
- * @copyright   2024 the Miski authors. All rights reserved.
- * @license     MIT
- */
-
 import { BooleanArray } from "@phughesmcr/booleanarray";
 
 import { VERSION } from "@/constants.ts";
 import { ArchetypeManager } from "@/archetype/archetype-manager.ts";
 import { type ComponentBundleCommitEntry, ComponentManager } from "@/component/component-manager.ts";
-import { createEntityArray, type EntityArray } from "@/entity/entity-array.ts";
+import { createEntityArray, type EntityArray } from "@/entity/entity.ts";
 import { EntityManager } from "@/entity/entity-manager.ts";
 import {
   CapacityError,
@@ -26,13 +19,13 @@ import {
 } from "@/errors.ts";
 import { QueryManager } from "@/query/query-manager.ts";
 import { SystemManager } from "@/system/system-manager.ts";
-import { isObject } from "@/utils.ts";
+import { hasOwnProperty, isObject } from "@/utils.ts";
 import type { Component } from "@/component/component.ts";
 import type { ComponentInstance } from "@/component/component-instance.ts";
 import type { Query } from "@/query/query.ts";
 import type { DynamicComponent } from "@/types/component.ts";
-import type { Entity } from "@/entity/entity-id.ts";
-import type { QueryEntityList } from "@/types/entity-views.ts";
+import type { Entity } from "@/entity/entity.ts";
+import type { QueryEntityList } from "@/entity/entity.ts";
 import type { ComponentData, SchemaOrNull, SchemaValues } from "@/types/partitions.ts";
 import type {
   ComponentBundle,
@@ -254,7 +247,7 @@ export class World {
       capacity: this.#entityManager.capacity,
       create: () => {
         this.#assertInitialized();
-        return this.#entityManager.create();
+        return this.#createEntity();
       },
       createWith: <const TBundle extends readonly ComponentBundleEntryInput[]>(
         bundle: TBundle & ComponentBundle<TBundle>,
@@ -264,7 +257,7 @@ export class World {
       },
       createOrThrow: () => {
         this.#assertInitialized();
-        const entity = this.#entityManager.create();
+        const entity = this.#createEntity();
         if (entity === undefined) {
           throw new CapacityError(`World is at capacity (${this.#entityManager.capacity} entities).`);
         }
@@ -314,7 +307,7 @@ export class World {
         this.#assertSystemRegistrationAvailable();
         return this.#systemManager.create(system);
       },
-      get: (system) => this.#systemManager.get(system),
+      get: ((system: string) => this.#systemManager.get(system)) as WorldSystemAPI["get"],
       has: (system) => this.#systemManager.has(system),
       destroy: (system) => {
         this.#assertSystemRegistrationAvailable();
@@ -413,9 +406,41 @@ export class World {
     TValue extends SchemaOrNull,
     TStorage extends SchemaOrNull = TValue,
   >(component: Component<TValue, TStorage> | string): ComponentInstance<TValue, TStorage> {
-    const instance = this.#componentManager.getInstance(component);
-    if (instance !== undefined) return instance;
+    const instance = typeof component === "string" ?
+      this.#componentManager.getInstance(component) :
+      this.#componentManager.getInstance(component);
+    if (instance !== undefined) return instance as ComponentInstance<TValue, TStorage>;
     throw new NotRegisteredError(formatComponentNotRegistered(componentDisplayName(component)));
+  }
+
+  /** Validate a public component data payload before any ownership/storage mutation. */
+  #validateComponentData<TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
+    instance: ComponentInstance<TValue, TStorage>,
+    data: unknown,
+  ): void {
+    if (data === undefined) return;
+    if (instance.storage === null) {
+      throw new ComponentDataError(`Component ${instance.type.name} has no data storage.`);
+    }
+    if (!isObject(data)) {
+      throw new TypeError(`Component data for "${instance.type.name}" must be an object.`);
+    }
+
+    const partitions = instance.storage.partitions as Record<string, unknown>;
+    const values = data as Record<string, unknown>;
+    for (const key in values) {
+      if (!hasOwnProperty(values, key)) continue;
+      if (!hasOwnProperty(partitions, key)) {
+        throw new ComponentDataError(`Component ${instance.type.name} does not define data field "${key}".`);
+      }
+      const value = values[key];
+      if (value === undefined) {
+        throw new ComponentDataError(`Component ${instance.type.name} data field "${key}" cannot be undefined.`);
+      }
+      if (typeof value !== "number") {
+        throw new ComponentDataError(`Component ${instance.type.name} data field "${key}" must be a number.`);
+      }
+    }
   }
 
   /** Preflight a borrowed dense entity list before an atomic batch mutation. */
@@ -476,12 +501,7 @@ export class World {
 
         let data: Partial<Record<string, number>> | undefined;
         if (entry.length === 2) {
-          if (instance.storage === null) {
-            throw new ComponentDataError(`Component ${instance.type.name} has no data storage.`);
-          }
-          if (entry[1] !== undefined && !isObject(entry[1])) {
-            throw new TypeError(`Bundle data for component "${instance.type.name}" must be an object.`);
-          }
+          this.#validateComponentData(instance, entry[1]);
           data = entry[1] as Partial<Record<string, number>> | undefined;
         }
 
@@ -514,18 +534,27 @@ export class World {
 
   /** Roll back a newly-created entity after bundle preflight fails. */
   #rollbackCreatedEntity(entity: Entity): void {
-    let changed = false;
+    let changed = this.#archetypeManager.getEntityArchetype(entity) !== undefined;
     const archetype = this.#archetypeManager.getEntityArchetype(entity);
     if (archetype) {
       for (const componentInstance of archetype.components) {
         changed ||= this.#componentManager.removeInstanceFromEntity(componentInstance, entity);
       }
     }
-    this.#archetypeManager.reset(entity);
+    this.#archetypeManager.destroyEntity(entity);
     if (this.#entityManager.isActive(entity)) {
       this.#entityManager.destroy(entity);
     }
     this.#invalidateCommittedTransition(changed);
+  }
+
+  /** Create an active entity and attach it to the root archetype. */
+  #createEntity(): Entity | undefined {
+    const entity = this.#entityManager.create();
+    if (entity === undefined) return undefined;
+    this.#archetypeManager.createEntity(entity);
+    this.#invalidateCommittedTransition(true);
+    return entity;
   }
 
   /** Create an entity and atomically attach a bundle. */
@@ -533,7 +562,7 @@ export class World {
     bundle: readonly ComponentBundleEntryInput[],
     throwOnCapacity: boolean,
   ): Entity | undefined {
-    const entity = this.#entityManager.create();
+    const entity = this.#createEntity();
     if (entity === undefined) {
       if (throwOnCapacity) {
         throw new CapacityError(`World is at capacity (${this.#entityManager.capacity} entities).`);
@@ -600,7 +629,9 @@ export class World {
     if (!this.#entityManager.isActive(entity)) {
       throw new EntityNotFoundError(formatEntityNotActive(entity));
     }
-    const changed = this.#commitAddComponent(this.#getRegisteredComponentInstance(component), entity, data);
+    const instance = this.#getRegisteredComponentInstance(component);
+    this.#validateComponentData(instance, data);
+    const changed = this.#commitAddComponent(instance, entity, data);
     this.#invalidateCommittedTransition(changed);
   }
 
@@ -614,24 +645,11 @@ export class World {
     data?: Partial<Record<keyof TValue, number>> | undefined,
   ): number {
     const instance = this.#getRegisteredComponentInstance(component);
+    this.#validateComponentData(instance, data);
     const count = this.#preflightBatchEntities(entities);
 
     try {
-      const maxEntities = this.#componentManager.getInstanceMaxEntities(instance);
-      if (maxEntities !== null) {
-        let newOwners = 0;
-        for (let i = 0; i < count; i++) {
-          if (!this.#componentManager.entityOwnsInstance(instance, this.#batchEntities[i]!)) {
-            newOwners++;
-          }
-        }
-        if (this.#componentManager.getInstanceOwnerCount(instance) + newOwners > maxEntities) {
-          throw new RangeError(
-            `Component "${instance.type.name}" can only be added to ${maxEntities} entities.`,
-          );
-        }
-      }
-
+      this.#componentManager.preflightAddInstanceToEntities(instance, this.#batchEntities, count);
       let changedCount = 0;
       for (let i = 0; i < count; i++) {
         if (this.#componentManager.addInstanceToEntity(instance, this.#batchEntities[i]!, data)) {
@@ -702,7 +720,9 @@ export class World {
     if (!this.#entityManager.isActive(entity)) {
       throw new EntityNotFoundError(formatEntityNotActive(entity));
     }
-    const instance = this.#componentManager.getInstance(component);
+    const instance = typeof component === "string" ?
+      this.#componentManager.getInstance(component) :
+      this.#componentManager.getInstance(component);
     if (instance === undefined) {
       throw new NotRegisteredError(formatComponentNotRegistered(componentDisplayName(component)));
     }
@@ -712,7 +732,7 @@ export class World {
     if (!this.#componentManager.entityOwnsInstance(instance, entity)) {
       throw new ComponentOwnershipError(`Entity ${entity} does not own component ${instance.type.name}.`);
     }
-    return instance;
+    return instance as ComponentInstance<TValue, TStorage>;
   }
 
   /** Get guarded component data for an active owning entity. */
@@ -735,7 +755,9 @@ export class World {
     entity: Entity,
     value: Partial<Record<keyof TValue, number>>,
   ): void {
-    this.#componentManager.setInstanceEntityData(this.#getGuardedDataComponent(component, entity), entity, value);
+    const instance = this.#getGuardedDataComponent(component, entity);
+    this.#validateComponentData(instance, value);
+    this.#componentManager.setInstanceEntityData(instance, entity, value);
   }
 
   /** Mark guarded component data changed for an active owning entity. */
@@ -801,8 +823,8 @@ export class World {
         this.#componentManager.removeInstanceFromEntity(componentInstance, entity);
       }
     }
-    // Reset the entity to the root archetype
-    this.#archetypeManager.reset(entity);
+    // Remove the inactive entity from archetype membership
+    this.#archetypeManager.destroyEntity(entity);
     // Destroy the entity itself
     this.#entityManager.destroy(entity);
     this.#invalidateCommittedTransition(true);
@@ -850,13 +872,19 @@ export class World {
         this.#archetypeManager.registerQuery(query, true);
       },
     );
-    this.#systemManager = new SystemManager(this, {
-      queryComponents: (query: Query) => this.#queryManager.components(query),
-      queryEntityList: (query: Query) => {
-        this.#assertInitialized();
-        return this.#queryManager.entityList(query);
+    this.#systemManager = new SystemManager(
+      this,
+      {
+        queryComponents: (query: Query) => this.#queryManager.components(query),
+        queryEntityList: (query: Query) => {
+          this.#assertInitialized();
+          return this.#queryManager.entityList(query);
+        },
       },
-    });
+      () => {
+        if (this.#state === "initialized") this.#enterErrorState();
+      },
+    );
 
     // Public APIs
     const APIs: WorldAPIResult = this.#constructAPIs();
@@ -877,7 +905,6 @@ export class World {
    */
   async init(): Promise<void> {
     assertWorldState("uninitialized", this.#state);
-    // TODO: ensure everything is in its correct initial state - however, fromJSON world's shouldn't set everything to initial??
     try {
       this.#archetypeManager.init();
       this.#state = "initialized";

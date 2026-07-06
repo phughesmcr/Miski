@@ -1,6 +1,6 @@
 /// <reference lib="deno.ns" />
 
-import { CapacityError, NotRegisteredError, Query, System } from "../mod.ts";
+import { CapacityError, ComponentDataError, NotRegisteredError, Query, System } from "../mod.ts";
 import type { Entity } from "../mod.ts";
 import { assert, assertEquals, assertStrictEquals, assertThrows } from "./helpers.ts";
 import { createEntity, createTestWorld, tagComponent, vec2Component } from "./fixtures.ts";
@@ -103,15 +103,19 @@ Deno.test("setEntityData applies partial updates and keeps omitted keys", async 
   assertEquals(world.components.getEntityData(position, entity), { x: 9, y: 4 }, "Expected partial update");
 });
 
-Deno.test("setEntityData ignores keys explicitly set to undefined", async () => {
+Deno.test("setEntityData rejects keys explicitly set to undefined", async () => {
   const position = vec2Component();
   const world = await createTestWorld([position]);
   const entity = createEntity(world);
 
   world.components.addToEntity(position, entity, { x: 3, y: 4 });
-  world.components.setEntityData(position, entity, { x: undefined, y: 7 });
+  assertThrows(
+    () => world.components.setEntityData(position, entity, { x: undefined, y: 7 }),
+    ComponentDataError,
+    'data field "x" cannot be undefined',
+  );
 
-  assertEquals(world.components.getEntityData(position, entity), { x: 3, y: 7 }, "Expected undefined keys skipped");
+  assertEquals(world.components.getEntityData(position, entity), { x: 3, y: 4 }, "Expected rejected write to be inert");
 });
 
 Deno.test("createOrThrow creates active entities", async () => {

@@ -1,10 +1,3 @@
-/**
- * @module      ComponentInstance
- * @description A component instance is the world-local representation of a component.
- * @copyright   2024 the Miski authors. All rights reserved.
- * @license     MIT
- */
-
 import type { ComponentInstanceSpec } from "@/types/component.ts";
 import type {
   ComponentPartitions,
@@ -12,7 +5,7 @@ import type {
   SchemaOrNull,
   StorageProxyWithProperties,
 } from "@/types/partitions.ts";
-import type { Entity } from "@/entity/entity-id.ts";
+import type { Entity } from "@/entity/entity.ts";
 import type { Component } from "./component.ts";
 
 /** A ComponentInstance is the world-local representation of a component */

@@ -5,7 +5,7 @@ import { BooleanArray } from "@phughesmcr/booleanarray";
 import { ArchetypeManager } from "../src/archetype/archetype-manager.ts";
 import { Archetype } from "../src/archetype/archetype.ts";
 import { ComponentManager } from "../src/component/component-manager.ts";
-import { ReusableEntityIterator } from "../src/entity/entity-list.ts";
+import { ReusableEntityIterator } from "../src/entity/entity.ts";
 import { EntityManager } from "../src/entity/entity-manager.ts";
 import { QueryCache } from "../src/query/query-cache.ts";
 import { QueryEntityResult, QueryResultPool } from "../src/query/query-pool.ts";

@@ -1,10 +1,3 @@
-/**
- * @module      types/query
- * @description Query-related type definitions.
- * @copyright   2024 the Miski authors. All rights reserved.
- * @license     MIT
- */
-
 import type { BooleanArray } from "@phughesmcr/booleanarray";
 
 import type { Archetype } from "@/archetype/archetype.ts";

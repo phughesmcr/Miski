@@ -1,18 +1,11 @@
-/**
- * @module      EntityManager
- * @description A simple entity manager for managing entities in a game or simulation
- * @copyright   2024 the Miski authors. All rights reserved.
- * @license     MIT
- */
-
 import { BitPool } from "@phughesmcr/bitpool";
 import { BooleanArray } from "@phughesmcr/booleanarray";
 
 import { EntityNotFoundError, formatEntityNotActive } from "@/errors.ts";
-import type { Entity } from "@/entity/entity-id.ts";
+import type { Entity } from "@/entity/entity.ts";
 import type { EntityManagerSerialized } from "@/types/component.ts";
 import { isPositiveUint32, isUint32, numberArrayFromString } from "@/utils.ts";
-import { ReusableEntityIterator } from "./entity-list.ts";
+import { ReusableEntityIterator } from "./entity.ts";
 
 /** An EntityManager is responsible for creating and destroying entities */
 export class EntityManager {

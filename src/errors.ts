@@ -1,11 +1,4 @@
-/**
- * @module      errors
- * @description Error classes used throughout the library.
- * @copyright   2024 the Miski authors. All rights reserved.
- * @license     MIT
- */
-
-import type { Entity } from "@/entity/entity-id.ts";
+import type { Entity } from "@/entity/entity.ts";
 
 /** Resolve a component reference to its display name */
 export function componentDisplayName(component: { readonly name: string } | string): string {

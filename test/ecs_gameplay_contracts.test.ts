@@ -31,7 +31,7 @@ Deno.test("world enforces entity capacity and reuses destroyed entity slots with
   );
   assertEquals(ids(world.entities.query(new Query({ all: [position] }))), [], "Expected destroy to remove components");
   assertEquals(ids(world.components.getOwners(position)), [], "Expected destroy to clear component ownership");
-  assert(world.archetypes.isEntityInRoot(second), "Expected destroyed entity to be reset to the root archetype");
+  assert(!world.archetypes.isEntityInRoot(second), "Expected destroyed entity to leave archetype membership");
 
   const replacement = createEntity(world);
   assertStrictEquals(
@@ -42,6 +42,13 @@ Deno.test("world enforces entity capacity and reuses destroyed entity slots with
   assert(
     !world.components.entityHas(position, replacement),
     "Expected recycled entity to start without stale components",
+  );
+
+  world.components.addToEntity(position, replacement);
+  assertEquals(
+    world.components.getEntityData(position, replacement),
+    { x: 0, y: 0 },
+    "Expected recycled component storage to be reinitialized when ownership is reacquired",
   );
 });
 
@@ -192,6 +199,27 @@ Deno.test("manual typed query and system expose keyed component instances in cal
   assertEquals(world.components.getEntityData(position, first), { x: 7, y: 10 }, "Expected typed manual system update");
 });
 
+Deno.test("equivalent query filters preserve distinct callback component keys", async () => {
+  const position = vec2Component();
+  const world = await createTestWorld([position]);
+
+  ids(world.entities.query(new Query({ all: { position } })));
+  const positionInstance = world.components.require(position);
+  let callbackRan = false;
+  const aliasedMovement = new System({
+    name: "aliasedMovement",
+    query: new Query({ all: { pos: position } }),
+    callback: (components) => {
+      callbackRan = true;
+      assertStrictEquals(components.pos, positionInstance, "Expected later query's authored key to be preserved");
+      assertEquals("position" in components, false, "Expected previous query's callback key not to leak");
+    },
+  });
+
+  world.systems.create(aliasedMovement)();
+  assert(callbackRan, "Expected aliased system callback to run");
+});
+
 Deno.test("systems receive matching component instances, borrowed entity lists, and frame arguments", async () => {
   const position = vec2Component();
   const velocity = vec2Component("velocity");
@@ -316,6 +344,89 @@ Deno.test("system lifecycle hooks run during world initialization and destructio
 
   assertEquals(calls, ["init", "callback", "destroy"], "Expected system hooks around callback execution");
   assertStrictEquals(world.state, "destroyed", "Expected world to enter destroyed state");
+});
+
+Deno.test("systems created after world initialization run their init hook", async () => {
+  const position = vec2Component();
+  const world = await createTestWorld([position]);
+  let initCount = 0;
+
+  world.systems.create(
+    new System({
+      name: "lateSystem",
+      query: new Query({ all: [position] }),
+      init: () => {
+        initCount++;
+      },
+      callback: () => {},
+    }),
+  );
+
+  assertEquals(initCount, 1, "Expected late-created system init hook to run immediately");
+});
+
+Deno.test("late async system init rejection moves the world into error state", async () => {
+  const position = vec2Component();
+  const world = await createTestWorld([position]);
+  const lateSystem = new System({
+    name: "lateAsyncFailure",
+    query: new Query({ all: [position] }),
+    init: async () => {
+      await Promise.resolve();
+      throw new Error("late init failed");
+    },
+    callback: () => {},
+  });
+
+  world.systems.create(lateSystem);
+  await Promise.resolve();
+  await Promise.resolve();
+
+  assertEquals(world.state, "error", "Expected async late init failure to poison the world");
+  assert(!world.systems.has(lateSystem), "Expected failed late-created system to be rolled back");
+  assertThrows(() => world.entities.create(), WorldStateError, "World has encountered an error");
+});
+
+Deno.test("late async system init rejection is ignored after the system is destroyed", async () => {
+  const position = vec2Component();
+  const world = await createTestWorld([position]);
+  let rejectInit!: (error: unknown) => void;
+  const initPromise = new Promise<void>((_, reject) => {
+    rejectInit = reject;
+  });
+  const lateSystem = new System({
+    name: "lateStaleAsyncFailure",
+    query: new Query({ all: [position] }),
+    init: () => initPromise,
+    callback: () => {},
+  });
+
+  world.systems.create(lateSystem);
+  await world.systems.destroy(lateSystem);
+  rejectInit(new Error("stale late init failed"));
+  await Promise.resolve();
+  await Promise.resolve();
+
+  assertEquals(world.state, "initialized", "Expected stale late init failure not to poison the world");
+  assert(!world.systems.has(lateSystem), "Expected destroyed late-created system to stay unregistered");
+  world.entities.createOrThrow();
+});
+
+Deno.test("late synchronous system init failure rolls back registration and poisons the world", async () => {
+  const position = vec2Component();
+  const world = await createTestWorld([position]);
+  const lateSystem = new System({
+    name: "lateSyncFailure",
+    query: new Query({ all: [position] }),
+    init: () => {
+      throw new Error("late sync init failed");
+    },
+    callback: () => {},
+  });
+
+  assertThrows(() => world.systems.create(lateSystem), Error, "late sync init failed");
+  assertEquals(world.state, "error", "Expected synchronous late init failure to poison the world");
+  assert(!world.systems.has(lateSystem), "Expected failed late-created system to be rolled back");
 });
 
 Deno.test("query compose supports reusable filters for renderable active movers", async () => {
@@ -786,7 +897,7 @@ Deno.test("high-volume game-loop smoke test keeps query results deterministic un
   }
 
   assertEquals(
-    ids(world.entities.query(activeMovers)),
+    ids(world.entities.query(activeMovers)).sort((a, b) => a - b),
     expectedMovers.slice(64),
     "Expected query cache invalidation to handle repeated component churn",
   );

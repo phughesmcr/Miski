@@ -119,16 +119,18 @@
  * world.components.setEntityData<Vec2>(positionComponent, entity1, { x: 15 });
  *
  * // Second way: type-unsafe and does not show the entity in changed tracking
- * const positionComponentInstance = world.components.require("position");
+ * const positionComponentInstance = world.components.require(positionComponent);
  * positionComponentInstance.partitions!.x[entity1] = 10;
  * positionComponentInstance.partitions!.y[entity1] = 20;
  * positionComponentInstance.markChanged(entity1);
  *
  * // Third way: Through the component proxy - type-safe and shows the entity in changed tracking
- * const positionComponentInstance: ComponentInstance<Vec2> = world.components.getInstance("position");
- * positionComponentInstance.proxy.entity = entity1;
- * positionComponentInstance.proxy.x = 10;
- * positionComponentInstance.proxy.y = 20;
+ * const positionComponentInstance = world.components.getInstance(positionComponent);
+ * if (positionComponentInstance) {
+ *   positionComponentInstance.proxy.entity = entity1;
+ *   positionComponentInstance.proxy.x = 10;
+ *   positionComponentInstance.proxy.y = 20;
+ * }
  * ```
  *
  * @example Get all the data-component Entities whose properties changed since the last `world.refresh()`
@@ -246,15 +248,15 @@ export {
   SpecError,
   WorldStateError,
 } from "@/errors.ts";
-export { QueryRuntime } from "@/query/query.ts";
-export { isComponentMap, isValidQuerySpec, normalizeQuerySpec, Query } from "@/query/query.ts";
+export { isValidQuerySpec, Query } from "@/query/query.ts";
 export { isValidSystemSpec, System } from "@/system/system.ts";
 export { World } from "@/world/world.ts";
 export { isValidWorldSpec } from "@/world/utils.ts";
 export { isValidName } from "@/utils.ts";
 export type {
+  ComposedQueryComponents,
   NormalizedQueryComponentEntry,
-  NormalizedQuerySpec,
+  QueryComponents,
   QueryConstructor,
   QueryInputSpec,
 } from "@/query/query.ts";

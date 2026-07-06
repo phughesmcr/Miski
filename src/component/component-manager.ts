@@ -1,21 +1,14 @@
-/**
- * @module      ComponentManager
- * @description A component manager is responsible for managing the components of a world.
- * @copyright   2024 the Miski authors. All rights reserved.
- * @license     MIT
- */
-
 import { BooleanArray } from "@phughesmcr/booleanarray";
 import { getPartitionByteSize, PartitionedBuffer } from "@phughesmcr/partitionedbuffer";
 
 import { $_COMPONENT_ID_KEY, $_PARTITION_KEY } from "@/constants.ts";
-import { createEntityArray, type EntityArray } from "@/entity/entity-array.ts";
-import { ReusableEntityIterator } from "@/entity/entity-list.ts";
+import { createEntityArray, type EntityArray } from "@/entity/entity.ts";
+import { ReusableEntityIterator } from "@/entity/entity.ts";
 import { componentDisplayName, formatComponentNotRegistered, NotRegisteredError } from "@/errors.ts";
 import type { DynamicComponent, DynamicComponentInstance } from "@/types/component.ts";
-import type { Entity } from "@/entity/entity-id.ts";
+import type { Entity } from "@/entity/entity.ts";
 import type { ComponentData, SchemaOrNull, TypedArray } from "@/types/partitions.ts";
-import { isObject } from "@/utils.ts";
+import { hasOwnProperty, isObject } from "@/utils.ts";
 import { ComponentInstance } from "./component-instance.ts";
 import { StorageProxy } from "./storage-proxy.ts";
 import type { Component } from "./component.ts";
@@ -39,6 +32,23 @@ export type ComponentBundleCommitEntry = {
   readonly data: Partial<Record<string, number>> | undefined;
 };
 
+type ComponentState = {
+  readonly instance: DynamicComponentInstance;
+  changed?: BooleanArray;
+  changedCount: number;
+  changedList?: EntityArray;
+  changedIterator?: ReusableEntityIterator;
+  changedPositions?: EntityArray;
+  readonly isUncappedTag: boolean;
+  readonly maxEntities: number;
+  ownerCount: number;
+  ownerList?: EntityArray;
+  ownerIterator?: ReusableEntityIterator;
+  ownerPositions?: EntityArray;
+  owners?: Uint8Array;
+  readonly usesSparseStorage: boolean;
+};
+
 /**
  * A component manager owns component registration, storage, ownership flags, owner iteration, and changed tracking.
  *
@@ -50,30 +60,10 @@ export class ComponentManager {
   #buffer: PartitionedBuffer;
   /** The maximum number of entities this manager can track */
   #capacity: number;
-  /** Changed state indexed by component instance id */
-  #changedById: (BooleanArray | undefined)[];
-  /** Number of changed entities indexed by component instance id */
-  #changedCountsById: number[];
-  /** Dense changed entity IDs indexed by component instance id */
-  #changedListsById: (EntityArray | undefined)[];
-  /** Reusable changed iterators indexed by component instance id */
-  #changedIteratorsById: (ReusableEntityIterator | undefined)[];
-  /** Dense changed-list positions indexed by component instance id, then entity ID */
-  #changedPositionsById: (EntityArray | undefined)[];
   /** Shared empty changed iterator returned for tag components */
   #emptyChangedIterator: ReusableEntityIterator;
   /** Shared empty owner iterator returned for components with no owners */
   #emptyOwnerIterator: ReusableEntityIterator;
-  /** Owner count indexed by component instance id */
-  #ownerCountsById: number[];
-  /** Dense owner entity IDs indexed by component instance id */
-  #ownerListsById: (EntityArray | undefined)[];
-  /** Reusable owner iterators indexed by component instance id */
-  #ownerIteratorsById: (ReusableEntityIterator | undefined)[];
-  /** Dense owner-list positions indexed by component instance id, then entity ID */
-  #ownerPositionsById: (EntityArray | undefined)[];
-  /** Byte ownership flags indexed by component instance id, then entity ID */
-  #ownersById: (Uint8Array | undefined)[];
   /** The registry of component instances */
   #registry: Map<DynamicComponent, DynamicComponentInstance>;
   /** The registry of component instances by name */
@@ -82,16 +72,8 @@ export class ComponentManager {
   #publicRegistry: Readonly<Record<string, DynamicComponentInstance>>;
   /** Component instances indexed by component definition id */
   #registryByComponentId: DynamicComponentInstance[];
-  /** Component instances indexed by component instance id */
-  #instancesById: DynamicComponentInstance[];
-  /** `true` for uncapped tag components, indexed by component id */
-  #isUncappedTagById: boolean[];
-  /** `true` for uncapped data components, indexed by component id */
-  #isUncappedDataById: boolean[];
-  /** Component max owner count, or 0 when uncapped, indexed by component id */
-  #maxEntitiesById: number[];
-  /** Whether component storage uses sparse non-typed-array partitions, indexed by component id */
-  #usesSparseStorageById: boolean[];
+  /** Component ownership and changed state indexed by component instance id */
+  #states: ComponentState[];
 
   /**
    * Create a new component manager.
@@ -105,27 +87,13 @@ export class ComponentManager {
     this.#buffer = new PartitionedBuffer(size, capacity);
     this.#capacity = capacity;
     // create the various registries
-    this.#changedById = [];
-    this.#changedCountsById = [];
-    this.#changedListsById = [];
-    this.#changedIteratorsById = [];
-    this.#changedPositionsById = [];
     this.#emptyChangedIterator = new ReusableEntityIterator(createEntityArray(0));
     this.#emptyOwnerIterator = new ReusableEntityIterator(createEntityArray(0));
-    this.#ownerCountsById = [];
-    this.#ownerListsById = [];
-    this.#ownerIteratorsById = [];
-    this.#ownerPositionsById = [];
-    this.#ownersById = [];
     this.#registry = new Map();
     this.#registryByName = {};
     this.#publicRegistry = {};
     this.#registryByComponentId = [];
-    this.#instancesById = [];
-    this.#isUncappedTagById = [];
-    this.#isUncappedDataById = [];
-    this.#maxEntitiesById = [];
-    this.#usesSparseStorageById = [];
+    this.#states = [];
     // register each component
     for (const component of components) {
       const maxEntities = component.maxEntities;
@@ -135,14 +103,17 @@ export class ComponentManager {
       const proxy = storage ?
         new StorageProxy({
           storage,
-          markChanged: (entity: Entity) => this.#markChanged(instanceId, entity),
+          markChanged: (entity: Entity) => {
+            const state = this.#states[instanceId];
+            if (state !== undefined) this.#markChanged(state, entity);
+          },
           capacity,
         }) :
         null;
       // register component instance
       const instance = new ComponentInstance({
         id: instanceId,
-        has: (entity: Entity): boolean => this.#ownersById[instanceId]?.[entity] === 1,
+        has: (entity: Entity): boolean => this.#states[instanceId]?.owners?.[entity] === 1,
         markChanged: (entity: Entity): boolean => this.#markInstanceIdChanged(instanceId, entity),
         proxy,
         storage,
@@ -158,13 +129,14 @@ export class ComponentManager {
           }
         }
       }
-      this.#changedCountsById[instance.id] = 0;
-      this.#ownerCountsById[instance.id] = 0;
-      this.#instancesById[instance.id] = instance;
-      this.#isUncappedTagById[instance.id] = storage === null && maxEntities === null;
-      this.#isUncappedDataById[instance.id] = storage !== null && maxEntities === null;
-      this.#maxEntitiesById[instance.id] = maxEntities ?? 0;
-      this.#usesSparseStorageById[instance.id] = usesSparseStorage;
+      this.#states[instance.id] = {
+        changedCount: 0,
+        instance,
+        isUncappedTag: storage === null && maxEntities === null,
+        maxEntities: maxEntities ?? 0,
+        ownerCount: 0,
+        usesSparseStorage,
+      };
       this.#registry.set(component, instance);
       this.#registryByName[component.name] = instance;
       this.#registryByComponentId[component[$_COMPONENT_ID_KEY]] = instance;
@@ -183,33 +155,33 @@ export class ComponentManager {
   }
 
   /** Get the dense list capacity needed for a component's owner/changed lists. */
-  #getListCapacity(instanceId: number): number {
-    const maxEntities = this.#maxEntitiesById[instanceId] ?? 0;
+  #getListCapacity(state: ComponentState): number {
+    const maxEntities = state.maxEntities;
     return Math.min(maxEntities === 0 ? this.#capacity : maxEntities, this.#capacity);
   }
 
   /** Allocate ownership tracking for a component only when it first gains an owner. */
-  #ensureOwnershipState(instanceId: number): Uint8Array {
-    let owners = this.#ownersById[instanceId];
+  #ensureOwnershipState(state: ComponentState): Uint8Array {
+    let owners = state.owners;
     if (owners !== undefined) return owners;
 
-    const ownerList = createEntityArray(this.#capacity, this.#getListCapacity(instanceId));
+    const ownerList = createEntityArray(this.#capacity, this.#getListCapacity(state));
     owners = new Uint8Array(this.#capacity);
-    this.#ownersById[instanceId] = owners;
-    this.#ownerListsById[instanceId] = ownerList;
-    this.#ownerPositionsById[instanceId] = createEntityArray(this.#capacity);
-    this.#ownerIteratorsById[instanceId] = new ReusableEntityIterator(ownerList);
+    state.owners = owners;
+    state.ownerList = ownerList;
+    state.ownerPositions = createEntityArray(this.#capacity);
+    state.ownerIterator = new ReusableEntityIterator(ownerList);
     return owners;
   }
 
   /** Append an entity to a component's dense owner list. */
-  #appendOwner(instanceId: number, entity: Entity): void {
-    const ownerCount = this.#ownerCountsById[instanceId] ?? 0;
-    const ownerList = this.#ownerListsById[instanceId]!;
-    const ownerPositions = this.#ownerPositionsById[instanceId]!;
+  #appendOwner(state: ComponentState, entity: Entity): void {
+    const ownerCount = state.ownerCount;
+    const ownerList = state.ownerList!;
+    const ownerPositions = state.ownerPositions!;
     ownerList[ownerCount] = entity;
     ownerPositions[entity] = ownerCount;
-    this.#ownerCountsById[instanceId] = ownerCount + 1;
+    state.ownerCount = ownerCount + 1;
   }
 
   /** Remove an entity from a dense list whose membership was already checked. */
@@ -230,77 +202,91 @@ export class ComponentManager {
    * Claim ownership for an entity when it is not already owned.
    * @returns `true` when ownership changed from unowned to owned
    */
-  #acquireOwnership(instanceId: number, entity: Entity, owners: Uint8Array): boolean {
+  #acquireOwnership(state: ComponentState, entity: Entity, owners: Uint8Array): boolean {
     const alreadyOwned = owners[entity] === 1;
     if (alreadyOwned) return false;
     owners[entity] = 1;
-    this.#appendOwner(instanceId, entity);
+    this.#appendOwner(state, entity);
     return true;
   }
 
   /** Allocate changed tracking for data components only when a write marks them changed. */
-  #ensureChangedState(instanceId: number): BooleanArray | undefined {
-    let changed = this.#changedById[instanceId];
+  #ensureChangedState(state: ComponentState): BooleanArray | undefined {
+    let changed = state.changed;
     if (changed !== undefined) return changed;
 
-    const instance = this.#instancesById[instanceId];
+    const instance = state.instance;
     if (instance === undefined || instance.storage === null) return undefined;
 
-    const changedList = createEntityArray(this.#capacity, this.#getListCapacity(instanceId));
+    const changedList = createEntityArray(this.#capacity, this.#getListCapacity(state));
     changed = new BooleanArray(this.#capacity);
-    this.#changedById[instanceId] = changed;
-    this.#changedListsById[instanceId] = changedList;
-    this.#changedPositionsById[instanceId] = createEntityArray(this.#capacity);
-    this.#changedIteratorsById[instanceId] = new ReusableEntityIterator(changedList);
+    state.changed = changed;
+    state.changedList = changedList;
+    state.changedPositions = createEntityArray(this.#capacity);
+    state.changedIterator = new ReusableEntityIterator(changedList);
     return changed;
   }
 
   /** Mark a data component changed once per entity per refresh window. */
-  #markChanged(instanceId: number, entity: Entity): void {
-    const changed = this.#ensureChangedState(instanceId);
+  #markChanged(state: ComponentState, entity: Entity): void {
+    const changed = this.#ensureChangedState(state);
     if (changed === undefined || changed.get(entity)) return;
 
-    const changedList = this.#changedListsById[instanceId];
-    const changedPositions = this.#changedPositionsById[instanceId];
+    const changedList = state.changedList;
+    const changedPositions = state.changedPositions;
     if (changedList === undefined || changedPositions === undefined) {
-      throw new Error(`Failed to find dense changed state for component id ${instanceId}.`);
+      throw new Error(`Failed to find dense changed state for component id ${state.instance.id}.`);
     }
 
-    const changedCount = this.#changedCountsById[instanceId] ?? 0;
+    const changedCount = state.changedCount;
     changed.set(entity, true);
     changedList[changedCount] = entity;
     changedPositions[entity] = changedCount;
-    this.#changedCountsById[instanceId] = changedCount + 1;
+    state.changedCount = changedCount + 1;
   }
 
   /** Mark a data component changed by instance id if the entity owns it. */
   #markInstanceIdChanged(instanceId: number, entity: Entity): boolean {
-    const instance = this.#instancesById[instanceId];
+    const state = this.#states[instanceId];
+    if (state === undefined) return false;
+    const instance = state.instance;
     if (instance === undefined || instance.storage === null) return false;
-    if (this.#ownersById[instanceId]?.[entity] !== 1) return false;
-    this.#markChanged(instanceId, entity);
+    if (state.owners?.[entity] !== 1) return false;
+    this.#markChanged(state, entity);
     return true;
   }
 
   /** Remove a data component from changed iteration if present. */
-  #unmarkChanged(instanceId: number, entity: Entity): void {
-    const changed = this.#changedById[instanceId];
+  #unmarkChanged(state: ComponentState, entity: Entity): void {
+    const changed = state.changed;
     if (changed === undefined || !changed.get(entity)) return;
 
-    const changedList = this.#changedListsById[instanceId];
-    const changedPositions = this.#changedPositionsById[instanceId];
+    const changedList = state.changedList;
+    const changedPositions = state.changedPositions;
     if (changedList === undefined || changedPositions === undefined) {
-      throw new Error(`Failed to find dense changed state for component id ${instanceId}.`);
+      throw new Error(`Failed to find dense changed state for component id ${state.instance.id}.`);
     }
 
-    const changedCount = this.#changedCountsById[instanceId] ?? 1;
-    this.#changedCountsById[instanceId] = this.#removeFromDenseList(
+    const changedCount = state.changedCount;
+    state.changedCount = this.#removeFromDenseList(
       changedList,
       changedPositions,
       changedCount,
       entity,
     );
     changed.set(entity, false);
+  }
+
+  /** Reset one entity's component storage slot to its default empty value. */
+  #clearEntityStorage(storage: Record<string, unknown>, entity: Entity): void {
+    for (const key in storage) {
+      const partition = storage[key];
+      if (ArrayBuffer.isView(partition as ArrayBufferView)) {
+        (partition as TypedArray)[entity] = 0;
+      } else if (partition !== undefined && partition !== null) {
+        Reflect.deleteProperty(partition, String(entity));
+      }
+    }
   }
 
   /**
@@ -327,16 +313,19 @@ export class ComponentManager {
     if (entity >= this.#capacity) {
       throw new RangeError(`Entity ${entity} is outside component capacity.`);
     }
-    const owners = this.#ensureOwnershipState(id);
+    const state = this.#states[id];
+    if (state === undefined) return false;
+    const owners = this.#ensureOwnershipState(state);
 
-    if (this.#isUncappedTagById[id] || (data === undefined && this.#isUncappedDataById[id])) {
-      return this.#acquireOwnership(id, entity, owners);
+    const storage = instance.storage;
+    if (state.isUncappedTag) {
+      return this.#acquireOwnership(state, entity, owners);
     }
 
     const alreadyOwned = owners[entity] === 1;
-    const maxEntities = this.#maxEntitiesById[id] ?? 0;
+    const maxEntities = state.maxEntities;
     if (!alreadyOwned && maxEntities !== 0) {
-      const ownerCount = this.#ownerCountsById[id] ?? 0;
+      const ownerCount = state.ownerCount;
       if (ownerCount >= maxEntities) {
         throw new RangeError(
           `Component "${instance.type.name}" can only be added to ${maxEntities} entities.`,
@@ -344,20 +333,23 @@ export class ComponentManager {
       }
     }
 
-    const ownershipChanged = this.#acquireOwnership(id, entity, owners);
+    const ownershipChanged = this.#acquireOwnership(state, entity, owners);
+    if (ownershipChanged && storage !== null) {
+      this.#clearEntityStorage(storage.partitions as Record<string, unknown>, entity);
+    }
 
-    const storage = instance.storage;
     const hasData = isObject(data);
     if (storage !== null && hasData) {
-      this.#markChanged(id, entity);
+      this.#markChanged(state, entity);
     }
 
     // Set data if provided
     if (hasData && storage !== null) {
       const partitions = storage.partitions as Record<string, TypedArray>;
       for (const key in data) {
+        if (!hasOwnProperty(data, key)) continue;
         const value = data[key];
-        if (value !== undefined && key in partitions) {
+        if (value !== undefined && hasOwnProperty(partitions, key)) {
           partitions[key]![entity] = value;
         }
       }
@@ -377,7 +369,7 @@ export class ComponentManager {
     TStorage extends SchemaOrNull = TValue,
   >(component: Component<TValue, TStorage> | string, entity: Entity): boolean {
     const instance = this.getInstance(component);
-    return instance ? this.#ownersById[instance.id]?.[entity] === 1 : false;
+    return instance ? this.#states[instance.id]?.owners?.[entity] === 1 : false;
   }
 
   /**
@@ -391,7 +383,7 @@ export class ComponentManager {
     TValue extends SchemaOrNull,
     TStorage extends SchemaOrNull = TValue,
   >(instance: ComponentInstance<TValue, TStorage>, entity: Entity): boolean {
-    return this.#ownersById[instance.id]?.[entity] === 1;
+    return this.#states[instance.id]?.owners?.[entity] === 1;
   }
 
   /**
@@ -413,16 +405,23 @@ export class ComponentManager {
    * @param component - The component to get the instance of
    * @returns The component instance or `undefined` if the component is not registered
    */
+  getInstance(component: string): DynamicComponentInstance | undefined;
   getInstance<
     TValue extends SchemaOrNull,
     TStorage extends SchemaOrNull = TValue,
-  >(component: Component<TValue, TStorage> | string): ComponentInstance<TValue, TStorage> | undefined {
+  >(component: Component<TValue, TStorage>): ComponentInstance<TValue, TStorage> | undefined;
+  getInstance<
+    TValue extends SchemaOrNull,
+    TStorage extends SchemaOrNull = TValue,
+  >(component: Component<TValue, TStorage> | string):
+    | ComponentInstance<TValue, TStorage>
+    | DynamicComponentInstance
+    | undefined;
+  getInstance(component: DynamicComponent | string): DynamicComponentInstance | undefined {
     if (typeof component === "string") {
-      return this.#registryByName[component] as ComponentInstance<TValue, TStorage> | undefined;
+      return this.#registryByName[component];
     }
-    return this.#registryByComponentId[component[$_COMPONENT_ID_KEY]] as
-      | ComponentInstance<TValue, TStorage>
-      | undefined;
+    return this.#registryByComponentId[component[$_COMPONENT_ID_KEY]];
   }
 
   /**
@@ -431,10 +430,16 @@ export class ComponentManager {
    * @returns The component instance
    * @throws {NotRegisteredError} If the component is not registered
    */
+  require(component: string): DynamicComponentInstance;
   require<
     TValue extends SchemaOrNull,
     TStorage extends SchemaOrNull = TValue,
-  >(component: Component<TValue, TStorage> | string): ComponentInstance<TValue, TStorage> {
+  >(component: Component<TValue, TStorage>): ComponentInstance<TValue, TStorage>;
+  require<
+    TValue extends SchemaOrNull,
+    TStorage extends SchemaOrNull = TValue,
+  >(component: Component<TValue, TStorage> | string): ComponentInstance<TValue, TStorage> | DynamicComponentInstance;
+  require(component: DynamicComponent | string): DynamicComponentInstance {
     const instance = this.getInstance(component);
     if (!instance) {
       throw new NotRegisteredError(formatComponentNotRegistered(componentDisplayName(component)));
@@ -464,9 +469,11 @@ export class ComponentManager {
   >(component: Component<TValue, TStorage> | string): IterableIterator<Entity> | undefined {
     const instance = this.getInstance(component);
     if (!instance) return;
-    const iterator = this.#changedIteratorsById[instance.id];
+    const state = this.#states[instance.id];
+    if (state === undefined) return;
+    const iterator = state.changedIterator;
     if (iterator === undefined) return this.#emptyChangedIterator.reset(0);
-    return iterator.reset(this.#changedCountsById[instance.id] ?? 0);
+    return iterator.reset(state.changedCount);
   }
 
   /**
@@ -480,26 +487,9 @@ export class ComponentManager {
   >(component: Component<TValue, TStorage> | string): IterableIterator<Entity> | undefined {
     const instance = this.getInstance(component);
     if (!instance) return;
-    return (this.#ownerIteratorsById[instance.id] ?? this.#emptyOwnerIterator).reset(
-      this.#ownerCountsById[instance.id] ?? 0,
-    );
-  }
-
-  /** Get the current owner count for a registered component instance. */
-  getInstanceOwnerCount<
-    TValue extends SchemaOrNull,
-    TStorage extends SchemaOrNull = TValue,
-  >(instance: ComponentInstance<TValue, TStorage>): number {
-    return this.#ownerCountsById[instance.id] ?? 0;
-  }
-
-  /** Get the owner limit for a registered component instance, or `null` when uncapped. */
-  getInstanceMaxEntities<
-    TValue extends SchemaOrNull,
-    TStorage extends SchemaOrNull = TValue,
-  >(instance: ComponentInstance<TValue, TStorage>): number | null {
-    const maxEntities = this.#maxEntitiesById[instance.id] ?? 0;
-    return maxEntities === 0 ? null : maxEntities;
+    const state = this.#states[instance.id];
+    if (state === undefined) return;
+    return (state.ownerIterator ?? this.#emptyOwnerIterator).reset(state.ownerCount);
   }
 
   /**
@@ -515,15 +505,34 @@ export class ComponentManager {
     }
     for (let i = 0; i < entries.length; i++) {
       const instance = entries[i]!.instance;
-      if (this.entityOwnsInstance(instance, entity)) continue;
-      const maxEntities = this.getInstanceMaxEntities(instance);
-      if (maxEntities === null) continue;
-      const ownerCount = this.getInstanceOwnerCount(instance);
-      if (ownerCount >= maxEntities) {
+      const state = this.#states[instance.id];
+      const maxEntities = state?.maxEntities ?? 0;
+      if (state === undefined || maxEntities === 0 || state.owners?.[entity] === 1) continue;
+      if (state.ownerCount >= maxEntities) {
         throw new RangeError(
           `Component "${instance.type.name}" can only be added to ${maxEntities} entities.`,
         );
       }
+    }
+  }
+
+  /** Preflight max-owner capacity for adding one component to a dense entity list. */
+  preflightAddInstanceToEntities<
+    TValue extends SchemaOrNull,
+    TStorage extends SchemaOrNull = TValue,
+  >(instance: ComponentInstance<TValue, TStorage>, entities: EntityArray, count: number): void {
+    const state = this.#states[instance.id];
+    const maxEntities = state?.maxEntities ?? 0;
+    if (state === undefined || maxEntities === 0) return;
+
+    let newOwners = 0;
+    for (let i = 0; i < count; i++) {
+      if (state.owners?.[entities[i]!] !== 1) newOwners++;
+    }
+    if (state.ownerCount + newOwners > maxEntities) {
+      throw new RangeError(
+        `Component "${instance.type.name}" can only be added to ${maxEntities} entities.`,
+      );
     }
   }
 
@@ -559,10 +568,10 @@ export class ComponentManager {
    */
   getEntityComponents(entity: Entity): DynamicComponentInstance[] {
     const components: DynamicComponentInstance[] = [];
-    for (let i = 0; i < this.#instancesById.length; i++) {
-      const instance = this.#instancesById[i]!;
-      if (this.#ownersById[i]?.[entity] === 1) {
-        components.push(instance);
+    for (let i = 0; i < this.#states.length; i++) {
+      const state = this.#states[i]!;
+      if (state.owners?.[entity] === 1) {
+        components.push(state.instance);
       }
     }
     return components;
@@ -639,9 +648,21 @@ export class ComponentManager {
    * @returns The component manager
    */
   refresh(): ComponentManager {
-    for (let i = 0; i < this.#changedById.length; i++) {
-      this.#changedById[i]?.clear();
-      this.#changedCountsById[i] = 0;
+    for (let i = 0; i < this.#states.length; i++) {
+      const state = this.#states[i]!;
+      const changed = state.changed;
+      const changedList = state.changedList;
+      const changedPositions = state.changedPositions;
+      const changedCount = state.changedCount;
+      if (changed !== undefined && changedList !== undefined && changedPositions !== undefined) {
+        for (let j = 0; j < changedCount; j++) {
+          const entity = changedList[j]!;
+          changed.set(entity, false);
+          changedList[j] = 0;
+          changedPositions[entity] = 0;
+        }
+      }
+      state.changedCount = 0;
     }
     return this;
   }
@@ -665,23 +686,25 @@ export class ComponentManager {
     entity: Entity,
   ): boolean {
     const id = instance.id;
-    const owners = this.#ownersById[id];
+    const state = this.#states[id];
+    if (state === undefined) return false;
+    const owners = state.owners;
     const wasOwned = owners?.[entity] === 1;
     if (!wasOwned) return false;
 
-    const ownerList = this.#ownerListsById[id]!;
-    const ownerPositions = this.#ownerPositionsById[id]!;
-    const ownerCount = this.#ownerCountsById[id] ?? 1;
-    this.#ownerCountsById[id] = this.#removeFromDenseList(ownerList, ownerPositions, ownerCount, entity);
+    const ownerList = state.ownerList!;
+    const ownerPositions = state.ownerPositions!;
+    const ownerCount = state.ownerCount;
+    state.ownerCount = this.#removeFromDenseList(ownerList, ownerPositions, ownerCount, entity);
 
     if (owners !== undefined && entity < owners.length) {
       owners[entity] = 0;
     }
     const storage = instance.storage;
     if (storage !== null) {
-      this.#unmarkChanged(id, entity);
+      this.#unmarkChanged(state, entity);
     }
-    if (wasOwned && storage !== null && this.#usesSparseStorageById[id]) {
+    if (wasOwned && storage !== null && state.usesSparseStorage) {
       const partitions = storage.partitions as Record<string, TypedArray>;
       for (const key in partitions) {
         const partition = partitions[key];
@@ -718,14 +741,16 @@ export class ComponentManager {
     if (!storage) return this;
     let changed = false;
     for (const key in value) {
+      if (!hasOwnProperty(value, key)) continue;
       const propertyValue = value[key];
-      if (propertyValue !== undefined && key in storage) {
+      if (propertyValue !== undefined && hasOwnProperty(storage, key)) {
         changed ||= storage[key]![entity] !== propertyValue;
         storage[key]![entity] = propertyValue;
       }
     }
-    if (changed && this.#ownersById[instance.id]?.[entity] === 1) {
-      this.#markChanged(instance.id, entity);
+    const state = this.#states[instance.id];
+    if (changed && state?.owners?.[entity] === 1) {
+      this.#markChanged(state, entity);
     }
     return this;
   }

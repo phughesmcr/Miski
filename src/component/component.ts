@@ -1,23 +1,3 @@
-/**
- * @module      Component
- * @description A component is a collection of properties that are stored in a world.
- * @copyright   2024 the Miski authors. All rights reserved.
- * @license     MIT
- *
- * @example
- * ```ts
- * type Vec2 = { x: number; y: number };
- * const component = Component<Vec2>({
- *   name: "position",
- *   schema: { x: Float32Array, y: Float32Array },
- *   maxEntities: null,
- * });
- *
- * // component can then be registered with a world
- * const world = new World({ components: [component], ... });
- * ```
- */
-
 import { isSchema, Partition, type PartitionSpec } from "@phughesmcr/partitionedbuffer";
 import { $_COMPONENT_ID_KEY, $_PARTITION_KEY } from "@/constants.ts";
 import type { ComponentPrivateMethods, ComponentSpec, DynamicComponent } from "@/types/component.ts";

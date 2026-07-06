@@ -1,7 +1,7 @@
-import { ReusableEntityIterator } from "@/entity/entity-list.ts";
-import { createEntityArray, type EntityArray } from "@/entity/entity-array.ts";
-import type { Entity } from "@/entity/entity-id.ts";
-import type { EntityResultSink } from "@/entity/entity-result-sink.ts";
+import { ReusableEntityIterator } from "@/entity/entity.ts";
+import { createEntityArray, type EntityArray } from "@/entity/entity.ts";
+import type { Entity } from "@/entity/entity.ts";
+import type { EntityResultSink } from "@/entity/entity.ts";
 
 /** Mutable pooled backing store for the public borrowed QueryEntityList view. */
 export class QueryEntityResult implements EntityResultSink {

@@ -1,16 +1,9 @@
-/**
- * @module      QueryManager
- * @description The QueryManager is responsible for creating, registering, and destroying queries.
- * @copyright   2024 the Miski authors. All rights reserved.
- * @license     MIT
- */
-
 import { ID_KEY } from "@/constants.ts";
 import { BooleanArray } from "@phughesmcr/booleanarray";
 import { componentDisplayName, formatComponentNotRegistered, NotRegisteredError } from "@/errors.ts";
 import type { Archetype } from "@/archetype/archetype.ts";
 import type { DynamicComponentInstance } from "@/types/component.ts";
-import type { Entity } from "@/entity/entity-id.ts";
+import type { Entity } from "@/entity/entity.ts";
 import type { QueryInstance } from "@/types/query.ts";
 import type { ComponentInstanceGetter, QueryManagerDependencies } from "@/types/world-api.ts";
 import { QueryCache } from "./query-cache.ts";
@@ -44,6 +37,18 @@ function addComponentsToLookup(
     const instance = instances[i]!;
     lookup[entries[i]!.key] = instance;
   }
+}
+
+function createBindingID(
+  entries: readonly NormalizedQueryComponentEntry[],
+  instances: readonly RegisteredComponentInstance[],
+): string {
+  let id = "";
+  for (let i = 0; i < instances.length; i++) {
+    const key = entries[i]!.key;
+    id += `${key.length}:${key}=${instances[i]!.id};`;
+  }
+  return id;
 }
 
 /**
@@ -81,8 +86,10 @@ function createQueryInstance(getInstances: ComponentInstanceGetter, size: number
   // Initialize empty set for matching archetypes
   const archetypes = new Set<Archetype>();
 
-  // turn the three arrays into a string
-  const id = `${and.toString()}:${or.toString()}:${not.toString()}:${include.toString()}`;
+  const bindings = `${createBindingID(query.allEntries, andInstances)}|${
+    createBindingID(query.anyEntries, orInstances)
+  }|${createBindingID(query.includeEntries, includeInstances)}`;
+  const id = `${and.toString()}:${or.toString()}:${not.toString()}:${include.toString()}:${bindings}`;
 
   return { and, or, not, include, archetypes, components, isDirty: true, id };
 }
@@ -189,6 +196,11 @@ export class QueryManager {
       query,
     );
     queryId = instance.id;
+    const existing = this.instancesByID.get(queryId);
+    if (existing) {
+      this.idsByQuery.set(query, queryId);
+      return existing;
+    }
 
     // Store mappings
     this.idsByQuery.set(query, queryId);

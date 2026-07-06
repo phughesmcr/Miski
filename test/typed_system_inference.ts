@@ -3,7 +3,17 @@
  * See test/README.md.
  */
 import { Component, Query, System, World } from "../mod.ts";
-import type { BorrowedEntityList, ComponentInstance, Entity, QuerySpec, SchemaOrNull, SystemCallback } from "../mod.ts";
+import type {
+  BorrowedEntityList,
+  ComponentData,
+  ComponentInstance,
+  DynamicComponentInstance,
+  Entity,
+  QuerySpec,
+  SchemaOrNull,
+  SystemCallback,
+  SystemInstance,
+} from "../mod.ts";
 import { tagComponent, type Vec2, vec2Component } from "./fixtures.ts";
 // @ts-expect-error AnySystemCallback is not exported from the public mod.ts surface.
 import type { AnySystemCallback } from "../mod.ts";
@@ -47,6 +57,35 @@ const manualTypedInstance = world.systems.create(manualTypedSystem);
 manualTypedInstance(1 / 60);
 // @ts-expect-error system instance arguments are inferred from the callback.
 manualTypedInstance("fast");
+
+const stringPosition = world.components.getInstance("position");
+expectType<DynamicComponentInstance | undefined>(stringPosition);
+// @ts-expect-error string component lookup returns a dynamic component instance, not a concrete schema.
+expectType<ComponentInstance<Vec2> | undefined>(stringPosition);
+
+const requiredStringPosition = world.components.require("position");
+expectType<DynamicComponentInstance>(requiredStringPosition);
+// @ts-expect-error required string lookup still cannot recover a concrete schema.
+expectType<ComponentInstance<Vec2>>(requiredStringPosition);
+
+const stringReadPosition = world.components.readEntityData("position", 0 as Entity);
+expectType<ComponentData<SchemaOrNull> | undefined>(stringReadPosition);
+// @ts-expect-error string component lookup cannot infer a schema for data reads.
+world.components.readEntityData<Vec2>("position", 0 as Entity);
+// @ts-expect-error string component lookup cannot infer a schema for throwing data reads.
+world.components.getEntityData<Vec2>("position", 0 as Entity);
+
+const namedSystem = world.systems.get("manualTypedMovement");
+expectType<SystemInstance<SystemCallback> | undefined>(namedSystem);
+
+// @ts-expect-error string component lookup cannot infer a schema for data writes.
+world.components.addToEntity("position", 0 as Entity, { x: 1, y: 2 });
+// @ts-expect-error string component lookup cannot infer a schema for batch data writes.
+world.components.addToEntities("position", { count: 0, indices: [] }, { x: 1, y: 2 });
+// @ts-expect-error tag components do not accept data payloads.
+world.components.addToEntity(renderable, 0 as Entity, {});
+// @ts-expect-error tag components do not have settable component data.
+world.components.setEntityData(renderable, 0 as Entity, {});
 
 const asyncSystem = new System({
   name: "asyncMovement",

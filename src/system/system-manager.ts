@@ -1,15 +1,8 @@
-/**
- * @module      SystemManager
- * @description The SystemManager is responsible for creating and destroying systems.
- * @copyright   2024 the Miski authors. All rights reserved.
- * @license     MIT
- */
-
 import { $_SYSTEM_DESTROY_KEY, $_SYSTEM_INIT_KEY } from "@/constants.ts";
 import { AlreadyRegisteredError, formatSystemNotRegistered, NotRegisteredError } from "@/errors.ts";
 import type { ComponentMap } from "@/types/component.ts";
-import type { SystemBindings } from "@/types/system-bindings.ts";
 import type { SystemCallback, SystemInstance, TypedSystemCallback } from "@/types/system.ts";
+import type { SystemBindings } from "@/types/system.ts";
 import type { UntypedQueryComponents } from "@/types/query.ts";
 import type { WorldContext } from "@/types/world-api.ts";
 import { createSystemInstance, type System } from "./system.ts";
@@ -21,6 +14,12 @@ type SystemRegistration = {
   name: string;
   system: System<UntypedQueryComponents, unknown[], unknown>;
 };
+
+type LifecycleErrorHandler = (error: unknown) => void;
+
+function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
+  return !!value && typeof (value as PromiseLike<unknown>).then === "function";
+}
 
 /** The SystemManager is responsible for creating, registering, initializing, and destroying systems. */
 export class SystemManager {
@@ -39,17 +38,21 @@ export class SystemManager {
   /** Frozen public registry view keyed by system name. */
   #publicRegistry: Readonly<Record<string, SystemInstance<SystemCallback>>>;
 
+  /** Notifies the owning world about asynchronous lifecycle failures. */
+  #onLifecycleError: LifecycleErrorHandler;
+
   /**
    * Create a new SystemManager
    * @param world The world to create the system manager in
    * @param bindings Internal bindings used to resolve query data for systems
    */
-  constructor(world: WorldContext, bindings: SystemBindings) {
+  constructor(world: WorldContext, bindings: SystemBindings, onLifecycleError: LifecycleErrorHandler = () => {}) {
     this.#world = world;
     this.#bindings = bindings;
     this.#records = {};
     this.#registry = {};
     this.#publicRegistry = Object.freeze({});
+    this.#onLifecycleError = onLifecycleError;
   }
 
   /** @returns a frozen record of all system instances by name */
@@ -60,6 +63,34 @@ export class SystemManager {
   /** Refresh the public registry view after cold-path system registry changes. */
   #refreshPublicRegistry(): void {
     this.#publicRegistry = Object.freeze({ ...this.#registry });
+  }
+
+  /** Remove a current record by identity so stale async failures cannot delete replacement systems. */
+  #unregisterRecord(record: SystemRegistration): boolean {
+    if (this.#records[record.name] !== record) return false;
+    delete this.#records[record.name];
+    delete this.#registry[record.name];
+    this.#refreshPublicRegistry();
+    return true;
+  }
+
+  /** Run init for a system registered after world initialization. */
+  #initLateRecord(record: SystemRegistration): void {
+    try {
+      const initResult = record.init(this.#world);
+      if (isPromiseLike(initResult)) {
+        void Promise.resolve(initResult).catch((error) => {
+          if (this.#unregisterRecord(record)) {
+            this.#onLifecycleError(error);
+          }
+        });
+      }
+    } catch (error) {
+      if (this.#unregisterRecord(record)) {
+        this.#onLifecycleError(error);
+      }
+      throw error;
+    }
   }
 
   /**
@@ -87,6 +118,9 @@ export class SystemManager {
     };
     this.#registry[system.name] = instance as unknown as SystemInstance<SystemCallback>;
     this.#refreshPublicRegistry();
+    if (this.#world.state === "initialized") {
+      this.#initLateRecord(this.#records[system.name]!);
+    }
     return instance;
   }
 
@@ -130,17 +164,31 @@ export class SystemManager {
    * @param system The system to get the instance of
    * @returns The system instance
    */
+  get(system: string): SystemInstance<SystemCallback> | undefined;
+  get<
+    TComponents extends ComponentMap,
+    TArgs extends unknown[],
+    TReturn,
+  >(system: System<TComponents, TArgs, TReturn>):
+    | SystemInstance<
+      TypedSystemCallback<TComponents, TArgs, TReturn>
+    >
+    | undefined;
   get<
     TComponents extends ComponentMap,
     TArgs extends unknown[],
     TReturn,
   >(system: string | System<TComponents, TArgs, TReturn>):
-    | SystemInstance<
-      TypedSystemCallback<TComponents, TArgs, TReturn>
-    >
+    | SystemInstance<SystemCallback>
+    | SystemInstance<TypedSystemCallback<TComponents, TArgs, TReturn>>
+    | undefined;
+  get(system: string | System<ComponentMap, unknown[], unknown>):
+    | SystemInstance<SystemCallback>
+    | SystemInstance<TypedSystemCallback<ComponentMap, unknown[], unknown>>
     | undefined {
     return this.#getRecord(system)?.instance as
-      | SystemInstance<TypedSystemCallback<TComponents, TArgs, TReturn>>
+      | SystemInstance<SystemCallback>
+      | SystemInstance<TypedSystemCallback<ComponentMap, unknown[], unknown>>
       | undefined;
   }
 

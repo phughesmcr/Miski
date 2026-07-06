@@ -1,12 +1,5 @@
-/**
- * @module      types
- * @description Public type re-exports for the library.
- * @copyright   2024 the Miski authors. All rights reserved.
- * @license     MIT
- */
-
-export type { Entity } from "@/entity/entity-id.ts";
-export type { EntityResultSink } from "@/entity/entity-result-sink.ts";
+export type { Entity } from "@/entity/entity.ts";
+export type { EntityResultSink } from "@/entity/entity.ts";
 export type {
   ComponentInstances,
   ComponentMap,
@@ -22,7 +15,7 @@ export type {
   BorrowedEntityIterator,
   BorrowedEntityList,
   QueryEntityList,
-} from "@/types/entity-views.ts";
+} from "@/entity/entity.ts";
 export type {
   ComponentData,
   ComponentPartitions,
@@ -41,9 +34,9 @@ export type {
   TypedArrayConstructor,
 } from "@/types/partitions.ts";
 export type { QueryInstance, QuerySpec, TypedQuerySpec, UntypedQueryComponents } from "@/types/query.ts";
-export type { SystemBindings } from "@/types/system-bindings.ts";
 export type {
   ParametersExceptFirstTwo,
+  SystemBindings,
   SystemCallback,
   SystemFunction,
   SystemInstance,
