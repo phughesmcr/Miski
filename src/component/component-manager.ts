@@ -48,6 +48,10 @@ type ComponentState = {
   ownerPositions?: EntityArray;
   owners?: Uint8Array;
   readonly usesSparseStorage: boolean;
+  /** Dense typed-array partition keys in stable registration order. */
+  readonly storageKeys: readonly string[];
+  /** Parallel typed-array columns for `storageKeys`. */
+  readonly storageColumns: readonly TypedArray[];
   /** Monotonic revision for membership and value changes. */
   revision: number;
   /** World revision token assigned on the last change. */
@@ -123,6 +127,9 @@ export class ComponentManager {
       const storage = this.#buffer.addPartition(component[$_PARTITION_KEY]);
       const instanceId = this.#registry.size;
       const coercionScratch: Record<string, TypedArray> = {};
+      const storageKeys: string[] = [];
+      const storageColumns: TypedArray[] = [];
+      let usesSparseStorage = false;
       if (storage !== null) {
         const partitions = storage.partitions as Record<string, TypedArray>;
         for (const key in partitions) {
@@ -130,6 +137,10 @@ export class ComponentManager {
           if (ArrayBuffer.isView(partition)) {
             const Ctor = partition.constructor as new (length: number) => TypedArray;
             coercionScratch[key] = new Ctor(1);
+            storageKeys.push(key);
+            storageColumns.push(partition);
+          } else if (partition !== undefined && partition !== null) {
+            usesSparseStorage = true;
           }
         }
       }
@@ -156,16 +167,6 @@ export class ComponentManager {
         type: component,
         getRevision: () => this.#states[instanceId]?.revision ?? 0,
       });
-      let usesSparseStorage = false;
-      if (storage !== null) {
-        const partitions = storage.partitions as Record<string, unknown>;
-        for (const key in partitions) {
-          if (!ArrayBuffer.isView(partitions[key] as ArrayBufferView)) {
-            usesSparseStorage = true;
-            break;
-          }
-        }
-      }
       this.#states[instance.id] = {
         changedCount: 0,
         instance,
@@ -173,6 +174,8 @@ export class ComponentManager {
         maxEntities: maxEntities ?? 0,
         ownerCount: 0,
         usesSparseStorage,
+        storageKeys,
+        storageColumns,
         revision: 0,
         lastChangedRevision: 0,
         coercionScratch,
@@ -355,6 +358,38 @@ export class ComponentManager {
   }
 
   /**
+   * Write schema columns from a data object.
+   *
+   * When `dataValidated` is true, unknown keys have already been rejected and values are known numbers, so the
+   * write path skips `hasOwnProperty` checks. New ownership zeros any schema key absent from `data`.
+   */
+  #writeEntityStorageData(
+    state: ComponentState,
+    componentName: string,
+    data: Record<string, number | undefined>,
+    slot: number,
+    ownershipChanged: boolean,
+    dataValidated: boolean,
+  ): void {
+    const keys = state.storageKeys;
+    const columns = state.storageColumns;
+    const scratch = state.coercionScratch ?? {};
+    for (let i = 0; i < keys.length; i++) {
+      const key = keys[i]!;
+      const column = columns[i]!;
+      const value = dataValidated ? data[key] : (hasOwnProperty(data, key) ? data[key] : undefined);
+      if (value === undefined) {
+        if (ownershipChanged) column[slot] = 0;
+        continue;
+      }
+      const scratchColumn = scratch[key];
+      column[slot] = scratchColumn === undefined ?
+        value :
+        canonicalizeStoredValue(componentName, key, value, scratchColumn);
+    }
+  }
+
+  /**
    * Add a registered component instance to an entity.
    *
    * This updates only component ownership/data/changed state. Callers that expose world-level mutations must handle
@@ -363,6 +398,8 @@ export class ComponentManager {
    * @param instance - The registered component instance
    * @param entity - The entity to add the component to
    * @param data - Optional data to set for the component
+   * @param slot - Optional precomputed storage slot
+   * @param dataValidated - When true, `data` was already schema-validated by the caller
    * @returns `true` if the component ownership changed
    * @internal
    */
@@ -374,6 +411,7 @@ export class ComponentManager {
     entity: Entity,
     data?: Partial<Record<keyof TValue, number>>,
     slot: number = entityIndex(entity),
+    dataValidated: boolean = false,
   ): boolean {
     const id = instance.id;
     if (slot >= this.#capacity) {
@@ -401,27 +439,37 @@ export class ComponentManager {
 
     const ownershipChanged = this.#acquireOwnership(state, owners, slot);
     if (ownershipChanged) this.#bumpRevision(state);
-    if (ownershipChanged && storage !== null) {
+
+    const hasData = isObject(data);
+    // Clear leftovers only when we cannot apply defaults during the write pass.
+    if (ownershipChanged && storage !== null && (!hasData || state.usesSparseStorage)) {
       this.#clearEntityStorage(storage.partitions as Record<string, unknown>, slot);
     }
 
-    const hasData = isObject(data);
     if (storage !== null && hasData) {
       this.#markChanged(state, entity, slot);
-    }
-
-    // Set data if provided
-    if (hasData && storage !== null) {
-      const partitions = storage.partitions as Record<string, TypedArray>;
-      const scratch = state.coercionScratch ?? {};
-      for (const key in data) {
-        if (!hasOwnProperty(data, key)) continue;
-        const value = data[key];
-        if (value !== undefined && hasOwnProperty(partitions, key)) {
-          const coerced = scratch[key] === undefined ?
-            value :
-            canonicalizeStoredValue(instance.type.name, key, value, scratch[key]!);
-          partitions[key]![slot] = coerced;
+      if (state.storageKeys.length > 0) {
+        this.#writeEntityStorageData(
+          state,
+          instance.type.name,
+          data as Record<string, number | undefined>,
+          slot,
+          ownershipChanged,
+          dataValidated,
+        );
+      } else {
+        // Sparse / object partitions: preserve the prior key-walk write path.
+        const partitions = storage.partitions as Record<string, TypedArray>;
+        const scratch = state.coercionScratch ?? {};
+        for (const key in data) {
+          if (!hasOwnProperty(data, key)) continue;
+          const value = (data as Record<string, number | undefined>)[key];
+          if (value !== undefined && hasOwnProperty(partitions, key)) {
+            const scratchColumn = scratch[key];
+            partitions[key]![slot] = scratchColumn === undefined ?
+              value :
+              canonicalizeStoredValue(instance.type.name, key, value, scratchColumn);
+          }
         }
       }
     }
@@ -623,6 +671,8 @@ export class ComponentManager {
           instance,
           entity,
           data as Partial<Record<PropertyKey, number>> | undefined,
+          entityIndex(entity),
+          true,
         )
       ) {
         added.push(instance);

@@ -604,9 +604,10 @@ export class World {
     instance: ComponentInstance<TValue, TStorage>,
     entity: Entity,
     data?: ComponentDataInput<TValue>,
+    dataValidated: boolean = false,
   ): boolean {
     const slot = entityIndex(entity);
-    const changed = this.#componentManager.addInstanceToEntity(instance, entity, data, slot);
+    const changed = this.#componentManager.addInstanceToEntity(instance, entity, data, slot, dataValidated);
     if (changed) {
       this.#archetypeManager.addComponent(entity, instance, slot);
     }
@@ -650,7 +651,7 @@ export class World {
     }
     const instance = this.#getRegisteredComponentInstance(component);
     this.#validateComponentData(instance, data);
-    const changed = this.#commitAddComponent(instance, entity, data);
+    const changed = this.#commitAddComponent(instance, entity, data, true);
     this.#invalidateCommittedTransition(changed);
   }
 
@@ -671,7 +672,15 @@ export class World {
       this.#componentManager.preflightAddInstanceToEntities(instance, this.#batchEntities, count);
       let changedCount = 0;
       for (let i = 0; i < count; i++) {
-        if (this.#componentManager.addInstanceToEntity(instance, this.#batchEntities[i]!, data)) {
+        if (
+          this.#componentManager.addInstanceToEntity(
+            instance,
+            this.#batchEntities[i]!,
+            data,
+            this.#batchSlots[i]!,
+            true,
+          )
+        ) {
           changedCount++;
         }
       }
