@@ -1,5 +1,14 @@
-export type { Entity } from "@/entity/entity.ts";
-export type { EntityResultSink } from "@/entity/entity.ts";
+export type {
+  BorrowedEntityIndices,
+  BorrowedEntityIterator,
+  BorrowedEntityList,
+  BorrowedSlotIndices,
+  Entity,
+  EntityResultSink,
+  QueryEntityList,
+  SlotIndex,
+} from "@/entity/entity.ts";
+export { asSlotIndex, entityGeneration, entityIndex, MAX_WORLD_CAPACITY, packEntity } from "@/entity/entity.ts";
 export type {
   ComponentInstances,
   ComponentMap,
@@ -10,12 +19,6 @@ export type {
   DynamicComponentInstance,
   EntityManagerSerialized,
 } from "@/types/component.ts";
-export type {
-  BorrowedEntityIndices,
-  BorrowedEntityIterator,
-  BorrowedEntityList,
-  QueryEntityList,
-} from "@/entity/entity.ts";
 export type {
   ComponentData,
   ComponentPartitions,
@@ -60,3 +63,13 @@ export type {
   WorldState,
   WorldSystemAPI,
 } from "@/types/world-api.ts";
+export type { CheckpointEntitySet, ComponentCheckpoint } from "@/checkpoint/checkpoint.ts";
+export type { WorldRollbackPoint } from "@/rollback/rollback.ts";
+export type {
+  CompiledComponentEntry,
+  CompiledComponentProperty,
+  CompiledComponentSchema,
+  ComponentsFromSchemaMap,
+  SchemaComponentMap,
+} from "@/schema/schema.ts";
+export type { EcsWorldConfig, SpawnSpec, StorageFromMap } from "@/world/ecs-world.ts";

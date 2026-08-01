@@ -1,21 +1,29 @@
+import { createEntityArray, createSlotArray, type EntityArray } from "@/entity/entity.ts";
 import { ReusableEntityIterator } from "@/entity/entity.ts";
-import { createEntityArray, type EntityArray } from "@/entity/entity.ts";
-import type { Entity } from "@/entity/entity.ts";
-import type { EntityResultSink } from "@/entity/entity.ts";
+import type { Entity, EntityResultSink, SlotIndex } from "@/entity/entity.ts";
 
 /** Mutable pooled backing store for the public borrowed QueryEntityList view. */
 export class QueryEntityResult implements EntityResultSink {
   #iterator: ReusableEntityIterator;
   count: number = 0;
+  /** Packed entity handles for identity. */
+  readonly entities: Uint32Array;
+  /**
+   * Slot indices for SoA storage access.
+   * Alias kept as `indices` for hot-loop partition indexing.
+   */
   readonly indices: EntityArray;
 
   constructor(size: number) {
-    this.indices = createEntityArray(size);
-    this.#iterator = new ReusableEntityIterator(this.indices);
+    this.entities = createEntityArray(size);
+    this.indices = createSlotArray(size);
+    this.#iterator = new ReusableEntityIterator(this.entities);
   }
 
-  add(entity: Entity): void {
-    this.indices[this.count++] = entity;
+  add(entity: Entity, slot: SlotIndex): void {
+    this.entities[this.count] = entity;
+    this.indices[this.count] = slot;
+    this.count++;
   }
 
   clear(): void {
@@ -27,14 +35,14 @@ export class QueryEntityResult implements EntityResultSink {
   }
 
   /**
-   * Iterate the valid entity IDs.
+   * Iterate the valid packed entity handles.
    *
    * Unlike {@link QueryEntityResult.iterate}, each call returns a fresh
    * iterator, so nested iteration of the same list is safe.
    */
   *[Symbol.iterator](): IterableIterator<Entity> {
     for (let i = 0; i < this.count; i++) {
-      yield this.indices[i]!;
+      yield this.entities[i]! as Entity;
     }
   }
 }

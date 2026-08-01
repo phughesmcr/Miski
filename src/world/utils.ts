@@ -1,5 +1,6 @@
 import { isValidComponentArray } from "@/component/component.ts";
 import { MIN_WORLD_CAPACITY } from "@/constants.ts";
+import { MAX_WORLD_CAPACITY } from "@/entity/entity.ts";
 import { WorldStateError } from "@/errors.ts";
 import type { WorldSpec, WorldState } from "@/types/world-api.ts";
 import { isObject, isPositiveUint32 } from "@/utils.ts";
@@ -21,7 +22,8 @@ function hasUniqueComponentNames(components: WorldSpec["components"]): boolean {
 export function isValidWorldSpec(spec: unknown): spec is WorldSpec {
   if (isObject(spec) === false) return false;
   const { capacity, components } = spec;
-  return isPositiveUint32(capacity) && capacity >= MIN_WORLD_CAPACITY && isValidComponentArray(components) &&
+  return isPositiveUint32(capacity) && capacity >= MIN_WORLD_CAPACITY && capacity <= MAX_WORLD_CAPACITY &&
+    isValidComponentArray(components) &&
     components.length > 0 && hasUniqueComponentNames(components);
 }
 

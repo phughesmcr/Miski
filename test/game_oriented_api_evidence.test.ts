@@ -5,6 +5,7 @@ import {
   Component,
   ComponentDataError,
   ComponentOwnershipError,
+  entityIndex,
   EntityNotFoundError,
   NotRegisteredError,
   Query,
@@ -101,10 +102,11 @@ Deno.test("include exposes optional component instances without filtering render
       const posY = renderComponents.pos.partitions.y;
       const facing = renderComponents.facing.partitions.dir;
       for (let i = 0; i < entities.count; i++) {
-        const entity = entities.indices[i]!;
-        const dir = renderComponents.facing.has(entity) ? facing[entity] : 0;
-        const hp = renderComponents.health.has(entity) ? renderComponents.health.partitions.hp[entity] : 0;
-        rendered.push(`${entity}:${posX[entity]},${posY[entity]}:${dir}:${hp}`);
+        const entity = entities.entities[i]!;
+        const slot = entities.indices[i]!;
+        const dir = renderComponents.facing.has(entity) ? facing[slot] : 0;
+        const hp = renderComponents.health.has(entity) ? renderComponents.health.partitions.hp[slot] : 0;
+        rendered.push(`${entity}:${posX[slot]},${posY[slot]}:${dir}:${hp}`);
       }
     },
   });
@@ -165,7 +167,7 @@ Deno.test("instance and world changed marking are ownership guarded and allocati
   const drawable = world.components.require(Drawable);
   world.refresh();
 
-  facing.partitions.dir[owner] = 3;
+  facing.partitions.dir[entityIndex(owner)] = 3;
   assertEquals(ids(world.components.getChanged(Facing)), [], "Expected direct partition write not to mark changed");
   assertStrictEquals(facing.markChanged(owner), true, "Expected owner data instance marking to succeed");
   assertStrictEquals(facing.markChanged(owner), true, "Expected duplicate owner marking to stay successful");

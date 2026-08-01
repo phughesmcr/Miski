@@ -1,7 +1,7 @@
 import { BooleanArray } from "@phughesmcr/booleanarray";
 import { ID_KEY } from "@/constants.ts";
-import { createEntityArray, type EntityArray } from "@/entity/entity.ts";
-import type { Entity } from "@/entity/entity.ts";
+import { createEntityArray, createSlotArray, type EntityArray } from "@/entity/entity.ts";
+import { asSlotIndex, type Entity, entityIndex } from "@/entity/entity.ts";
 import type { EntityResultSink } from "@/entity/entity.ts";
 import type { DynamicComponentInstance } from "@/types/component.ts";
 import type { QueryInstance } from "@/types/query.ts";
@@ -19,20 +19,20 @@ function* activeListIterator(
   count: number,
 ): IterableIterator<Entity> {
   for (let i = 0; i < count; i++) {
-    const entity = list[i]!;
-    if (hasFlag(flags, entity, activeMask)) yield entity;
+    const entity = list[i]! as Entity;
+    if (hasFlag(flags, entityIndex(entity), activeMask)) yield entity;
   }
 }
 
-function hasFlag(flags: Uint8Array, entity: Entity, mask: number): boolean {
-  return (flags[entity]! & mask) !== 0;
+function hasFlag(flags: Uint8Array, slot: number, mask: number): boolean {
+  return (flags[slot]! & mask) !== 0;
 }
 
-function setFlag(flags: Uint8Array, entity: Entity, mask: number, value: boolean): void {
+function setFlag(flags: Uint8Array, slot: number, mask: number, value: boolean): void {
   if (value) {
-    flags[entity]! |= mask;
+    flags[slot]! |= mask;
   } else {
-    flags[entity]! &= ~mask;
+    flags[slot]! &= ~mask;
   }
 }
 
@@ -121,7 +121,7 @@ export class Archetype {
     this.#enteredListCount = 0;
     this.#flags = new Uint8Array(capacity);
     this.#entityList = createEntityArray(capacity);
-    this.#entityPositions = createEntityArray(capacity);
+    this.#entityPositions = createSlotArray(capacity);
     this.#exitedCount = 0;
     this.#exitedList = createEntityArray(capacity);
     this.#exitedListCount = 0;
@@ -131,17 +131,17 @@ export class Archetype {
   }
 
   #activateEntity(entity: Entity): boolean {
-    if (hasFlag(this.#flags, entity, ENTITY_ACTIVE)) return false;
+    if (hasFlag(this.#flags, entityIndex(entity), ENTITY_ACTIVE)) return false;
     const position = this.#populationCount;
     this.#entityList[position] = entity;
-    this.#entityPositions[entity] = position;
-    setFlag(this.#flags, entity, ENTITY_ACTIVE, true);
-    if (!hasFlag(this.#flags, entity, ENTERED_ACTIVE)) {
-      if (!hasFlag(this.#flags, entity, ENTERED_LISTED)) {
-        setFlag(this.#flags, entity, ENTERED_LISTED, true);
+    this.#entityPositions[entityIndex(entity)] = position;
+    setFlag(this.#flags, entityIndex(entity), ENTITY_ACTIVE, true);
+    if (!hasFlag(this.#flags, entityIndex(entity), ENTERED_ACTIVE)) {
+      if (!hasFlag(this.#flags, entityIndex(entity), ENTERED_LISTED)) {
+        setFlag(this.#flags, entityIndex(entity), ENTERED_LISTED, true);
         this.#enteredList[this.#enteredListCount++] = entity;
       }
-      setFlag(this.#flags, entity, ENTERED_ACTIVE, true);
+      setFlag(this.#flags, entityIndex(entity), ENTERED_ACTIVE, true);
       this.#enteredCount++;
     }
     this.#populationCount++;
@@ -149,27 +149,27 @@ export class Archetype {
   }
 
   #deactivateEntity(entity: Entity): boolean {
-    if (!hasFlag(this.#flags, entity, ENTITY_ACTIVE)) return false;
-    if (hasFlag(this.#flags, entity, ENTERED_ACTIVE)) {
-      setFlag(this.#flags, entity, ENTERED_ACTIVE, false);
+    if (!hasFlag(this.#flags, entityIndex(entity), ENTITY_ACTIVE)) return false;
+    if (hasFlag(this.#flags, entityIndex(entity), ENTERED_ACTIVE)) {
+      setFlag(this.#flags, entityIndex(entity), ENTERED_ACTIVE, false);
       this.#enteredCount--;
     }
-    const removeIndex = this.#entityPositions[entity]!;
+    const removeIndex = this.#entityPositions[entityIndex(entity)]!;
     const lastIndex = this.#populationCount - 1;
-    const lastEntity = this.#entityList[lastIndex]!;
+    const lastEntity = this.#entityList[lastIndex]! as Entity;
     if (removeIndex !== lastIndex) {
       this.#entityList[removeIndex] = lastEntity;
-      this.#entityPositions[lastEntity] = removeIndex;
+      this.#entityPositions[entityIndex(lastEntity)] = removeIndex;
     }
     this.#entityList[lastIndex] = 0;
-    this.#entityPositions[entity] = 0;
-    setFlag(this.#flags, entity, ENTITY_ACTIVE, false);
-    if (!hasFlag(this.#flags, entity, EXITED_ACTIVE)) {
-      if (!hasFlag(this.#flags, entity, EXITED_LISTED)) {
-        setFlag(this.#flags, entity, EXITED_LISTED, true);
+    this.#entityPositions[entityIndex(entity)] = 0;
+    setFlag(this.#flags, entityIndex(entity), ENTITY_ACTIVE, false);
+    if (!hasFlag(this.#flags, entityIndex(entity), EXITED_ACTIVE)) {
+      if (!hasFlag(this.#flags, entityIndex(entity), EXITED_LISTED)) {
+        setFlag(this.#flags, entityIndex(entity), EXITED_LISTED, true);
         this.#exitedList[this.#exitedListCount++] = entity;
       }
-      setFlag(this.#flags, entity, EXITED_ACTIVE, true);
+      setFlag(this.#flags, entityIndex(entity), EXITED_ACTIVE, true);
       this.#exitedCount++;
     }
     this.#populationCount--;
@@ -197,7 +197,7 @@ export class Archetype {
     let added = 0;
     const end = start + count;
     for (let i = start; i < end; i++) {
-      const entity = entities[i]!;
+      const entity = entities[i]! as Entity;
       if (this.#activateEntity(entity)) added++;
     }
     return added;
@@ -244,17 +244,17 @@ export class Archetype {
   writeEntitiesIntoResult(out: EntityResultSink, visited?: BooleanArray): EntityResultSink {
     if (visited) {
       for (let i = 0; i < this.#populationCount; i++) {
-        const entity = this.#entityList[i]!;
-        if (visited.get(entity)) continue;
-        out.add(entity);
-        visited.set(entity, true);
+        const entity = this.#entityList[i]! as Entity;
+        if (visited.get(entityIndex(entity))) continue;
+        out.add(entity, asSlotIndex(entityIndex(entity)));
+        visited.set(entityIndex(entity), true);
       }
       return out;
     }
 
     for (let i = 0; i < this.#populationCount; i++) {
-      const entity = this.#entityList[i]!;
-      out.add(entity);
+      const entity = this.#entityList[i]! as Entity;
+      out.add(entity, asSlotIndex(entityIndex(entity)));
     }
     return out;
   }
@@ -298,19 +298,36 @@ export class Archetype {
   }
 
   /**
+   * Clear dense membership without removing the archetype from the registry.
+   * @internal
+   */
+  clearPopulation(): void {
+    this.#flags.fill(0);
+    this.#entityList.fill(0);
+    this.#entityPositions.fill(0);
+    this.#enteredList.fill(0);
+    this.#exitedList.fill(0);
+    this.#populationCount = 0;
+    this.#enteredCount = 0;
+    this.#enteredListCount = 0;
+    this.#exitedCount = 0;
+    this.#exitedListCount = 0;
+  }
+
+  /**
    * Clear entered/exited entities from a given Archetype
    * @returns The refreshed Archetype
    */
   refresh(): Archetype {
     for (let i = 0; i < this.#enteredListCount; i++) {
-      const entity = this.#enteredList[i]!;
-      setFlag(this.#flags, entity, ENTERED_ACTIVE, false);
-      setFlag(this.#flags, entity, ENTERED_LISTED, false);
+      const entity = this.#enteredList[i]! as Entity;
+      setFlag(this.#flags, entityIndex(entity), ENTERED_ACTIVE, false);
+      setFlag(this.#flags, entityIndex(entity), ENTERED_LISTED, false);
     }
     for (let i = 0; i < this.#exitedListCount; i++) {
-      const entity = this.#exitedList[i]!;
-      setFlag(this.#flags, entity, EXITED_ACTIVE, false);
-      setFlag(this.#flags, entity, EXITED_LISTED, false);
+      const entity = this.#exitedList[i]! as Entity;
+      setFlag(this.#flags, entityIndex(entity), EXITED_ACTIVE, false);
+      setFlag(this.#flags, entityIndex(entity), EXITED_LISTED, false);
     }
     this.#enteredCount = 0;
     this.#enteredListCount = 0;
@@ -340,7 +357,7 @@ export class Archetype {
     let removed = 0;
     const end = start + count;
     for (let i = start; i < end; i++) {
-      const entity = entities[i]!;
+      const entity = entities[i]! as Entity;
       if (this.#deactivateEntity(entity)) removed++;
     }
     return removed;

@@ -106,7 +106,7 @@ archetypeManager.refresh(archetypeQueryMap.values());
 
 const queryResult = new QueryEntityResult(MEDIUM_CAPACITY);
 for (let i = 0; i < MEDIUM_CAPACITY; i++) {
-  queryResult.add(i);
+  queryResult.add(i, i);
 }
 
 const bulkTransitionEntities = new Uint32Array(SMALL_CAPACITY);
@@ -119,7 +119,7 @@ const queryCache = new QueryCache(queryResultPool);
 const cacheId = "position:velocity:!sleeping";
 queryCache.getEntities(cacheId, () => {
   const result = queryResultPool.acquireEntityResult();
-  for (let i = 0; i < MEDIUM_CAPACITY; i += 2) result.add(i);
+  for (let i = 0; i < MEDIUM_CAPACITY; i += 2) result.add(i, i);
   return result;
 });
 queryCache.getComponents(cacheId, () => ({
@@ -422,7 +422,7 @@ Deno.bench({
   fn: () => {
     const result = queryResultPool.acquireEntityResult();
     for (let i = 0; i < MEDIUM_CAPACITY; i++) {
-      result.add(i);
+      result.add(i, i);
     }
     entitySink ^= result.count;
     queryResultPool.releaseEntityResult(result);
@@ -476,7 +476,7 @@ Deno.bench({
     queryCache.invalidate();
     const result = queryCache.getEntities(cacheId, () => {
       const next = queryResultPool.acquireEntityResult();
-      for (let i = 0; i < MEDIUM_CAPACITY; i += 2) next.add(i);
+      for (let i = 0; i < MEDIUM_CAPACITY; i += 2) next.add(i, i);
       return next;
     });
     entitySink ^= result.count;

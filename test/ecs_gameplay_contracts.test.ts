@@ -1,6 +1,6 @@
 /// <reference lib="deno.ns" />
 
-import { Component, EntityNotFoundError, Query, System, World, WorldStateError } from "../mod.ts";
+import { Component, entityIndex, EntityNotFoundError, Query, System, World, WorldStateError } from "../mod.ts";
 import { assert, assertEquals, assertRejects, assertStrictEquals, assertThrows, ids, listIds } from "./helpers.ts";
 import { createEntity, createTestWorld, tagComponent, type Vec2, vec2Component } from "./fixtures.ts";
 import type { BorrowedEntityIterator, BorrowedEntityList, ComponentInstance, Entity, QueryEntityList } from "../mod.ts";
@@ -35,9 +35,13 @@ Deno.test("world enforces entity capacity and reuses destroyed entity slots with
 
   const replacement = createEntity(world);
   assertStrictEquals(
-    replacement,
-    second,
-    "Expected entity IDs to be recycled for stable, allocation-free gameplay loops",
+    entityIndex(replacement),
+    entityIndex(second),
+    "Expected entity slots to be recycled for stable, allocation-free gameplay loops",
+  );
+  assert(
+    !world.entities.isActive(second),
+    "Expected the destroyed packed handle to become stale after slot reuse",
   );
   assert(
     !world.components.entityHas(position, replacement),
@@ -99,7 +103,7 @@ Deno.test("component proxy tracks only real writes and direct storage access rem
   assert(storage !== null && proxy !== null, "Expected component instance with proxy and storage");
 
   world.refresh();
-  storage.partitions.x[entity] = 99;
+  storage.partitions.x[entityIndex(entity)] = 99;
   assertEquals(
     ids(world.components.getChanged(position)),
     [],
@@ -185,11 +189,11 @@ Deno.test("manual typed query and system expose keyed component instances in cal
     query: new Query({ all: { position, velocity } }),
     callback: (components, entities, dt: number) => {
       for (let i = 0; i < entities.count; i++) {
-        const entity = entities.indices[i]!;
-        components.position.partitions.x[entity] = components.position.partitions.x[entity]! +
-          components.velocity.partitions.x[entity]! * dt;
-        components.position.partitions.y[entity] = components.position.partitions.y[entity]! +
-          components.velocity.partitions.y[entity]! * dt;
+        const slot = entities.indices[i]!;
+        components.position.partitions.x[slot] = components.position.partitions.x[slot]! +
+          components.velocity.partitions.x[slot]! * dt;
+        components.position.partitions.y[slot] = components.position.partitions.y[slot]! +
+          components.velocity.partitions.y[slot]! * dt;
       }
     },
   });
@@ -241,13 +245,13 @@ Deno.test("systems receive matching component instances, borrowed entity lists, 
       const velocityStore = velocityInstance.storage;
       assert(positionStore !== null && velocityStore !== null, "Expected movement components to have storage");
       for (let i = 0; i < entities.count; i++) {
-        const entity = entities.indices[i]!;
-        const nextX = (positionStore.partitions.x[entity] ?? Number.NaN) +
-          (velocityStore.partitions.x[entity] ?? Number.NaN) * dt;
-        const nextY = (positionStore.partitions.y[entity] ?? Number.NaN) +
-          (velocityStore.partitions.y[entity] ?? Number.NaN) * dt;
-        positionStore.partitions.x[entity] = nextX;
-        positionStore.partitions.y[entity] = nextY;
+        const slot = entities.indices[i]!;
+        const nextX = (positionStore.partitions.x[slot] ?? Number.NaN) +
+          (velocityStore.partitions.x[slot] ?? Number.NaN) * dt;
+        const nextY = (positionStore.partitions.y[slot] ?? Number.NaN) +
+          (velocityStore.partitions.y[slot] ?? Number.NaN) * dt;
+        positionStore.partitions.x[slot] = nextX;
+        positionStore.partitions.y[slot] = nextY;
       }
     },
   });
@@ -297,9 +301,9 @@ Deno.test("typed systems receive keyed component records and borrowed entity lis
       const velocityStorage = components.velocity.storage;
       assert(positionStorage !== null && velocityStorage !== null, "Expected data components to have storage");
       for (let i = 0; i < entities.count; i++) {
-        const entity = entities.indices[i]!;
-        positionStorage.partitions.x[entity] = (positionStorage.partitions.x[entity] ?? 0) +
-          (velocityStorage.partitions.x[entity] ?? 0) * dt;
+        const slot = entities.indices[i]!;
+        positionStorage.partitions.x[slot] = (positionStorage.partitions.x[slot] ?? 0) +
+          (velocityStorage.partitions.x[slot] ?? 0) * dt;
       }
     },
   });
@@ -683,7 +687,7 @@ Deno.test("world state guards make lifecycle misuse explicit", async () => {
   const position = vec2Component();
   const world = new World({ capacity: 8, components: [position] });
   const query = new Query({ all: [position] });
-  const emptyList = { count: 0, indices: new Uint32Array(0) };
+  const emptyList = { count: 0, entities: new Uint32Array(0), indices: new Uint32Array(0) };
 
   assertThrows(() => world.refresh(), WorldStateError, "World has not been initialized");
   assertThrows(() => world.entities.create(), WorldStateError, "World has not been initialized");

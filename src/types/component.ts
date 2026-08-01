@@ -14,6 +14,8 @@ export type EntityManagerSerialized = {
   capacity: number;
   /** The entities in the EntityManager */
   entities: string;
+  /** Optional per-slot generation counters */
+  generations?: string;
 };
 
 /** A component definition whose value/storage shape is only known dynamically. */
@@ -95,6 +97,8 @@ export type ComponentInstanceSpec<
   has(entity: Entity): boolean;
   /** Ownership-guarded changed marker */
   markChanged(entity: Entity): boolean;
+  /** Optional revision provider */
+  getRevision?: () => number;
   /** The StorageProxy of the ComponentInstance */
   proxy: TStorage extends null ? null : StorageProxyWithProperties<TValue>;
   /** The storage of the ComponentInstance */

@@ -55,12 +55,18 @@ Because Miski is designed to be used inside your own projects, we let you config
 
 * Modern modular ESNext data-oriented Typescript codebase
 * Fast, cache-friendly ArrayBuffer-based component data storage
+* Generational entity handles with slot-indexed SoA storage
 * Simple, developer-friendly, human-readable API
 * Ability to register more than 32 components in one world
 * Ability to limit the number of entities a component can be added to
 * Define components, systems and queries once, reuse them across multiple worlds
 * `AND`,`OR`,`NOT` operators in Queries
-* Dense zero-allocation `queryList` API for index-based hot loops and systems
+* Dense zero-allocation `queryList` API with packed `entities` + storage `indices` (slots)
+* `world.frame(fn)` tick helper that refreshes entered/exited/changed state
+* Typed `createEcsWorld` named-map bootstrap (`spawn`, `storage`, `frame`)
+* Component schema compile + stable FNV hash for tooling and saves
+* Component-subset checkpoints and speculative world rollback points
+* Value canonicalization through typed-array storage on public writes
 * Atomic bulk component add/remove APIs for spawn, load, and query-wide transitions
 * Opt-in snapshot helpers for tools, tests, and non-frame-critical code
 * `world.archetypes.queryEntered` & `world.archetypes.queryExited` methods
@@ -204,7 +210,7 @@ We can create a new world like so:
 
 ```typescript
 const world = new World({
-  capacity: 1000, // The maximum number of entities to allow in the world (minimum 8)
+  capacity: 1000, // The maximum number of entities to allow in the world (minimum 8, maximum 65536)
   components: [
     positionComponent, // We'll create this in the components section below
   ],
@@ -225,6 +231,27 @@ const world = new World({
 
 ```typescript
 world.refresh();
+// Or wrap a tick so refresh always runs:
+world.frame(() => {
+  // systems / mutations — read entered/exited/changed inside this callback
+});
+```
+
+For a typed named-map bootstrap:
+
+```typescript
+import { createEcsWorld } from "@phughesmcr/miski";
+
+const game = createEcsWorld({
+  capacity: 1024,
+  components: {
+    Position: { x: Float32Array, y: Float32Array },
+    Health: { hp: Uint16Array, maxHp: Uint16Array },
+  },
+});
+await game.init();
+const entity = game.spawn({ Position: { x: 0, y: 0 }, Health: { hp: 10, maxHp: 10 } });
+game.storage.Position.get(entity, "x");
 ```
 
 ### Components
@@ -393,7 +420,9 @@ There are two ways to do this:
 The first is quick but unsafe (no automatic change tracking and no ownership checks):
 
 ```typescript
-positionInstance.storage.partitions.x[entity] = 1;
+import { entityIndex } from "@phughesmcr/miski";
+
+positionInstance.storage.partitions.x[entityIndex(entity)] = 1;
 positionInstance.markChanged(entity); // ownership-guarded manual changed mark
 ```
 
@@ -422,10 +451,12 @@ performance-sensitive code that wants raw access without guards.
 For example:
 
 ```typescript
-// Direct storage access - no change tracking
-positionInstance.storage.partitions.x[101] = 1;
+import { entityIndex } from "@phughesmcr/miski";
 
-// Proxy access - with change tracking
+// Direct storage access - no change tracking (index by slot)
+positionInstance.storage.partitions.x[entityIndex(101)] = 1;
+
+// Proxy access - with change tracking (packed handle)
 positionInstance.proxy.entity = 444;
 positionInstance.proxy.x = 1;
 
@@ -467,16 +498,21 @@ Only unregistered components throw.
 
 ### Entities
 
-Entities are just integers. They are essentially indexes or pointers into various arrays in the world.
+Entities are packed generational handles (slot index + generation). Destroying and recreating an entity reuses the slot
+but invalidates the old handle via `world.entities.isActive(entity)`.
+
+Use `entityIndex(entity)` / `entityGeneration(entity)` / `packEntity(slot, gen)` when you need to inspect handles.
+Prefer query-list `indices` (slots) for SoA partition access, and `entities` (packed handles) for identity APIs.
 
 ```typescript
 // Create (will return undefined if no entities are available)
 const entity = world.entities.create();
 // Destroy
 world.entities.destroy(entity);
-// Test if entity is active in the world
+// Test if entity is active in the world (generation-aware)
 world.entities.isActive(entity);
 // Test if an entity is valid in the world
+world.entities.isEntity(entity);
 world.entities.isEntity(4235); // will return false if the world capacity is 1000 as above
 // Get the number of active entities in a world
 const active = world.entities.getActiveCount();
@@ -508,19 +544,21 @@ const components = world.components.query(positionQuery);
 const entities = world.entities.query(positionQuery);
 ```
 
-For performance-sensitive loops, use `queryList` to get a dense reusable view of matching entity IDs:
+For performance-sensitive loops, use `queryList` to get a dense reusable view of packed handles and slots:
 
 ```typescript
 const result = world.entities.queryList(positionQuery);
 for (let i = 0; i < result.count; i++) {
-  const entity = result.indices[i];
-  positionX[entity] += 1;
+  const entity = result.entities[i]; // packed handle (identity APIs)
+  const slot = result.indices[i]; // storage slot (SoA partitions)
+  positionX[slot] += 1;
+  world.entities.isActive(entity);
 }
 ```
 
 `queryList` returns a borrowed, pooled view, not a stable snapshot. The result is valid only until the next
-world mutation, query invalidation, or `world.refresh()`. Read `indices` only for entries `0 <= i < count`;
-callers that need stable entity IDs must explicitly opt into allocation:
+world mutation, query invalidation, or `world.refresh()`. Read `entities` / `indices` only for entries
+`0 <= i < count`; callers that need stable entity IDs must explicitly opt into allocation:
 
 ```typescript
 const snapshot = world.entities.querySnapshot(positionQuery);
@@ -571,9 +609,9 @@ const movementSystem = new System({
     const velocityStorage = velocity.storage.partitions;
 
     for (let i = 0; i < entities.count; i++) {
-      const entity = entities.indices[i];
-      positionStorage.x[entity] += velocityStorage.x[entity] * dt;
-      positionStorage.y[entity] += velocityStorage.y[entity] * dt;
+      const slot = entities.indices[i];
+      positionStorage.x[slot] += velocityStorage.x[slot] * dt;
+      positionStorage.y[slot] += velocityStorage.y[slot] * dt;
     }
   },
 });
@@ -592,7 +630,8 @@ to:
 
 ```typescript
 for (let i = 0; i < entities.count; i++) {
-  const entity = entities.indices[i];
+  const entity = entities.entities[i]; // packed handle
+  const slot = entities.indices[i]; // SoA slot
   // ...
 }
 ```
@@ -617,9 +656,10 @@ const renderSystem = new System({
     components.facing; // ComponentInstance<FacingValue, FacingStorage>
     // components.hidden is intentionally unavailable here.
     for (let i = 0; i < entities.count; i++) {
-      const entity = entities.indices[i];
+      const entity = entities.entities[i];
+      const slot = entities.indices[i];
       if (components.facing.has(entity)) {
-        const dir = components.facing.partitions.dir[entity];
+        const dir = components.facing.partitions.dir[slot];
       }
       // render...
     }
@@ -641,9 +681,9 @@ const positionSystem = new System({
     const position = components.position as ComponentInstance<Vec2>;
     const { x, y } = position.storage.partitions;
     for (let i = 0; i < entities.count; i++) {
-      const entity = entities.indices[i];
-      x[entity] += 1;
-      y[entity] += 1;
+      const slot = entities.indices[i];
+      x[slot] += 1;
+      y[slot] += 1;
     }
   },
 });
@@ -661,6 +701,35 @@ Once registered, systems are then called like normal functions:
 systemInstance();
 ```
 
+### Checkpoints, rollback, and schema tooling
+
+Capture a component subset for save/debug tooling:
+
+```typescript
+const checkpoint = world.captureCheckpoint([entity], positionComponent, healthComponent);
+world.applyCheckpoint(checkpoint);
+```
+
+Speculative simulation uses a full-world rollback point:
+
+```typescript
+import { captureWorldRollbackPoint, commitWorldRollbackPoint, restoreWorldRollbackPoint } from "@phughesmcr/miski";
+
+const point = captureWorldRollbackPoint(world);
+// mutate...
+restoreWorldRollbackPoint(world, point); // or commitWorldRollbackPoint(world, point)
+```
+
+Schema helpers compile storage shapes and produce a stable FNV hash:
+
+```typescript
+import { compileComponentSchema, componentSchemaHash } from "@phughesmcr/miski";
+
+const schema = compileComponentSchema({ x: Float32Array, y: Float32Array });
+const hash = componentSchemaHash(schema);
+```
+
+`world.queryRevision(query)` returns a monotonically increasing token that bumps when any component in the query is written.
 
 ## Contributing
 
@@ -715,4 +784,3 @@ Miski is released under the MIT license. See `LICENSE` for further details.
 &copy; 2024 The Miski Authors. All rights reserved.
 
 See `AUTHORS.md` for author details.
-****

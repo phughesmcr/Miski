@@ -160,13 +160,23 @@
  * const positionQuery = new Query({ all: [positionComponent] });
  * const positionView = world.entities.queryList(positionQuery);
  * for (let i = 0; i < positionView.count; i++) {
- *   const entity = positionView.indices[i]!;
- *   console.log(entity);
+ *   const entity = positionView.entities[i]!; // packed handle (identity / isActive)
+ *   const slot = positionView.indices[i]!;    // storage slot for partitions
+ *   console.log(entity, slot);
  * }
- * // Or, on cold paths, borrowed lists are directly iterable:
+ * // Or, on cold paths, borrowed lists are directly iterable (packed handles):
  * for (const entity of positionView) {
  *   console.log(entity);
  * }
+ * ```
+ *
+ * @example Frame lifecycle
+ * ```ts
+ * world.frame(() => {
+ *   systemInstance(dt);
+ *   // read entered/exited/changed here
+ * });
+ * // refresh() has already run
  * ```
  *
  * @example Query entities by component with the convenience iterator API
@@ -214,10 +224,11 @@
  *     const position = components.position;
  *     const facing = components.facing;
  *     for (let i = 0; i < entities.count; i++) {
- *       const entity = entities.indices[i]!;
+ *       const entity = entities.entities[i]!;
+ *       const slot = entities.indices[i]!;
  *       position.proxy.entity = entity;
  *       if (facing.has(entity)) {
- *         const dir = facing.partitions.dir[entity];
+ *         const dir = facing.partitions.dir[slot];
  *       }
  *     }
  *   },
@@ -226,7 +237,9 @@
  * const systemInstance = world.systems.create(positionSystem);
  *
  * const update = (frametime: number) => {
- *   systemInstance(frametime, "Hello, World!"); // the System's callback is called here
+ *   world.frame(() => {
+ *     systemInstance(frametime, "Hello, World!");
+ *   });
  *   requestAnimationFrame(update);
  * }
  *
@@ -250,9 +263,18 @@ export {
 } from "@/errors.ts";
 export { isValidQuerySpec, Query } from "@/query/query.ts";
 export { isValidSystemSpec, System } from "@/system/system.ts";
-export { World } from "@/world/world.ts";
+export {
+  captureWorldRollbackPoint,
+  commitWorldRollbackPoint,
+  restoreWorldRollbackPoint,
+  World,
+} from "@/world/world.ts";
 export { isValidWorldSpec } from "@/world/utils.ts";
 export { isValidName } from "@/utils.ts";
+export { asSlotIndex, entityGeneration, entityIndex, MAX_WORLD_CAPACITY, packEntity } from "@/entity/entity.ts";
+export { canonicalizeStoredValue } from "@/value/canonicalize.ts";
+export { compileComponentSchema, componentSchemaHash, mergeComponentSchemas } from "@/schema/schema.ts";
+export { createEcsWorld, createEcsWorldFromSchema, createEcsWorldWithSchema, EcsWorld } from "@/world/ecs-world.ts";
 export type {
   ComposedQueryComponents,
   NormalizedQueryComponentEntry,
@@ -267,18 +289,26 @@ export type {
   BorrowedEntityIndices,
   BorrowedEntityIterator,
   BorrowedEntityList,
+  BorrowedSlotIndices,
+  CheckpointEntitySet,
+  CompiledComponentEntry,
+  CompiledComponentProperty,
+  CompiledComponentSchema,
   ComponentBundle,
   ComponentBundleEntryFor,
   ComponentBundleEntryInput,
+  ComponentCheckpoint,
   ComponentData,
   ComponentInstances,
   ComponentMap,
   ComponentPartitions,
   ComponentRecord,
+  ComponentsFromSchemaMap,
   ComponentSpec,
   ComponentValue,
   DynamicComponent,
   DynamicComponentInstance,
+  EcsWorldConfig,
   Entity,
   ParametersExceptFirstTwo,
   Partition,
@@ -286,9 +316,13 @@ export type {
   QueryEntityList,
   QuerySpec,
   Schema,
+  SchemaComponentMap,
   SchemaOrNull,
   SchemaPartitions,
   SchemaValues,
+  SlotIndex,
+  SpawnSpec,
+  StorageFromMap,
   StorageProxyWithProperties,
   SystemCallback,
   SystemFunction,
@@ -304,6 +338,7 @@ export type {
   WorldComponentAPI,
   WorldContext,
   WorldEntityAPI,
+  WorldRollbackPoint,
   WorldSpec,
   WorldState,
   WorldSystemAPI,

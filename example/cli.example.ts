@@ -417,7 +417,7 @@ const predatorAISystem = new System({
     const preyPositions = gatherEntityPositions(preyQuery, true) as EntityPosition[];
 
     for (let i = 0; i < entities.count; i++) {
-      const predatorEntity = entities.indices[i]!;
+      const predatorEntity = entities.entities[i]!;
       predatorPos.entity = predatorEntity;
       predatorVel.entity = predatorEntity;
 
@@ -459,7 +459,7 @@ const preyAISystem = new System({
     const predatorPositions = gatherEntityPositions(predatorQuery, false) as Vec2Data[];
 
     for (let i = 0; i < entities.count; i++) {
-      const preyEntity = entities.indices[i]!;
+      const preyEntity = entities.entities[i]!;
       preyPos.entity = preyEntity;
       preyVel.entity = preyEntity;
 
@@ -501,7 +501,7 @@ const separationSystem = new System({
     // Build spatial index of all entity positions
     const entityPositions: Array<{ entity: number; x: number; y: number }> = [];
     for (let i = 0; i < entities.count; i++) {
-      const entity = entities.indices[i]!;
+      const entity = entities.entities[i]!;
       position.entity = entity;
       entityPositions.push({
         entity,
@@ -579,7 +579,7 @@ const movementSystem = new System({
     const { proxy: velocity } = components["velocity"] as ComponentInstance<Vec2>;
 
     for (let i = 0; i < entities.count; i++) {
-      const entity = entities.indices[i]!;
+      const entity = entities.entities[i]!;
       position.entity = entity;
       velocity.entity = entity;
 
@@ -619,7 +619,7 @@ const renderPredatorSystem = new System({
     const { proxy: energyProxy } = components["energy"] as ComponentInstance<Energy>;
 
     for (let i = 0; i < entities.count; i++) {
-      const entity = entities.indices[i]!;
+      const entity = entities.entities[i]!;
       pos.entity = entity;
       prevPos.entity = entity;
       energyProxy.entity = entity;
@@ -648,7 +648,7 @@ const renderPreySystem = new System({
     const { proxy: prevPos } = components["previousPosition"] as ComponentInstance<Vec2>;
 
     for (let i = 0; i < entities.count; i++) {
-      const entity = entities.indices[i]!;
+      const entity = entities.entities[i]!;
       pos.entity = entity;
       prevPos.entity = entity;
       placeOnGrid(
@@ -725,7 +725,7 @@ const predatorEnergySystem = new System({
     const predatorsToRemove = new Set<number>();
 
     for (let i = 0; i < entities.count; i++) {
-      const entity = entities.indices[i]!;
+      const entity = entities.entities[i]!;
       energyProxy.entity = entity;
       energyProxy.value -= PREDATOR_ENERGY_LOSS_PER_SECOND * dt;
 
@@ -764,7 +764,7 @@ const preyReproductionSystem = new System({
     }
 
     for (let i = 0; i < entities.count; i++) {
-      const entity = entities.indices[i]!;
+      const entity = entities.entities[i]!;
       preyPos.entity = entity;
       reproTimer.entity = entity;
 
@@ -834,7 +834,7 @@ const updatePreviousPositionSystem = new System({
     const { proxy: position } = components["position"] as ComponentInstance<Vec2>;
     const { proxy: previousPosition } = components["previousPosition"] as ComponentInstance<Vec2>;
     for (let i = 0; i < entities.count; i++) {
-      const entity = entities.indices[i]!;
+      const entity = entities.entities[i]!;
       position.entity = entity;
       previousPosition.entity = entity;
       previousPosition.x = position.x;

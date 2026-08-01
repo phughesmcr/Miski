@@ -3,7 +3,7 @@ import { BooleanArray } from "@phughesmcr/booleanarray";
 import { createEntityArray, type EntityArray } from "@/entity/entity.ts";
 import { NotRegisteredError } from "@/errors.ts";
 import type { DynamicComponentInstance } from "@/types/component.ts";
-import type { Entity } from "@/entity/entity.ts";
+import { type Entity, entityIndex } from "@/entity/entity.ts";
 import type { QueryInstance } from "@/types/query.ts";
 import { Archetype } from "./archetype.ts";
 
@@ -59,12 +59,12 @@ export class ArchetypeManager {
    * @returns The target archetype
    */
   #moveEntity(entity: Entity, archetype: Archetype): Archetype {
-    const oldArchetype = this.entityArchetypes[entity];
+    const oldArchetype = this.entityArchetypes[entityIndex(entity)];
     if (oldArchetype === archetype) return archetype;
 
     oldArchetype?.removeEntity(entity);
     archetype.addEntity(entity);
-    this.entityArchetypes[entity] = archetype;
+    this.entityArchetypes[entityIndex(entity)] = archetype;
     this.#queryMembershipDirty = true;
 
     return archetype;
@@ -95,8 +95,8 @@ export class ArchetypeManager {
     targets.length = 0;
 
     for (let i = 0; i < count; i++) {
-      const entity = entities[i]!;
-      const source = this.entityArchetypes[entity] ?? this.root;
+      const entity = entities[i]! as Entity;
+      const source = this.entityArchetypes[entityIndex(entity)] ?? this.root;
       let group = -1;
       for (let j = 0; j < sources.length; j++) {
         if (sources[j] === source) {
@@ -126,8 +126,8 @@ export class ArchetypeManager {
     }
 
     for (let i = 0; i < count; i++) {
-      const entity = entities[i]!;
-      const source = this.entityArchetypes[entity] ?? this.root;
+      const entity = entities[i]! as Entity;
+      const source = this.entityArchetypes[entityIndex(entity)] ?? this.root;
       let group = -1;
       for (let j = 0; j < sources.length; j++) {
         if (sources[j] === source) {
@@ -150,7 +150,7 @@ export class ArchetypeManager {
       target.addEntities(this.#bulkEntities, offset, groupCount);
       const end = offset + groupCount;
       for (let i = offset; i < end; i++) {
-        this.entityArchetypes[this.#bulkEntities[i]!] = target;
+        this.entityArchetypes[entityIndex(this.#bulkEntities[i]! as Entity)] = target;
         this.#bulkEntities[i] = 0;
       }
       counts[group] = 0;
@@ -377,7 +377,7 @@ export class ArchetypeManager {
    * @returns The target archetype
    */
   addComponent(entity: Entity, instance: DynamicComponentInstance): Archetype {
-    const oldArchetype = this.entityArchetypes[entity] ?? this.root;
+    const oldArchetype = this.entityArchetypes[entityIndex(entity)] ?? this.root;
     return this.#moveEntity(entity, this.#getTransitionArchetype(oldArchetype, instance, true));
   }
 
@@ -404,7 +404,7 @@ export class ArchetypeManager {
    * @returns The target archetype
    */
   addComponentSet(entity: Entity, instances: readonly DynamicComponentInstance[]): Archetype {
-    const oldArchetype = this.entityArchetypes[entity] ?? this.root;
+    const oldArchetype = this.entityArchetypes[entityIndex(entity)] ?? this.root;
     return this.#moveEntity(entity, this.#getSetTransitionArchetype(oldArchetype, instances));
   }
 
@@ -419,7 +419,7 @@ export class ArchetypeManager {
       delete this.#componentCache[key];
     }
 
-    const archetype = this.entityArchetypes[entity];
+    const archetype = this.entityArchetypes[entityIndex(entity)];
     if (!archetype) return this.#componentCache;
 
     // Reuse cache object
@@ -449,10 +449,10 @@ export class ArchetypeManager {
 
   /** Remove a destroyed entity from whichever archetype currently owns it. */
   destroyEntity(entity: Entity): this {
-    const archetype = this.entityArchetypes[entity];
+    const archetype = this.entityArchetypes[entityIndex(entity)];
     if (archetype !== undefined) {
       archetype.removeEntity(entity);
-      delete this.entityArchetypes[entity];
+      delete this.entityArchetypes[entityIndex(entity)];
       this.#queryMembershipDirty = true;
     }
     return this;
@@ -464,7 +464,7 @@ export class ArchetypeManager {
    * @returns The Archetype associated with the Entity or undefined
    */
   getEntityArchetype(entity: Entity): Archetype | undefined {
-    return this.entityArchetypes[entity];
+    return this.entityArchetypes[entityIndex(entity)];
   }
 
   /**
@@ -493,7 +493,7 @@ export class ArchetypeManager {
    * @returns `true` if the Entity is in the root archetype, `false` otherwise
    */
   isEntityInRoot(entity: Entity): boolean {
-    return this.entityArchetypes[entity] === this.root;
+    return this.entityArchetypes[entityIndex(entity)] === this.root;
   }
 
   /**
@@ -569,7 +569,7 @@ export class ArchetypeManager {
    * @returns The target archetype
    */
   removeComponent(entity: Entity, instance: DynamicComponentInstance): Archetype {
-    const oldArchetype = this.entityArchetypes[entity] ?? this.root;
+    const oldArchetype = this.entityArchetypes[entityIndex(entity)] ?? this.root;
     return this.#moveEntity(entity, this.#getTransitionArchetype(oldArchetype, instance, false));
   }
 
@@ -595,17 +595,41 @@ export class ArchetypeManager {
     if (!this.registry.has(archetype.id)) {
       throw new NotRegisteredError("Invalid archetype.");
     }
-    if (entity >= this.entityArchetypes.length || entity < 0) {
+    if (entityIndex(entity) >= this.entityArchetypes.length || entityIndex(entity) < 0) {
       throw new RangeError("Invalid entity.");
     }
 
-    const currentArchetype = this.entityArchetypes[entity];
+    const currentArchetype = this.entityArchetypes[entityIndex(entity)];
     if (currentArchetype === archetype) return archetype;
 
     currentArchetype?.removeEntity(entity);
-    this.entityArchetypes[entity] = archetype;
+    this.entityArchetypes[entityIndex(entity)] = archetype;
     archetype.addEntity(entity);
     this.#queryMembershipDirty = true;
     return archetype;
+  }
+
+  /**
+   * Rebuild the entity-to-archetype map from component ownership.
+   * @internal
+   */
+  rebuildFromOwnership(
+    activeEntities: Iterable<Entity>,
+    getOwnedInstances: (entity: Entity) => readonly DynamicComponentInstance[],
+  ): void {
+    for (const archetype of this.registry.values()) {
+      archetype.clearPopulation();
+    }
+    for (let slot = 0; slot < this.#capacity; slot++) {
+      delete this.entityArchetypes[slot];
+    }
+
+    for (const entity of activeEntities) {
+      const owned = getOwnedInstances(entity);
+      const archetype = owned.length === 0 ? this.root : this.#getSetTransitionArchetype(this.root, owned);
+      this.entityArchetypes[entityIndex(entity)] = archetype;
+      archetype.addEntity(entity);
+    }
+    this.#queryMembershipDirty = true;
   }
 }

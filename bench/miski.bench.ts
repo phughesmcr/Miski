@@ -1,6 +1,6 @@
 /// <reference lib="deno.ns" />
 
-import { Component, Query, World } from "../mod.ts";
+import { Component, entityIndex, Query, World } from "../mod.ts";
 import type { ComponentInstance, Entity } from "../mod.ts";
 import {
   countEntities,
@@ -80,6 +80,7 @@ const renderStatePartitions = renderStateInstance.partitions;
 const readDataOut = { x: 0, y: 0 };
 
 const mutationEntity = mixed.entities[128]!;
+const mutationSlot = entityIndex(mutationEntity);
 const healthOwnerEntity = mixed.entities[129]!;
 const addRemoveEntity = mustCreateEntity(lifecycle.world);
 const lifecycleEntity = mustCreateEntity(lifecycle.world);
@@ -493,8 +494,8 @@ Deno.bench({
   group: "component data hot path",
   baseline: true,
   fn: () => {
-    positionStorage.partitions.x[mutationEntity] = (positionStorage.partitions.x[mutationEntity] ?? 0) + 1;
-    positionStorage.partitions.y[mutationEntity] = (positionStorage.partitions.y[mutationEntity] ?? 0) - 1;
+    positionStorage.partitions.x[mutationSlot] = (positionStorage.partitions.x[mutationSlot] ?? 0) + 1;
+    positionStorage.partitions.y[mutationSlot] = (positionStorage.partitions.y[mutationSlot] ?? 0) - 1;
   },
 });
 
@@ -502,8 +503,8 @@ Deno.bench({
   name: "direct typed-array write + instance.markChanged",
   group: "component data hot path",
   fn: () => {
-    positionStorage.partitions.x[mutationEntity] = (positionStorage.partitions.x[mutationEntity] ?? 0) + 1;
-    positionStorage.partitions.y[mutationEntity] = (positionStorage.partitions.y[mutationEntity] ?? 0) - 1;
+    positionStorage.partitions.x[mutationSlot] = (positionStorage.partitions.x[mutationSlot] ?? 0) + 1;
+    positionStorage.partitions.y[mutationSlot] = (positionStorage.partitions.y[mutationSlot] ?? 0) - 1;
     numericSink ^= positionInstance.markChanged(mutationEntity) ? 1 : 0;
   },
 });
@@ -581,10 +582,11 @@ Deno.bench({
     const sprite = renderStatePartitions.sprite;
     let total = 0;
     for (let i = 0; i < result.count; i++) {
-      const entity = result.indices[i]!;
-      total += px[entity] ?? 0;
-      if (healthInstance.has(entity)) total += current[entity] ?? 0;
-      if (renderStateInstance.has(entity)) total += sprite[entity] ?? 0;
+      const entity = result.entities[i]!;
+      const slot = result.indices[i]!;
+      total += px[slot] ?? 0;
+      if (healthInstance.has(entity)) total += current[slot] ?? 0;
+      if (renderStateInstance.has(entity)) total += sprite[slot] ?? 0;
     }
     numericSink ^= total;
   },

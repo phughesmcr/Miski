@@ -287,12 +287,12 @@ const steeringSystem = world.systems.create(
       const brainDrag = components.brain.partitions.drag;
 
       for (let i = 0; i < count; i++) {
-        const entity = indices[i]!;
-        const x = positionX[entity]!;
-        const y = positionY[entity]!;
-        const team = visualTeam[entity]! | 0;
-        const orbit = brainOrbit[entity]!;
-        const bias = brainBias[entity]!;
+        const slot = indices[i]!;
+        const x = positionX[slot]!;
+        const y = positionY[slot]!;
+        const team = visualTeam[slot]! | 0;
+        const orbit = brainOrbit[slot]!;
+        const bias = brainBias[slot]!;
 
         let targetX = targetXByTeam[team]!;
         let targetY = targetYByTeam[team]!;
@@ -301,8 +301,8 @@ const steeringSystem = world.systems.create(
           targetX = cx + Math.cos(targetX + orbit * 5) * (120 + team * 95);
           targetY = cy + Math.sin(targetY - orbit * 4) * (90 + team * 80);
         } else if (currentMode === "lattice") {
-          const column = ((entity * 37) % 14) - 6.5;
-          const row = ((entity * 19) % 9) - 4;
+          const column = ((slot * 37) % 14) - 6.5;
+          const row = ((slot * 19) % 9) - 4;
           targetX = cx + column * 118 + targetX;
           targetY = cy + row * 94 + targetY;
         }
@@ -323,11 +323,11 @@ const steeringSystem = world.systems.create(
         const pulseRadius = 60 + pulseAge * 470;
         const pulseRing = Math.max(0, 1 - Math.abs(pulseDistance - pulseRadius) / 130) * pulsePower;
 
-        let nextVelocityX = (velocityX[entity]! * brainDrag[entity]!) +
+        let nextVelocityX = (velocityX[slot]! * brainDrag[slot]!) +
           dx * inverseDistance * pull * 22 +
           tangentX * orbit * 34 * bias +
           pulseDx * inversePulseDistance * pulseRing * 285;
-        let nextVelocityY = (velocityY[entity]! * brainDrag[entity]!) +
+        let nextVelocityY = (velocityY[slot]! * brainDrag[slot]!) +
           dy * inverseDistance * pull * 22 +
           tangentY * orbit * 34 * bias +
           pulseDy * inversePulseDistance * pulseRing * 285;
@@ -339,12 +339,12 @@ const steeringSystem = world.systems.create(
           nextVelocityY *= scale;
           speed = maxSpeed;
         }
-        velocityX[entity] = nextVelocityX;
-        velocityY[entity] = nextVelocityY;
+        velocityX[slot] = nextVelocityX;
+        velocityY[slot] = nextVelocityY;
 
         const energy = Math.max(0.12, Math.min(1.3, speed / maxSpeed + pulseRing * 0.65));
-        visualEnergy[entity] = energy;
-        visualAlpha[entity] = Math.max(0.35, Math.min(1, 0.45 + energy * 0.42));
+        visualEnergy[slot] = energy;
+        visualAlpha[slot] = Math.max(0.35, Math.min(1, 0.45 + energy * 0.42));
       }
 
       pulseAge += dt;
@@ -365,26 +365,26 @@ const movementSystem = world.systems.create(
       const velocityY = components.velocity.partitions.y;
 
       for (let i = 0; i < count; i++) {
-        const entity = indices[i]!;
-        let x = positionX[entity]! + velocityX[entity]! * dt;
-        let y = positionY[entity]! + velocityY[entity]! * dt;
+        const slot = indices[i]!;
+        let x = positionX[slot]! + velocityX[slot]! * dt;
+        let y = positionY[slot]! + velocityY[slot]! * dt;
 
         if (x < 0) {
-          velocityX[entity] = velocityX[entity]! * -0.84;
+          velocityX[slot] = velocityX[slot]! * -0.84;
           x = 0;
         } else if (x > WORLD_WIDTH) {
-          velocityX[entity] = velocityX[entity]! * -0.84;
+          velocityX[slot] = velocityX[slot]! * -0.84;
           x = WORLD_WIDTH;
         }
         if (y < 0) {
-          velocityY[entity] = velocityY[entity]! * -0.84;
+          velocityY[slot] = velocityY[slot]! * -0.84;
           y = 0;
         } else if (y > WORLD_HEIGHT) {
-          velocityY[entity] = velocityY[entity]! * -0.84;
+          velocityY[slot] = velocityY[slot]! * -0.84;
           y = WORLD_HEIGHT;
         }
-        positionX[entity] = x;
-        positionY[entity] = y;
+        positionX[slot] = x;
+        positionY[slot] = y;
       }
     },
   }),
@@ -406,17 +406,17 @@ const lifetimeSystem = world.systems.create(
       const velocityY = components.velocity.partitions.y;
       let expiredCount = 0;
       for (let i = 0; i < count; i++) {
-        const entity = indices[i]!;
-        const nextAge = age[entity]! + dt;
-        age[entity] = nextAge;
-        const progress = nextAge / ttl[entity]!;
-        visualAlpha[entity] = Math.max(0, 1 - progress);
-        visualEnergy[entity] = Math.max(0, 1 - progress * 0.7);
-        visualRadius[entity] = visualRadius[entity]! * 0.993;
-        velocityX[entity] = velocityX[entity]! * 0.985;
-        velocityY[entity] = velocityY[entity]! * 0.985;
+        const slot = indices[i]!;
+        const nextAge = age[slot]! + dt;
+        age[slot] = nextAge;
+        const progress = nextAge / ttl[slot]!;
+        visualAlpha[slot] = Math.max(0, 1 - progress);
+        visualEnergy[slot] = Math.max(0, 1 - progress * 0.7);
+        visualRadius[slot] = visualRadius[slot]! * 0.993;
+        velocityX[slot] = velocityX[slot]! * 0.985;
+        velocityY[slot] = velocityY[slot]! * 0.985;
         if (progress >= 1) {
-          expiredScratch[expiredCount++] = entity;
+          expiredScratch[expiredCount++] = slot;
         }
       }
       for (let i = 0; i < expiredCount; i++) {
@@ -518,13 +518,13 @@ const snapshot = (): string => {
   payload += `,"droneTarget":${desiredDroneCount},"capacity":${CAPACITY}},"stride":10,"entities":[`;
 
   for (let i = 0; i < limit; i++) {
-    const entity = entities.indices[i]!;
+    const slot = entities.indices[i]!;
     if (i > 0) payload += ",";
-    payload += `${metric(positionStore.x[entity]!)},${metric(positionStore.y[entity]!)}`;
-    payload += `,${metric(velocityStore.x[entity]!)},${metric(velocityStore.y[entity]!)}`;
-    payload += `,${metric(visualStore.hue[entity]!)},${metric(visualStore.radius[entity]!)}`;
-    payload += `,${metric(visualStore.alpha[entity]!)},${metric(visualStore.energy[entity]!)}`;
-    payload += `,${visualStore.team[entity]!},${visualStore.kind[entity]!}`;
+    payload += `${metric(positionStore.x[slot]!)},${metric(positionStore.y[slot]!)}`;
+    payload += `,${metric(velocityStore.x[slot]!)},${metric(velocityStore.y[slot]!)}`;
+    payload += `,${metric(visualStore.hue[slot]!)},${metric(visualStore.radius[slot]!)}`;
+    payload += `,${metric(visualStore.alpha[slot]!)},${metric(visualStore.energy[slot]!)}`;
+    payload += `,${visualStore.team[slot]!},${visualStore.kind[slot]!}`;
   }
 
   return `${payload}]}`;

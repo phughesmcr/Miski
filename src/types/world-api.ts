@@ -49,6 +49,8 @@ export type WorldContext = {
   init(): Promise<void>;
   destroy(): Promise<void>;
   refresh(): void;
+  frame<T>(fn: () => T): T;
+  queryRevision(query: Query): number;
 };
 
 /** The public archetype transition and query membership API. */

@@ -4,8 +4,9 @@ import type {
   PartitionStorage,
   SchemaOrNull,
   StorageProxyWithProperties,
+  TypedArray,
 } from "@/types/partitions.ts";
-import type { Entity } from "@/entity/entity.ts";
+import { asSlotIndex, type Entity, entityIndex, type SlotIndex } from "@/entity/entity.ts";
 import type { Component } from "./component.ts";
 
 /** A ComponentInstance is the world-local representation of a component */
@@ -21,6 +22,9 @@ export class ComponentInstance<
 
   /** Ownership-guarded changed marker for hot paths */
   readonly #markChanged: (entity: Entity) => boolean;
+
+  /** Revision provider */
+  readonly #getRevision: () => number;
 
   /** The ComponentInstance's proxy */
   readonly proxy: TStorage extends null ? null : StorageProxyWithProperties<TValue>;
@@ -42,10 +46,11 @@ export class ComponentInstance<
    * @throws {TypeError} If the spec is invalid
    */
   constructor(spec: ComponentInstanceSpec<TValue, TStorage>) {
-    const { has, id, markChanged, proxy, storage, type } = spec;
+    const { has, id, markChanged, proxy, storage, type, getRevision } = spec;
     this.id = id;
     this.#has = has;
     this.#markChanged = markChanged;
+    this.#getRevision = getRevision ?? (() => 0);
     this.proxy = proxy as TStorage extends null ? null : StorageProxyWithProperties<TValue>;
     this.storage = storage as TStorage extends null ? null : PartitionStorage<TStorage>;
     this.type = type;
@@ -57,6 +62,14 @@ export class ComponentInstance<
     return this.type.name;
   }
 
+  /**
+   * Monotonic token that increases when this component's membership or stored
+   * values change.
+   */
+  get revision(): number {
+    return this.#getRevision();
+  }
+
   /** Check whether an entity owns this component instance. */
   has(entity: Entity): boolean {
     return this.#has(entity);
@@ -65,6 +78,42 @@ export class ComponentInstance<
   /** Mark an owning data component entity as changed. */
   markChanged(entity: Entity): boolean {
     return this.#markChanged(entity);
+  }
+
+  /** Read a property for a packed entity handle (validates ownership via {@link has}). */
+  get(entity: Entity, key: string): number {
+    const partitions = this.storage?.partitions as Record<string, TypedArray> | undefined;
+    if (partitions === undefined) {
+      throw new TypeError(`Component ${this.name} has no data storage.`);
+    }
+    return partitions[key]![entityIndex(entity)]!;
+  }
+
+  /** Write a property for a packed entity handle. */
+  set(entity: Entity, key: string, value: number): void {
+    if (this.proxy === null) {
+      throw new TypeError(`Component ${this.name} has no data storage.`);
+    }
+    this.proxy.entity = entity;
+    (this.proxy as Record<string, number>)[key] = value;
+  }
+
+  /** Read a property by raw slot with no generation or membership check. */
+  getAt(slot: SlotIndex, key: string): number {
+    const partitions = this.storage?.partitions as Record<string, TypedArray> | undefined;
+    if (partitions === undefined) {
+      throw new TypeError(`Component ${this.name} has no data storage.`);
+    }
+    return partitions[key]![slot]!;
+  }
+
+  /** Write a property by raw slot with no generation or membership check. */
+  setAt(slot: SlotIndex, key: string, value: number): void {
+    if (this.proxy === null) {
+      throw new TypeError(`Component ${this.name} has no data storage.`);
+    }
+    this.proxy.slot = asSlotIndex(slot);
+    (this.proxy as Record<string, number>)[key] = value;
   }
 
   /** Runtime string tag used by `Object.prototype.toString`. */

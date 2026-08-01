@@ -61,7 +61,7 @@ export function ids(iterable: Iterable<number> | undefined): number[] {
 export function listIds(list: QueryEntityList): number[] {
   const result = new Array<number>(list.count);
   for (let i = 0; i < list.count; i++) {
-    result[i] = list.indices[i]!;
+    result[i] = list.entities[i]!;
   }
   return result;
 }

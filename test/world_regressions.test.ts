@@ -9,6 +9,7 @@ import {
   Query,
   WorldStateError,
 } from "../mod.ts";
+import { entityIndex } from "../mod.ts";
 import { ArchetypeManager } from "../src/archetype/archetype-manager.ts";
 import { EntityManager } from "../src/entity/entity-manager.ts";
 import type { QueryEntityList } from "../mod.ts";
@@ -228,7 +229,7 @@ Deno.test("public component writes reject invalid data instead of silently disca
   const inheritedData = Object.create({ x: 99, z: 3 }) as Partial<{ x: number; y: number }>;
   world.components.setEntityData(position, entity, inheritedData);
   assertThrows(
-    () => world.components.addToEntities(renderableAsData, { count: 1, indices: [entity] }, {}),
+    () => world.components.addToEntities(renderableAsData, { count: 1, entities: [entity], indices: [entity] }, {}),
     ComponentDataError,
     "has no data storage",
   );
@@ -424,7 +425,11 @@ Deno.test("component removal rejects inactive entities and stays idempotent for 
   assert(world.components.entityHas(position, nonOwner), "Expected non-owner removal to leave other ownership intact");
   assert(!world.components.entityHas(velocity, nonOwner), "Expected non-owner to remain without velocity");
 
-  const list: QueryEntityList = { count: 2, indices: new Uint32Array([owner, nonOwner]) };
+  const list: QueryEntityList = {
+    count: 2,
+    entities: new Uint32Array([owner, nonOwner]),
+    indices: new Uint32Array([owner, nonOwner]),
+  };
   assertEquals(world.components.removeFromEntities(velocity, list), 1, "Expected only actual owners to be removed");
   assert(!world.components.entityHas(velocity, owner), "Expected owner to lose velocity");
   assert(world.components.entityHas(position, owner), "Expected batch removal to leave other ownership intact");
@@ -437,7 +442,11 @@ Deno.test("batch component removal rejects inactive entities without partial mut
   const first = createEntity(world);
   world.components.addToEntity(position, first, { x: 1, y: 2 });
 
-  const list: QueryEntityList = { count: 2, indices: new Uint32Array([first, 7]) };
+  const list: QueryEntityList = {
+    count: 2,
+    entities: new Uint32Array([first, 7]),
+    indices: new Uint32Array([first, 7]),
+  };
   assertThrows(
     () => world.components.removeFromEntities(position, list),
     EntityNotFoundError,
@@ -458,7 +467,11 @@ Deno.test("batch component add capacity failures leave all state unchanged", asy
   const first = createEntity(world);
   const second = createEntity(world);
 
-  const list: QueryEntityList = { count: 2, indices: new Uint32Array([first, second]) };
+  const list: QueryEntityList = {
+    count: 2,
+    entities: new Uint32Array([first, second]),
+    indices: new Uint32Array([first, second]),
+  };
   assertThrows(
     () => world.components.addToEntities(player, list),
     RangeError,
@@ -479,7 +492,11 @@ Deno.test("batch component transitions reject duplicate entity targets before mu
   const entity = createEntity(world);
   world.components.addToEntity(position, entity, { x: 1, y: 2 });
 
-  const duplicateList: QueryEntityList = { count: 2, indices: new Uint32Array([entity, entity]) };
+  const duplicateList: QueryEntityList = {
+    count: 2,
+    entities: new Uint32Array([entity, entity]),
+    indices: new Uint32Array([entity, entity]),
+  };
   assertThrows(
     () => world.components.addToEntities(velocity, duplicateList, { x: 3, y: 4 }),
     RangeError,
@@ -605,10 +622,10 @@ Deno.test("direct typed-array storage remains an unguarded data access escape ha
   const instance = world.components.getInstance(position);
   assert(instance !== undefined && instance.storage !== null, "Expected position storage");
 
-  instance.storage.partitions.x[entity] = 12;
-  instance.storage.partitions.y[entity] = 13;
+  instance.storage.partitions.x[entityIndex(entity)] = 12;
+  instance.storage.partitions.y[entityIndex(entity)] = 13;
   assertEquals(
-    { x: instance.storage.partitions.x[entity], y: instance.storage.partitions.y[entity] },
+    { x: instance.storage.partitions.x[entityIndex(entity)], y: instance.storage.partitions.y[entityIndex(entity)] },
     { x: 12, y: 13 },
     "Expected raw storage writes to work without ownership checks",
   );

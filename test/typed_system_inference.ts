@@ -81,7 +81,7 @@ expectType<SystemInstance<SystemCallback> | undefined>(namedSystem);
 // @ts-expect-error string component lookup cannot infer a schema for data writes.
 world.components.addToEntity("position", 0 as Entity, { x: 1, y: 2 });
 // @ts-expect-error string component lookup cannot infer a schema for batch data writes.
-world.components.addToEntities("position", { count: 0, indices: [] }, { x: 1, y: 2 });
+world.components.addToEntities("position", { count: 0, entities: [], indices: [] }, { x: 1, y: 2 });
 // @ts-expect-error tag components do not accept data payloads.
 world.components.addToEntity(renderable, 0 as Entity, {});
 // @ts-expect-error tag components do not have settable component data.
