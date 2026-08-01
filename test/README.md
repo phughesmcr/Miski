@@ -19,5 +19,6 @@ These files are type-checked by `deno task check` but are **not** executed by `d
 
 - `typed_system_inference.ts` — `new System` / `new Query` callback and query-map inference
 - `query_constructor_inference.ts` — typed `Query({ all: { … } })` constructor inference
+- `typed_ecs_world_inference.ts` — `createEcsWorld` / schema-world spawn and storage inference
 
 They use `@ts-expect-error` to assert that invalid access is rejected at compile time.

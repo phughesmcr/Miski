@@ -8,7 +8,7 @@ export function hasOwnProperty<T>(object: T, key: PropertyKey): key is keyof T {
 }
 
 /** @returns `true` if ```typeof n === 'number'``` */
-export function isNumber(n: unknown): n is number {
+function isNumber(n: unknown): n is number {
   return typeof n === "number";
 }
 

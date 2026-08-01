@@ -103,7 +103,7 @@
     },
     "demo:cli": {
       "description": "Run the legacy terminal predator-prey demo",
-      "command": "deno run -Ar --unstable example/cli.example.ts"
+      "command": "deno run -Ar example/cli.example.ts"
     },
     "bench": {
       "description": "Run public and internal ECS throughput benchmark suites",

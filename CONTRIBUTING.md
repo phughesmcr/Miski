@@ -60,8 +60,8 @@ JSR publishing is triggered by semver git tags, not by merging to `main`.
 3. Create and push a matching tag:
 
    ```sh
-   git tag v0.1.0
-   git push origin v0.1.0
+   git tag v1.0.0-alpha.3
+   git push origin v1.0.0-alpha.3
    ```
 
 4. The Publish workflow runs automatically on the tag push.

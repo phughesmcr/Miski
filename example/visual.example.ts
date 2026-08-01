@@ -396,6 +396,7 @@ const lifetimeSystem = world.systems.create(
     query: sparkQuery,
     callback: (components, sparks, dt: number) => {
       const indices = sparks.indices;
+      const entities = sparks.entities;
       const count = sparks.count;
       const age = components.lifetime.partitions.age;
       const ttl = components.lifetime.partitions.ttl;
@@ -416,7 +417,7 @@ const lifetimeSystem = world.systems.create(
         velocityX[slot] = velocityX[slot]! * 0.985;
         velocityY[slot] = velocityY[slot]! * 0.985;
         if (progress >= 1) {
-          expiredScratch[expiredCount++] = slot;
+          expiredScratch[expiredCount++] = entities[i]!;
         }
       }
       for (let i = 0; i < expiredCount; i++) {

@@ -27,7 +27,6 @@ export type {
   PartitionStorage,
   Schema,
   SchemaOrNull,
-  SchemaPartitions,
   SchemaProperty,
   SchemaPropertyArray,
   SchemaValues,

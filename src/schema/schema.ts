@@ -129,7 +129,7 @@ function hashEntries(entries: readonly CompiledComponentEntry[]): string {
   ])));
 }
 
-export function fnv1a64(value: string): string {
+function fnv1a64(value: string): string {
   let hash = FNV_OFFSET;
   function write(byte: number): void {
     hash ^= BigInt(byte);

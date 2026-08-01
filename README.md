@@ -725,8 +725,12 @@ Schema helpers compile storage shapes and produce a stable FNV hash:
 ```typescript
 import { compileComponentSchema, componentSchemaHash } from "@phughesmcr/miski";
 
-const schema = compileComponentSchema({ x: Float32Array, y: Float32Array });
-const hash = componentSchemaHash(schema);
+const schema = compileComponentSchema({
+  Position: { x: Float32Array, y: Float32Array },
+});
+const hash = componentSchemaHash({
+  Position: { x: Float32Array, y: Float32Array },
+});
 ```
 
 `world.queryRevision(query)` returns a monotonically increasing token that bumps when any component in the query is written.

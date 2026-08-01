@@ -18,7 +18,7 @@ import type { EntityManagerSerialized } from "@/types/component.ts";
 import { isPositiveUint32, isUint32, numberArrayFromString } from "@/utils.ts";
 import { ROLLBACK_PAGE_SIZE } from "@/rollback/page.ts";
 
-export type EntityManagerRollbackState = {
+type EntityManagerRollbackState = {
   freeHead: number;
   nextFresh: number;
   liveCount: number;

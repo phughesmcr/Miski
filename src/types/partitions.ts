@@ -33,11 +33,6 @@ export type SchemaPropertyArray<T> = T extends TypedArrayConstructor ? InstanceT
   T extends [infer Constructor extends TypedArrayConstructor, number] ? InstanceType<Constructor> :
   never;
 
-/** Typed-array partition views for a component schema */
-export type SchemaPartitions<T extends Schema<T>> = {
-  [K in keyof T]: SchemaPropertyArray<T[K]>;
-};
-
 /**
  * Typed-array partition views keyed by a component's schema.
  *

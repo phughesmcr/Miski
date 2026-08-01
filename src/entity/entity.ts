@@ -202,5 +202,3 @@ export class ReusableSlotPackIterator implements IterableIterator<Entity> {
 
 /** @internal Generation bit mask for entity packing. */
 export const ENTITY_GEN_MASK = GEN_MASK;
-/** @internal Index bit mask for entity packing. */
-export const ENTITY_INDEX_MASK = INDEX_MASK;

@@ -1,8 +1,6 @@
-/// <reference lib="dom" />
-
 /**
  * @module demo
- * @description A predator-prey simulation using Miski and Canvas2D.
+ * @description A predator-prey simulation using Miski in the terminal.
  * @copyright 2024 the Miski authors. All rights reserved.
  * @license MIT
  */

@@ -318,7 +318,6 @@ export type {
   Schema,
   SchemaComponentMap,
   SchemaOrNull,
-  SchemaPartitions,
   SchemaValues,
   SlotIndex,
   SpawnSpec,

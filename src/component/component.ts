@@ -28,7 +28,7 @@ export function isValidComponentSpec<
 }
 
 /** Component type guard */
-export function isComponent(component: unknown): component is DynamicComponent {
+function isComponent(component: unknown): component is DynamicComponent {
   return !!(component && component instanceof Component);
 }
 
