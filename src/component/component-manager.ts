@@ -133,7 +133,7 @@ export class ComponentManager {
           storage,
           markChanged: (entity: Entity) => {
             const state = this.#states[instanceId];
-            if (state !== undefined) this.#markChanged(state, entity);
+            if (state !== undefined) this.#markChanged(state, entity, entityIndex(entity));
           },
           capacity,
           componentName: component.name,
@@ -233,18 +233,17 @@ export class ComponentManager {
   }
 
   /** Append an entity to a component's dense owner list. */
-  #appendOwner(state: ComponentState, entity: Entity): void {
+  #appendOwner(state: ComponentState, entity: Entity, slot: number): void {
     const ownerCount = state.ownerCount;
     const ownerList = state.ownerList!;
     const ownerPositions = state.ownerPositions!;
     ownerList[ownerCount] = entity;
-    ownerPositions[entityIndex(entity)] = ownerCount;
+    ownerPositions[slot] = ownerCount;
     state.ownerCount = ownerCount + 1;
   }
 
   /** Remove an entity from a dense list whose membership was already checked. */
-  #removeFromDenseList(list: EntityArray, positions: EntityArray, count: number, entity: Entity): number {
-    const slot = entityIndex(entity);
+  #removeFromDenseList(list: EntityArray, positions: EntityArray, count: number, slot: number): number {
     const removeIndex = positions[slot]!;
     const lastIndex = count - 1;
     const lastEntity = list[lastIndex]!;
@@ -261,11 +260,11 @@ export class ComponentManager {
    * Claim ownership for an entity when it is not already owned.
    * @returns `true` when ownership changed from unowned to owned
    */
-  #acquireOwnership(state: ComponentState, entity: Entity, owners: Uint8Array): boolean {
-    const alreadyOwned = owners[entityIndex(entity)] === 1;
+  #acquireOwnership(state: ComponentState, entity: Entity, owners: Uint8Array, slot: number): boolean {
+    const alreadyOwned = owners[slot] === 1;
     if (alreadyOwned) return false;
-    owners[entityIndex(entity)] = 1;
-    this.#appendOwner(state, entity);
+    owners[slot] = 1;
+    this.#appendOwner(state, entity, slot);
     return true;
   }
 
@@ -287,9 +286,9 @@ export class ComponentManager {
   }
 
   /** Mark a data component changed once per entity per refresh window. */
-  #markChanged(state: ComponentState, entity: Entity): void {
+  #markChanged(state: ComponentState, entity: Entity, slot: number): void {
     const changed = this.#ensureChangedState(state);
-    if (changed === undefined || changed.get(entityIndex(entity))) return;
+    if (changed === undefined || changed.get(slot)) return;
 
     const changedList = state.changedList;
     const changedPositions = state.changedPositions;
@@ -298,9 +297,9 @@ export class ComponentManager {
     }
 
     const changedCount = state.changedCount;
-    changed.set(entityIndex(entity), true);
+    changed.set(slot, true);
     changedList[changedCount] = entity;
-    changedPositions[entityIndex(entity)] = changedCount;
+    changedPositions[slot] = changedCount;
     state.changedCount = changedCount + 1;
     this.#bumpRevision(state);
   }
@@ -311,15 +310,16 @@ export class ComponentManager {
     if (state === undefined) return false;
     const instance = state.instance;
     if (instance === undefined || instance.storage === null) return false;
-    if (state.owners?.[entityIndex(entity)] !== 1) return false;
-    this.#markChanged(state, entity);
+    const slot = entityIndex(entity);
+    if (state.owners?.[slot] !== 1) return false;
+    this.#markChanged(state, entity, slot);
     return true;
   }
 
   /** Remove a data component from changed iteration if present. */
-  #unmarkChanged(state: ComponentState, entity: Entity): void {
+  #unmarkChanged(state: ComponentState, slot: number): void {
     const changed = state.changed;
-    if (changed === undefined || !changed.get(entityIndex(entity))) return;
+    if (changed === undefined || !changed.get(slot)) return;
 
     const changedList = state.changedList;
     const changedPositions = state.changedPositions;
@@ -332,19 +332,19 @@ export class ComponentManager {
       changedList,
       changedPositions,
       changedCount,
-      entity,
+      slot,
     );
-    changed.set(entityIndex(entity), false);
+    changed.set(slot, false);
   }
 
   /** Reset one entity's component storage slot to its default empty value. */
-  #clearEntityStorage(storage: Record<string, unknown>, entity: Entity): void {
+  #clearEntityStorage(storage: Record<string, unknown>, slot: number): void {
     for (const key in storage) {
       const partition = storage[key];
       if (ArrayBuffer.isView(partition as ArrayBufferView)) {
-        (partition as TypedArray)[entityIndex(entity)] = 0;
+        (partition as TypedArray)[slot] = 0;
       } else if (partition !== undefined && partition !== null) {
-        Reflect.deleteProperty(partition, String(entityIndex(entity)));
+        Reflect.deleteProperty(partition, String(slot));
       }
     }
   }
@@ -368,9 +368,10 @@ export class ComponentManager {
     instance: ComponentInstance<TValue, TStorage>,
     entity: Entity,
     data?: Partial<Record<keyof TValue, number>>,
+    slot: number = entityIndex(entity),
   ): boolean {
     const id = instance.id;
-    if (entityIndex(entity) >= this.#capacity) {
+    if (slot >= this.#capacity) {
       throw new RangeError(`Entity ${entity} is outside component capacity.`);
     }
     const state = this.#states[id];
@@ -379,10 +380,10 @@ export class ComponentManager {
 
     const storage = instance.storage;
     if (state.isUncappedTag) {
-      return this.#acquireOwnership(state, entity, owners);
+      return this.#acquireOwnership(state, entity, owners, slot);
     }
 
-    const alreadyOwned = owners[entityIndex(entity)] === 1;
+    const alreadyOwned = owners[slot] === 1;
     const maxEntities = state.maxEntities;
     if (!alreadyOwned && maxEntities !== 0) {
       const ownerCount = state.ownerCount;
@@ -393,15 +394,15 @@ export class ComponentManager {
       }
     }
 
-    const ownershipChanged = this.#acquireOwnership(state, entity, owners);
+    const ownershipChanged = this.#acquireOwnership(state, entity, owners, slot);
     if (ownershipChanged) this.#bumpRevision(state);
     if (ownershipChanged && storage !== null) {
-      this.#clearEntityStorage(storage.partitions as Record<string, unknown>, entity);
+      this.#clearEntityStorage(storage.partitions as Record<string, unknown>, slot);
     }
 
     const hasData = isObject(data);
     if (storage !== null && hasData) {
-      this.#markChanged(state, entity);
+      this.#markChanged(state, entity, slot);
     }
 
     // Set data if provided
@@ -415,7 +416,7 @@ export class ComponentManager {
           const coerced = scratch[key] === undefined ?
             value :
             canonicalizeStoredValue(instance.type.name, key, value, scratch[key]!);
-          partitions[key]![entityIndex(entity)] = coerced;
+          partitions[key]![slot] = coerced;
         }
       }
     }
@@ -722,9 +723,10 @@ export class ComponentManager {
       if (changed !== undefined && changedList !== undefined && changedPositions !== undefined) {
         for (let j = 0; j < changedCount; j++) {
           const entity = changedList[j]!;
-          changed.set(entityIndex(entity), false);
+          const slot = entityIndex(entity);
+          changed.set(slot, false);
           changedList[j] = 0;
-          changedPositions[entityIndex(entity)] = 0;
+          changedPositions[slot] = 0;
         }
       }
       state.changedCount = 0;
@@ -749,25 +751,26 @@ export class ComponentManager {
   >(
     instance: ComponentInstance<TValue, TStorage>,
     entity: Entity,
+    slot: number = entityIndex(entity),
   ): boolean {
     const id = instance.id;
     const state = this.#states[id];
     if (state === undefined) return false;
     const owners = state.owners;
-    const wasOwned = owners?.[entityIndex(entity)] === 1;
+    const wasOwned = owners?.[slot] === 1;
     if (!wasOwned) return false;
 
     const ownerList = state.ownerList!;
     const ownerPositions = state.ownerPositions!;
     const ownerCount = state.ownerCount;
-    state.ownerCount = this.#removeFromDenseList(ownerList, ownerPositions, ownerCount, entity);
+    state.ownerCount = this.#removeFromDenseList(ownerList, ownerPositions, ownerCount, slot);
 
-    if (owners !== undefined && entityIndex(entity) < owners.length) {
-      owners[entityIndex(entity)] = 0;
+    if (owners !== undefined && slot < owners.length) {
+      owners[slot] = 0;
     }
     const storage = instance.storage;
     if (storage !== null) {
-      this.#unmarkChanged(state, entity);
+      this.#unmarkChanged(state, slot);
     }
     if (wasOwned) this.#bumpRevision(state);
     if (wasOwned && storage !== null && state.usesSparseStorage) {
@@ -775,7 +778,7 @@ export class ComponentManager {
       for (const key in partitions) {
         const partition = partitions[key];
         if (partition && !ArrayBuffer.isView(partition)) {
-          Reflect.deleteProperty(partition, String(entityIndex(entity)));
+          Reflect.deleteProperty(partition, String(slot));
         }
       }
     }
@@ -807,6 +810,7 @@ export class ComponentManager {
     if (!storage) return this;
     const state = this.#states[instance.id];
     const scratch = state?.coercionScratch ?? {};
+    const slot = entityIndex(entity);
     let changed = false;
     for (const key in value) {
       if (!hasOwnProperty(value, key)) continue;
@@ -815,17 +819,17 @@ export class ComponentManager {
         const coerced = scratch[key] === undefined ?
           propertyValue :
           canonicalizeStoredValue(instance.type.name, key, propertyValue, scratch[key]!);
-        const previous = storage[key]![entityIndex(entity)];
+        const previous = storage[key]![slot];
         if (!Object.is(previous, coerced)) {
-          this.#beforeColumnWrite?.(instance.id, key, entityIndex(entity));
-          storage[key]![entityIndex(entity)] = coerced;
+          this.#beforeColumnWrite?.(instance.id, key, slot);
+          storage[key]![slot] = coerced;
           changed = true;
         }
       }
     }
-    if (changed && state?.owners?.[entityIndex(entity)] === 1) {
+    if (changed && state?.owners?.[slot] === 1) {
       this.#bumpRevision(state);
-      this.#markChanged(state, entity);
+      this.#markChanged(state, entity, slot);
     }
     return this;
   }

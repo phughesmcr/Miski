@@ -468,7 +468,7 @@ export class World {
         this.#clearBatchEntities(i);
         throw new EntityNotFoundError(formatEntityNotActive(entity));
       }
-      const slot = entityIndex(entity);
+      const slot = entities.indices[i]!;
       if (this.#batchSeen[slot] === 1) {
         this.#clearBatchEntities(i);
         throw new RangeError(`Duplicate entity ${entity} in batch entity list.`);
@@ -483,8 +483,8 @@ export class World {
   /** Clear duplicate-detection scratch flags after batch preflight/commit. */
   #clearBatchEntities(count: number): void {
     for (let i = 0; i < count; i++) {
-      const entity = this.#batchEntities[i]!;
-      this.#batchSeen[entityIndex(entity as Entity)] = 0;
+      const entity = this.#batchEntities[i]! as Entity;
+      this.#batchSeen[entityIndex(entity)] = 0;
       this.#batchEntities[i] = 0;
     }
   }
@@ -601,9 +601,10 @@ export class World {
     entity: Entity,
     data?: ComponentDataInput<TValue>,
   ): boolean {
-    const changed = this.#componentManager.addInstanceToEntity(instance, entity, data);
+    const slot = entityIndex(entity);
+    const changed = this.#componentManager.addInstanceToEntity(instance, entity, data, slot);
     if (changed) {
-      this.#archetypeManager.addComponent(entity, instance);
+      this.#archetypeManager.addComponent(entity, instance, slot);
     }
     return changed;
   }
@@ -616,9 +617,10 @@ export class World {
     instance: ComponentInstance<TValue, TStorage>,
     entity: Entity,
   ): boolean {
-    const changed = this.#componentManager.removeInstanceFromEntity(instance, entity);
+    const slot = entityIndex(entity);
+    const changed = this.#componentManager.removeInstanceFromEntity(instance, entity, slot);
     if (changed) {
-      this.#archetypeManager.removeComponent(entity, instance);
+      this.#archetypeManager.removeComponent(entity, instance, slot);
     }
     return changed;
   }

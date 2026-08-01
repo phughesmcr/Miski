@@ -58,13 +58,13 @@ export class ArchetypeManager {
    * @param archetype - The target archetype
    * @returns The target archetype
    */
-  #moveEntity(entity: Entity, archetype: Archetype): Archetype {
-    const oldArchetype = this.entityArchetypes[entityIndex(entity)];
+  #moveEntity(entity: Entity, archetype: Archetype, slot: number = entityIndex(entity)): Archetype {
+    const oldArchetype = this.entityArchetypes[slot];
     if (oldArchetype === archetype) return archetype;
 
-    oldArchetype?.removeEntity(entity);
-    archetype.addEntity(entity);
-    this.entityArchetypes[entityIndex(entity)] = archetype;
+    oldArchetype?.removeEntity(entity, slot);
+    archetype.addEntity(entity, slot);
+    this.entityArchetypes[slot] = archetype;
     this.#queryMembershipDirty = true;
 
     return archetype;
@@ -96,7 +96,8 @@ export class ArchetypeManager {
 
     for (let i = 0; i < count; i++) {
       const entity = entities[i]! as Entity;
-      const source = this.entityArchetypes[entityIndex(entity)] ?? this.root;
+      const slot = entityIndex(entity);
+      const source = this.entityArchetypes[slot] ?? this.root;
       let group = -1;
       for (let j = 0; j < sources.length; j++) {
         if (sources[j] === source) {
@@ -127,7 +128,8 @@ export class ArchetypeManager {
 
     for (let i = 0; i < count; i++) {
       const entity = entities[i]! as Entity;
-      const source = this.entityArchetypes[entityIndex(entity)] ?? this.root;
+      const slot = entityIndex(entity);
+      const source = this.entityArchetypes[slot] ?? this.root;
       let group = -1;
       for (let j = 0; j < sources.length; j++) {
         if (sources[j] === source) {
@@ -376,9 +378,9 @@ export class ArchetypeManager {
    * @param instance - The component instance being added
    * @returns The target archetype
    */
-  addComponent(entity: Entity, instance: DynamicComponentInstance): Archetype {
-    const oldArchetype = this.entityArchetypes[entityIndex(entity)] ?? this.root;
-    return this.#moveEntity(entity, this.#getTransitionArchetype(oldArchetype, instance, true));
+  addComponent(entity: Entity, instance: DynamicComponentInstance, slot: number = entityIndex(entity)): Archetype {
+    const oldArchetype = this.entityArchetypes[slot] ?? this.root;
+    return this.#moveEntity(entity, this.#getTransitionArchetype(oldArchetype, instance, true), slot);
   }
 
   /**
@@ -404,8 +406,9 @@ export class ArchetypeManager {
    * @returns The target archetype
    */
   addComponentSet(entity: Entity, instances: readonly DynamicComponentInstance[]): Archetype {
-    const oldArchetype = this.entityArchetypes[entityIndex(entity)] ?? this.root;
-    return this.#moveEntity(entity, this.#getSetTransitionArchetype(oldArchetype, instances));
+    const slot = entityIndex(entity);
+    const oldArchetype = this.entityArchetypes[slot] ?? this.root;
+    return this.#moveEntity(entity, this.#getSetTransitionArchetype(oldArchetype, instances), slot);
   }
 
   /**
@@ -449,10 +452,11 @@ export class ArchetypeManager {
 
   /** Remove a destroyed entity from whichever archetype currently owns it. */
   destroyEntity(entity: Entity): this {
-    const archetype = this.entityArchetypes[entityIndex(entity)];
+    const slot = entityIndex(entity);
+    const archetype = this.entityArchetypes[slot];
     if (archetype !== undefined) {
-      archetype.removeEntity(entity);
-      delete this.entityArchetypes[entityIndex(entity)];
+      archetype.removeEntity(entity, slot);
+      delete this.entityArchetypes[slot];
       this.#queryMembershipDirty = true;
     }
     return this;
@@ -568,9 +572,9 @@ export class ArchetypeManager {
    * @param instance - The component instance being removed
    * @returns The target archetype
    */
-  removeComponent(entity: Entity, instance: DynamicComponentInstance): Archetype {
-    const oldArchetype = this.entityArchetypes[entityIndex(entity)] ?? this.root;
-    return this.#moveEntity(entity, this.#getTransitionArchetype(oldArchetype, instance, false));
+  removeComponent(entity: Entity, instance: DynamicComponentInstance, slot: number = entityIndex(entity)): Archetype {
+    const oldArchetype = this.entityArchetypes[slot] ?? this.root;
+    return this.#moveEntity(entity, this.#getTransitionArchetype(oldArchetype, instance, false), slot);
   }
 
   /**
@@ -595,16 +599,17 @@ export class ArchetypeManager {
     if (!this.registry.has(archetype.id)) {
       throw new NotRegisteredError("Invalid archetype.");
     }
-    if (entityIndex(entity) >= this.entityArchetypes.length || entityIndex(entity) < 0) {
+    const slot = entityIndex(entity);
+    if (slot >= this.entityArchetypes.length || slot < 0) {
       throw new RangeError("Invalid entity.");
     }
 
-    const currentArchetype = this.entityArchetypes[entityIndex(entity)];
+    const currentArchetype = this.entityArchetypes[slot];
     if (currentArchetype === archetype) return archetype;
 
-    currentArchetype?.removeEntity(entity);
-    this.entityArchetypes[entityIndex(entity)] = archetype;
-    archetype.addEntity(entity);
+    currentArchetype?.removeEntity(entity, slot);
+    this.entityArchetypes[slot] = archetype;
+    archetype.addEntity(entity, slot);
     this.#queryMembershipDirty = true;
     return archetype;
   }

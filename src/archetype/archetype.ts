@@ -20,7 +20,8 @@ function* activeListIterator(
 ): IterableIterator<Entity> {
   for (let i = 0; i < count; i++) {
     const entity = list[i]! as Entity;
-    if (hasFlag(flags, entityIndex(entity), activeMask)) yield entity;
+    const slot = entityIndex(entity);
+    if (hasFlag(flags, slot, activeMask)) yield entity;
   }
 }
 
@@ -130,31 +131,31 @@ export class Archetype {
     this.removeTransitions = [];
   }
 
-  #activateEntity(entity: Entity): boolean {
-    if (hasFlag(this.#flags, entityIndex(entity), ENTITY_ACTIVE)) return false;
+  #activateEntity(entity: Entity, slot: number): boolean {
+    if (hasFlag(this.#flags, slot, ENTITY_ACTIVE)) return false;
     const position = this.#populationCount;
     this.#entityList[position] = entity;
-    this.#entityPositions[entityIndex(entity)] = position;
-    setFlag(this.#flags, entityIndex(entity), ENTITY_ACTIVE, true);
-    if (!hasFlag(this.#flags, entityIndex(entity), ENTERED_ACTIVE)) {
-      if (!hasFlag(this.#flags, entityIndex(entity), ENTERED_LISTED)) {
-        setFlag(this.#flags, entityIndex(entity), ENTERED_LISTED, true);
+    this.#entityPositions[slot] = position;
+    setFlag(this.#flags, slot, ENTITY_ACTIVE, true);
+    if (!hasFlag(this.#flags, slot, ENTERED_ACTIVE)) {
+      if (!hasFlag(this.#flags, slot, ENTERED_LISTED)) {
+        setFlag(this.#flags, slot, ENTERED_LISTED, true);
         this.#enteredList[this.#enteredListCount++] = entity;
       }
-      setFlag(this.#flags, entityIndex(entity), ENTERED_ACTIVE, true);
+      setFlag(this.#flags, slot, ENTERED_ACTIVE, true);
       this.#enteredCount++;
     }
     this.#populationCount++;
     return true;
   }
 
-  #deactivateEntity(entity: Entity): boolean {
-    if (!hasFlag(this.#flags, entityIndex(entity), ENTITY_ACTIVE)) return false;
-    if (hasFlag(this.#flags, entityIndex(entity), ENTERED_ACTIVE)) {
-      setFlag(this.#flags, entityIndex(entity), ENTERED_ACTIVE, false);
+  #deactivateEntity(entity: Entity, slot: number): boolean {
+    if (!hasFlag(this.#flags, slot, ENTITY_ACTIVE)) return false;
+    if (hasFlag(this.#flags, slot, ENTERED_ACTIVE)) {
+      setFlag(this.#flags, slot, ENTERED_ACTIVE, false);
       this.#enteredCount--;
     }
-    const removeIndex = this.#entityPositions[entityIndex(entity)]!;
+    const removeIndex = this.#entityPositions[slot]!;
     const lastIndex = this.#populationCount - 1;
     const lastEntity = this.#entityList[lastIndex]! as Entity;
     if (removeIndex !== lastIndex) {
@@ -162,14 +163,14 @@ export class Archetype {
       this.#entityPositions[entityIndex(lastEntity)] = removeIndex;
     }
     this.#entityList[lastIndex] = 0;
-    this.#entityPositions[entityIndex(entity)] = 0;
-    setFlag(this.#flags, entityIndex(entity), ENTITY_ACTIVE, false);
-    if (!hasFlag(this.#flags, entityIndex(entity), EXITED_ACTIVE)) {
-      if (!hasFlag(this.#flags, entityIndex(entity), EXITED_LISTED)) {
-        setFlag(this.#flags, entityIndex(entity), EXITED_LISTED, true);
+    this.#entityPositions[slot] = 0;
+    setFlag(this.#flags, slot, ENTITY_ACTIVE, false);
+    if (!hasFlag(this.#flags, slot, EXITED_ACTIVE)) {
+      if (!hasFlag(this.#flags, slot, EXITED_LISTED)) {
+        setFlag(this.#flags, slot, EXITED_LISTED, true);
         this.#exitedList[this.#exitedListCount++] = entity;
       }
-      setFlag(this.#flags, entityIndex(entity), EXITED_ACTIVE, true);
+      setFlag(this.#flags, slot, EXITED_ACTIVE, true);
       this.#exitedCount++;
     }
     this.#populationCount--;
@@ -179,10 +180,11 @@ export class Archetype {
   /**
    * Add an Entity to the Archetype
    * @param entity - The Entity to add
+   * @param slot - Optional precomputed storage slot (`entityIndex(entity)`)
    * @returns The Archetype with the Entity added
    */
-  addEntity(entity: Entity): Archetype {
-    this.#activateEntity(entity);
+  addEntity(entity: Entity, slot: number = entityIndex(entity)): Archetype {
+    this.#activateEntity(entity, slot);
     return this;
   }
 
@@ -198,7 +200,7 @@ export class Archetype {
     const end = start + count;
     for (let i = start; i < end; i++) {
       const entity = entities[i]! as Entity;
-      if (this.#activateEntity(entity)) added++;
+      if (this.#activateEntity(entity, entityIndex(entity))) added++;
     }
     return added;
   }
@@ -245,9 +247,10 @@ export class Archetype {
     if (visited) {
       for (let i = 0; i < this.#populationCount; i++) {
         const entity = this.#entityList[i]! as Entity;
-        if (visited.get(entityIndex(entity))) continue;
-        out.add(entity, asSlotIndex(entityIndex(entity)));
-        visited.set(entityIndex(entity), true);
+        const slot = entityIndex(entity);
+        if (visited.get(slot)) continue;
+        out.add(entity, asSlotIndex(slot));
+        visited.set(slot, true);
       }
       return out;
     }
@@ -320,14 +323,14 @@ export class Archetype {
    */
   refresh(): Archetype {
     for (let i = 0; i < this.#enteredListCount; i++) {
-      const entity = this.#enteredList[i]! as Entity;
-      setFlag(this.#flags, entityIndex(entity), ENTERED_ACTIVE, false);
-      setFlag(this.#flags, entityIndex(entity), ENTERED_LISTED, false);
+      const slot = entityIndex(this.#enteredList[i]! as Entity);
+      setFlag(this.#flags, slot, ENTERED_ACTIVE, false);
+      setFlag(this.#flags, slot, ENTERED_LISTED, false);
     }
     for (let i = 0; i < this.#exitedListCount; i++) {
-      const entity = this.#exitedList[i]! as Entity;
-      setFlag(this.#flags, entityIndex(entity), EXITED_ACTIVE, false);
-      setFlag(this.#flags, entityIndex(entity), EXITED_LISTED, false);
+      const slot = entityIndex(this.#exitedList[i]! as Entity);
+      setFlag(this.#flags, slot, EXITED_ACTIVE, false);
+      setFlag(this.#flags, slot, EXITED_LISTED, false);
     }
     this.#enteredCount = 0;
     this.#enteredListCount = 0;
@@ -339,10 +342,11 @@ export class Archetype {
   /**
    * Remove an Entity from an Archetype
    * @param entity - The Entity to remove
+   * @param slot - Optional precomputed storage slot (`entityIndex(entity)`)
    * @returns The Archetype with the Entity removed
    */
-  removeEntity(entity: Entity): Archetype {
-    this.#deactivateEntity(entity);
+  removeEntity(entity: Entity, slot: number = entityIndex(entity)): Archetype {
+    this.#deactivateEntity(entity, slot);
     return this;
   }
 
@@ -358,7 +362,7 @@ export class Archetype {
     const end = start + count;
     for (let i = start; i < end; i++) {
       const entity = entities[i]! as Entity;
-      if (this.#deactivateEntity(entity)) removed++;
+      if (this.#deactivateEntity(entity, entityIndex(entity))) removed++;
     }
     return removed;
   }
