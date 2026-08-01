@@ -1,9 +1,9 @@
 import { BooleanArray } from "@phughesmcr/booleanarray";
 
-import { createEntityArray, type EntityArray } from "@/entity/entity.ts";
+import { createSlotArray, type EntityArray } from "@/entity/entity.ts";
 import { NotRegisteredError } from "@/errors.ts";
 import type { DynamicComponentInstance } from "@/types/component.ts";
-import { type Entity, entityIndex } from "@/entity/entity.ts";
+import { type Entity, entityIndex, packEntity, type PackSlot } from "@/entity/entity.ts";
 import type { QueryInstance } from "@/types/query.ts";
 import { Archetype } from "./archetype.ts";
 
@@ -33,8 +33,8 @@ export class ArchetypeManager {
   /** Reusable query list for refresh passes */
   #queryScratch: QueryInstance[];
 
-  /** Reusable grouped entity storage for batch component transitions */
-  #bulkEntities: EntityArray;
+  /** Reusable grouped slot storage for batch component transitions */
+  #bulkSlots: EntityArray;
 
   /** Reusable group counts for batch component transitions */
   #bulkGroupCounts: number[];
@@ -50,6 +50,9 @@ export class ArchetypeManager {
 
   /** Reusable target archetypes for batch component transitions */
   #bulkTargets: Archetype[];
+
+  /** Pack slot → entity for archetype public iterators / query writes */
+  #packSlot: PackSlot;
 
   /**
    * Move an entity to a
@@ -71,15 +74,15 @@ export class ArchetypeManager {
   }
 
   /**
-   * Move a dense entity list through a single-component transition grouped by source archetype.
-   * @param entities - Dense entity IDs
-   * @param count - Number of entity IDs to read
+   * Move a dense slot list through a single-component transition grouped by source archetype.
+   * @param slots - Dense storage slots
+   * @param count - Number of slots to read
    * @param instance - The component instance being added or removed
    * @param add - Whether the component is being added
    * @returns The number of entities moved to a different archetype
    */
   #moveEntities(
-    entities: EntityArray,
+    slots: EntityArray,
     count: number,
     instance: DynamicComponentInstance,
     add: boolean,
@@ -95,8 +98,7 @@ export class ArchetypeManager {
     targets.length = 0;
 
     for (let i = 0; i < count; i++) {
-      const entity = entities[i]! as Entity;
-      const slot = entityIndex(entity);
+      const slot = slots[i]!;
       const source = this.entityArchetypes[slot] ?? this.root;
       let group = -1;
       for (let j = 0; j < sources.length; j++) {
@@ -127,8 +129,7 @@ export class ArchetypeManager {
     }
 
     for (let i = 0; i < count; i++) {
-      const entity = entities[i]! as Entity;
-      const slot = entityIndex(entity);
+      const slot = slots[i]!;
       const source = this.entityArchetypes[slot] ?? this.root;
       let group = -1;
       for (let j = 0; j < sources.length; j++) {
@@ -139,7 +140,7 @@ export class ArchetypeManager {
       }
       if (group === -1) continue;
       const write = writes[group]!;
-      this.#bulkEntities[write] = entity;
+      this.#bulkSlots[write] = slot;
       writes[group] = write + 1;
     }
 
@@ -148,12 +149,12 @@ export class ArchetypeManager {
       const target = targets[group]!;
       const offset = offsets[group]!;
       const groupCount = counts[group] ?? 0;
-      source.removeEntities(this.#bulkEntities, offset, groupCount);
-      target.addEntities(this.#bulkEntities, offset, groupCount);
+      source.removeEntities(this.#bulkSlots, offset, groupCount);
+      target.addEntities(this.#bulkSlots, offset, groupCount);
       const end = offset + groupCount;
       for (let i = offset; i < end; i++) {
-        this.entityArchetypes[entityIndex(this.#bulkEntities[i]! as Entity)] = target;
-        this.#bulkEntities[i] = 0;
+        this.entityArchetypes[this.#bulkSlots[i]!] = target;
+        this.#bulkSlots[i] = 0;
       }
       counts[group] = 0;
       offsets[group] = 0;
@@ -190,7 +191,7 @@ export class ArchetypeManager {
       const components = add ?
         this.#componentsWithAdded(from.components, instance) :
         this.#componentsWithRemoved(from.components, instance);
-      archetype = new Archetype(this.entityArchetypes.length, components, bitfield);
+      archetype = new Archetype(this.#capacity, components, bitfield, this.#packSlot);
       this.registry.set(archetypeId, archetype);
     }
 
@@ -303,6 +304,7 @@ export class ArchetypeManager {
         this.#capacity,
         this.#componentsWithAddedSet(from.components, instances),
         bitfield,
+        this.#packSlot,
       );
       this.registry.set(archetypeId, archetype);
     }
@@ -350,16 +352,22 @@ export class ArchetypeManager {
    * Create a new ArchetypeManager
    * @param capacity - The maximum number of entities this manager can handle
    * @param componentCount - The number of components registered in the world
+   * @param packSlot - Packs a live slot into an entity handle (defaults to generation 0)
    */
-  constructor(capacity: number, componentCount: number) {
+  constructor(
+    capacity: number,
+    componentCount: number,
+    packSlot: PackSlot = (slot) => packEntity(slot, 0),
+  ) {
     this.#capacity = capacity;
+    this.#packSlot = packSlot;
     this.registry = new Map();
     this.entityArchetypes = new Array(capacity);
     this.queryArchetypes = new Map();
     this.#componentCache = {};
     this.#queryMembershipDirty = true;
     this.#queryScratch = [];
-    this.#bulkEntities = createEntityArray(capacity);
+    this.#bulkSlots = createSlotArray(capacity);
     this.#bulkGroupCounts = [];
     this.#bulkGroupOffsets = [];
     this.#bulkGroupWrites = [];
@@ -368,7 +376,7 @@ export class ArchetypeManager {
 
     // Create root archetype with properly sized bitfield for components
     const rootBitfield = new BooleanArray(componentCount);
-    this.root = new Archetype(capacity, [], rootBitfield);
+    this.root = new Archetype(capacity, [], rootBitfield, packSlot);
     this.registry.set(this.root.id, this.root);
   }
 
@@ -385,13 +393,13 @@ export class ArchetypeManager {
 
   /**
    * Move entities to the archetypes reached by adding a component.
-   * @param entities - Dense entity IDs
-   * @param count - Number of entity IDs to read
+   * @param slots - Dense storage slots
+   * @param count - Number of slots to read
    * @param instance - The component instance being added
    * @returns The number of entities moved to a different archetype
    */
-  addComponents(entities: EntityArray, count: number, instance: DynamicComponentInstance): number {
-    return this.#moveEntities(entities, count, instance, true);
+  addComponents(slots: EntityArray, count: number, instance: DynamicComponentInstance): number {
+    return this.#moveEntities(slots, count, instance, true);
   }
 
   /** Add a newly-created active entity to the root archetype. */
@@ -579,13 +587,13 @@ export class ArchetypeManager {
 
   /**
    * Move entities to the archetypes reached by removing a component.
-   * @param entities - Dense entity IDs
-   * @param count - Number of entity IDs to read
+   * @param slots - Dense storage slots
+   * @param count - Number of slots to read
    * @param instance - The component instance being removed
    * @returns The number of entities moved to a different archetype
    */
-  removeComponents(entities: EntityArray, count: number, instance: DynamicComponentInstance): number {
-    return this.#moveEntities(entities, count, instance, false);
+  removeComponents(slots: EntityArray, count: number, instance: DynamicComponentInstance): number {
+    return this.#moveEntities(slots, count, instance, false);
   }
 
   /**

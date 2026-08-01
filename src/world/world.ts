@@ -3,7 +3,7 @@ import { BooleanArray } from "@phughesmcr/booleanarray";
 import { VERSION } from "@/constants.ts";
 import { ArchetypeManager } from "@/archetype/archetype-manager.ts";
 import { type ComponentBundleCommitEntry, ComponentManager } from "@/component/component-manager.ts";
-import { createEntityArray, type EntityArray, entityIndex } from "@/entity/entity.ts";
+import { createEntityArray, createSlotArray, type EntityArray, entityIndex } from "@/entity/entity.ts";
 import { EntityManager } from "@/entity/entity-manager.ts";
 import {
   CapacityError,
@@ -90,8 +90,11 @@ export class World {
   /** Cache of entities visited by archetype query helpers */
   readonly #visitedArchetypeEntities: BooleanArray;
 
-  /** Dense scratch storage for preflighted batch component transitions */
+  /** Dense scratch storage for preflighted batch component transitions (packed handles) */
   readonly #batchEntities: EntityArray;
+
+  /** Dense scratch storage for preflighted batch component transitions (slots) */
+  readonly #batchSlots: EntityArray;
 
   /** Duplicate-detection scratch flags for preflighted batch component transitions */
   readonly #batchSeen: Uint8Array;
@@ -475,6 +478,7 @@ export class World {
       }
       this.#batchSeen[slot] = 1;
       this.#batchEntities[i] = entity;
+      this.#batchSlots[i] = slot;
     }
 
     return count;
@@ -483,9 +487,9 @@ export class World {
   /** Clear duplicate-detection scratch flags after batch preflight/commit. */
   #clearBatchEntities(count: number): void {
     for (let i = 0; i < count; i++) {
-      const entity = this.#batchEntities[i]! as Entity;
-      this.#batchSeen[entityIndex(entity)] = 0;
+      this.#batchSeen[this.#batchSlots[i]!] = 0;
       this.#batchEntities[i] = 0;
+      this.#batchSlots[i] = 0;
     }
   }
 
@@ -672,7 +676,7 @@ export class World {
         }
       }
       if (changedCount > 0) {
-        this.#archetypeManager.addComponents(this.#batchEntities, count, instance);
+        this.#archetypeManager.addComponents(this.#batchSlots, count, instance);
       }
       this.#invalidateCommittedTransition(changedCount > 0);
       return changedCount;
@@ -715,7 +719,7 @@ export class World {
         }
       }
       if (changedCount > 0) {
-        this.#archetypeManager.removeComponents(this.#batchEntities, count, instance);
+        this.#archetypeManager.removeComponents(this.#batchSlots, count, instance);
       }
       this.#invalidateCommittedTransition(changedCount > 0);
       return changedCount;
@@ -857,11 +861,13 @@ export class World {
     // Internal managers
     const { capacity, components } = spec;
     this.#entityManager = new EntityManager(capacity);
-    this.#componentManager = new ComponentManager(capacity, components, () => ++this.#revision);
+    const packSlot = (slot: number) => this.#entityManager.packSlot(slot);
+    this.#componentManager = new ComponentManager(capacity, components, () => ++this.#revision, packSlot);
 
-    this.#archetypeManager = new ArchetypeManager(capacity, components.length);
+    this.#archetypeManager = new ArchetypeManager(capacity, components.length, packSlot);
     this.#visitedArchetypeEntities = new BooleanArray(capacity);
     this.#batchEntities = createEntityArray(capacity);
+    this.#batchSlots = createSlotArray(capacity);
     this.#batchSeen = new Uint8Array(capacity);
     this.#bundleEntries = [];
     this.#bundleSeenComponents = new Uint8Array(components.length);

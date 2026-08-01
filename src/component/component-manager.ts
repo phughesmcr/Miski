@@ -2,8 +2,8 @@ import { BooleanArray } from "@phughesmcr/booleanarray";
 import { getPartitionByteSize, PartitionedBuffer } from "@phughesmcr/partitionedbuffer";
 
 import { $_COMPONENT_ID_KEY, $_PARTITION_KEY } from "@/constants.ts";
-import { createEntityArray, createSlotArray, type EntityArray } from "@/entity/entity.ts";
-import { ReusableEntityIterator } from "@/entity/entity.ts";
+import { createEntityArray, createSlotArray, type EntityArray, packEntity, type PackSlot } from "@/entity/entity.ts";
+import { ReusableEntityIterator, ReusableSlotPackIterator } from "@/entity/entity.ts";
 import { componentDisplayName, formatComponentNotRegistered, NotRegisteredError } from "@/errors.ts";
 import type { DynamicComponent, DynamicComponentInstance } from "@/types/component.ts";
 import { type Entity, entityIndex } from "@/entity/entity.ts";
@@ -38,13 +38,13 @@ type ComponentState = {
   changed?: BooleanArray;
   changedCount: number;
   changedList?: EntityArray;
-  changedIterator?: ReusableEntityIterator;
+  changedIterator?: ReusableSlotPackIterator;
   changedPositions?: EntityArray;
   readonly isUncappedTag: boolean;
   readonly maxEntities: number;
   ownerCount: number;
   ownerList?: EntityArray;
-  ownerIterator?: ReusableEntityIterator;
+  ownerIterator?: ReusableSlotPackIterator;
   ownerPositions?: EntityArray;
   owners?: Uint8Array;
   readonly usesSparseStorage: boolean;
@@ -85,17 +85,21 @@ export class ComponentManager {
   #nextWorldRevision: () => number;
   /** Optional column-write hook for rollback capture */
   #beforeColumnWrite?: (instanceId: number, key: string, slot: number) => void;
+  /** Pack slot → entity at owner/changed iterator edges */
+  #packSlot: PackSlot;
 
   /**
    * Create a new component manager.
    * @param capacity - The capacity of the component manager
    * @param components - The components to register
    * @param nextWorldRevision - Optional monotonic world revision bump
+   * @param packSlot - Packs a live slot into an entity handle (defaults to generation 0)
    */
   constructor(
     capacity: number,
     components: DynamicComponent[],
     nextWorldRevision: () => number = () => 0,
+    packSlot: PackSlot = (slot) => packEntity(slot, 0),
   ) {
     // create the storage buffer
     const storageSize = components.reduce((acc, component) => acc + getComponentStorageSize(component, capacity), 0);
@@ -103,6 +107,7 @@ export class ComponentManager {
     this.#buffer = new PartitionedBuffer(size, capacity);
     this.#capacity = capacity;
     this.#nextWorldRevision = nextWorldRevision;
+    this.#packSlot = packSlot;
     // create the various registries
     this.#emptyChangedIterator = new ReusableEntityIterator(createEntityArray(0));
     this.#emptyOwnerIterator = new ReusableEntityIterator(createEntityArray(0));
@@ -223,33 +228,33 @@ export class ComponentManager {
     let owners = state.owners;
     if (owners !== undefined) return owners;
 
-    const ownerList = createEntityArray(this.#capacity, this.#getListCapacity(state));
+    const ownerList = createSlotArray(this.#capacity, this.#getListCapacity(state));
     owners = new Uint8Array(this.#capacity);
     state.owners = owners;
     state.ownerList = ownerList;
     state.ownerPositions = createSlotArray(this.#capacity);
-    state.ownerIterator = new ReusableEntityIterator(ownerList);
+    state.ownerIterator = new ReusableSlotPackIterator(ownerList, this.#packSlot);
     return owners;
   }
 
-  /** Append an entity to a component's dense owner list. */
-  #appendOwner(state: ComponentState, entity: Entity, slot: number): void {
+  /** Append a storage slot to a component's dense owner list. */
+  #appendOwner(state: ComponentState, slot: number): void {
     const ownerCount = state.ownerCount;
     const ownerList = state.ownerList!;
     const ownerPositions = state.ownerPositions!;
-    ownerList[ownerCount] = entity;
+    ownerList[ownerCount] = slot;
     ownerPositions[slot] = ownerCount;
     state.ownerCount = ownerCount + 1;
   }
 
-  /** Remove an entity from a dense list whose membership was already checked. */
+  /** Remove a slot from a dense list whose membership was already checked. */
   #removeFromDenseList(list: EntityArray, positions: EntityArray, count: number, slot: number): number {
     const removeIndex = positions[slot]!;
     const lastIndex = count - 1;
-    const lastEntity = list[lastIndex]!;
+    const lastSlot = list[lastIndex]!;
     if (removeIndex !== lastIndex) {
-      list[removeIndex] = lastEntity;
-      positions[entityIndex(lastEntity as Entity)] = removeIndex;
+      list[removeIndex] = lastSlot;
+      positions[lastSlot] = removeIndex;
     }
     list[lastIndex] = 0;
     positions[slot] = 0;
@@ -260,11 +265,11 @@ export class ComponentManager {
    * Claim ownership for an entity when it is not already owned.
    * @returns `true` when ownership changed from unowned to owned
    */
-  #acquireOwnership(state: ComponentState, entity: Entity, owners: Uint8Array, slot: number): boolean {
+  #acquireOwnership(state: ComponentState, owners: Uint8Array, slot: number): boolean {
     const alreadyOwned = owners[slot] === 1;
     if (alreadyOwned) return false;
     owners[slot] = 1;
-    this.#appendOwner(state, entity, slot);
+    this.#appendOwner(state, slot);
     return true;
   }
 
@@ -276,17 +281,17 @@ export class ComponentManager {
     const instance = state.instance;
     if (instance === undefined || instance.storage === null) return undefined;
 
-    const changedList = createEntityArray(this.#capacity, this.#getListCapacity(state));
+    const changedList = createSlotArray(this.#capacity, this.#getListCapacity(state));
     changed = new BooleanArray(this.#capacity);
     state.changed = changed;
     state.changedList = changedList;
     state.changedPositions = createSlotArray(this.#capacity);
-    state.changedIterator = new ReusableEntityIterator(changedList);
+    state.changedIterator = new ReusableSlotPackIterator(changedList, this.#packSlot);
     return changed;
   }
 
   /** Mark a data component changed once per entity per refresh window. */
-  #markChanged(state: ComponentState, entity: Entity, slot: number): void {
+  #markChanged(state: ComponentState, _entity: Entity, slot: number): void {
     const changed = this.#ensureChangedState(state);
     if (changed === undefined || changed.get(slot)) return;
 
@@ -298,7 +303,7 @@ export class ComponentManager {
 
     const changedCount = state.changedCount;
     changed.set(slot, true);
-    changedList[changedCount] = entity;
+    changedList[changedCount] = slot;
     changedPositions[slot] = changedCount;
     state.changedCount = changedCount + 1;
     this.#bumpRevision(state);
@@ -380,7 +385,7 @@ export class ComponentManager {
 
     const storage = instance.storage;
     if (state.isUncappedTag) {
-      return this.#acquireOwnership(state, entity, owners, slot);
+      return this.#acquireOwnership(state, owners, slot);
     }
 
     const alreadyOwned = owners[slot] === 1;
@@ -394,7 +399,7 @@ export class ComponentManager {
       }
     }
 
-    const ownershipChanged = this.#acquireOwnership(state, entity, owners, slot);
+    const ownershipChanged = this.#acquireOwnership(state, owners, slot);
     if (ownershipChanged) this.#bumpRevision(state);
     if (ownershipChanged && storage !== null) {
       this.#clearEntityStorage(storage.partitions as Record<string, unknown>, slot);
@@ -722,8 +727,7 @@ export class ComponentManager {
       const changedCount = state.changedCount;
       if (changed !== undefined && changedList !== undefined && changedPositions !== undefined) {
         for (let j = 0; j < changedCount; j++) {
-          const entity = changedList[j]!;
-          const slot = entityIndex(entity);
+          const slot = changedList[j]!;
           changed.set(slot, false);
           changedList[j] = 0;
           changedPositions[slot] = 0;
@@ -887,9 +891,9 @@ export class ComponentManager {
         state.ownerCount = 0;
         if (snap.ownerList !== undefined) {
           for (let j = 0; j < snap.ownerCount; j++) {
-            const entity = snap.ownerList[j]! as Entity;
-            state.ownerList![j] = entity;
-            state.ownerPositions![entityIndex(entity)] = j;
+            const slot = snap.ownerList[j]!;
+            state.ownerList![j] = slot;
+            state.ownerPositions![slot] = j;
           }
           state.ownerCount = snap.ownerCount;
         }
