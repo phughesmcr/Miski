@@ -452,8 +452,8 @@ export class World {
       if (value === undefined) {
         throw new ComponentDataError(`Component ${instance.type.name} data field "${key}" cannot be undefined.`);
       }
-      if (typeof value !== "number") {
-        throw new ComponentDataError(`Component ${instance.type.name} data field "${key}" must be a number.`);
+      if (typeof value !== "number" || !Number.isFinite(value)) {
+        throw new ComponentDataError(`Component ${instance.type.name} data field "${key}" must be a finite number.`);
       }
     }
   }

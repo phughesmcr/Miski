@@ -58,6 +58,8 @@ type ComponentState = {
   lastChangedRevision: number;
   /** One-element typed-array scratch buffers for value canonicalization. */
   coercionScratch?: Record<string, TypedArray>;
+  /** Parallel scratch columns for `storageKeys` (avoids string-key lookup on write). */
+  readonly coercionScratchColumns: readonly TypedArray[];
 };
 
 /**
@@ -129,6 +131,7 @@ export class ComponentManager {
       const coercionScratch: Record<string, TypedArray> = {};
       const storageKeys: string[] = [];
       const storageColumns: TypedArray[] = [];
+      const coercionScratchColumns: TypedArray[] = [];
       let usesSparseStorage = false;
       if (storage !== null) {
         const partitions = storage.partitions as Record<string, TypedArray>;
@@ -136,9 +139,11 @@ export class ComponentManager {
           const partition = partitions[key];
           if (ArrayBuffer.isView(partition)) {
             const Ctor = partition.constructor as new (length: number) => TypedArray;
-            coercionScratch[key] = new Ctor(1);
+            const scratchColumn = new Ctor(1);
+            coercionScratch[key] = scratchColumn;
             storageKeys.push(key);
             storageColumns.push(partition);
+            coercionScratchColumns.push(scratchColumn);
           } else if (partition !== undefined && partition !== null) {
             usesSparseStorage = true;
           }
@@ -176,6 +181,7 @@ export class ComponentManager {
         usesSparseStorage,
         storageKeys,
         storageColumns,
+        coercionScratchColumns,
         revision: 0,
         lastChangedRevision: 0,
         coercionScratch,
@@ -360,8 +366,9 @@ export class ComponentManager {
   /**
    * Write schema columns from a data object.
    *
-   * When `dataValidated` is true, unknown keys have already been rejected and values are known numbers, so the
-   * write path skips `hasOwnProperty` checks. New ownership zeros any schema key absent from `data`.
+   * When `dataValidated` is true, values are already known finite numbers, so the write path skips
+   * `hasOwnProperty` and `canonicalizeStoredValue` (TypedArray assignment performs storage coercion).
+   * New ownership zeros any schema key absent from `data`.
    */
   #writeEntityStorageData(
     state: ComponentState,
@@ -373,16 +380,28 @@ export class ComponentManager {
   ): void {
     const keys = state.storageKeys;
     const columns = state.storageColumns;
-    const scratch = state.coercionScratch ?? {};
+    if (dataValidated) {
+      for (let i = 0; i < keys.length; i++) {
+        const value = data[keys[i]!];
+        if (value === undefined) {
+          if (ownershipChanged) columns[i]![slot] = 0;
+          continue;
+        }
+        columns[i]![slot] = value === 0 ? 0 : value;
+      }
+      return;
+    }
+
+    const scratchColumns = state.coercionScratchColumns;
     for (let i = 0; i < keys.length; i++) {
       const key = keys[i]!;
       const column = columns[i]!;
-      const value = dataValidated ? data[key] : (hasOwnProperty(data, key) ? data[key] : undefined);
+      const value = hasOwnProperty(data, key) ? data[key] : undefined;
       if (value === undefined) {
         if (ownershipChanged) column[slot] = 0;
         continue;
       }
-      const scratchColumn = scratch[key];
+      const scratchColumn = scratchColumns[i];
       column[slot] = scratchColumn === undefined ?
         value :
         canonicalizeStoredValue(componentName, key, value, scratchColumn);
@@ -440,7 +459,7 @@ export class ComponentManager {
     const ownershipChanged = this.#acquireOwnership(state, owners, slot);
     if (ownershipChanged) this.#bumpRevision(state);
 
-    const hasData = isObject(data);
+    const hasData = dataValidated ? data != null : isObject(data);
     // Clear leftovers only when we cannot apply defaults during the write pass.
     if (ownershipChanged && storage !== null && (!hasData || state.usesSparseStorage)) {
       this.#clearEntityStorage(storage.partitions as Record<string, unknown>, slot);
@@ -461,7 +480,7 @@ export class ComponentManager {
         // Sparse / object partitions: preserve the prior key-walk write path.
         const partitions = storage.partitions as Record<string, TypedArray>;
         const scratch = state.coercionScratch ?? {};
-        for (const key in data) {
+        for (const key in data!) {
           if (!hasOwnProperty(data, key)) continue;
           const value = (data as Record<string, number | undefined>)[key];
           if (value !== undefined && hasOwnProperty(partitions, key)) {

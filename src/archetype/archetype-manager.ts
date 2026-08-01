@@ -175,12 +175,13 @@ export class ArchetypeManager {
    * @returns The target archetype
    */
   #getTransitionArchetype(from: Archetype, instance: DynamicComponentInstance, add: boolean): Archetype {
-    const hasComponent = from.bitfield.get(instance.id);
-    if (hasComponent === add) return from;
-
+    // Warm transitions skip the bitfield probe (hot add/remove path).
     const transitions = add ? from.addTransitions : from.removeTransitions;
     const cached = transitions[instance.id];
     if (cached) return cached;
+
+    const hasComponent = from.bitfield.get(instance.id);
+    if (hasComponent === add) return from;
 
     const bitfield = from.bitfield.clone();
     bitfield.set(instance.id, add);
