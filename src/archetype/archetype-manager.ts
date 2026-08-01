@@ -24,6 +24,9 @@ export class ArchetypeManager {
   /** The maximum number of entities this manager can handle. */
   #capacity: number;
 
+  /** Number of components registered in the world (transition edge array size). */
+  #componentCount: number;
+
   /** Reusable cache for entity component lookup. */
   #componentCache: Record<string, DynamicComponentInstance>;
 
@@ -181,7 +184,10 @@ export class ArchetypeManager {
     if (cached) return cached;
 
     const hasComponent = from.bitfield.get(instance.id);
-    if (hasComponent === add) return from;
+    if (hasComponent === add) {
+      transitions[instance.id] = from;
+      return from;
+    }
 
     const bitfield = from.bitfield.clone();
     bitfield.set(instance.id, add);
@@ -192,7 +198,7 @@ export class ArchetypeManager {
       const components = add ?
         this.#componentsWithAdded(from.components, instance) :
         this.#componentsWithRemoved(from.components, instance);
-      archetype = new Archetype(this.#capacity, components, bitfield, this.#packSlot);
+      archetype = new Archetype(this.#capacity, components, bitfield, this.#packSlot, this.#componentCount);
       this.registry.set(archetypeId, archetype);
     }
 
@@ -306,6 +312,7 @@ export class ArchetypeManager {
         this.#componentsWithAddedSet(from.components, instances),
         bitfield,
         this.#packSlot,
+        this.#componentCount,
       );
       this.registry.set(archetypeId, archetype);
     }
@@ -361,6 +368,7 @@ export class ArchetypeManager {
     packSlot: PackSlot = (slot) => packEntity(slot, 0),
   ) {
     this.#capacity = capacity;
+    this.#componentCount = componentCount;
     this.#packSlot = packSlot;
     this.registry = new Map();
     this.entityArchetypes = new Array(capacity);
@@ -377,7 +385,7 @@ export class ArchetypeManager {
 
     // Create root archetype with properly sized bitfield for components
     const rootBitfield = new BooleanArray(componentCount);
-    this.root = new Archetype(capacity, [], rootBitfield, packSlot);
+    this.root = new Archetype(capacity, [], rootBitfield, packSlot, componentCount);
     this.registry.set(this.root.id, this.root);
   }
 

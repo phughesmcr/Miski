@@ -3,6 +3,7 @@
   "specifiers": {
     "jsr:@phughesmcr/bitpool@0.9.1": "0.9.1",
     "jsr:@phughesmcr/bitpool@~0.9.1": "0.9.1",
+    "jsr:@phughesmcr/booleanarray@*": "0.13.0",
     "jsr:@phughesmcr/booleanarray@0.13": "0.13.0",
     "jsr:@phughesmcr/partitionedbuffer@~0.4.1": "0.4.1",
     "jsr:@std/semver@1": "1.0.8"
@@ -11,7 +12,7 @@
     "@phughesmcr/bitpool@0.9.1": {
       "integrity": "07519ef3646f6c7e6cc91171471b9db8bee20b52d69c41685a78ef9f2f256d96",
       "dependencies": [
-        "jsr:@phughesmcr/booleanarray"
+        "jsr:@phughesmcr/booleanarray@0.13"
       ]
     },
     "@phughesmcr/booleanarray@0.13.0": {

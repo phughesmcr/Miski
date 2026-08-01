@@ -52,6 +52,8 @@ type ComponentState = {
   readonly storageKeys: readonly string[];
   /** Parallel typed-array columns for `storageKeys`. */
   readonly storageColumns: readonly TypedArray[];
+  /** Own-key presence map for schema fields (typed + sparse partitions). */
+  readonly storageKeyLookup: Readonly<Record<string, 1>>;
   /** Monotonic revision for membership and value changes. */
   revision: number;
   /** World revision token assigned on the last change. */
@@ -132,6 +134,7 @@ export class ComponentManager {
       const storageKeys: string[] = [];
       const storageColumns: TypedArray[] = [];
       const coercionScratchColumns: TypedArray[] = [];
+      const storageKeyLookup: Record<string, 1> = Object.create(null);
       let usesSparseStorage = false;
       if (storage !== null) {
         const partitions = storage.partitions as Record<string, TypedArray>;
@@ -144,8 +147,10 @@ export class ComponentManager {
             storageKeys.push(key);
             storageColumns.push(partition);
             coercionScratchColumns.push(scratchColumn);
+            storageKeyLookup[key] = 1;
           } else if (partition !== undefined && partition !== null) {
             usesSparseStorage = true;
+            storageKeyLookup[key] = 1;
           }
         }
       }
@@ -181,6 +186,7 @@ export class ComponentManager {
         usesSparseStorage,
         storageKeys,
         storageColumns,
+        storageKeyLookup,
         coercionScratchColumns,
         revision: 0,
         lastChangedRevision: 0,
@@ -381,7 +387,33 @@ export class ComponentManager {
     const keys = state.storageKeys;
     const columns = state.storageColumns;
     if (dataValidated) {
-      for (let i = 0; i < keys.length; i++) {
+      const keyCount = keys.length;
+      // Specialize 1- and 2-field schemas (common gameplay shapes like Vec2).
+      if (keyCount === 2) {
+        const v0 = data[keys[0]!];
+        const v1 = data[keys[1]!];
+        if (v0 === undefined) {
+          if (ownershipChanged) columns[0]![slot] = 0;
+        } else {
+          columns[0]![slot] = v0 === 0 ? 0 : v0;
+        }
+        if (v1 === undefined) {
+          if (ownershipChanged) columns[1]![slot] = 0;
+        } else {
+          columns[1]![slot] = v1 === 0 ? 0 : v1;
+        }
+        return;
+      }
+      if (keyCount === 1) {
+        const v0 = data[keys[0]!];
+        if (v0 === undefined) {
+          if (ownershipChanged) columns[0]![slot] = 0;
+        } else {
+          columns[0]![slot] = v0 === 0 ? 0 : v0;
+        }
+        return;
+      }
+      for (let i = 0; i < keyCount; i++) {
         const value = data[keys[i]!];
         if (value === undefined) {
           if (ownershipChanged) columns[i]![slot] = 0;
@@ -560,6 +592,15 @@ export class ComponentManager {
       return this.#registryByName[component];
     }
     return this.#registryByComponentId[component[$_COMPONENT_ID_KEY]];
+  }
+
+  /**
+   * Own-key schema field lookup for a registered instance (typed + sparse partitions).
+   * Used by World public-payload validation to avoid `hasOwnProperty` on partitions.
+   * @internal
+   */
+  getStorageKeyLookup(instance: DynamicComponentInstance): Readonly<Record<string, 1>> | undefined {
+    return this.#states[instance.id]?.storageKeyLookup;
   }
 
   /**

@@ -77,27 +77,27 @@ Because Miski is designed to be used inside your own projects, we let you config
 
 Miski is optimized for Deno game-loop workloads where predictable frame time and low GC pressure matter.
 
-Recent local benchmark results on Deno 2.9.0, aarch64 macOS:
+Recent local benchmark results on Deno 2.9.4, aarch64 macOS:
 
 | Benchmark | Result |
 | --- | ---: |
-| `isActive` hot check | 6.8 ns |
-| `entityHas` ownership check | 6.1 ns |
-| `instance.has` ownership check | 4.1 ns |
-| Direct typed-array write + `instance.markChanged` | 9.4 ns |
-| `readEntityDataInto` reused object | 21.4 ns |
-| Add/remove tag component | 68.0 ns |
-| Add/remove data component | 111.6 ns |
-| Move entity across common gameplay archetypes | 271.4 ns |
-| Bulk add/remove tag component - 7,168 entities | 439.7 us, 61.3 ns/entity |
-| Bulk add/remove data component - 7,168 entities | 630.1 us, 87.9 ns/entity |
-| Query cache miss after refresh | 1.9 us |
-| Cached dense `queryList` iteration | 958.6 ns |
-| Cached dense `queryList` iteration with `include` | 2.0 us |
-| Dense changed iteration with no changed entities | 10.0 ns |
-| Spawn/despawn 128 projectiles - repeated `addToEntity` | 60.7 us |
-| Spawn/despawn 128 projectiles - `createWith` bundle | 85.1 us |
-| Game frame - move, query renderables, refresh | 7.1 us |
+| `isActive` hot check | 6.5 ns |
+| `entityHas` ownership check | 6.5 ns |
+| `instance.has` ownership check | 4.3 ns |
+| Direct typed-array write + `instance.markChanged` | 9.6 ns |
+| `readEntityDataInto` reused object | 20.4 ns |
+| Add/remove tag component | 68.8 ns |
+| Add/remove data component | 121.3 ns |
+| Move entity across common gameplay archetypes | 333.5 ns |
+| Bulk add/remove tag component - 7,168 entities | 401.8 us, 56.1 ns/entity |
+| Bulk add/remove data component - 7,168 entities | 611.3 us, 85.3 ns/entity |
+| Query cache miss after refresh | 1.8 us |
+| Cached dense `queryList` iteration | 946.1 ns |
+| Cached dense `queryList` iteration with `include` | 1.9 us |
+| Dense changed iteration with no changed entities | 10.7 ns |
+| Spawn/despawn 128 projectiles - repeated `addToEntity` | 70.9 us |
+| Spawn/despawn 128 projectiles - `createWith` bundle | 91.5 us |
+| Game frame - move, query renderables, refresh | 6.8 us |
 
 GC allocation pressure is budgeted separately. Hot entity, component check, direct write, cached query list, changed,
 and owner iteration paths are effectively allocation-free in steady state. The current `deno task bench:gc` run reports:
@@ -113,14 +113,14 @@ and owner iteration paths are effectively allocation-free in steady state. The c
 | Cached `queryList` entity iteration | 0.0000 B/iter |
 | Cached `queryList` entity iteration with `include` | 0.0000 B/iter |
 | Included-component render loop | 0.0000 B/iter |
-| Component changed dense iterator | 0.0486 B/iter |
+| Component changed dense iterator | 0.0487 B/iter |
 | Component owners iterator | 0.0000 B/iter |
 | Spawn/despawn 128 projectiles - repeated `addToEntity` | 0.0000 B/iter |
 | Spawn/despawn 128 projectiles - `createWith` bundle | 936.5920 B/iter |
 | Add/remove data component runtime transition | 40.0012 B/iter |
-| Bulk add/remove tag component - 896 entities | 1.56 KiB/iter |
+| Bulk add/remove tag component - 896 entities | 1.64 KiB/iter |
 | Bulk add/remove data component - 896 entities | 1.56 KiB/iter |
-| Game frame system + cached render query + refresh | 896.0464 B/iter |
+| Game frame system + cached render query + refresh | 304.0272 B/iter |
 
 Against a local ECS benchmark shape derived from `noctjs/ecs-benchmark`, Miski ranks in the top three by normalized
 geomean when using Deno and Miski's dense/bulk APIs for hot query loops. Cross-library benchmark numbers are sensitive

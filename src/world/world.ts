@@ -441,11 +441,14 @@ export class World {
       throw new TypeError(`Component data for "${instance.type.name}" must be an object.`);
     }
 
-    const partitions = instance.storage.partitions as Record<string, unknown>;
+    const knownKeys = this.#componentManager.getStorageKeyLookup(instance);
+    if (knownKeys === undefined) {
+      throw new ComponentDataError(`Component ${instance.type.name} has no data storage.`);
+    }
     const values = data as Record<string, unknown>;
     for (const key in values) {
       if (!hasOwnProperty(values, key)) continue;
-      if (!hasOwnProperty(partitions, key)) {
+      if (knownKeys[key] !== 1) {
         throw new ComponentDataError(`Component ${instance.type.name} does not define data field "${key}".`);
       }
       const value = values[key];

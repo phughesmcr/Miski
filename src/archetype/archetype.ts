@@ -69,6 +69,9 @@ export class Archetype {
   /** The world's entity capacity (used for entity tracking arrays) */
   #entityCapacity: number;
 
+  /** World component-registry size — transition edge arrays are indexed by instance id */
+  #transitionCapacity: number;
+
   /** Dense currently-active storage slots in this archetype */
   #entityList: EntityArray;
 
@@ -105,6 +108,7 @@ export class Archetype {
    * @param components - The components associated with this Archetype
    * @param bitfield - Optional BooleanArray to use as the Archetype's Component Bitfield
    * @param packSlot - Packs a live slot into an entity handle (defaults to generation 0)
+   * @param transitionCapacity - Size of add/remove transition edge arrays (world component count)
    * @returns a new Archetype object
    */
   constructor(
@@ -112,13 +116,14 @@ export class Archetype {
     components: DynamicComponentInstance[],
     bitfield?: BooleanArray,
     packSlot: PackSlot = (slot) => packEntity(slot, 0),
+    transitionCapacity: number = 0,
   ) {
     this.#entityCapacity = capacity;
     this.#packSlot = packSlot;
     bitfield = bitfield ??
       (components.length > 0 ?
         BooleanArray.fromObjects(components.length, ID_KEY, components) :
-        new BooleanArray(capacity));
+        new BooleanArray(Math.max(transitionCapacity, 1)));
     this.bitfield = bitfield;
     this.id = bitfield.buffer.toString();
     this.components = components;
@@ -133,34 +138,44 @@ export class Archetype {
     this.#exitedList = createSlotArray(capacity);
     this.#exitedListCount = 0;
     this.#populationCount = 0;
-    this.addTransitions = [];
-    this.removeTransitions = [];
+    this.#transitionCapacity = Math.max(transitionCapacity, bitfield.size ?? 0, components.length);
+    this.addTransitions = new Array(this.#transitionCapacity);
+    this.removeTransitions = new Array(this.#transitionCapacity);
   }
 
   #activateEntity(slot: number): boolean {
-    if (hasFlag(this.#flags, slot, ENTITY_ACTIVE)) return false;
+    const flags = this.#flags;
+    let flag = flags[slot]!;
+    if ((flag & ENTITY_ACTIVE) !== 0) return false;
+
     const position = this.#populationCount;
     this.#entityList[position] = slot;
     this.#entityPositions[slot] = position;
-    setFlag(this.#flags, slot, ENTITY_ACTIVE, true);
-    if (!hasFlag(this.#flags, slot, ENTERED_ACTIVE)) {
-      if (!hasFlag(this.#flags, slot, ENTERED_LISTED)) {
-        setFlag(this.#flags, slot, ENTERED_LISTED, true);
+
+    flag |= ENTITY_ACTIVE;
+    if ((flag & ENTERED_ACTIVE) === 0) {
+      if ((flag & ENTERED_LISTED) === 0) {
+        flag |= ENTERED_LISTED;
         this.#enteredList[this.#enteredListCount++] = slot;
       }
-      setFlag(this.#flags, slot, ENTERED_ACTIVE, true);
+      flag |= ENTERED_ACTIVE;
       this.#enteredCount++;
     }
+    flags[slot] = flag;
     this.#populationCount++;
     return true;
   }
 
   #deactivateEntity(slot: number): boolean {
-    if (!hasFlag(this.#flags, slot, ENTITY_ACTIVE)) return false;
-    if (hasFlag(this.#flags, slot, ENTERED_ACTIVE)) {
-      setFlag(this.#flags, slot, ENTERED_ACTIVE, false);
+    const flags = this.#flags;
+    let flag = flags[slot]!;
+    if ((flag & ENTITY_ACTIVE) === 0) return false;
+
+    if ((flag & ENTERED_ACTIVE) !== 0) {
+      flag &= ~ENTERED_ACTIVE;
       this.#enteredCount--;
     }
+
     const removeIndex = this.#entityPositions[slot]!;
     const lastIndex = this.#populationCount - 1;
     const lastSlot = this.#entityList[lastIndex]!;
@@ -170,15 +185,17 @@ export class Archetype {
     }
     this.#entityList[lastIndex] = 0;
     this.#entityPositions[slot] = 0;
-    setFlag(this.#flags, slot, ENTITY_ACTIVE, false);
-    if (!hasFlag(this.#flags, slot, EXITED_ACTIVE)) {
-      if (!hasFlag(this.#flags, slot, EXITED_LISTED)) {
-        setFlag(this.#flags, slot, EXITED_LISTED, true);
+
+    flag &= ~ENTITY_ACTIVE;
+    if ((flag & EXITED_ACTIVE) === 0) {
+      if ((flag & EXITED_LISTED) === 0) {
+        flag |= EXITED_LISTED;
         this.#exitedList[this.#exitedListCount++] = slot;
       }
-      setFlag(this.#flags, slot, EXITED_ACTIVE, true);
+      flag |= EXITED_ACTIVE;
       this.#exitedCount++;
     }
+    flags[slot] = flag;
     this.#populationCount--;
     return true;
   }
@@ -215,7 +232,13 @@ export class Archetype {
    * @returns A new Archetype
    */
   clone(): Archetype {
-    return new Archetype(this.#entityCapacity, this.components, this.bitfield.clone(), this.#packSlot);
+    return new Archetype(
+      this.#entityCapacity,
+      this.components,
+      this.bitfield.clone(),
+      this.#packSlot,
+      this.#transitionCapacity,
+    );
   }
 
   /**
