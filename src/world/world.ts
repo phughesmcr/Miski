@@ -158,11 +158,13 @@ export class World {
   ): IterableIterator<Entity> {
     this.#visitedArchetypeEntities.clear();
     const queryInstance = this.#queryManager.instanceWithMembership(query);
-    const archetypes = this.#archetypeManager.query(queryInstance);
-    if (archetypes === undefined) {
+    if (queryInstance.archetypeCount === 0) {
       return;
     }
-    for (const archetype of archetypes) {
+    const matching = queryInstance.archetypes;
+    const matchingCount = queryInstance.archetypeCount;
+    for (let i = 0; i < matchingCount; i++) {
+      const archetype = matching[i]!;
       const entities = mode === "entities" ?
         archetype.getEntities() :
         mode === "entered" ?
@@ -452,7 +454,7 @@ export class World {
   refresh(retainChanged: boolean = false, retainTransitions: boolean = false): void {
     assertWorldState("initialized", this.#state);
     try {
-      this.#archetypeManager.refresh(this.#queryManager.instancesByID.values(), retainTransitions);
+      this.#archetypeManager.refresh(this.#queryManager.registeredQueries, retainTransitions);
       if (!retainChanged) this.#componentManager.refresh();
     } catch (error) {
       this.#enterErrorState();

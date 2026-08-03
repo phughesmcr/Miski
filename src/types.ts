@@ -35,7 +35,13 @@ export type {
   TypedArray,
   TypedArrayConstructor,
 } from "@/types/partitions.ts";
-export type { QueryInstance, QuerySpec, TypedQuerySpec, UntypedQueryComponents } from "@/types/query.ts";
+export type {
+  QueryInstance,
+  QueryInstanceList,
+  QuerySpec,
+  TypedQuerySpec,
+  UntypedQueryComponents,
+} from "@/types/query.ts";
 export type {
   ParametersExceptFirstTwo,
   SystemBindings,

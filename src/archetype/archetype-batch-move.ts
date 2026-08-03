@@ -12,6 +12,9 @@ export type TransitionArchetypeGetter = (
 /**
  * Owns reusable scratch buffers for batch single-component archetype transitions.
  * Used by {@link ArchetypeManager} for `addComponents` / `removeComponents`.
+ *
+ * Group lists keep capacity across calls — never truncate with `.length = 0`, which
+ * reallocates V8 elements backing stores on the hot path.
  */
 export class ArchetypeBatchMove {
   /** Reusable grouped slot storage for batch component transitions */
@@ -68,14 +71,13 @@ export class ArchetypeBatchMove {
     const counts = this.#bulkGroupCounts;
     const offsets = this.#bulkGroupOffsets;
     const writes = this.#bulkGroupWrites;
-    sources.length = 0;
-    targets.length = 0;
+    let groupCount = 0;
 
     for (let i = 0; i < count; i++) {
       const slot = slots[i]!;
       const source = entityArchetypes[slot] ?? root;
       let group = -1;
-      for (let j = 0; j < sources.length; j++) {
+      for (let j = 0; j < groupCount; j++) {
         if (sources[j] === source) {
           group = j;
           break;
@@ -84,7 +86,7 @@ export class ArchetypeBatchMove {
       if (group === -1) {
         const target = getTransitionArchetype(source, instance, add);
         if (source === target) continue;
-        group = sources.length;
+        group = groupCount++;
         sources[group] = source;
         targets[group] = target;
         counts[group] = 0;
@@ -93,7 +95,7 @@ export class ArchetypeBatchMove {
     }
 
     let moved = 0;
-    for (let group = 0; group < sources.length; group++) {
+    for (let group = 0; group < groupCount; group++) {
       offsets[group] = moved;
       writes[group] = moved;
       moved += counts[group] ?? 0;
@@ -106,7 +108,7 @@ export class ArchetypeBatchMove {
       const slot = slots[i]!;
       const source = entityArchetypes[slot] ?? root;
       let group = -1;
-      for (let j = 0; j < sources.length; j++) {
+      for (let j = 0; j < groupCount; j++) {
         if (sources[j] === source) {
           group = j;
           break;
@@ -118,14 +120,14 @@ export class ArchetypeBatchMove {
       writes[group] = write + 1;
     }
 
-    for (let group = 0; group < sources.length; group++) {
+    for (let group = 0; group < groupCount; group++) {
       const source = sources[group]!;
       const target = targets[group]!;
       const offset = offsets[group]!;
-      const groupCount = counts[group] ?? 0;
-      source.removeEntities(this.#bulkSlots, offset, groupCount);
-      target.addEntities(this.#bulkSlots, offset, groupCount);
-      const end = offset + groupCount;
+      const groupSize = counts[group] ?? 0;
+      source.removeEntities(this.#bulkSlots, offset, groupSize);
+      target.addEntities(this.#bulkSlots, offset, groupSize);
+      const end = offset + groupSize;
       for (let i = offset; i < end; i++) {
         entityArchetypes[this.#bulkSlots[i]!] = target;
         this.#bulkSlots[i] = 0;
@@ -135,8 +137,6 @@ export class ArchetypeBatchMove {
       writes[group] = 0;
     }
 
-    sources.length = 0;
-    targets.length = 0;
     return moved;
   }
 }

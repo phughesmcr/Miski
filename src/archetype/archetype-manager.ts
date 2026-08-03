@@ -3,7 +3,7 @@ import { BooleanArray } from "@phughesmcr/booleanarray";
 import { type Entity, type EntityArray, entityIndex, packEntity, type PackSlot } from "@/entity/entity.ts";
 import { NotRegisteredError } from "@/errors.ts";
 import type { DynamicComponentInstance } from "@/types/component.ts";
-import type { QueryInstance } from "@/types/query.ts";
+import type { QueryInstance, QueryInstanceList } from "@/types/query.ts";
 import { Archetype } from "./archetype.ts";
 import { ArchetypeBatchMove, type TransitionArchetypeGetter } from "./archetype-batch-move.ts";
 
@@ -14,9 +14,6 @@ export class ArchetypeManager {
 
   /** Archetypes indexed by Entity */
   readonly entityArchetypes: Archetype[];
-
-  /** Archetypes associated with a QueryInstance */
-  readonly queryArchetypes: Map<QueryInstance, Set<Archetype>>;
 
   /** Entities in this archetype have no components */
   readonly root: Archetype;
@@ -33,8 +30,14 @@ export class ArchetypeManager {
   /** Whether query-to-archetype mappings need to be rebuilt */
   #queryMembershipDirty: boolean;
 
-  /** Reusable query list for refresh passes */
-  #queryScratch: QueryInstance[];
+  /** Dense archetype list parallel to {@link registry} (hot membership rebuilds). */
+  readonly #archetypes: Archetype[] = [];
+
+  /** Valid prefix length of {@link #archetypes}. */
+  #archetypeCount: number = 0;
+
+  /** Reusable one-query list for {@link registerQuery}. */
+  readonly #singleQueryList: { queries: QueryInstance[]; count: number };
 
   /** Batch single-component transition scratch and move logic */
   #batchMove: ArchetypeBatchMove;
@@ -47,6 +50,16 @@ export class ArchetypeManager {
 
   /** Pack slot -> entity for archetype public iterators / query writes */
   #packSlot: PackSlot;
+
+  /**
+   * Register a newly created archetype in both the id map and dense list.
+   * @param archetypeId - Stable bitfield-derived id
+   * @param archetype - The archetype to register
+   */
+  #registerArchetype(archetypeId: string, archetype: Archetype): void {
+    this.registry.set(archetypeId, archetype);
+    this.#archetypes[this.#archetypeCount++] = archetype;
+  }
 
   /**
    * Move an entity to a
@@ -123,7 +136,7 @@ export class ArchetypeManager {
         this.#componentsWithAdded(from.components, instance) :
         this.#componentsWithRemoved(from.components, instance);
       archetype = new Archetype(this.#capacity, components, bitfield, this.#packSlot, this.#componentCount);
-      this.registry.set(archetypeId, archetype);
+      this.#registerArchetype(archetypeId, archetype);
     }
 
     transitions[instance.id] = archetype;
@@ -238,42 +251,39 @@ export class ArchetypeManager {
         this.#packSlot,
         this.#componentCount,
       );
-      this.registry.set(archetypeId, archetype);
+      this.#registerArchetype(archetypeId, archetype);
     }
     return archetype;
   }
 
   /**
    * Rebuild query membership while preserving the caller's transition lifecycle.
-   * @param queries - Query instances whose archetype membership should be rebuilt
+   * @param queries - Dense query list whose archetype membership should be rebuilt
    * @param includeDirtyArchetypes - Include dirty empty archetypes for entered/exited views
    * @param refreshArchetypes - Clear archetype transition state after membership is rebuilt
    */
   #rebuildQueryMembership(
-    queries: readonly QueryInstance[],
+    queries: QueryInstanceList,
     includeDirtyArchetypes: boolean,
     refreshArchetypes: boolean,
   ): void {
-    for (const query of queries) {
-      let archetypeSet = this.queryArchetypes.get(query);
-      if (!archetypeSet) {
-        archetypeSet = new Set();
-        this.queryArchetypes.set(query, archetypeSet);
-      } else {
-        archetypeSet.clear();
-      }
-      query.archetypes.clear();
+    const queryArray = queries.queries;
+    const queryCount = queries.count;
+    for (let q = 0; q < queryCount; q++) {
+      const query = queryArray[q]!;
+      query.archetypeCount = 0;
       query.isDirty = false;
     }
 
-    for (const archetype of this.registry.values()) {
-      for (const query of queries) {
+    const archetypes = this.#archetypes;
+    const archetypeCount = this.#archetypeCount;
+    for (let a = 0; a < archetypeCount; a++) {
+      const archetype = archetypes[a]!;
+      for (let q = 0; q < queryCount; q++) {
+        const query = queryArray[q]!;
         if (!archetype.isCandidate(query)) continue;
-
-        const archetypeSet = this.queryArchetypes.get(query)!;
         if (archetype.getPopulationCount() > 0 || (includeDirtyArchetypes && archetype.isDirty())) {
-          archetypeSet.add(archetype);
-          query.archetypes.add(archetype);
+          query.archetypes[query.archetypeCount++] = archetype;
         }
       }
       if (refreshArchetypes) archetype.refresh();
@@ -296,17 +306,16 @@ export class ArchetypeManager {
     this.#packSlot = packSlot;
     this.registry = new Map();
     this.entityArchetypes = new Array(capacity);
-    this.queryArchetypes = new Map();
     this.#componentCache = {};
     this.#queryMembershipDirty = true;
-    this.#queryScratch = [];
+    this.#singleQueryList = { queries: [], count: 0 };
     this.#batchMove = new ArchetypeBatchMove(capacity);
     this.#getTransitionForBatch = (from, component, isAdd) => this.#getTransitionArchetype(from, component, isAdd);
 
     // Create root archetype with properly sized bitfield for components
     const rootBitfield = new BooleanArray(componentCount);
     this.root = new Archetype(capacity, [], rootBitfield, packSlot, componentCount);
-    this.registry.set(this.root.id, this.root);
+    this.#registerArchetype(this.root.id, this.root);
   }
 
   /**
@@ -383,7 +392,7 @@ export class ArchetypeManager {
   destroy(): this {
     this.registry.clear();
     this.entityArchetypes.length = 0;
-    this.queryArchetypes.clear();
+    this.#archetypeCount = 0;
     return this;
   }
 
@@ -440,10 +449,10 @@ export class ArchetypeManager {
   /**
    * Get the Archetypes associated with a QueryInstance
    * @param query The QueryInstance
-   * @returns An IterableIterator of Archetypes associated with the QueryInstance or undefined
+   * @returns Matching archetypes, or undefined when the query has no matches
    */
-  query(query: QueryInstance): IterableIterator<Archetype> | undefined {
-    return this.queryArchetypes.get(query)?.values();
+  query(query: QueryInstance): QueryInstance | undefined {
+    return query.archetypeCount > 0 ? query : undefined;
   }
 
   /**
@@ -453,7 +462,10 @@ export class ArchetypeManager {
    * @returns this
    */
   registerQuery(query: QueryInstance, retainTransitions: boolean = true): this {
-    this.#rebuildQueryMembership([query], retainTransitions, false);
+    const list = this.#singleQueryList;
+    list.queries[0] = query;
+    list.count = 1;
+    this.#rebuildQueryMembership(list, retainTransitions, false);
     return this;
   }
 
@@ -461,20 +473,15 @@ export class ArchetypeManager {
    * Run routine maintenance on the ArchetypeManager
    * @returns this
    */
-  refresh(queries: MapIterator<QueryInstance>, retainTransitions: boolean = false): this {
+  refresh(queries: QueryInstanceList, retainTransitions: boolean = false): this {
     if (this.#queryMembershipDirty) {
-      // Convert queries iterator to a reusable array to avoid exhausting it.
-      const queryArray = this.#queryScratch;
-      queryArray.length = 0;
-      for (const query of queries) {
-        queryArray.push(query);
-      }
-
-      this.#rebuildQueryMembership(queryArray, retainTransitions, !retainTransitions);
+      this.#rebuildQueryMembership(queries, retainTransitions, !retainTransitions);
       this.#queryMembershipDirty = false;
     } else if (!retainTransitions) {
-      for (const archetype of this.registry.values()) {
-        archetype.refresh();
+      const archetypes = this.#archetypes;
+      const archetypeCount = this.#archetypeCount;
+      for (let i = 0; i < archetypeCount; i++) {
+        archetypes[i]!.refresh();
       }
     }
     return this;
@@ -486,7 +493,7 @@ export class ArchetypeManager {
    * @param retainTransitions - Keep entered/exited state while refreshing membership
    * @returns this
    */
-  ensureQueryMembership(queries: MapIterator<QueryInstance>, retainTransitions: boolean = true): this {
+  ensureQueryMembership(queries: QueryInstanceList, retainTransitions: boolean = true): this {
     if (this.#queryMembershipDirty) {
       this.refresh(queries, retainTransitions);
     }
@@ -559,8 +566,10 @@ export class ArchetypeManager {
     activeEntities: Iterable<Entity>,
     getOwnedInstances: (entity: Entity) => readonly DynamicComponentInstance[],
   ): void {
-    for (const archetype of this.registry.values()) {
-      archetype.clearPopulation();
+    const archetypes = this.#archetypes;
+    const archetypeCount = this.#archetypeCount;
+    for (let i = 0; i < archetypeCount; i++) {
+      archetypes[i]!.clearPopulation();
     }
     for (let slot = 0; slot < this.#capacity; slot++) {
       delete this.entityArchetypes[slot];

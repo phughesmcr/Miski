@@ -11,9 +11,9 @@ export class QueryCache {
   #componentCache: Map<string, Record<string, DynamicComponentInstance>>;
   #entityCache: Map<string, EntityCacheEntry>;
   #globalVersion: number;
-  #pool?: QueryResultPool;
+  #pool: QueryResultPool;
 
-  constructor(pool?: QueryResultPool) {
+  constructor(pool: QueryResultPool) {
     this.#componentCache = new Map();
     this.#entityCache = new Map();
     this.#globalVersion = 0;
@@ -30,48 +30,58 @@ export class QueryCache {
     this.#globalVersion++;
   }
 
-  /** Get cached components or compute and cache them */
-  getComponents(
+  /** Get cached components or store them on first access */
+  ensureComponents(
     queryId: string,
-    compute: () => Record<string, DynamicComponentInstance>,
+    components: Record<string, DynamicComponentInstance>,
   ): Record<string, DynamicComponentInstance> {
-    if (!this.#componentCache.has(queryId)) {
-      this.#componentCache.set(queryId, compute());
-    }
-
-    return this.#componentCache.get(queryId)!;
+    const cached = this.#componentCache.get(queryId);
+    if (cached !== undefined) return cached;
+    this.#componentCache.set(queryId, components);
+    return components;
   }
 
-  /** Get cached entities or compute and cache them */
-  getEntities(
-    queryId: string,
-    compute: () => QueryEntityResult,
-  ): QueryEntityResult {
+  /**
+   * Return a cached entity result when the global version still matches.
+   * Callers must fill and {@link storeEntities} on a miss — no compute closure.
+   */
+  getCachedEntities(queryId: string): QueryEntityResult | undefined {
     const entry = this.#entityCache.get(queryId);
     if (entry && entry.version === this.#globalVersion) {
       return entry.result;
     }
+    return undefined;
+  }
 
-    if (entry && this.#pool) {
+  /**
+   * Acquire a pooled entity result for a cache miss, releasing any stale entry.
+   * After filling, call {@link storeEntities}.
+   */
+  acquireEntitiesForFill(queryId: string): QueryEntityResult {
+    const entry = this.#entityCache.get(queryId);
+    if (entry) {
       this.#pool.releaseEntityResult(entry.result);
-      const result = compute();
+    }
+    const result = this.#pool.acquireEntityResult();
+    result.clear();
+    return result;
+  }
+
+  /** Store a filled entity result at the current global version. */
+  storeEntities(queryId: string, result: QueryEntityResult): void {
+    const entry = this.#entityCache.get(queryId);
+    if (entry) {
       entry.result = result;
       entry.version = this.#globalVersion;
-      return result;
+      return;
     }
-
-    const result = compute();
     this.#entityCache.set(queryId, { result, version: this.#globalVersion });
-    return result;
   }
 
   /** Clear all caches and release pooled resources */
   clear(): void {
-    // Release all entity arrays back to pool
-    if (this.#pool) {
-      for (const entry of this.#entityCache.values()) {
-        this.#pool.releaseEntityResult(entry.result);
-      }
+    for (const entry of this.#entityCache.values()) {
+      this.#pool.releaseEntityResult(entry.result);
     }
     this.#entityCache.clear();
     this.#componentCache.clear();

@@ -1,10 +1,9 @@
 import { ID_KEY } from "@/constants.ts";
 import { BooleanArray } from "@phughesmcr/booleanarray";
 import { componentDisplayName, formatComponentNotRegistered, NotRegisteredError } from "@/errors.ts";
-import type { Archetype } from "@/archetype/archetype.ts";
 import type { DynamicComponentInstance } from "@/types/component.ts";
 import type { Entity } from "@/entity/entity.ts";
-import type { QueryInstance } from "@/types/query.ts";
+import type { QueryInstance, QueryInstanceList } from "@/types/query.ts";
 import type { ComponentInstanceGetter, QueryManagerDependencies } from "@/types/world-api.ts";
 import { QueryCache } from "./query-cache.ts";
 import { type QueryEntityResult, QueryResultPool } from "./query-pool.ts";
@@ -12,6 +11,8 @@ import type { NormalizedQueryComponentEntry, Query } from "./query.ts";
 
 type QueryComponent = Parameters<ComponentInstanceGetter>[0][number];
 type RegisteredComponentInstance = DynamicComponentInstance;
+
+export type { QueryInstanceList };
 
 function getRegisteredInstances(
   getInstances: ComponentInstanceGetter,
@@ -83,15 +84,22 @@ function createQueryInstance(getInstances: ComponentInstanceGetter, size: number
   addComponentsToLookup(components, query.includeEntries, includeInstances);
   Object.freeze(components);
 
-  // Initialize empty set for matching archetypes
-  const archetypes = new Set<Archetype>();
-
   const bindings = `${createBindingID(query.allEntries, andInstances)}|${
     createBindingID(query.anyEntries, orInstances)
   }|${createBindingID(query.includeEntries, includeInstances)}`;
   const id = `${and.toString()}:${or.toString()}:${not.toString()}:${include.toString()}:${bindings}`;
 
-  return { and, or, not, include, archetypes, components, isDirty: true, id };
+  return {
+    and,
+    or,
+    not,
+    include,
+    archetypes: [],
+    archetypeCount: 0,
+    components,
+    isDirty: true,
+    id,
+  };
 }
 
 /** The QueryManager is responsible for creating, registering, and destroying queries. */
@@ -100,10 +108,16 @@ export class QueryManager {
   #dependencies: QueryManagerDependencies;
 
   /** Callback for refreshing query-to-archetype membership. */
-  #ensureQueryMembership: (queries: MapIterator<QueryInstance>) => void;
+  #ensureQueryMembership: (queries: QueryInstanceList) => void;
 
   /** Callback for registering one query against existing archetypes. */
   #registerQueryMembership: (query: QueryInstance) => void;
+
+  /** Dense registered query instances (avoids Map.values() on the hot path). */
+  readonly #queries: QueryInstance[] = [];
+
+  /** Reusable dense-list view over {@link #queries} — never reallocated. */
+  readonly #queryList: { queries: QueryInstance[]; count: number };
 
   /** Cache for query results */
   readonly cache: QueryCache;
@@ -127,12 +141,13 @@ export class QueryManager {
   constructor(
     dependencies: QueryManagerDependencies,
     capacity: number,
-    ensureQueryMembership: (queries: MapIterator<QueryInstance>) => void,
+    ensureQueryMembership: (queries: QueryInstanceList) => void,
     registerQueryMembership: (query: QueryInstance) => void,
   ) {
     this.#dependencies = dependencies;
     this.#ensureQueryMembership = ensureQueryMembership;
     this.#registerQueryMembership = registerQueryMembership;
+    this.#queryList = { queries: this.#queries, count: 0 };
     this.pool = new QueryResultPool(capacity);
     this.cache = new QueryCache(this.pool);
     this.instancesByID = new Map();
@@ -140,15 +155,15 @@ export class QueryManager {
     this.cacheInvalidated = false;
   }
 
+  /** Dense registered queries for archetype membership rebuilds. */
+  get registeredQueries(): QueryInstanceList {
+    return this.#queryList;
+  }
+
   /** Get components for a query */
   components(query: Query): Record<string, DynamicComponentInstance> {
     const instance = this.register(query);
-    const queryId = instance.id;
-    const result = this.cache.getComponents(
-      queryId,
-      () => instance.components,
-    );
-    return result;
+    return this.cache.ensureComponents(instance.id, instance.components);
   }
 
   /** Get entities for a query */
@@ -162,20 +177,20 @@ export class QueryManager {
     const queryId = instance.id;
     this.ensureQueryMembership();
 
-    const result = this.cache.getEntities(
-      queryId,
-      () => {
-        const result = this.pool.acquireEntityResult();
-        result.clear();
-        for (const archetype of instance.archetypes) {
-          archetype.writeEntitiesIntoResult(result);
-        }
-        return result;
-      },
-    );
+    const cached = this.cache.getCachedEntities(queryId);
+    if (cached !== undefined) {
+      this.cacheInvalidated = false;
+      return cached;
+    }
 
+    const result = this.cache.acquireEntitiesForFill(queryId);
+    const archetypes = instance.archetypes;
+    const archetypeCount = instance.archetypeCount;
+    for (let i = 0; i < archetypeCount; i++) {
+      archetypes[i]!.writeEntitiesIntoResult(result);
+    }
+    this.cache.storeEntities(queryId, result);
     this.cacheInvalidated = false;
-
     return result;
   }
 
@@ -205,6 +220,7 @@ export class QueryManager {
     // Store mappings
     this.idsByQuery.set(query, queryId);
     this.instancesByID.set(queryId, instance);
+    this.#queries[this.#queryList.count++] = instance;
 
     // Refresh archetypes after query registration to update mappings
     if (this.#dependencies.isInitialized()) {
@@ -223,7 +239,7 @@ export class QueryManager {
 
   /** Ensures query-to-archetype membership is current before entity queries. */
   ensureQueryMembership(): void {
-    this.#ensureQueryMembership(this.instancesByID.values());
+    this.#ensureQueryMembership(this.registeredQueries);
   }
 
   /** Invalidate entity query caches after a committed entity/component transition. */

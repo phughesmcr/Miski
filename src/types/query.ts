@@ -38,8 +38,13 @@ export type UntypedQueryComponents = Record<string, DynamicComponent>;
 export type QueryInstance = {
   /** A BooleanArray for the AND match criteria */
   and: BooleanArray;
-  /** The archetypes which match this query */
-  archetypes: Set<Archetype>;
+  /**
+   * Dense matching archetypes. Only the prefix `[0, archetypeCount)` is valid.
+   * Capacity is retained across membership rebuilds to avoid hot-path allocation.
+   */
+  archetypes: Archetype[];
+  /** Valid prefix length of {@link archetypes} */
+  archetypeCount: number;
   /** The components which match this query */
   components: Readonly<Record<string, DynamicComponentInstance>>;
   /** The QueryInstance's unique identifier */
@@ -56,4 +61,10 @@ export type QueryInstance = {
   not: BooleanArray;
   /** A BooleanArray for non-filtering included components */
   include: BooleanArray;
+};
+
+/** Dense registered-query list for zero-alloc membership rebuilds. */
+export type QueryInstanceList = {
+  readonly queries: readonly QueryInstance[];
+  readonly count: number;
 };

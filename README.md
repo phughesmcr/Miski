@@ -100,7 +100,8 @@ Recent local benchmark results on Deno 2.9.4, aarch64 macOS:
 | Game frame - move, query renderables, refresh | 6.8 us |
 
 GC allocation pressure is budgeted separately. Hot entity, component check, direct write, cached query list, changed,
-and owner iteration paths are effectively allocation-free in steady state. The current `deno task bench:gc` run reports:
+owner iteration, and bulk add/remove transition paths are effectively allocation-free in steady state. The current
+`deno task bench:gc` run reports:
 
 | Allocation Scenario | Steady-State Allocation |
 | --- | ---: |
@@ -118,8 +119,8 @@ and owner iteration paths are effectively allocation-free in steady state. The c
 | Spawn/despawn 128 projectiles - repeated `addToEntity` | 0.0000 B/iter |
 | Spawn/despawn 128 projectiles - `createWith` bundle | 936.5920 B/iter |
 | Add/remove data component runtime transition | 40.0012 B/iter |
-| Bulk add/remove tag component - 896 entities | 1.64 KiB/iter |
-| Bulk add/remove data component - 896 entities | 1.56 KiB/iter |
+| Bulk add/remove tag component - 896 entities | 0.0000 B/iter |
+| Bulk add/remove data component - 896 entities | 0.0000 B/iter |
 | Game frame system + cached render query + refresh | 304.0272 B/iter |
 
 Against a local ECS benchmark shape derived from `noctjs/ecs-benchmark`, Miski ranks in the top three by normalized
@@ -748,9 +749,9 @@ Contributions are welcome and encouraged. The aim of the project is performance 
 The benchmark suite covers the gameplay paths ECS users usually care about: world setup, repeated-add versus bundle
 spawn/despawn lifecycle, multi-component destroy cleanup, archetype transitions, direct writes with manual changed
 marking, allocation-free reads, included-component render loops, owner and changed iteration, cached and invalidated
-queries, entered/exited query tracking, 64-component worlds, plain TypeScript data-layout baselines, system updates, and
-whole-frame loops. It also has dedicated internal manager/cache throughput coverage plus retained memory and GC
-allocation budget checks. Run public and internal throughput benchmarks with:
+queries, zero-alloc bulk component transitions, entered/exited query tracking, 64-component worlds, plain TypeScript
+data-layout baselines, system updates, and whole-frame loops. It also has dedicated internal manager/cache throughput
+coverage plus retained memory and GC allocation budget checks. Run public and internal throughput benchmarks with:
 
 ```bash
 deno task bench
