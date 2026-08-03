@@ -189,71 +189,23 @@ export class ArchetypeManager {
   }
 
   /**
-   * Build a component list with multiple components inserted by registry id.
-   * @param components - The source component list
-   * @param added - Components to add
-   * @returns A sorted component list for the target archetype
-   */
-  #componentsWithAddedSet(
-    components: readonly DynamicComponentInstance[],
-    added: readonly DynamicComponentInstance[],
-  ): DynamicComponentInstance[] {
-    const byId: DynamicComponentInstance[] = [];
-    let maxId = -1;
-    for (let i = 0; i < components.length; i++) {
-      const component = components[i]!;
-      byId[component.id] = component;
-      if (component.id > maxId) maxId = component.id;
-    }
-    for (let i = 0; i < added.length; i++) {
-      const component = added[i]!;
-      byId[component.id] = component;
-      if (component.id > maxId) maxId = component.id;
-    }
-
-    const result: DynamicComponentInstance[] = [];
-    for (let id = 0; id <= maxId; id++) {
-      const component = byId[id];
-      if (component) result.push(component);
-    }
-    return result;
-  }
-
-  /**
    * Get or create the archetype reached by adding a set of components.
+   * Walks warm single-component edges so hot bundle spawns avoid bitfield clone/toString.
    * @param from - The source archetype
    * @param instances - Components being added
+   * @param count - Active prefix length of `instances`
    * @returns The target archetype
    */
   #getSetTransitionArchetype(
     from: Archetype,
     instances: readonly DynamicComponentInstance[],
+    count: number = instances.length,
   ): Archetype {
-    if (instances.length === 0) return from;
-
-    const bitfield = from.bitfield.clone();
-    let changed = false;
-    for (let i = 0; i < instances.length; i++) {
-      const instance = instances[i]!;
-      if (bitfield.get(instance.id)) continue;
-      bitfield.set(instance.id, true);
-      changed = true;
+    let current = from;
+    for (let i = 0; i < count; i++) {
+      current = this.#getTransitionArchetype(current, instances[i]!, true);
     }
-    if (!changed) return from;
-
-    const archetypeId = bitfield.buffer.toString();
-    let archetype = this.registry.get(archetypeId);
-    if (!archetype) {
-      archetype = new Archetype(
-        this.#capacity,
-        this.#componentsWithAddedSet(from.components, instances),
-        bitfield,
-        this.#packSlot,
-        this.#componentCount,
-      );
-      this.#registerArchetype(archetypeId, archetype);
-    }
-    return archetype;
+    return current;
   }
 
   /**
@@ -349,12 +301,17 @@ export class ArchetypeManager {
    * Move an entity once to the archetype reached by adding a component set.
    * @param entity - The entity to move
    * @param instances - Components whose ownership changed to owned
+   * @param count - Active prefix length of `instances` (defaults to `instances.length`)
    * @returns The target archetype
    */
-  addComponentSet(entity: Entity, instances: readonly DynamicComponentInstance[]): Archetype {
+  addComponentSet(
+    entity: Entity,
+    instances: readonly DynamicComponentInstance[],
+    count: number = instances.length,
+  ): Archetype {
     const slot = entityIndex(entity);
     const oldArchetype = this.entityArchetypes[slot] ?? this.root;
-    return this.#moveEntity(entity, this.#getSetTransitionArchetype(oldArchetype, instances), slot);
+    return this.#moveEntity(entity, this.#getSetTransitionArchetype(oldArchetype, instances, count), slot);
   }
 
   /**

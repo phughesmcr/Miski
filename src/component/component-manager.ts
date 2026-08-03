@@ -36,9 +36,9 @@ function getComponentStorageSize(component: DynamicComponent, capacity: number):
 /** A preflighted bundle entry ready for component-manager commit. */
 export type ComponentBundleCommitEntry = {
   /** The registered component instance to add or update. */
-  readonly instance: DynamicComponentInstance;
+  instance: DynamicComponentInstance;
   /** Optional numeric data to merge into component storage. */
-  readonly data: Partial<Record<string, number>> | undefined;
+  data: Partial<Record<string, number>> | undefined;
 };
 
 type ComponentState = {
@@ -610,11 +610,15 @@ export class ComponentManager {
    * @throws {RangeError} If the entity is out of component capacity or any max owner count would overflow
    * @internal
    */
-  preflightAddBundleToEntity(entries: readonly ComponentBundleCommitEntry[], entity: Entity): void {
+  preflightAddBundleToEntity(
+    entries: readonly ComponentBundleCommitEntry[],
+    entity: Entity,
+    count: number = entries.length,
+  ): void {
     if (entityIndex(entity) >= this.#capacity) {
       throw new RangeError(`Entity ${entity} is outside component capacity.`);
     }
-    for (let i = 0; i < entries.length; i++) {
+    for (let i = 0; i < count; i++) {
       const instance = entries[i]!.instance;
       const state = this.#states[instance.id];
       const maxEntities = state?.maxEntities ?? 0;
@@ -654,9 +658,23 @@ export class ComponentManager {
    * @returns Component instances whose ownership changed from unowned to owned
    * @internal
    */
-  addBundleToEntity(entries: readonly ComponentBundleCommitEntry[], entity: Entity): DynamicComponentInstance[] {
-    const added: DynamicComponentInstance[] = [];
-    for (let i = 0; i < entries.length; i++) {
+  /**
+   * Commit a preflighted set of component additions/upserts for one entity.
+   * @param entries - Unique registered component instances and optional data
+   * @param entity - The target entity
+   * @param count - Active prefix length of `entries`
+   * @param addedOut - Scratch array for ownership-changed instances (index-written, never shrunk)
+   * @returns Number of ownership-changed instances written to `addedOut`
+   * @internal
+   */
+  addBundleToEntity(
+    entries: readonly ComponentBundleCommitEntry[],
+    entity: Entity,
+    count: number,
+    addedOut: DynamicComponentInstance[],
+  ): number {
+    let addedCount = 0;
+    for (let i = 0; i < count; i++) {
       const { data, instance } = entries[i]!;
       if (
         this.addInstanceToEntity(
@@ -667,10 +685,10 @@ export class ComponentManager {
           true,
         )
       ) {
-        added.push(instance);
+        addedOut[addedCount++] = instance;
       }
     }
-    return added;
+    return addedCount;
   }
 
   /**

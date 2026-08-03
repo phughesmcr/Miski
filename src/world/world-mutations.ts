@@ -21,6 +21,7 @@ import {
   NotRegisteredError,
 } from "@/errors.ts";
 import type { SchemaOrNull } from "@/types/partitions.ts";
+import type { DynamicComponentInstance } from "@/types/component.ts";
 import type { ComponentBundleEntryInput } from "@/types/world-api.ts";
 import { hasOwnProperty, isObject } from "@/utils.ts";
 
@@ -62,8 +63,14 @@ export class WorldMutations {
   /** Duplicate-detection scratch flags for preflighted batch component transitions */
   readonly #batchSeen: Uint8Array;
 
-  /** Reusable preflighted bundle entries */
+  /** Reusable preflighted bundle entries (objects pooled across calls) */
   readonly #bundleEntries: ComponentBundleCommitEntry[];
+
+  /** Active prefix length of {@link #bundleEntries} for the current preflight */
+  #bundleEntryCount: number;
+
+  /** Reusable ownership-changed scratch for bundle commits */
+  readonly #bundleAdded: DynamicComponentInstance[];
 
   /** Duplicate-detection scratch flags for bundle component instances */
   readonly #bundleSeenComponents: Uint8Array;
@@ -78,6 +85,8 @@ export class WorldMutations {
     this.#batchSlots = createSlotArray(deps.capacity);
     this.#batchSeen = new Uint8Array(deps.capacity);
     this.#bundleEntries = [];
+    this.#bundleEntryCount = 0;
+    this.#bundleAdded = [];
     this.#bundleSeenComponents = new Uint8Array(deps.componentCount);
   }
 
@@ -172,14 +181,20 @@ export class WorldMutations {
     if (!this.#entityManager.isActive(entity)) {
       throw new EntityNotFoundError(formatEntityNotActive(entity));
     }
-    const entries = this.#preflightBundle(bundle);
+    if (bundle.length === 0) return;
+    const count = this.#preflightBundle(bundle);
     try {
-      this.#componentManager.preflightAddBundleToEntity(entries, entity);
-      const added = this.#componentManager.addBundleToEntity(entries, entity);
-      if (added.length > 0) {
-        this.#archetypeManager.addComponentSet(entity, added);
+      this.#componentManager.preflightAddBundleToEntity(this.#bundleEntries, entity, count);
+      const addedCount = this.#componentManager.addBundleToEntity(
+        this.#bundleEntries,
+        entity,
+        count,
+        this.#bundleAdded,
+      );
+      if (addedCount > 0) {
+        this.#archetypeManager.addComponentSet(entity, this.#bundleAdded, addedCount);
       }
-      this.invalidateCommittedTransition(added.length > 0);
+      this.invalidateCommittedTransition(addedCount > 0);
     } finally {
       this.#clearBundleEntries();
     }
@@ -322,40 +337,59 @@ export class WorldMutations {
 
   /** Clear bundle duplicate-detection scratch state. */
   #clearBundleEntries(): void {
-    for (let i = 0; i < this.#bundleEntries.length; i++) {
-      const instance = this.#bundleEntries[i]!.instance;
-      this.#bundleSeenComponents[instance.id] = 0;
+    for (let i = 0; i < this.#bundleEntryCount; i++) {
+      const entry = this.#bundleEntries[i]!;
+      this.#bundleSeenComponents[entry.instance.id] = 0;
+      entry.data = undefined;
     }
-    this.#bundleEntries.length = 0;
+    this.#bundleEntryCount = 0;
   }
 
-  /** Resolve, validate, and stage a user-provided bundle before mutation. */
-  #preflightBundle(bundle: readonly ComponentBundleEntryInput[]): readonly ComponentBundleCommitEntry[] {
-    try {
-      for (let i = 0; i < bundle.length; i++) {
-        const entry = bundle[i];
-        if (!Array.isArray(entry) || (entry.length !== 1 && entry.length !== 2)) {
-          throw new TypeError("Bundle entries must be [component] or [component, data] tuples.");
-        }
-        const instance = this.getRegisteredComponentInstance(entry[0]);
-        if (this.#bundleSeenComponents[instance.id] === 1) {
-          throw new RangeError(`Duplicate component "${instance.type.name}" in bundle.`);
-        }
-        this.#bundleSeenComponents[instance.id] = 1;
-
-        let data: Partial<Record<string, number>> | undefined;
-        if (entry.length === 2) {
-          this.validateComponentData(instance, entry[1]);
-          data = entry[1] as Partial<Record<string, number>> | undefined;
-        }
-
-        this.#bundleEntries.push({ instance, data });
+  /**
+   * Resolve, validate, and stage a user-provided bundle before mutation.
+   * @returns Active staged entry count in {@link #bundleEntries}
+   */
+  #preflightBundle(bundle: readonly ComponentBundleEntryInput[]): number {
+    for (let i = 0; i < bundle.length; i++) {
+      const entry = bundle[i];
+      if (!Array.isArray(entry) || (entry.length !== 1 && entry.length !== 2)) {
+        this.#clearBundleEntries();
+        throw new TypeError("Bundle entries must be [component] or [component, data] tuples.");
       }
-      return this.#bundleEntries;
-    } catch (error) {
-      this.#clearBundleEntries();
-      throw error;
+
+      const instance = this.#componentManager.getInstance(entry[0]);
+      if (instance === undefined) {
+        this.#clearBundleEntries();
+        throw new NotRegisteredError(formatComponentNotRegistered(componentDisplayName(entry[0])));
+      }
+
+      if (this.#bundleSeenComponents[instance.id] === 1) {
+        this.#clearBundleEntries();
+        throw new RangeError(`Duplicate component "${instance.type.name}" in bundle.`);
+      }
+
+      let data: Partial<Record<string, number>> | undefined;
+      if (entry.length === 2) {
+        try {
+          this.validateComponentData(instance, entry[1]);
+        } catch (error) {
+          this.#clearBundleEntries();
+          throw error;
+        }
+        data = entry[1] as Partial<Record<string, number>> | undefined;
+      }
+
+      this.#bundleSeenComponents[instance.id] = 1;
+      const staged = this.#bundleEntries[i];
+      if (staged === undefined) {
+        this.#bundleEntries[i] = { instance, data };
+      } else {
+        staged.instance = instance;
+        staged.data = data;
+      }
+      this.#bundleEntryCount = i + 1;
     }
+    return this.#bundleEntryCount;
   }
 
   /** Roll back a newly-created entity after bundle preflight fails. */

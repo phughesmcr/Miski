@@ -423,7 +423,7 @@ const scenarios: Scenario[] = [
   {
     name: "spawn/despawn 128 projectiles - createWith bundle",
     iterations: 10_000,
-    maxSteadyStateBeforeGcBytesPerIter: PROJECTILE_SPAWN_DESPAWN_BUDGET_BYTES_PER_ITER,
+    maxSteadyStateBeforeGcBytesPerIter: ZERO_ALLOC_BUDGET_BYTES_PER_ITER,
     fn: () => {
       spawnProjectileBatchWithCreateWith(bundledSpawnEntities);
       destroyBundledBatch(bundledSpawnEntities);

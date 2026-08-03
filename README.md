@@ -89,14 +89,14 @@ Recent local benchmark results on Deno 2.9.4, aarch64 macOS:
 | Add/remove tag component | 68.8 ns |
 | Add/remove data component | 121.3 ns |
 | Move entity across common gameplay archetypes | 333.5 ns |
-| Bulk add/remove tag component - 7,168 entities | 401.8 us, 56.1 ns/entity |
-| Bulk add/remove data component - 7,168 entities | 611.3 us, 85.3 ns/entity |
+| Bulk add/remove tag component - 7,168 entities | 464.8 us, 64.8 ns/entity |
+| Bulk add/remove data component - 7,168 entities | 669.4 us, 93.4 ns/entity |
 | Query cache miss after refresh | 1.8 us |
 | Cached dense `queryList` iteration | 946.1 ns |
 | Cached dense `queryList` iteration with `include` | 1.9 us |
 | Dense changed iteration with no changed entities | 10.7 ns |
 | Spawn/despawn 128 projectiles - repeated `addToEntity` | 70.9 us |
-| Spawn/despawn 128 projectiles - `createWith` bundle | 91.5 us |
+| Spawn/despawn 128 projectiles - `createWith` bundle | 60.1 us |
 | Game frame - move, query renderables, refresh | 6.8 us |
 
 GC allocation pressure is budgeted separately. Hot entity, component check, direct write, cached query list, changed, owner iteration, and bulk add/remove transition paths are effectively allocation-free in steady state. The current `deno task bench:gc` run reports:
@@ -115,7 +115,7 @@ GC allocation pressure is budgeted separately. Hot entity, component check, dire
 | Component changed dense iterator | 0.0487 B/iter |
 | Component owners iterator | 0.0000 B/iter |
 | Spawn/despawn 128 projectiles - repeated `addToEntity` | 0.0000 B/iter |
-| Spawn/despawn 128 projectiles - `createWith` bundle | 936.5920 B/iter |
+| Spawn/despawn 128 projectiles - `createWith` bundle | 0.0000 B/iter |
 | Add/remove data component runtime transition | 40.0012 B/iter |
 | Bulk add/remove tag component - 896 entities | 0.0000 B/iter |
 | Bulk add/remove data component - 896 entities | 0.0000 B/iter |
