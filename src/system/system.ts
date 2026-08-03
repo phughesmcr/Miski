@@ -35,16 +35,26 @@ export function createSystemInstance<
   system: System<TComponents, TArgs, TReturn>,
 ): SystemInstance<TypedSystemCallback<TComponents, TArgs, TReturn>> {
   const components = bindings.queryComponents(system.query) as ComponentInstances<TComponents>;
-  const callback = system.callback as CallableSystem<TComponents, TArgs, TReturn>;
+  const callback = system.callback as CallableSystem<TComponents, unknown[], TReturn>;
+  const query = system.query;
 
   if (Object.keys(components).length === 0) {
     throw new NoComponentsFoundError("System query returned no components");
   }
 
-  const boundCallback = ((...args: TArgs) => {
-    return callback(components, bindings.queryEntityList(system.query), ...args);
-  }) as unknown as SystemInstance<TypedSystemCallback<TComponents, TArgs, TReturn>>;
-  return boundCallback;
+  // Fixed-arity forwarder: no rest/spread on the hot path, and no dependence on
+  // `callback.length` (which would break trailing default parameters).
+  // Four user-arg slots covers current call sites; omitted args stay `undefined`,
+  // so callback defaults still apply.
+  return ((arg0?: unknown, arg1?: unknown, arg2?: unknown, arg3?: unknown) =>
+    callback(
+      components,
+      bindings.queryEntityList(query),
+      arg0,
+      arg1,
+      arg2,
+      arg3,
+    )) as unknown as SystemInstance<TypedSystemCallback<TComponents, TArgs, TReturn>>;
 }
 
 /**

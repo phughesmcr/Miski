@@ -387,10 +387,10 @@ Local tasting notes — Deno 2.9.4, aarch64 macOS:
 | Spawn/despawn 128 via `createWith` | ~60 µs |
 | Game frame (move + query + refresh) | ~6.8 µs |
 
-Hot entity, ownership, direct-write, cached query, changed/owner iteration, and
-bulk transition paths are **effectively allocation-free** in steady state
-(`deno task bench:gc`). A representative game-frame path allocates
-~56 B/iter — a nibble, not a feast.
+Hot entity, ownership, direct-write, cached query, changed/owner iteration,
+bulk transition, and game-frame (move + query + refresh) paths are
+**effectively allocation-free** in steady state (`deno task bench:gc`) —
+about ~3 B/iter of measurement noise on the frame path, not a feast.
 
 Figures are illustrative local snapshots, not CI throughput gates. Absolute
 timings vary by machine and workload. Being the fastest ECS on the web is
