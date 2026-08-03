@@ -287,8 +287,9 @@ export class World {
     }
     const archetype = this.#archetypeManager.getEntityArchetype(entity);
     if (archetype) {
-      for (const componentInstance of archetype.components) {
-        this.#componentManager.removeInstanceFromEntity(componentInstance, entity);
+      const components = archetype.components;
+      for (let i = 0; i < components.length; i++) {
+        this.#componentManager.removeInstanceFromEntity(components[i]!, entity);
       }
     }
     this.#archetypeManager.destroyEntity(entity);

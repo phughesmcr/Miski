@@ -363,8 +363,9 @@ export class WorldMutations {
     let changed = this.#archetypeManager.getEntityArchetype(entity) !== undefined;
     const archetype = this.#archetypeManager.getEntityArchetype(entity);
     if (archetype) {
-      for (const componentInstance of archetype.components) {
-        changed ||= this.#componentManager.removeInstanceFromEntity(componentInstance, entity);
+      const components = archetype.components;
+      for (let i = 0; i < components.length; i++) {
+        changed ||= this.#componentManager.removeInstanceFromEntity(components[i]!, entity);
       }
     }
     this.#archetypeManager.destroyEntity(entity);

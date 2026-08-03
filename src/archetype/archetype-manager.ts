@@ -12,8 +12,8 @@ export class ArchetypeManager {
   /** Archetypes by their id */
   readonly registry: Map<string, Archetype>;
 
-  /** Archetypes indexed by Entity */
-  readonly entityArchetypes: Archetype[];
+  /** Archetypes indexed by Entity storage slot (`undefined` = no archetype) */
+  readonly entityArchetypes: Array<Archetype | undefined>;
 
   /** Entities in this archetype have no components */
   readonly root: Archetype;
@@ -402,7 +402,7 @@ export class ArchetypeManager {
     const archetype = this.entityArchetypes[slot];
     if (archetype !== undefined) {
       archetype.removeEntity(entity, slot);
-      delete this.entityArchetypes[slot];
+      this.entityArchetypes[slot] = undefined;
       this.#queryMembershipDirty = true;
     }
     return this;
@@ -572,7 +572,7 @@ export class ArchetypeManager {
       archetypes[i]!.clearPopulation();
     }
     for (let slot = 0; slot < this.#capacity; slot++) {
-      delete this.entityArchetypes[slot];
+      this.entityArchetypes[slot] = undefined;
     }
 
     for (const entity of activeEntities) {

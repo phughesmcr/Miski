@@ -56,7 +56,7 @@ export class ArchetypeBatchMove {
    * @returns The number of entities moved to a different archetype
    */
   moveEntities(
-    entityArchetypes: Archetype[],
+    entityArchetypes: Array<Archetype | undefined>,
     root: Archetype,
     getTransitionArchetype: TransitionArchetypeGetter,
     slots: EntityArray,
