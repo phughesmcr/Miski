@@ -1,6 +1,11 @@
 import { isSchema, Partition, type PartitionSpec } from "@phughesmcr/partitionedbuffer";
 import { $_COMPONENT_ID_KEY, $_PARTITION_KEY } from "@/constants.ts";
-import type { ComponentPrivateMethods, ComponentSpec, DynamicComponent } from "@/types/component.ts";
+import type {
+  ComponentConstructor,
+  ComponentPrivateMethods,
+  ComponentSpec,
+  DynamicComponent,
+} from "@/types/component.ts";
 import type { Schema, SchemaOrNull } from "@/types/partitions.ts";
 import { isPositiveUint32, isValidName } from "@/utils.ts";
 
@@ -29,7 +34,7 @@ export function isValidComponentSpec<
 
 /** Component type guard */
 function isComponent(component: unknown): component is DynamicComponent {
-  return !!(component && component instanceof Component);
+  return !!(component && component instanceof ComponentRuntime);
 }
 
 /** Checks if a value is an array of Components */
@@ -41,8 +46,13 @@ export function isValidComponentArray(array: unknown): array is Array<DynamicCom
   return true;
 }
 
-/** A Component is a collection of properties that are stored in a world */
-export class Component<
+/**
+ * Component implementation used by the {@link Component} constructor.
+ *
+ * Prefer importing {@link Component} — construct overloads live on that value so
+ * bare `new Component({ schema })` infers storage instead of collapsing to `never`.
+ */
+class ComponentRuntime<
   TValue extends SchemaOrNull = null,
   TStorage extends SchemaOrNull = TValue,
 > implements ComponentPrivateMethods<TStorage> {
@@ -69,7 +79,7 @@ export class Component<
     }
     const runtimeSpec = spec as ComponentSpecRuntime<TStorage>;
 
-    this.#id = Component.#nextId++;
+    this.#id = ComponentRuntime.#nextId++;
     this.#partition = new Partition<TStorage>({
       name: runtimeSpec.name,
       schema: runtimeSpec.schema as Schema<TStorage> | null,
@@ -119,3 +129,17 @@ export class Component<
     return this.#partition;
   }
 }
+
+/**
+ * A Component is a collection of properties that are stored in a world.
+ *
+ * Construct overloads: tag specs, bare `{ schema }` (infers storage), or
+ * explicit `ComponentSpec` / dual generics for branded writes.
+ */
+export type Component<
+  TValue extends SchemaOrNull = null,
+  TStorage extends SchemaOrNull = TValue,
+> = ComponentRuntime<TValue, TStorage>;
+
+/** A Component is a collection of properties that are stored in a world */
+export const Component: ComponentConstructor = ComponentRuntime as unknown as ComponentConstructor;

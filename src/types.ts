@@ -10,6 +10,7 @@ export type {
 } from "@/entity/entity.ts";
 export { asSlotIndex, entityGeneration, entityIndex, MAX_WORLD_CAPACITY, packEntity } from "@/entity/entity.ts";
 export type {
+  ComponentConstructor,
   ComponentInstances,
   ComponentMap,
   ComponentPrivateMethods,
@@ -18,6 +19,8 @@ export type {
   DynamicComponent,
   DynamicComponentInstance,
   EntityManagerSerialized,
+  InferredDataComponentSpec,
+  TagComponentSpec,
 } from "@/types/component.ts";
 export type {
   ComponentData,

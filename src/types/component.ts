@@ -38,6 +38,42 @@ export type ComponentInstances<TMap extends ComponentMap> = {
     never;
 };
 
+/** Spec for a tag component (no data schema). */
+export type TagComponentSpec = {
+  /** The component's label */
+  name: string;
+  /** Tags omit schema (or pass null explicitly). */
+  schema?: null;
+  /**
+   * The maximum number of entities able to equip this component per world.
+   *
+   * __Warning__: use this only where memory use is a concern, performance will be worse.
+   */
+  maxEntities?: number | null;
+};
+
+/**
+ * Spec for a data component whose value shape matches storage.
+ *
+ * Used by the bare `new Component({ schema })` construct overload so TypeScript
+ * can infer `Component<TStorage, TStorage>` without an explicit generic.
+ *
+ * `schema` is the raw property map (not `Schema<TStorage>`) so constructors like
+ * `Float32Array` are preserved instead of widening to `SchemaProperty` / `unknown`.
+ */
+export type InferredDataComponentSpec<TStorage extends Record<string, SchemaProperty>> = {
+  /** The component's label */
+  name: string;
+  /** The component's property definitions */
+  schema: TStorage;
+  /**
+   * The maximum number of entities able to equip this component per world.
+   *
+   * __Warning__: use this only where memory use is a concern, performance will be worse.
+   */
+  maxEntities?: number | null;
+};
+
 /** The Component's constructor specification */
 export type ComponentSpec<
   TValue extends SchemaOrNull = null,
@@ -74,6 +110,36 @@ export type ComponentSpec<
       /** The component's property definitions */
       schema: Schema<TStorage>;
     });
+
+/**
+ * Construct signatures for {@link Component}.
+ *
+ * Mirrors {@link QueryConstructor}: class type-params alone cannot rebind
+ * `TValue` from a bare `{ schema }` argument (it stays at the `null` default
+ * while `TStorage` is inferred, and {@link ComponentSpec} collapses to `never`).
+ */
+export interface ComponentConstructor {
+  /** Create a tag component (no schema). */
+  new (spec: TagComponentSpec): Component<null, null>;
+
+  /**
+   * Create a data component, inferring storage (and matching value shape) from `schema`.
+   *
+   * Prefer this for the common SoA case: `new Component({ name, schema: { x: Float32Array } })`.
+   */
+  new <TStorage extends Record<string, SchemaProperty>>(
+    spec: InferredDataComponentSpec<TStorage>,
+  ): Component<TStorage, TStorage>;
+
+  /**
+   * Create a component with an explicit value and/or storage shape
+   * (branded writes, dual generics, or documented `Component<Vec2>` form).
+   */
+  new <
+    TValue extends SchemaOrNull,
+    TStorage extends SchemaOrNull = TValue,
+  >(spec: ComponentSpec<TValue, TStorage>): Component<TValue, TStorage>;
+}
 
 /**
  * @internal

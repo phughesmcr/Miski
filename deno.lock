@@ -5,6 +5,7 @@
     "jsr:@phughesmcr/bitpool@~0.9.1": "0.9.1",
     "jsr:@phughesmcr/booleanarray@*": "0.13.0",
     "jsr:@phughesmcr/booleanarray@0.13": "0.13.0",
+    "jsr:@phughesmcr/partitionedbuffer@*": "0.4.1",
     "jsr:@phughesmcr/partitionedbuffer@~0.4.1": "0.4.1",
     "jsr:@std/semver@1": "1.0.8"
   },

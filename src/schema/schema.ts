@@ -51,7 +51,7 @@ export function createComponentFromSchema<TSchema extends Readonly<Record<string
   schema: TSchema,
 ): Component<ComponentValue<TSchema>, TSchema> {
   const spec = { name, schema } as ComponentSpec<ComponentValue<TSchema>, TSchema>;
-  return new Component(spec);
+  return new Component<ComponentValue<TSchema>, TSchema>(spec);
 }
 
 /** Canonical schema, metadata, and component identities compiled as one immutable truth object. */

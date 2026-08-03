@@ -25,6 +25,14 @@ const velocity = vec2Component("velocity");
 const renderable = tagComponent("renderable");
 const disabled = tagComponent("disabled");
 const inferredTag = new Component({ name: "inferredTag" });
+const inferredPosition = new Component({
+  name: "inferredPosition",
+  schema: { x: Float32Array, y: Float32Array },
+});
+expectType<Component<null, null>>(inferredTag);
+expectType<Component<Vec2, Vec2>>(inferredPosition);
+// @ts-expect-error bare schema components are not tags
+expectType<Component<null>>(inferredPosition);
 
 const world = new World({ capacity: 8, components: [position, velocity, renderable, disabled] });
 
