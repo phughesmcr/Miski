@@ -119,7 +119,7 @@ GC allocation pressure is budgeted separately. Hot entity, component check, dire
 | Add/remove data component runtime transition | 40.0012 B/iter |
 | Bulk add/remove tag component - 896 entities | 0.0000 B/iter |
 | Bulk add/remove data component - 896 entities | 0.0000 B/iter |
-| Game frame system + cached render query + refresh | 304.0272 B/iter |
+| Game frame system + cached render query + refresh | 56.0048 B/iter |
 
 Against a local ECS benchmark shape derived from `noctjs/ecs-benchmark`, Miski ranks in the top three by normalized geomean when using Deno and Miski's dense/bulk APIs for hot query loops. Cross-library benchmark numbers are sensitive to runtime, machine, benchmark shape, and API style, so treat this as a comparison aid rather than a universal ranking.
 
