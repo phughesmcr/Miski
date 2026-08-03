@@ -116,7 +116,7 @@ GC allocation pressure is budgeted separately. Hot entity, component check, dire
 | Component owners iterator | 0.0000 B/iter |
 | Spawn/despawn 128 projectiles - repeated `addToEntity` | 0.0000 B/iter |
 | Spawn/despawn 128 projectiles - `createWith` bundle | 0.0000 B/iter |
-| Add/remove data component runtime transition | 40.0012 B/iter |
+| Add/remove data component runtime transition | 0.0000 B/iter |
 | Bulk add/remove tag component - 896 entities | 0.0000 B/iter |
 | Bulk add/remove data component - 896 entities | 0.0000 B/iter |
 | Game frame system + cached render query + refresh | 56.0048 B/iter |

@@ -55,7 +55,7 @@ const FRAME_BUDGET_BYTES_PER_ITER = 1_028;
 const WORLD_CONSTRUCTOR_BUDGET_BYTES_PER_ITER = 12_000;
 const PROJECTILE_SPAWN_DESPAWN_BUDGET_BYTES_PER_ITER = 3_200;
 const GET_ENTITY_DATA_BUDGET_BYTES_PER_ITER = 80;
-const DATA_COMPONENT_TRANSITION_BUDGET_BYTES_PER_ITER = 60;
+const DATA_COMPONENT_TRANSITION_BUDGET_BYTES_PER_ITER = ZERO_ALLOC_BUDGET_BYTES_PER_ITER;
 const BATCH_COMPONENT_TRANSITION_BUDGET_BYTES_PER_ITER = ZERO_ALLOC_BUDGET_BYTES_PER_ITER;
 const REFRESH_BUDGET_BYTES_PER_ITER = 800;
 const QUERY_TRANSITION_TRACKING_BUDGET_BYTES_PER_ITER = 1_800;
@@ -274,6 +274,7 @@ const renderStateInstance = mixed.world.components.getInstance(mixed.components.
 const renderStatePartitions = renderStateInstance.partitions;
 const positionData = { x: 0, y: 0 };
 const positionReadOut = { x: 0, y: 0 };
+const transitionVelocityData = { x: 1, y: -1 };
 const mutationEntity = mixed.entities[128]!;
 const mutationSlot = entityIndex(mutationEntity);
 const healthOwnerEntity = mixed.entities[129]!;
@@ -549,7 +550,11 @@ const scenarios: Scenario[] = [
     iterations: 100_000,
     maxSteadyStateBeforeGcBytesPerIter: DATA_COMPONENT_TRANSITION_BUDGET_BYTES_PER_ITER,
     fn: () => {
-      lifecycle.world.components.addToEntity(lifecycle.components.velocity, transitionEntity, { x: 1, y: -1 });
+      lifecycle.world.components.addToEntity(
+        lifecycle.components.velocity,
+        transitionEntity,
+        transitionVelocityData,
+      );
       lifecycle.world.components.removeFromEntity(lifecycle.components.velocity, transitionEntity);
     },
   },
