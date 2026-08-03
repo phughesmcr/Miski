@@ -4,9 +4,21 @@
  * @copyright   2024 the Miski authors. All rights reserved.
  * @license     MIT
  *
+ * Public surface tiers:
+ * - **Core** - World, Component, Query, System, entity handles, errors
+ * - **Hot-path** - dense `queryList`, direct `.storage.partitions` writes, `frame`
+ * - **Tooling** - `createEcsWorld`, schema hash, checkpoints, rollback, canonicalize
+ *
+ * Prefer `.storage.partitions` for SoA access (`.partitions` is an alias).
+ * Index typed arrays by storage slot via `entityIndex(entity)` or `queryList` `indices`,
+ * not by the packed entity handle.
+ *
+ * ## Core
+ *
  * @example Create Components
  * ```ts
- * type Vec2 = { x: number; y: number };
+ * // Schema uses typed-array constructors (storage shape).
+ * type Vec2 = { x: Float32ArrayConstructor; y: Float32ArrayConstructor };
  * const positionComponent = new Component<Vec2>({
  *   name: "position",
  *   schema: {
@@ -18,6 +30,7 @@
  *
  * @example Create a component with branded writes and exact storage partitions
  * ```ts
+ * // TValue = what callers may write; TStorage = runtime typed-array schema.
  * type FacingValue = { dir: 0 | 1 | 2 | 3 };
  * type FacingStorage = { dir: Uint8ArrayConstructor };
  * const facingComponent = new Component<FacingValue, FacingStorage>({
@@ -26,178 +39,118 @@
  * });
  * ```
  *
- * @example Create a new World
+ * @example Create, initialize, refresh, and destroy a World
  * ```ts
- * // Create a new World with a capacity of 1024 entities and register the component.
+ * // capacity: minimum 8, maximum 65536 (MAX_WORLD_CAPACITY).
  * const world = new World({
- *   capacity: 1024,      // The maximum number of entities that the world can hold.
- *   components: [ positionComponent ], // The components to register in the world (requires at least one component).
+ *   capacity: 1024,
+ *   components: [positionComponent], // at least one component required
  * });
+ * world.init(); // runs System init hooks
+ * world.refresh(); // once per frame (or use world.frame)
+ * world.destroy(); // destroys entities/components; runs System destroy hooks
  * ```
  *
- * @example Destroy a World
+ * @example Create and destroy Entities
  * ```ts
- * // Destroying a World will destroy all Entities and Components within it.
- * // Also calls all System's `destroy` methods.
- * world.destroy();
- * ```
- *
- * @example Initialize a World
- * ```ts
- * // Calls all System's `init` methods.
- * world.init();
- * ```
- *
- * @example Run routine maintenance on the world
- * ```ts
- * // Recommended once per frame (minimum).
- * world.refresh();
- * ```
- *
- * @example Create a new Entity
- * ```ts
- * const entity1: Entity | undefined = world.entities.create(); // 0
- * const entity2: Entity | undefined = world.entities.create(); // 1
- * // Or, if capacity exhaustion should be an error rather than a soft failure:
- * const entity3: Entity = world.entities.createOrThrow(); // 2 (throws CapacityError when full)
+ * const entity1: Entity | undefined = world.entities.create();
+ * const entity2: Entity | undefined = world.entities.create();
+ * const entity3: Entity = world.entities.createOrThrow(); // throws CapacityError when full
  * const entity4: Entity | undefined = world.entities.createWith([
  *   [positionComponent, { x: 1, y: 2 }],
  * ]);
  * const entity5: Entity = world.entities.createWithOrThrow([
  *   [positionComponent, { x: 1, y: 2 }],
  * ]);
- * // To create multiple entities, call create() in a loop
- * const entities: Entity[] = [];
- * for (let i = 0; i < 7; i++) {
- *   const entity = world.entities.create();
- *   if (entity !== undefined) entities.push(entity);
- * }
- * ```
- *
- * @example Destroy an Entity
- * ```ts
  * world.entities.destroy(entity2);
+ * world.entities.isActive(entity1); // true
+ * world.entities.isActive(entity2); // false (destroyed)
  * ```
  *
- * @example Check if an Entity is active
+ * @example Add and remove Components
  * ```ts
- * const isActive: boolean = world.entities.isActive(entity1); // true
- * const isActive2: boolean = world.entities.isActive(entity2); // false (destroyed)
- * ```
- *
- * @example Add a component to an Entity
- * ```ts
- * // Without setting initial values:
  * world.components.addToEntity(positionComponent, entity1);
- *
- * // With setting initial values:
  * world.components.addToEntity(positionComponent, entity2, { x: 10, y: 20 });
- *
- * // addToEntity is an upsert: if the entity already owns the component,
- * // ownership is unchanged and any provided data is merged.
+ * // upsert: ownership unchanged; provided fields merge
  * world.components.addToEntity(positionComponent, entity2, { x: 15 }); // y stays 20
- *
- * // Add or upsert multiple components atomically:
  * world.components.addBundle(entity2, [
  *   [positionComponent, { x: 10, y: 20 }],
  *   [facingComponent, { dir: 0 }],
  * ]);
- * ```
- *
- * @example Remove a component from an Entity
- * ```ts
  * world.components.removeFromEntity(positionComponent, entity2);
  * ```
  *
- * @example Set an Entity's component values
+ * @example Read and write Component data
  * ```ts
- * // Ideally this is done through a System.
+ * import { entityIndex } from "@phughesmcr/miski";
  *
- * // First way: type-safe and shows the entity in changed tracking
- * world.components.setEntityData<Vec2>(positionComponent, entity1, { x: 10, y: 20 });
- * // Partial updates are supported; omitted keys keep their current values:
- * world.components.setEntityData<Vec2>(positionComponent, entity1, { x: 15 });
+ * // Guarded public APIs (throw on inactive / non-owner / tag / unregistered):
+ * const data = world.components.getEntityData(positionComponent, entity1);
+ * world.components.setEntityData(positionComponent, entity1, { x: 10, y: 20 });
+ * world.components.setEntityData(positionComponent, entity1, { x: 15 }); // partial; y kept
  *
- * // Second way: type-unsafe and does not show the entity in changed tracking
- * const positionComponentInstance = world.components.require(positionComponent);
- * positionComponentInstance.partitions!.x[entity1] = 10;
- * positionComponentInstance.partitions!.y[entity1] = 20;
- * positionComponentInstance.markChanged(entity1);
- *
- * // Third way: Through the component proxy - type-safe and shows the entity in changed tracking
- * const positionComponentInstance = world.components.getInstance(positionComponent);
- * if (positionComponentInstance) {
- *   positionComponentInstance.proxy.entity = entity1;
- *   positionComponentInstance.proxy.x = 10;
- *   positionComponentInstance.proxy.y = 20;
- * }
- * ```
- *
- * @example Get all the data-component Entities whose properties changed since the last `world.refresh()`
- * ```ts
- * const changedPosition: IterableIterator<Entity> | undefined = world.components.getChanged(positionComponent);
- * if (changedPosition) {
- *   for (const entity of changedPosition) {
- *     console.log(entity);
- *   }
- * }
- * ```
- *
- * @example Read a component's data without throwing
- * ```ts
- * // Returns undefined if the entity is inactive, does not own the component,
- * // or the component is a tag. Only unregistered components throw.
- * const data = world.components.readEntityData(positionComponent, entity1);
- * if (data !== undefined) {
- *   console.log(data.x, data.y);
- * }
+ * // Soft reads (undefined for inactive / non-owner / tag; only unregistered throws):
+ * const soft = world.components.readEntityData(positionComponent, entity1);
  * const out = { x: 0, y: 0 };
  * world.components.readEntityDataInto(positionComponent, entity1, out);
+ *
+ * // Proxy: type-safe writes with change tracking
+ * const positionInstance = world.components.getInstance(positionComponent);
+ * if (positionInstance) {
+ *   positionInstance.proxy.entity = entity1;
+ *   positionInstance.proxy.x = 10;
+ *   positionInstance.proxy.y = 20;
+ * }
+ *
+ * // Direct SoA: index by slot (entityIndex), not the packed handle.
+ * // Prefer .storage.partitions (.partitions is an alias). No automatic change tracking.
+ * const required = world.components.require(positionComponent);
+ * required.storage!.partitions.x[entityIndex(entity1)] = 10;
+ * required.storage!.partitions.y[entityIndex(entity1)] = 20;
+ * required.markChanged(entity1);
  * ```
  *
- * @example Query entities by component for hot loops
+ * @example Changed tracking and snapshots
  * ```ts
- * const positionQuery = new Query({ all: [positionComponent] });
- * const positionView = world.entities.queryList(positionQuery);
- * for (let i = 0; i < positionView.count; i++) {
- *   const entity = positionView.entities[i]!; // packed handle (identity / isActive)
- *   const slot = positionView.indices[i]!;    // storage slot for partitions
- *   console.log(entity, slot);
- * }
- * // Or, on cold paths, borrowed lists are directly iterable (packed handles):
- * for (const entity of positionView) {
+ * // Borrowed dense iterator - valid until next mutation / refresh:
+ * for (const entity of world.components.getChanged(positionComponent)) {
  *   console.log(entity);
  * }
+ * // Stable array for tools / tests:
+ * const changedSnapshot = world.components.getChangedSnapshot(positionComponent);
  * ```
  *
- * @example Frame lifecycle
+ * ## Hot-path
+ *
+ * @example Dense queryList and frame lifecycle
  * ```ts
+ * const positionQuery = new Query({ all: [positionComponent] });
  * world.frame(() => {
- *   systemInstance(dt);
- *   // read entered/exited/changed here
+ *   const view = world.entities.queryList(positionQuery);
+ *   for (let i = 0; i < view.count; i++) {
+ *     const entity = view.entities[i]!; // packed handle (identity / isActive)
+ *     const slot = view.indices[i]!; // storage slot for .storage.partitions
+ *     console.log(entity, slot);
+ *   }
  * });
- * // refresh() has already run
+ * // refresh() has already run after the callback
  * ```
  *
- * @example Query entities by component with the convenience iterator API
+ * @example Convenience entity iterator (cold path)
  * ```ts
  * const positionQuery = new Query({ all: [positionComponent] });
- * const positionView = world.entities.query(positionQuery);
- * for (const entity of positionView) {
+ * for (const entity of world.entities.query(positionQuery)) {
  *   console.log(entity);
  * }
  * ```
  *
- * @example Query entities by component (complex)
+ * @example Query filters (all / any / none / include)
  * ```ts
+ * // all = AND, any = OR, none = NOT; include exposes instances without filtering membership.
  * const renderablePlayerQuery = new Query({
- *   // All entities must have the player component.
  *   all: [playerComponent],
- *   // All entities must have the renderable component or the renderable SFX component.
  *   any: [renderableComponent, renderableSFXComponent],
- *   // All entities must not have the invisibility component.
  *   none: [invisibilityComponent],
- *   // Expose component instances without filtering membership.
  *   include: [facingComponent],
  * });
  * ```
@@ -207,46 +160,70 @@
  * const positionSystem = new System({
  *   name: "positionSystem",
  *   query: new Query({ all: { position: positionComponent }, include: { facing: facingComponent } }),
- *   // optional
  *   init: (world: World) => {
- *     // called once on world.init()
  *     console.log("positionSystem initialized");
  *   },
- *   // optional
  *   destroy: (world: World) => {
- *     // called once on world.destroy()
  *     console.log("positionSystem destroyed");
  *   },
- *   // required
- *   // The callback to run when the SystemInstance is called
  *   callback: (components, entities, frametime: number, message: string): void => {
- *     console.log(frametime, message);
  *     const position = components.position;
  *     const facing = components.facing;
+ *     const positionX = position.storage!.partitions.x;
  *     for (let i = 0; i < entities.count; i++) {
  *       const entity = entities.entities[i]!;
  *       const slot = entities.indices[i]!;
  *       position.proxy.entity = entity;
  *       if (facing.has(entity)) {
- *         const dir = facing.partitions.dir[slot];
+ *         const dir = facing.storage!.partitions.dir[slot];
  *       }
+ *       positionX[slot] += 1;
  *     }
  *   },
  * });
  *
  * const systemInstance = world.systems.create(positionSystem);
- *
  * const update = (frametime: number) => {
  *   world.frame(() => {
  *     systemInstance(frametime, "Hello, World!");
  *   });
  *   requestAnimationFrame(update);
- * }
- *
+ * };
  * requestAnimationFrame(update);
+ * ```
+ *
+ * ## Tooling
+ *
+ * @example Typed world bootstrap, schema hash, and rollback
+ * ```ts
+ * import {
+ *   captureWorldRollbackPoint,
+ *   compileComponentSchema,
+ *   componentSchemaHash,
+ *   createEcsWorld,
+ *   restoreWorldRollbackPoint,
+ * } from "@phughesmcr/miski";
+ *
+ * const game = createEcsWorld({
+ *   capacity: 1024,
+ *   components: {
+ *     Position: { x: Float32Array, y: Float32Array },
+ *   },
+ * });
+ * await game.init();
+ * const entity = game.spawn({ Position: { x: 0, y: 0 } });
+ * game.storage.Position.get(entity, "x");
+ *
+ * const hash = componentSchemaHash({ Position: { x: Float32Array, y: Float32Array } });
+ * const schema = compileComponentSchema({ Position: { x: Float32Array, y: Float32Array } });
+ *
+ * const point = captureWorldRollbackPoint(world);
+ * // mutate...
+ * restoreWorldRollbackPoint(world, point);
  * ```
  */
 
+// --- Core ---
 export { Component, isValidComponentSpec } from "@/component/component.ts";
 export {
   AlreadyRegisteredError,
@@ -272,9 +249,12 @@ export {
 export { isValidWorldSpec } from "@/world/utils.ts";
 export { isValidName } from "@/utils.ts";
 export { asSlotIndex, entityGeneration, entityIndex, MAX_WORLD_CAPACITY, packEntity } from "@/entity/entity.ts";
+
+// --- Tooling ---
 export { canonicalizeStoredValue } from "@/value/canonicalize.ts";
 export { compileComponentSchema, componentSchemaHash, mergeComponentSchemas } from "@/schema/schema.ts";
 export { createEcsWorld, createEcsWorldFromSchema, createEcsWorldWithSchema, EcsWorld } from "@/world/ecs-world.ts";
+
 export type {
   ComposedQueryComponents,
   NormalizedQueryComponentEntry,

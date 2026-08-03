@@ -60,7 +60,7 @@ Because Miski is designed to be used inside your own projects, we let you config
 * Ability to register more than 32 components in one world
 * Ability to limit the number of entities a component can be added to
 * Define components, systems and queries once, reuse them across multiple worlds
-* `AND`,`OR`,`NOT` operators in Queries
+* Query operators: `all` (AND), `any` (OR), `none` (NOT), plus non-filtering `include`
 * Dense zero-allocation `queryList` API with packed `entities` + storage `indices` (slots)
 * `world.frame(fn)` tick helper that refreshes entered/exited/changed state
 * Typed `createEcsWorld` named-map bootstrap (`spawn`, `storage`, `frame`)
@@ -161,6 +161,10 @@ import { World, ... } from "@phughesmcr/miski";
 ## Development
 
 Miski uses Deno 2.x for local validation and CI.
+
+Contributor conventions (see also `CONTRIBUTING.md`): prefer `.storage.partitions` for SoA
+access; index typed arrays by slot (`entityIndex` / `queryList` `indices`), not by packed
+entity handles; keep comments ASCII-only in `src/`.
 
 Run the full contributor check before opening a pull request:
 
@@ -417,7 +421,9 @@ Once we have the component instance we can modify entity properties.
 
 There are two ways to do this:
 
-The first is quick but unsafe (no automatic change tracking and no ownership checks):
+The first is quick but unsafe (no automatic change tracking and no ownership checks). Prefer
+`.storage.partitions` for SoA access (`.partitions` is an alias). Index by storage slot via
+`entityIndex(entity)` or `queryList` `indices`, not by the packed entity handle:
 
 ```typescript
 import { entityIndex } from "@phughesmcr/miski";
@@ -659,7 +665,7 @@ const renderSystem = new System({
       const entity = entities.entities[i];
       const slot = entities.indices[i];
       if (components.facing.has(entity)) {
-        const dir = components.facing.partitions.dir[slot];
+        const dir = components.facing.storage.partitions.dir[slot];
       }
       // render...
     }

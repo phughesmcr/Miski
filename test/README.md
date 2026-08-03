@@ -2,6 +2,18 @@
 
 Runtime tests live in `*.test.ts` files and run via `deno test` (see `deno.json` `test.include`).
 
+## Domain map
+
+| File | Covers |
+| --- | --- |
+| `ecs_gameplay_contracts.test.ts` | Happy-path gameplay: capacity, systems, queries, batch transitions, multi-world |
+| `ecs_validation_contracts.test.ts` | Spec rejection and registry consistency |
+| `game_oriented_api_evidence.test.ts` | `include`, bundles/spawn preflight, changed marking |
+| `world_api_conveniences.test.ts` | Soft reads, upserts, `createOrThrow`, iterable `queryList` |
+| `world_regressions.test.ts` | Edge cases: maxEntities, entered/exited, cache freshness, batch atomicity |
+| `learnings.test.ts` | Newer APIs: frame, revision, createEcsWorld, schema hash, checkpoint, rollback |
+| `module_graph.test.ts` | Forbidden import coupling edges |
+
 ## Shared fixtures
 
 `fixtures.ts` provides common ECS setup helpers used across test files:

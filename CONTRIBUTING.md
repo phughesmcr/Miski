@@ -51,6 +51,36 @@ Inside `src`, use `@/` imports for cross-folder modules and `./` imports for
 same-folder modules. Keep external package imports first, then a blank line,
 then internal imports.
 
+## Architecture
+
+Public entry points:
+
+- [`mod.ts`](mod.ts) — package exports and JSR module docs
+- [`src/types/world-api.ts`](src/types/world-api.ts) — `World*API` contracts consumers see on `world.entities` / `world.components` / etc.
+
+Mutation pipeline (keep these boundaries when changing code):
+
+1. **World** validates and orchestrates (liveness, preflight, query invalidation)
+2. **ComponentManager** owns storage, ownership flags, and changed tracking
+3. **ArchetypeManager** owns archetype membership and transitions
+
+Borrowed vs snapshot iterators:
+
+- Hot paths return **borrowed** dense views (`queryList`, `getChanged`, `getOwners`, `getActive`) that are valid only until the next world mutation or `refresh`
+- `*Snapshot` / `querySnapshot` / `toArray` helpers allocate stable copies for tools, tests, and non-frame-critical code
+
+Layout sketch: `src/{world,component,entity,query,system,archetype,checkpoint,rollback,schema,value}/`. Demos live in `example/`; throughput and GC budgets in `bench/`. See [`test/README.md`](test/README.md) for how tests map to API domains.
+
+Validation: `deno task ci` before every PR. For performance-sensitive changes also run `deno task bench` and ideally `deno task bench:all`.
+
+## Naming and comments
+
+- Prefer `.storage.partitions` in new docs and examples (`.partitions` is an alias)
+- Prefer `entityIndex` / `queryList` `indices` for SoA writes; packed handles for identity APIs (`isActive`, ownership)
+- Document the layered query pattern (`query` / `queryList` / `querySnapshot`) rather than renaming methods
+- Comment *why* on preflight, atomicity, and borrowed lifetimes; avoid comments that only restate the identifier
+- ASCII-only in `src/` comments (`prefer-ascii` lint)
+
 ## Releasing
 
 JSR publishing is triggered by semver git tags, not by merging to `main`.

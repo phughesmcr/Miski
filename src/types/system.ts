@@ -65,7 +65,7 @@ export type SystemSpec<
   name: string;
   /** The query which will provide the components and entities to the system. */
   query: Query<TComponents>;
-  /** The core function of the system. Called when this.exec is called. */
+  /** The core function of the system. Invoked when the registered SystemInstance is called. */
   callback: TypedSystemCallback<TComponents, TArgs, TReturn>;
   /** The function to call when the system is initialized. */
   init?: (world: WorldContext) => void | Promise<void>;

@@ -1,11 +1,11 @@
 import { BooleanArray } from "@phughesmcr/booleanarray";
 
-import { createSlotArray, type EntityArray } from "@/entity/entity.ts";
+import { type Entity, type EntityArray, entityIndex, packEntity, type PackSlot } from "@/entity/entity.ts";
 import { NotRegisteredError } from "@/errors.ts";
 import type { DynamicComponentInstance } from "@/types/component.ts";
-import { type Entity, entityIndex, packEntity, type PackSlot } from "@/entity/entity.ts";
 import type { QueryInstance } from "@/types/query.ts";
 import { Archetype } from "./archetype.ts";
+import { ArchetypeBatchMove, type TransitionArchetypeGetter } from "./archetype-batch-move.ts";
 
 /** ArchetypeManager handles creation and allocation of Archetypes */
 export class ArchetypeManager {
@@ -36,25 +36,16 @@ export class ArchetypeManager {
   /** Reusable query list for refresh passes */
   #queryScratch: QueryInstance[];
 
-  /** Reusable grouped slot storage for batch component transitions */
-  #bulkSlots: EntityArray;
+  /** Batch single-component transition scratch and move logic */
+  #batchMove: ArchetypeBatchMove;
 
-  /** Reusable group counts for batch component transitions */
-  #bulkGroupCounts: number[];
+  /**
+   * Stable transition resolver for batch moves.
+   * Cached once so hot `#moveEntities` calls do not allocate a closure per invocation.
+   */
+  #getTransitionForBatch: TransitionArchetypeGetter;
 
-  /** Reusable group offsets for batch component transitions */
-  #bulkGroupOffsets: number[];
-
-  /** Reusable group write offsets for batch component transitions */
-  #bulkGroupWrites: number[];
-
-  /** Reusable source archetypes for batch component transitions */
-  #bulkSources: Archetype[];
-
-  /** Reusable target archetypes for batch component transitions */
-  #bulkTargets: Archetype[];
-
-  /** Pack slot → entity for archetype public iterators / query writes */
+  /** Pack slot -> entity for archetype public iterators / query writes */
   #packSlot: PackSlot;
 
   /**
@@ -90,83 +81,16 @@ export class ArchetypeManager {
     instance: DynamicComponentInstance,
     add: boolean,
   ): number {
-    if (count === 0) return 0;
-
-    const sources = this.#bulkSources;
-    const targets = this.#bulkTargets;
-    const counts = this.#bulkGroupCounts;
-    const offsets = this.#bulkGroupOffsets;
-    const writes = this.#bulkGroupWrites;
-    sources.length = 0;
-    targets.length = 0;
-
-    for (let i = 0; i < count; i++) {
-      const slot = slots[i]!;
-      const source = this.entityArchetypes[slot] ?? this.root;
-      let group = -1;
-      for (let j = 0; j < sources.length; j++) {
-        if (sources[j] === source) {
-          group = j;
-          break;
-        }
-      }
-      if (group === -1) {
-        const target = this.#getTransitionArchetype(source, instance, add);
-        if (source === target) continue;
-        group = sources.length;
-        sources[group] = source;
-        targets[group] = target;
-        counts[group] = 0;
-      }
-      counts[group] = (counts[group] ?? 0) + 1;
-    }
-
-    let moved = 0;
-    for (let group = 0; group < sources.length; group++) {
-      offsets[group] = moved;
-      writes[group] = moved;
-      moved += counts[group] ?? 0;
-    }
-    if (moved === 0) {
-      return 0;
-    }
-
-    for (let i = 0; i < count; i++) {
-      const slot = slots[i]!;
-      const source = this.entityArchetypes[slot] ?? this.root;
-      let group = -1;
-      for (let j = 0; j < sources.length; j++) {
-        if (sources[j] === source) {
-          group = j;
-          break;
-        }
-      }
-      if (group === -1) continue;
-      const write = writes[group]!;
-      this.#bulkSlots[write] = slot;
-      writes[group] = write + 1;
-    }
-
-    for (let group = 0; group < sources.length; group++) {
-      const source = sources[group]!;
-      const target = targets[group]!;
-      const offset = offsets[group]!;
-      const groupCount = counts[group] ?? 0;
-      source.removeEntities(this.#bulkSlots, offset, groupCount);
-      target.addEntities(this.#bulkSlots, offset, groupCount);
-      const end = offset + groupCount;
-      for (let i = offset; i < end; i++) {
-        this.entityArchetypes[this.#bulkSlots[i]!] = target;
-        this.#bulkSlots[i] = 0;
-      }
-      counts[group] = 0;
-      offsets[group] = 0;
-      writes[group] = 0;
-    }
-
-    sources.length = 0;
-    targets.length = 0;
-    this.#queryMembershipDirty = true;
+    const moved = this.#batchMove.moveEntities(
+      this.entityArchetypes,
+      this.root,
+      this.#getTransitionForBatch,
+      slots,
+      count,
+      instance,
+      add,
+    );
+    if (moved > 0) this.#queryMembershipDirty = true;
     return moved;
   }
 
@@ -376,12 +300,8 @@ export class ArchetypeManager {
     this.#componentCache = {};
     this.#queryMembershipDirty = true;
     this.#queryScratch = [];
-    this.#bulkSlots = createSlotArray(capacity);
-    this.#bulkGroupCounts = [];
-    this.#bulkGroupOffsets = [];
-    this.#bulkGroupWrites = [];
-    this.#bulkSources = [];
-    this.#bulkTargets = [];
+    this.#batchMove = new ArchetypeBatchMove(capacity);
+    this.#getTransitionForBatch = (from, component, isAdd) => this.#getTransitionArchetype(from, component, isAdd);
 
     // Create root archetype with properly sized bitfield for components
     const rootBitfield = new BooleanArray(componentCount);

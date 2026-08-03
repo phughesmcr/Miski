@@ -9,10 +9,18 @@ import type { DynamicComponent, DynamicComponentInstance } from "@/types/compone
 import { type Entity, entityIndex } from "@/entity/entity.ts";
 import type { ComponentData, SchemaOrNull, TypedArray } from "@/types/partitions.ts";
 import { hasOwnProperty, isObject } from "@/utils.ts";
-import { ComponentInstance } from "./component-instance.ts";
-import { StorageProxy } from "./storage-proxy.ts";
-import type { Component } from "./component.ts";
 import { canonicalizeStoredValue } from "@/value/canonicalize.ts";
+import { ComponentInstance } from "./component-instance.ts";
+import type { Component } from "./component.ts";
+import {
+  captureComponentManagerSnapshot,
+  type ComponentManagerSnapshot,
+  restoreComponentManagerSnapshot,
+} from "./component-snapshot.ts";
+import { writeEntityStorageData, writeSparseEntityStorageData } from "./component-storage-write.ts";
+import { StorageProxy } from "./storage-proxy.ts";
+
+export type { ComponentManagerSnapshot };
 
 function roundUpToMultiple(value: number, multiple: number): number {
   const remainder = value % multiple;
@@ -93,7 +101,7 @@ export class ComponentManager {
   #nextWorldRevision: () => number;
   /** Optional column-write hook for rollback capture */
   #beforeColumnWrite?: (instanceId: number, key: string, slot: number) => void;
-  /** Pack slot → entity at owner/changed iterator edges */
+  /** Pack slot -> entity at owner/changed iterator edges */
   #packSlot: PackSlot;
 
   /**
@@ -370,77 +378,6 @@ export class ComponentManager {
   }
 
   /**
-   * Write schema columns from a data object.
-   *
-   * When `dataValidated` is true, values are already known finite numbers, so the write path skips
-   * `hasOwnProperty` and `canonicalizeStoredValue` (TypedArray assignment performs storage coercion).
-   * New ownership zeros any schema key absent from `data`.
-   */
-  #writeEntityStorageData(
-    state: ComponentState,
-    componentName: string,
-    data: Record<string, number | undefined>,
-    slot: number,
-    ownershipChanged: boolean,
-    dataValidated: boolean,
-  ): void {
-    const keys = state.storageKeys;
-    const columns = state.storageColumns;
-    if (dataValidated) {
-      const keyCount = keys.length;
-      // Specialize 1- and 2-field schemas (common gameplay shapes like Vec2).
-      if (keyCount === 2) {
-        const v0 = data[keys[0]!];
-        const v1 = data[keys[1]!];
-        if (v0 === undefined) {
-          if (ownershipChanged) columns[0]![slot] = 0;
-        } else {
-          columns[0]![slot] = v0 === 0 ? 0 : v0;
-        }
-        if (v1 === undefined) {
-          if (ownershipChanged) columns[1]![slot] = 0;
-        } else {
-          columns[1]![slot] = v1 === 0 ? 0 : v1;
-        }
-        return;
-      }
-      if (keyCount === 1) {
-        const v0 = data[keys[0]!];
-        if (v0 === undefined) {
-          if (ownershipChanged) columns[0]![slot] = 0;
-        } else {
-          columns[0]![slot] = v0 === 0 ? 0 : v0;
-        }
-        return;
-      }
-      for (let i = 0; i < keyCount; i++) {
-        const value = data[keys[i]!];
-        if (value === undefined) {
-          if (ownershipChanged) columns[i]![slot] = 0;
-          continue;
-        }
-        columns[i]![slot] = value === 0 ? 0 : value;
-      }
-      return;
-    }
-
-    const scratchColumns = state.coercionScratchColumns;
-    for (let i = 0; i < keys.length; i++) {
-      const key = keys[i]!;
-      const column = columns[i]!;
-      const value = hasOwnProperty(data, key) ? data[key] : undefined;
-      if (value === undefined) {
-        if (ownershipChanged) column[slot] = 0;
-        continue;
-      }
-      const scratchColumn = scratchColumns[i];
-      column[slot] = scratchColumn === undefined ?
-        value :
-        canonicalizeStoredValue(componentName, key, value, scratchColumn);
-    }
-  }
-
-  /**
    * Add a registered component instance to an entity.
    *
    * This updates only component ownership/data/changed state. Callers that expose world-level mutations must handle
@@ -500,7 +437,7 @@ export class ComponentManager {
     if (storage !== null && hasData) {
       this.#markChanged(state, entity, slot);
       if (state.storageKeys.length > 0) {
-        this.#writeEntityStorageData(
+        writeEntityStorageData(
           state,
           instance.type.name,
           data as Record<string, number | undefined>,
@@ -510,18 +447,13 @@ export class ComponentManager {
         );
       } else {
         // Sparse / object partitions: preserve the prior key-walk write path.
-        const partitions = storage.partitions as Record<string, TypedArray>;
-        const scratch = state.coercionScratch ?? {};
-        for (const key in data!) {
-          if (!hasOwnProperty(data, key)) continue;
-          const value = (data as Record<string, number | undefined>)[key];
-          if (value !== undefined && hasOwnProperty(partitions, key)) {
-            const scratchColumn = scratch[key];
-            partitions[key]![slot] = scratchColumn === undefined ?
-              value :
-              canonicalizeStoredValue(instance.type.name, key, value, scratchColumn);
-          }
-        }
+        writeSparseEntityStorageData(
+          storage.partitions as Record<string, TypedArray>,
+          state.coercionScratch ?? {},
+          instance.type.name,
+          data as Record<string, number | undefined>,
+          slot,
+        );
       }
     }
 
@@ -950,93 +882,15 @@ export class ComponentManager {
 
   /** Capture a full ownership + column snapshot for rollback. */
   captureSnapshot(): ComponentManagerSnapshot {
-    const states: Array<{
-      owners?: number[];
-      ownerCount: number;
-      ownerList?: number[];
-      revision: number;
-      lastChangedRevision: number;
-      columns: Record<string, number[]>;
-    }> = [];
-    for (let i = 0; i < this.#states.length; i++) {
-      const state = this.#states[i]!;
-      const instance = state.instance;
-      const columns: Record<string, number[]> = {};
-      if (instance.storage !== null) {
-        const partitions = instance.storage.partitions as Record<string, TypedArray>;
-        for (const key in partitions) {
-          const partition = partitions[key]!;
-          if (ArrayBuffer.isView(partition)) {
-            columns[key] = Array.from(partition);
-          }
-        }
-      }
-      states.push({
-        owners: state.owners === undefined ? undefined : Array.from(state.owners),
-        ownerCount: state.ownerCount,
-        ownerList: state.ownerList === undefined ? undefined : Array.from(state.ownerList),
-        revision: state.revision,
-        lastChangedRevision: state.lastChangedRevision,
-        columns,
-      });
-    }
-    return { states };
+    return captureComponentManagerSnapshot(this.#states);
   }
 
   /** Restore a full ownership + column snapshot for rollback. */
   restoreSnapshot(snapshot: ComponentManagerSnapshot): void {
-    for (let i = 0; i < snapshot.states.length; i++) {
-      const snap = snapshot.states[i]!;
-      const state = this.#states[i]!;
-      const instance = state.instance;
-      if (snap.owners === undefined) {
-        state.owners = undefined;
-        state.ownerList = undefined;
-        state.ownerPositions = undefined;
-        state.ownerIterator = undefined;
-        state.ownerCount = 0;
-      } else {
-        const owners = this.#ensureOwnershipState(state);
-        owners.set(snap.owners);
-        state.ownerCount = 0;
-        if (snap.ownerList !== undefined) {
-          for (let j = 0; j < snap.ownerCount; j++) {
-            const slot = snap.ownerList[j]!;
-            state.ownerList![j] = slot;
-            state.ownerPositions![slot] = j;
-          }
-          state.ownerCount = snap.ownerCount;
-        }
-      }
-      state.revision = snap.revision;
-      state.lastChangedRevision = snap.lastChangedRevision;
-      state.changed = undefined;
-      state.changedList = undefined;
-      state.changedPositions = undefined;
-      state.changedIterator = undefined;
-      state.changedCount = 0;
-      if (instance.storage !== null) {
-        const partitions = instance.storage.partitions as Record<string, TypedArray>;
-        for (const key in snap.columns) {
-          const partition = partitions[key];
-          const values = snap.columns[key]!;
-          if (partition !== undefined && ArrayBuffer.isView(partition)) {
-            partition.set(values);
-          }
-        }
-      }
-    }
+    restoreComponentManagerSnapshot(
+      this.#states,
+      snapshot,
+      (state) => this.#ensureOwnershipState(state),
+    );
   }
 }
-
-/** Full component-manager snapshot used by world rollback. */
-export type ComponentManagerSnapshot = {
-  readonly states: ReadonlyArray<{
-    owners?: number[];
-    ownerCount: number;
-    ownerList?: number[];
-    revision: number;
-    lastChangedRevision: number;
-    columns: Record<string, number[]>;
-  }>;
-};

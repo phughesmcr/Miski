@@ -2,11 +2,10 @@ import { BooleanArray } from "@phughesmcr/booleanarray";
 
 import { VERSION } from "@/constants.ts";
 import { ArchetypeManager } from "@/archetype/archetype-manager.ts";
-import { type ComponentBundleCommitEntry, ComponentManager } from "@/component/component-manager.ts";
-import { createEntityArray, createSlotArray, type EntityArray, entityIndex } from "@/entity/entity.ts";
+import { ComponentManager, type ComponentManagerSnapshot } from "@/component/component-manager.ts";
 import { EntityManager } from "@/entity/entity-manager.ts";
+import { type Entity, entityIndex, type QueryEntityList } from "@/entity/entity.ts";
 import {
-  CapacityError,
   ComponentDataError,
   componentDisplayName,
   ComponentOwnershipError,
@@ -19,17 +18,12 @@ import {
 } from "@/errors.ts";
 import { QueryManager } from "@/query/query-manager.ts";
 import { SystemManager } from "@/system/system-manager.ts";
-import { hasOwnProperty, isObject } from "@/utils.ts";
 import type { Component } from "@/component/component.ts";
 import type { ComponentInstance } from "@/component/component-instance.ts";
 import type { Query } from "@/query/query.ts";
 import type { DynamicComponent } from "@/types/component.ts";
-import type { Entity } from "@/entity/entity.ts";
-import type { QueryEntityList } from "@/entity/entity.ts";
-import type { ComponentData, SchemaOrNull, SchemaValues } from "@/types/partitions.ts";
+import type { ComponentData, SchemaOrNull } from "@/types/partitions.ts";
 import type {
-  ComponentBundle,
-  ComponentBundleEntryInput,
   WorldAPIResult,
   WorldArchetypeAPI,
   WorldComponentAPI,
@@ -38,7 +32,6 @@ import type {
   WorldState,
   WorldSystemAPI,
 } from "@/types/world-api.ts";
-import { assertWorldState, isValidWorldSpec } from "./utils.ts";
 import {
   applyComponentCheckpoint,
   captureComponentCheckpoint,
@@ -51,7 +44,9 @@ import {
   restoreRollbackState,
   validateRollbackState,
 } from "@/rollback/rollback.ts";
-import type { ComponentManagerSnapshot } from "@/component/component-manager.ts";
+import { constructWorldAPIs } from "./world-api-facade.ts";
+import { assertWorldState, isValidWorldSpec } from "./utils.ts";
+import { WorldMutations } from "./world-mutations.ts";
 
 type WorldRollbackState = {
   readonly entityJson: string;
@@ -77,6 +72,8 @@ export class World {
 
   #entityManager: EntityManager;
 
+  readonly #mutations: WorldMutations;
+
   readonly #queryManager: QueryManager;
 
   readonly #systemManager: SystemManager;
@@ -89,21 +86,6 @@ export class World {
 
   /** Cache of entities visited by archetype query helpers */
   readonly #visitedArchetypeEntities: BooleanArray;
-
-  /** Dense scratch storage for preflighted batch component transitions (packed handles) */
-  readonly #batchEntities: EntityArray;
-
-  /** Dense scratch storage for preflighted batch component transitions (slots) */
-  readonly #batchSlots: EntityArray;
-
-  /** Duplicate-detection scratch flags for preflighted batch component transitions */
-  readonly #batchSeen: Uint8Array;
-
-  /** Reusable preflighted bundle entries */
-  readonly #bundleEntries: ComponentBundleCommitEntry[];
-
-  /** Duplicate-detection scratch flags for bundle component instances */
-  readonly #bundleSeenComponents: Uint8Array;
 
   /** The World's current state */
   #state: WorldState;
@@ -125,221 +107,6 @@ export class World {
 
   /** System Management API */
   readonly systems: WorldSystemAPI;
-
-  #constructAPIs(): WorldAPIResult {
-    return {
-      archetypes: this.#constructArchetypeAPI(),
-      components: this.#constructComponentAPI(),
-      entities: this.#constructEntityAPI(),
-      systems: this.#constructSystemAPI(),
-    };
-  }
-
-  #constructArchetypeAPI(): WorldArchetypeAPI {
-    return {
-      getEntityArchetype: (entity: Entity) => this.#archetypeManager.getEntityArchetype(entity)?.id,
-      isEntityInRoot: (entity: Entity) => this.#archetypeManager.isEntityInRoot(entity),
-      queryComponents: (query: Query) => {
-        this.#assertInitialized();
-        return this.#queryManager.components(query);
-      },
-      queryEntities: (query: Query) => {
-        this.#assertInitialized();
-        return this.#queryArchetypeEntities(query);
-      },
-      queryEntered: (query: Query) => {
-        this.#assertInitialized();
-        return this.#queryArchetypeEntered(query);
-      },
-      queryExited: (query: Query) => {
-        this.#assertInitialized();
-        return this.#queryArchetypeExited(query);
-      },
-    };
-  }
-
-  #constructComponentAPI(): WorldComponentAPI {
-    return {
-      count: this.#componentManager.count,
-      registry: this.#componentManager.registry,
-      addToEntity: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
-        component: ComponentReference<TValue, TStorage>,
-        entity: Entity,
-        data?: Partial<SchemaValues<TValue>> | undefined,
-      ) => {
-        this.#assertInitialized();
-        // SchemaValues<T> values are always numeric; storage internals speak plain numbers.
-        this.#addComponentToEntity(component, entity, data as ComponentDataInput<TValue> | undefined);
-      },
-      addToEntities: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
-        component: ComponentReference<TValue, TStorage>,
-        entities: QueryEntityList,
-        data?: Partial<SchemaValues<TValue>> | undefined,
-      ) => {
-        this.#assertInitialized();
-        return this.#addComponentToEntities(
-          component,
-          entities,
-          data as ComponentDataInput<TValue> | undefined,
-        );
-      },
-      addBundle: <const TBundle extends readonly ComponentBundleEntryInput[]>(
-        entity: Entity,
-        bundle: TBundle & ComponentBundle<TBundle>,
-      ) => {
-        this.#assertInitialized();
-        this.#addBundleToEntity(entity, bundle);
-      },
-      entityHas: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
-        component: ComponentReference<TValue, TStorage>,
-        entity: Entity,
-      ) => this.#componentManager.entityHas(component, entity),
-      getChanged: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
-        component: ComponentReference<TValue, TStorage>,
-      ) => this.#componentManager.getChanged(component),
-      getChangedSnapshot: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
-        component: ComponentReference<TValue, TStorage>,
-      ) => this.#snapshotIterator(this.#componentManager.getChanged(component)),
-      getEntityData: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
-        component: ComponentReference<TValue, TStorage>,
-        entity: Entity,
-      ) => this.#getComponentEntityData(component, entity),
-      readEntityData: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
-        component: ComponentReference<TValue, TStorage>,
-        entity: Entity,
-      ) => this.#readComponentEntityData(component, entity),
-      readEntityDataInto: <
-        TValue extends SchemaOrNull,
-        TStorage extends SchemaOrNull = TValue,
-      >(
-        component: ComponentReference<TValue, TStorage>,
-        entity: Entity,
-        out: Partial<ComponentData<TValue>>,
-      ) => this.#readComponentEntityDataInto(component, entity, out),
-      getInstance: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
-        component: ComponentReference<TValue, TStorage>,
-      ) => this.#componentManager.getInstance(component),
-      require: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
-        component: ComponentReference<TValue, TStorage>,
-      ) => this.#componentManager.require(component),
-      getInstances: (array: DynamicComponent[] | Readonly<DynamicComponent[]>) =>
-        this.#componentManager.getInstances(array),
-      getOwners: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
-        component: ComponentReference<TValue, TStorage>,
-      ) => this.#componentManager.getOwners(component),
-      getOwnersSnapshot: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
-        component: ComponentReference<TValue, TStorage>,
-      ) => this.#snapshotIterator(this.#componentManager.getOwners(component)),
-      isRegistered: (component: DynamicComponent | string) => this.#componentManager.isRegistered(component),
-      markChanged: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
-        component: ComponentReference<TValue, TStorage>,
-        entity: Entity,
-      ) => {
-        this.#assertInitialized();
-        this.#markComponentChanged(component, entity);
-      },
-      query: (query: Query) => {
-        this.#assertInitialized();
-        return this.#queryManager.components(query);
-      },
-      removeFromEntity: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
-        component: ComponentReference<TValue, TStorage>,
-        entity: Entity,
-      ) => {
-        this.#assertInitialized();
-        this.#removeComponentFromEntity(component, entity);
-      },
-      removeFromEntities: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
-        component: ComponentReference<TValue, TStorage>,
-        entities: QueryEntityList,
-      ) => {
-        this.#assertInitialized();
-        return this.#removeComponentFromEntities(component, entities);
-      },
-      setEntityData: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
-        component: ComponentReference<TValue, TStorage>,
-        entity: Entity,
-        value: Partial<SchemaValues<TValue>>,
-      ) => {
-        this.#assertInitialized();
-        // SchemaValues<T> values are always numeric; storage internals speak plain numbers.
-        this.#setComponentEntityData(component, entity, value as ComponentDataInput<TValue>);
-      },
-    };
-  }
-
-  #constructEntityAPI(): WorldEntityAPI {
-    return {
-      capacity: this.#entityManager.capacity,
-      create: () => {
-        this.#assertInitialized();
-        return this.#createEntity();
-      },
-      createWith: <const TBundle extends readonly ComponentBundleEntryInput[]>(
-        bundle: TBundle & ComponentBundle<TBundle>,
-      ) => {
-        this.#assertInitialized();
-        return this.#createEntityWithBundle(bundle, false);
-      },
-      createOrThrow: () => {
-        this.#assertInitialized();
-        const entity = this.#createEntity();
-        if (entity === undefined) {
-          throw new CapacityError(`World is at capacity (${this.#entityManager.capacity} entities).`);
-        }
-        return entity;
-      },
-      createWithOrThrow: <const TBundle extends readonly ComponentBundleEntryInput[]>(
-        bundle: TBundle & ComponentBundle<TBundle>,
-      ) => {
-        this.#assertInitialized();
-        return this.#createEntityWithBundle(bundle, true)!;
-      },
-      destroy: (entity: Entity) => {
-        this.#assertInitialized();
-        this.#destroyEntity(entity);
-      },
-      getActive: (startEntity?: Entity, endEntity?: Entity) => this.#entityManager.getActive(startEntity, endEntity),
-      getActiveSnapshot: (startEntity?: Entity, endEntity?: Entity) =>
-        this.#snapshotIterator(this.#entityManager.getActive(startEntity, endEntity)) ?? [],
-      getActiveCount: () => this.#entityManager.getActiveCount(),
-      getAvailableCount: () => this.#entityManager.getAvailableCount(),
-      isActive: (entity: Entity) => this.#entityManager.isActive(entity),
-      isEntity: (entity: Entity) => this.#entityManager.isEntity(entity),
-      query: (query: Query) => {
-        this.#assertInitialized();
-        return this.#queryManager.entities(query);
-      },
-      queryList: (query: Query) => {
-        this.#assertInitialized();
-        return this.#queryManager.entityList(query);
-      },
-      querySnapshot: (query: Query) => {
-        this.#assertInitialized();
-        return this.#copyEntityList(this.#queryManager.entityList(query));
-      },
-      toArray: (list: QueryEntityList) => this.#copyEntityList(list),
-    };
-  }
-
-  #constructSystemAPI(): WorldSystemAPI {
-    const systemManager = this.#systemManager;
-    return {
-      get registry() {
-        return systemManager.registry;
-      },
-      create: (system) => {
-        this.#assertSystemRegistrationAvailable();
-        return this.#systemManager.create(system);
-      },
-      get: ((system: string) => this.#systemManager.get(system)) as WorldSystemAPI["get"],
-      has: (system) => this.#systemManager.has(system),
-      destroy: (system) => {
-        this.#assertSystemRegistrationAvailable();
-        return this.#systemManager.destroy(system);
-      },
-    };
-  }
 
   #assertInitialized(): void {
     assertWorldState("initialized", this.#state);
@@ -418,328 +185,6 @@ export class World {
     this.#visitedArchetypeEntities.clear();
   }
 
-  /** Resolve a registered component instance for mutation paths. */
-  #getRegisteredComponentInstance<
-    TValue extends SchemaOrNull,
-    TStorage extends SchemaOrNull = TValue,
-  >(component: ComponentReference<TValue, TStorage>): ComponentInstance<TValue, TStorage> {
-    const instance = this.#componentManager.getInstance(component);
-    if (instance !== undefined) return instance as ComponentInstance<TValue, TStorage>;
-    throw new NotRegisteredError(formatComponentNotRegistered(componentDisplayName(component)));
-  }
-
-  /** Validate a public component data payload before any ownership/storage mutation. */
-  #validateComponentData<TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
-    instance: ComponentInstance<TValue, TStorage>,
-    data: unknown,
-  ): void {
-    if (data === undefined) return;
-    if (instance.storage === null) {
-      throw new ComponentDataError(`Component ${instance.type.name} has no data storage.`);
-    }
-    if (!isObject(data)) {
-      throw new TypeError(`Component data for "${instance.type.name}" must be an object.`);
-    }
-
-    const knownKeys = this.#componentManager.getStorageKeyLookup(instance);
-    if (knownKeys === undefined) {
-      throw new ComponentDataError(`Component ${instance.type.name} has no data storage.`);
-    }
-    const values = data as Record<string, unknown>;
-    for (const key in values) {
-      if (!hasOwnProperty(values, key)) continue;
-      if (knownKeys[key] !== 1) {
-        throw new ComponentDataError(`Component ${instance.type.name} does not define data field "${key}".`);
-      }
-      const value = values[key];
-      if (value === undefined) {
-        throw new ComponentDataError(`Component ${instance.type.name} data field "${key}" cannot be undefined.`);
-      }
-      if (typeof value !== "number" || !Number.isFinite(value)) {
-        throw new ComponentDataError(`Component ${instance.type.name} data field "${key}" must be a finite number.`);
-      }
-    }
-  }
-
-  /** Preflight a borrowed dense entity list before an atomic batch mutation. */
-  #preflightBatchEntities(entities: QueryEntityList): number {
-    const count = entities.count;
-    if (!Number.isInteger(count) || count < 0 || count > this.#batchEntities.length) {
-      throw new RangeError(`Batch entity list count ${count} is outside world capacity.`);
-    }
-
-    for (let i = 0; i < count; i++) {
-      const entity = entities.entities[i]!;
-      if (!this.#entityManager.isActive(entity)) {
-        this.#clearBatchEntities(i);
-        throw new EntityNotFoundError(formatEntityNotActive(entity));
-      }
-      const slot = entities.indices[i]!;
-      if (this.#batchSeen[slot] === 1) {
-        this.#clearBatchEntities(i);
-        throw new RangeError(`Duplicate entity ${entity} in batch entity list.`);
-      }
-      this.#batchSeen[slot] = 1;
-      this.#batchEntities[i] = entity;
-      this.#batchSlots[i] = slot;
-    }
-
-    return count;
-  }
-
-  /** Clear duplicate-detection scratch flags after batch preflight/commit. */
-  #clearBatchEntities(count: number): void {
-    for (let i = 0; i < count; i++) {
-      this.#batchSeen[this.#batchSlots[i]!] = 0;
-      this.#batchEntities[i] = 0;
-      this.#batchSlots[i] = 0;
-    }
-  }
-
-  /** Clear bundle duplicate-detection scratch state. */
-  #clearBundleEntries(): void {
-    for (let i = 0; i < this.#bundleEntries.length; i++) {
-      const instance = this.#bundleEntries[i]!.instance;
-      this.#bundleSeenComponents[instance.id] = 0;
-    }
-    this.#bundleEntries.length = 0;
-  }
-
-  /** Resolve, validate, and stage a user-provided bundle before mutation. */
-  #preflightBundle(bundle: readonly ComponentBundleEntryInput[]): readonly ComponentBundleCommitEntry[] {
-    try {
-      for (let i = 0; i < bundle.length; i++) {
-        const entry = bundle[i];
-        if (!Array.isArray(entry) || (entry.length !== 1 && entry.length !== 2)) {
-          throw new TypeError("Bundle entries must be [component] or [component, data] tuples.");
-        }
-        const instance = this.#getRegisteredComponentInstance(entry[0]);
-        if (this.#bundleSeenComponents[instance.id] === 1) {
-          throw new RangeError(`Duplicate component "${instance.type.name}" in bundle.`);
-        }
-        this.#bundleSeenComponents[instance.id] = 1;
-
-        let data: Partial<Record<string, number>> | undefined;
-        if (entry.length === 2) {
-          this.#validateComponentData(instance, entry[1]);
-          data = entry[1] as Partial<Record<string, number>> | undefined;
-        }
-
-        this.#bundleEntries.push({ instance, data });
-      }
-      return this.#bundleEntries;
-    } catch (error) {
-      this.#clearBundleEntries();
-      throw error;
-    }
-  }
-
-  /** Add a preflighted component bundle to an active entity. */
-  #addBundleToEntity(entity: Entity, bundle: readonly ComponentBundleEntryInput[]): void {
-    if (!this.#entityManager.isActive(entity)) {
-      throw new EntityNotFoundError(formatEntityNotActive(entity));
-    }
-    const entries = this.#preflightBundle(bundle);
-    try {
-      this.#componentManager.preflightAddBundleToEntity(entries, entity);
-      const added = this.#componentManager.addBundleToEntity(entries, entity);
-      if (added.length > 0) {
-        this.#archetypeManager.addComponentSet(entity, added);
-      }
-      this.#invalidateCommittedTransition(added.length > 0);
-    } finally {
-      this.#clearBundleEntries();
-    }
-  }
-
-  /** Roll back a newly-created entity after bundle preflight fails. */
-  #rollbackCreatedEntity(entity: Entity): void {
-    let changed = this.#archetypeManager.getEntityArchetype(entity) !== undefined;
-    const archetype = this.#archetypeManager.getEntityArchetype(entity);
-    if (archetype) {
-      for (const componentInstance of archetype.components) {
-        changed ||= this.#componentManager.removeInstanceFromEntity(componentInstance, entity);
-      }
-    }
-    this.#archetypeManager.destroyEntity(entity);
-    if (this.#entityManager.isActive(entity)) {
-      this.#entityManager.destroy(entity);
-    }
-    this.#invalidateCommittedTransition(changed);
-  }
-
-  /** Create an active entity and attach it to the root archetype. */
-  #createEntity(): Entity | undefined {
-    const entity = this.#entityManager.create();
-    if (entity === undefined) return undefined;
-    this.#archetypeManager.createEntity(entity);
-    this.#invalidateCommittedTransition(true);
-    return entity;
-  }
-
-  /** Create an entity and atomically attach a bundle. */
-  #createEntityWithBundle(
-    bundle: readonly ComponentBundleEntryInput[],
-    throwOnCapacity: boolean,
-  ): Entity | undefined {
-    const entity = this.#createEntity();
-    if (entity === undefined) {
-      if (throwOnCapacity) {
-        throw new CapacityError(`World is at capacity (${this.#entityManager.capacity} entities).`);
-      }
-      return undefined;
-    }
-
-    try {
-      this.#addBundleToEntity(entity, bundle);
-      return entity;
-    } catch (error) {
-      this.#rollbackCreatedEntity(entity);
-      throw error;
-    }
-  }
-
-  /** Commit an already preflighted component add. */
-  #commitAddComponent<
-    TValue extends SchemaOrNull,
-    TStorage extends SchemaOrNull = TValue,
-  >(
-    instance: ComponentInstance<TValue, TStorage>,
-    entity: Entity,
-    data?: ComponentDataInput<TValue>,
-    dataValidated: boolean = false,
-  ): boolean {
-    const slot = entityIndex(entity);
-    const changed = this.#componentManager.addInstanceToEntity(instance, entity, data, slot, dataValidated);
-    if (changed) {
-      this.#archetypeManager.addComponent(entity, instance, slot);
-    }
-    return changed;
-  }
-
-  /** Commit an already preflighted component removal. */
-  #commitRemoveComponent<
-    TValue extends SchemaOrNull,
-    TStorage extends SchemaOrNull = TValue,
-  >(
-    instance: ComponentInstance<TValue, TStorage>,
-    entity: Entity,
-  ): boolean {
-    const slot = entityIndex(entity);
-    const changed = this.#componentManager.removeInstanceFromEntity(instance, entity, slot);
-    if (changed) {
-      this.#archetypeManager.removeComponent(entity, instance, slot);
-    }
-    return changed;
-  }
-
-  /** Invalidate entity query caches once for a committed ownership transition batch. */
-  #invalidateCommittedTransition(changed: boolean): void {
-    if (changed && this.#state === "initialized" && !this.#queryManager.cacheInvalidated) {
-      this.#queryManager.invalidate();
-    }
-  }
-
-  /** Add a component to an entity */
-  #addComponentToEntity<
-    TValue extends SchemaOrNull,
-    TStorage extends SchemaOrNull = TValue,
-  >(
-    component: ComponentReference<TValue, TStorage>,
-    entity: Entity,
-    data?: ComponentDataInput<TValue> | undefined,
-  ): void {
-    if (!this.#entityManager.isActive(entity)) {
-      throw new EntityNotFoundError(formatEntityNotActive(entity));
-    }
-    const instance = this.#getRegisteredComponentInstance(component);
-    this.#validateComponentData(instance, data);
-    const changed = this.#commitAddComponent(instance, entity, data, true);
-    this.#invalidateCommittedTransition(changed);
-  }
-
-  /** Add a component to every entity in a dense query list. */
-  #addComponentToEntities<
-    TValue extends SchemaOrNull,
-    TStorage extends SchemaOrNull = TValue,
-  >(
-    component: ComponentReference<TValue, TStorage>,
-    entities: QueryEntityList,
-    data?: ComponentDataInput<TValue> | undefined,
-  ): number {
-    const instance = this.#getRegisteredComponentInstance(component);
-    this.#validateComponentData(instance, data);
-    const count = this.#preflightBatchEntities(entities);
-
-    try {
-      this.#componentManager.preflightAddInstanceToEntities(instance, this.#batchEntities, count);
-      let changedCount = 0;
-      for (let i = 0; i < count; i++) {
-        if (
-          this.#componentManager.addInstanceToEntity(
-            instance,
-            this.#batchEntities[i]!,
-            data,
-            this.#batchSlots[i]!,
-            true,
-          )
-        ) {
-          changedCount++;
-        }
-      }
-      if (changedCount > 0) {
-        this.#archetypeManager.addComponents(this.#batchSlots, count, instance);
-      }
-      this.#invalidateCommittedTransition(changedCount > 0);
-      return changedCount;
-    } finally {
-      this.#clearBatchEntities(count);
-    }
-  }
-
-  /** Remove a component from an entity */
-  #removeComponentFromEntity<
-    TValue extends SchemaOrNull,
-    TStorage extends SchemaOrNull = TValue,
-  >(
-    component: ComponentReference<TValue, TStorage>,
-    entity: Entity,
-  ): void {
-    if (!this.#entityManager.isActive(entity)) {
-      throw new EntityNotFoundError(formatEntityNotActive(entity));
-    }
-    const changed = this.#commitRemoveComponent(this.#getRegisteredComponentInstance(component), entity);
-    this.#invalidateCommittedTransition(changed);
-  }
-
-  /** Remove a component from every entity in a dense query list. */
-  #removeComponentFromEntities<
-    TValue extends SchemaOrNull,
-    TStorage extends SchemaOrNull = TValue,
-  >(
-    component: ComponentReference<TValue, TStorage>,
-    entities: QueryEntityList,
-  ): number {
-    const instance = this.#getRegisteredComponentInstance(component);
-    const count = this.#preflightBatchEntities(entities);
-
-    try {
-      let changedCount = 0;
-      for (let i = 0; i < count; i++) {
-        if (this.#componentManager.removeInstanceFromEntity(instance, this.#batchEntities[i]!)) {
-          changedCount++;
-        }
-      }
-      if (changedCount > 0) {
-        this.#archetypeManager.removeComponents(this.#batchSlots, count, instance);
-      }
-      this.#invalidateCommittedTransition(changedCount > 0);
-      return changedCount;
-    } finally {
-      this.#clearBatchEntities(count);
-    }
-  }
-
   /** Resolve a registered data component instance for guarded public data access. */
   #getGuardedDataComponent<
     TValue extends SchemaOrNull,
@@ -785,7 +230,7 @@ export class World {
     value: ComponentDataInput<TValue>,
   ): void {
     const instance = this.#getGuardedDataComponent(component, entity);
-    this.#validateComponentData(instance, value);
+    this.#mutations.validateComponentData(instance, value);
     this.#componentManager.setInstanceEntityData(instance, entity, value);
   }
 
@@ -813,7 +258,7 @@ export class World {
     component: ComponentReference<TValue, TStorage>,
     entity: Entity,
   ): ComponentData<TValue> | undefined {
-    const instance = this.#getRegisteredComponentInstance(component);
+    const instance = this.#mutations.getRegisteredComponentInstance(component);
     if (instance.storage === null) return undefined;
     if (!this.#entityManager.isActive(entity)) return undefined;
     if (!this.#componentManager.entityOwnsInstance(instance, entity)) return undefined;
@@ -833,7 +278,7 @@ export class World {
     entity: Entity,
     out: Partial<ComponentData<TValue>>,
   ): boolean {
-    const instance = this.#getRegisteredComponentInstance(component);
+    const instance = this.#mutations.getRegisteredComponentInstance(component);
     if (instance.storage === null) return false;
     if (!this.#entityManager.isActive(entity)) return false;
     return this.#componentManager.getInstanceEntityDataInto(instance, entity, out);
@@ -852,7 +297,7 @@ export class World {
     }
     this.#archetypeManager.destroyEntity(entity);
     this.#entityManager.destroy(entity);
-    this.#invalidateCommittedTransition(true);
+    this.#mutations.invalidateCommittedTransition(true);
   }
 
   /**
@@ -878,11 +323,6 @@ export class World {
 
     this.#archetypeManager = new ArchetypeManager(capacity, components.length, packSlot);
     this.#visitedArchetypeEntities = new BooleanArray(capacity);
-    this.#batchEntities = createEntityArray(capacity);
-    this.#batchSlots = createSlotArray(capacity);
-    this.#batchSeen = new Uint8Array(capacity);
-    this.#bundleEntries = [];
-    this.#bundleSeenComponents = new Uint8Array(components.length);
 
     this.#queryManager = new QueryManager(
       {
@@ -899,6 +339,19 @@ export class World {
         this.#archetypeManager.registerQuery(query, true);
       },
     );
+    this.#mutations = new WorldMutations({
+      entityManager: this.#entityManager,
+      componentManager: this.#componentManager,
+      archetypeManager: this.#archetypeManager,
+      capacity,
+      componentCount: components.length,
+      isInitialized: () => this.#state === "initialized",
+      invalidateQueries: () => {
+        if (!this.#queryManager.cacheInvalidated) {
+          this.#queryManager.invalidate();
+        }
+      },
+    });
     this.#systemManager = new SystemManager(
       this,
       {
@@ -914,7 +367,28 @@ export class World {
     );
 
     // Public APIs
-    const APIs: WorldAPIResult = this.#constructAPIs();
+    const APIs: WorldAPIResult = constructWorldAPIs({
+      assertInitialized: () => this.#assertInitialized(),
+      assertSystemRegistrationAvailable: () => this.#assertSystemRegistrationAvailable(),
+      archetypeManager: this.#archetypeManager,
+      componentManager: this.#componentManager,
+      entityManager: this.#entityManager,
+      queryManager: this.#queryManager,
+      systemManager: this.#systemManager,
+      mutations: this.#mutations,
+      getComponentEntityData: (component, entity) => this.#getComponentEntityData(component, entity),
+      readComponentEntityData: (component, entity) => this.#readComponentEntityData(component, entity),
+      readComponentEntityDataInto: (component, entity, out) =>
+        this.#readComponentEntityDataInto(component, entity, out),
+      markComponentChanged: (component, entity) => this.#markComponentChanged(component, entity),
+      setComponentEntityData: (component, entity, value) => this.#setComponentEntityData(component, entity, value),
+      destroyEntity: (entity) => this.#destroyEntity(entity),
+      snapshotIterator: (iterator) => this.#snapshotIterator(iterator),
+      copyEntityList: (list) => this.#copyEntityList(list),
+      queryArchetypeEntities: (query) => this.#queryArchetypeEntities(query),
+      queryArchetypeEntered: (query) => this.#queryArchetypeEntered(query),
+      queryArchetypeExited: (query) => this.#queryArchetypeExited(query),
+    });
     this.archetypes = APIs.archetypes;
     this.components = APIs.components;
     this.entities = APIs.entities;
@@ -1052,12 +526,12 @@ export class World {
     component: DynamicComponent,
     properties: Record<string, number>,
   ): void {
-    this.#addComponentToEntity(component, entity, properties);
+    this.#mutations.addComponentToEntity(component, entity, properties);
   }
 
   /** @internal CheckpointWorld */
   removeComponentFromEntity(entity: Entity, component: DynamicComponent): void {
-    this.#removeComponentFromEntity(component, entity);
+    this.#mutations.removeComponentFromEntity(component, entity);
   }
 
   /** @internal */
@@ -1088,6 +562,7 @@ export class World {
     this[validateRollbackState](state);
     this.#rollbackState = undefined;
     this.#entityManager = EntityManager.fromJSON(state.entityJson);
+    this.#mutations.replaceEntityManager(this.#entityManager);
     this.#componentManager.restoreSnapshot(state.componentSnapshot);
     this.#archetypeManager.rebuildFromOwnership(
       this.#entityManager.getActive(),

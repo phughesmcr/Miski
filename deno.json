@@ -50,8 +50,8 @@
     "exclude": ["bench/**/*.ts", "example/**/*.ts", "test/**/*.ts"],
     "rules": {
       "tags": [
-        "recommended",
-        "jsr"
+        "jsr",
+        "recommended"
       ],
       "include": [
         "camelcase",

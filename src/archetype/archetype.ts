@@ -69,7 +69,7 @@ export class Archetype {
   /** The world's entity capacity (used for entity tracking arrays) */
   #entityCapacity: number;
 
-  /** World component-registry size — transition edge arrays are indexed by instance id */
+  /** World component-registry size - transition edge arrays are indexed by instance id */
   #transitionCapacity: number;
 
   /** Dense currently-active storage slots in this archetype */
@@ -81,7 +81,7 @@ export class Archetype {
   /** Entity state flags packed by storage slot. */
   #flags: Uint8Array;
 
-  /** Pack slot → entity at public / query edges */
+  /** Pack slot -> entity at public / query edges */
   #packSlot: PackSlot;
 
   /** Number of entities currently associated with this archetype */

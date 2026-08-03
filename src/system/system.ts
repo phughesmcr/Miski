@@ -81,7 +81,7 @@ export class System<
   /** The query which will provide the components and entities to the system. */
   readonly query: Query<TComponents>;
 
-  /** The core function of the system. Called when this.exec is called. */
+  /** The core function of the system. Invoked when the registered SystemInstance is called. */
   readonly callback: TypedSystemCallback<TComponents, TArgs, TReturn>;
 
   /**
