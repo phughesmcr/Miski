@@ -7,12 +7,9 @@ import { EntityManager } from "@/entity/entity-manager.ts";
 import { type Entity, entityIndex, type QueryEntityList } from "@/entity/entity.ts";
 import {
   ComponentDataError,
-  componentDisplayName,
   ComponentOwnershipError,
   EntityNotFoundError,
-  formatComponentNotRegistered,
   formatEntityNotActive,
-  NotRegisteredError,
   SpecError,
   WorldStateError,
 } from "@/errors.ts";
@@ -196,17 +193,14 @@ export class World {
     if (!this.#entityManager.isActive(entity)) {
       throw new EntityNotFoundError(formatEntityNotActive(entity));
     }
-    const instance = this.#componentManager.getInstance(component);
-    if (instance === undefined) {
-      throw new NotRegisteredError(formatComponentNotRegistered(componentDisplayName(component)));
-    }
+    const instance = this.#mutations.getRegisteredComponentInstance(component);
     if (instance.storage === null) {
       throw new ComponentDataError(`Component ${instance.type.name} has no data storage.`);
     }
     if (!this.#componentManager.entityOwnsInstance(instance, entity)) {
       throw new ComponentOwnershipError(`Entity ${entity} does not own component ${instance.type.name}.`);
     }
-    return instance as ComponentInstance<TValue, TStorage>;
+    return instance;
   }
 
   /** Get guarded component data for an active owning entity. */
