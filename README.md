@@ -1,4 +1,4 @@
-# 🍬 Miski
+# :candy: Miski
 
 **Quechuan** *miski* — *sweet*.
 
@@ -16,31 +16,31 @@ sugar crash mid-frame.
 [![Bun](https://img.shields.io/badge/bun-%5E1.3.0-lightgrey?logo=bun)](https://bun.sh/)
 [![Node](https://img.shields.io/badge/node-%5E24.0.0-lightgrey?logo=node.js)](https://nodejs.org/)
 
-Hungry for every overload? Full API docs live at
+:book: Hungry for every overload? Full API docs live at
 **[jsr.io/@phughesmcr/miski](https://jsr.io/@phughesmcr/miski)**.
 
 ---
 
-## Why Miski?
+## :sparkles: Why Miski?
 
 Because ECS should be *miski* — sweet to write, sharp under the hood.
 
 | | |
 | --- | --- |
-| **Performant** | `ArrayBuffer`-backed SoA storage, dense `queryList` iteration, and hot paths budgeted for zero steady-state allocation. Your frames stay smooth; the collector stays bored. |
-| **Predictable** | Deterministic results for a given call sequence. Still alpha (`1.0.0-alpha.x`) — breaking changes are called out in docs and tags, no surprise ingredients. |
-| **Focused** | Runtime deps are first-party only (`bitpool`, `booleanarray`, `partitionedbuffer`). No unrelated third-party surface. Just the pantry we need. |
+| :zap: **Performant** | `ArrayBuffer`-backed SoA storage, dense `queryList` iteration, and hot paths budgeted for zero steady-state allocation. Your frames stay smooth; the collector stays bored. |
+| :dart: **Predictable** | Deterministic results for a given call sequence. Still alpha (`1.0.0-alpha.x`) — breaking changes are called out in docs and tags, no surprise ingredients. |
+| :cookie: **Focused** | Runtime deps are first-party only (`bitpool`, `booleanarray`, `partitionedbuffer`). No unrelated third-party surface. Just the pantry we need. |
 
-**On the menu:** good predictable performance · a clean developer-friendly API ·
-a readable open-source codebase.
+:fork_and_knife: **On the menu:** good predictable performance · a clean
+developer-friendly API · a readable open-source codebase.
 
-**Off the menu:** being the fastest/smallest ECS on the web · API interchange
-with other libraries · polyfills for older runtimes. We cook for modern
-JavaScript — no leftovers.
+:no_entry_sign: **Off the menu:** being the fastest/smallest ECS on the web ·
+API interchange with other libraries · polyfills for older runtimes. We cook
+for modern JavaScript — no leftovers.
 
 ---
 
-## What's inside
+## :lollipop: What's inside
 
 - Cache-friendly typed-array SoA component storage
 - Generational entity handles with slot-indexed iteration
@@ -53,11 +53,11 @@ JavaScript — no leftovers.
 - Atomic bundles and bulk add/remove for spawn, load, and query-wide transitions
 - Component-subset checkpoints and speculative world rollback
 - Schema compile + stable FNV hash for tooling and saves
-- MIT licensed — share freely, keep the wrappers on
+- :page_with_curl: MIT licensed — share freely, keep the wrappers on
 
 ---
 
-## Install
+## :package: Install
 
 Pick your runtime. Same package, same sweetness.
 
@@ -78,7 +78,7 @@ import { Component, Query, System, World } from "@phughesmcr/miski";
 
 ---
 
-## Quick start
+## :rocket: Quick start
 
 One complete bite — components, world, spawn, system, frame:
 
@@ -161,19 +161,19 @@ const e = game.spawn({
 game.storage.Position.get(e, "x");
 ```
 
-> **House rule.** Components are fixed at world creation — the kitchen closes
-> after `new World`. Call `world.refresh()` (or wrap a tick in `world.frame`)
-> so entered / exited / changed stay fresh.
+> :warning: **House rule.** Components are fixed at world creation — the kitchen
+> closes after `new World`. Call `world.refresh()` (or wrap a tick in
+> `world.frame`) so entered / exited / changed stay fresh.
 
-Want to see it move? `deno task demo` · `deno task demo:cli`
+Want to see it move? :video_game: `deno task demo` · `deno task demo:cli`
 
 ---
 
-## Core concepts
+## :cake: Core concepts
 
 The recipe card. Read top to bottom — each section seasons the next.
 
-### World
+### :globe_with_meridians: World
 
 Everything lives in a world: entities, components, systems, archetypes.
 Think of it as the bakery where the rest of the kitchen works.
@@ -188,7 +188,7 @@ world.frame(() => { /* … */ }); // refresh always runs after the callback
 Capacity is clamped between **8** and **65536**. Cozy studio or full stadium —
 your call.
 
-### Components
+### :ice_cream: Components
 
 The ingredients. Data (or tag) shapes registered on a world. Create once; reuse
 across as many worlds as you like.
@@ -263,7 +263,7 @@ world.components.readEntityDataInto(Position, entity, out);
 Tags skip changed tracking. Need retained IDs outside the hot path? Reach for
 the `*Snapshot` helpers.
 
-### Entities
+### :ghost: Entities
 
 Packed generational handles (slot + generation). Destroying an entity recycles
 the slot; old handles fail `isActive` — no zombie leftovers.
@@ -281,7 +281,7 @@ world.entities.getAvailableCount();
 
 Peek under the wrapper with `entityIndex` · `entityGeneration` · `packEntity`.
 
-### Queries
+### :mag: Queries
 
 Ask the world who's who. Filters taste like boolean algebra:
 
@@ -310,7 +310,7 @@ world.archetypes.queryEntered(q);
 world.archetypes.queryExited(q);
 ```
 
-### Systems
+### :gear: Systems
 
 Where the work happens. Author with keyed component maps for typed instance
 records. Callbacks receive a borrowed `BorrowedEntityList` — same shape as
@@ -341,7 +341,7 @@ run(1 / 60);
 Array-based `QuerySpec` / dynamic callbacks still work for stringy, late-bound
 code — cast instances before touching concrete partitions.
 
-### Checkpoints, rollback, schema
+### :rewind: Checkpoints, rollback, schema
 
 Save a slice. Speculate. Undo. Hash a recipe for later.
 
@@ -368,7 +368,7 @@ a little ding every time the batter changes.
 
 ---
 
-## Performance
+## :stopwatch: Performance
 
 Sweet doesn't mean soft. Miski is tuned for Deno game-loop workloads where
 **frame time** and **GC pressure** matter more than winning a synthetic
@@ -405,7 +405,7 @@ deno task bench:all
 
 ---
 
-## Development
+## :hammer_and_wrench: Development
 
 Miski uses **Deno 2.x** for local validation and CI. Kitchen rules and floor
 plans live in [`CONTRIBUTING.md`](./CONTRIBUTING.md).
@@ -424,7 +424,7 @@ keep comments ASCII-only in `src/`.
 
 ---
 
-## Contributing
+## :handshake: Contributing
 
 Pull requests, issues, and feature ideas are all welcome — bring your appetite.
 The performance bar is **speed and GC pressure** on real gameplay paths; see
@@ -436,7 +436,7 @@ performance-sensitive changes, also run `deno task bench` and ideally
 
 ---
 
-## Acknowledgements
+## :heart: Acknowledgements
 
 Standing on the shoulders of sweet giants:
 [ape-ecs](https://github.com/fritzy/ape-ecs),
@@ -450,7 +450,7 @@ Standing on the shoulders of sweet giants:
 
 ---
 
-## License
+## :balance_scale: License
 
 [MIT](./LICENSE) — free as candy on a counter.
 © 2024 [The Miski Authors](./AUTHORS.md)
