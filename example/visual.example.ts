@@ -8,7 +8,7 @@
  * @license MIT
  */
 
-import { Component, Query, type Schema, System, World } from "../mod.ts";
+import { Component, entityIndex, Query, type Schema, System, World } from "../mod.ts";
 
 type Vec2Schema = {
   x: Float32ArrayConstructor;
@@ -41,7 +41,8 @@ const CAPACITY = 32_000;
 const DEFAULT_DRONES = 1_450;
 const MIN_DRONES = 128;
 const MAX_DRONES = 32_000;
-const SNAPSHOT_FPS = 12;
+const SNAPSHOT_FPS = 20;
+const SNAPSHOT_INTERVAL_MS = 1_000 / SNAPSHOT_FPS;
 const SIMULATION_FPS = 60;
 const SIMULATION_STEP_SECONDS = 1 / SIMULATION_FPS;
 const SIMULATION_STEP_MS = 1_000 / SIMULATION_FPS;
@@ -111,9 +112,9 @@ const world = new World({
 
 await world.init();
 
-const { partitions: positionStore } = world.components.require(position);
-const { partitions: velocityStore } = world.components.require(velocity);
-const { partitions: visualStore } = world.components.require(visual);
+const { partitions: positionStore } = world.components.require(position).storage;
+const { partitions: velocityStore } = world.components.require(velocity).storage;
+const { partitions: visualStore } = world.components.require(visual).storage;
 
 const droneQuery = new Query({ all: { position, velocity, visual, brain, drone } });
 const sparkQuery = new Query({ all: { position, velocity, visual, lifetime, spark } });
@@ -137,8 +138,10 @@ let pulseY = WORLD_HEIGHT * 0.5;
 let pulseAge = 99;
 let heapUsedMb = 0;
 let retainedTransitionMetrics = false;
+let nextSnapshotAt = 0;
 
 const expiredScratch = new Uint32Array(CAPACITY);
+const entityFloatScratch = new Float32Array(MAX_RENDERED_ENTITIES * 11);
 const targetXByTeam = new Float32Array(TEAM_COUNT);
 const targetYByTeam = new Float32Array(TEAM_COUNT);
 const clients = new Set<ReadableStreamDefaultController<Uint8Array>>();
@@ -146,6 +149,9 @@ const clients = new Set<ReadableStreamDefaultController<Uint8Array>>();
 const random = (min: number, max: number): number => min + Math.random() * (max - min);
 const round = (value: number): number => Math.round(value * 10) / 10;
 const metric = (value: number): string => String(round(value));
+
+/** Binary entity payloads as base64 — avoids JSON number-array encode/parse cost. */
+const encodeBase64 = (bytes: Uint8Array): string => bytes.toBase64();
 
 const countEntities = (entities: IterableIterator<number> | undefined): number => {
   if (!entities) return 0;
@@ -155,64 +161,67 @@ const countEntities = (entities: IterableIterator<number> | undefined): number =
 };
 
 const spawnDrone = (x: number, y: number, team: number): boolean => {
-  const entity = world.entities.create();
-  if (entity === undefined) return false;
-
   const speed = random(35, 130);
   const angle = random(0, Math.PI * 2);
   const hue = TEAM_HUES[team] ?? TEAM_HUES[0];
 
-  world.components.addToEntity(position, entity, { x, y });
-  world.components.addToEntity(velocity, entity, {
-    x: Math.cos(angle) * speed,
-    y: Math.sin(angle) * speed,
-  });
-  world.components.addToEntity(visual, entity, {
-    hue: hue + random(-8, 8),
-    radius: random(2.1, 4.8),
-    alpha: random(0.58, 0.92),
-    energy: random(0.35, 1),
-    team,
-    kind: 0,
-  });
-  world.components.addToEntity(brain, entity, {
-    orbit: random(-1, 1),
-    bias: random(0.15, 1),
-    drag: random(0.955, 0.992),
-  });
-  world.components.addToEntity(drone, entity);
+  // Atomic spawn: one archetype placement via createWith instead of repeated addToEntity.
+  const entity = world.entities.createWith([
+    [position, { x, y }],
+    [velocity, {
+      x: Math.cos(angle) * speed,
+      y: Math.sin(angle) * speed,
+    }],
+    [visual, {
+      hue: hue + random(-8, 8),
+      radius: random(2.1, 4.8),
+      alpha: random(0.58, 0.92),
+      energy: random(0.35, 1),
+      team,
+      kind: 0,
+    }],
+    [brain, {
+      orbit: random(-1, 1),
+      bias: random(0.15, 1),
+      drag: random(0.955, 0.992),
+    }],
+    [drone],
+  ]);
+  if (entity === undefined) return false;
   spawned++;
   return true;
 };
 
 const spawnSpark = (x: number, y: number, hue: number, strength = 1): boolean => {
-  const entity = world.entities.create();
-  if (entity === undefined) return false;
-
   const angle = random(0, Math.PI * 2);
   const speed = random(115, 520) * strength;
-  world.components.addToEntity(position, entity, { x, y });
-  world.components.addToEntity(velocity, entity, {
-    x: Math.cos(angle) * speed,
-    y: Math.sin(angle) * speed,
-  });
-  world.components.addToEntity(visual, entity, {
-    hue: hue + random(-12, 12),
-    radius: random(1.4, 5.5) * strength,
-    alpha: random(0.52, 0.95),
-    energy: random(0.2, 1),
-    team: 4,
-    kind: 1,
-  });
-  world.components.addToEntity(lifetime, entity, { age: 0, ttl: random(0.55, 1.8) });
-  world.components.addToEntity(spark, entity);
+  const entity = world.entities.createWith([
+    [position, { x, y }],
+    [velocity, {
+      x: Math.cos(angle) * speed,
+      y: Math.sin(angle) * speed,
+    }],
+    [visual, {
+      hue: hue + random(-12, 12),
+      radius: random(1.4, 5.5) * strength,
+      alpha: random(0.52, 0.95),
+      energy: random(0.2, 1),
+      team: 4,
+      kind: 1,
+    }],
+    [lifetime, { age: 0, ttl: random(0.55, 1.8) }],
+    [spark],
+  ]);
+  if (entity === undefined) return false;
   spawned++;
   return true;
 };
 
 const seedWorld = (droneCount = desiredDroneCount): void => {
-  for (const entity of world.entities.getActive()) {
-    world.entities.destroy(entity);
+  // Snapshot before destroy: borrowed getActive() is invalidated by mutations.
+  const active = world.entities.getActiveSnapshot();
+  for (let i = 0; i < active.length; i++) {
+    world.entities.destroy(active[i]!);
   }
   desiredDroneCount = Math.round(clamp(droneCount, MIN_DRONES, MAX_DRONES));
   spawned = 0;
@@ -275,16 +284,16 @@ const steeringSystem = world.systems.create(
 
       const indices = drones.indices;
       const count = drones.count;
-      const positionX = components.position.partitions.x;
-      const positionY = components.position.partitions.y;
-      const velocityX = components.velocity.partitions.x;
-      const velocityY = components.velocity.partitions.y;
-      const visualAlpha = components.visual.partitions.alpha;
-      const visualEnergy = components.visual.partitions.energy;
-      const visualTeam = components.visual.partitions.team;
-      const brainOrbit = components.brain.partitions.orbit;
-      const brainBias = components.brain.partitions.bias;
-      const brainDrag = components.brain.partitions.drag;
+      const positionX = components.position.storage.partitions.x;
+      const positionY = components.position.storage.partitions.y;
+      const velocityX = components.velocity.storage.partitions.x;
+      const velocityY = components.velocity.storage.partitions.y;
+      const visualAlpha = components.visual.storage.partitions.alpha;
+      const visualEnergy = components.visual.storage.partitions.energy;
+      const visualTeam = components.visual.storage.partitions.team;
+      const brainOrbit = components.brain.storage.partitions.orbit;
+      const brainBias = components.brain.storage.partitions.bias;
+      const brainDrag = components.brain.storage.partitions.drag;
 
       for (let i = 0; i < count; i++) {
         const slot = indices[i]!;
@@ -359,10 +368,10 @@ const movementSystem = world.systems.create(
     callback: (components, movers, dt: number) => {
       const indices = movers.indices;
       const count = movers.count;
-      const positionX = components.position.partitions.x;
-      const positionY = components.position.partitions.y;
-      const velocityX = components.velocity.partitions.x;
-      const velocityY = components.velocity.partitions.y;
+      const positionX = components.position.storage.partitions.x;
+      const positionY = components.position.storage.partitions.y;
+      const velocityX = components.velocity.storage.partitions.x;
+      const velocityY = components.velocity.storage.partitions.y;
 
       for (let i = 0; i < count; i++) {
         const slot = indices[i]!;
@@ -398,13 +407,13 @@ const lifetimeSystem = world.systems.create(
       const indices = sparks.indices;
       const entities = sparks.entities;
       const count = sparks.count;
-      const age = components.lifetime.partitions.age;
-      const ttl = components.lifetime.partitions.ttl;
-      const visualAlpha = components.visual.partitions.alpha;
-      const visualEnergy = components.visual.partitions.energy;
-      const visualRadius = components.visual.partitions.radius;
-      const velocityX = components.velocity.partitions.x;
-      const velocityY = components.velocity.partitions.y;
+      const age = components.lifetime.storage.partitions.age;
+      const ttl = components.lifetime.storage.partitions.ttl;
+      const visualAlpha = components.visual.storage.partitions.alpha;
+      const visualEnergy = components.visual.storage.partitions.energy;
+      const visualRadius = components.visual.storage.partitions.radius;
+      const velocityX = components.velocity.storage.partitions.x;
+      const velocityY = components.velocity.storage.partitions.y;
       let expiredCount = 0;
       for (let i = 0; i < count; i++) {
         const slot = indices[i]!;
@@ -486,6 +495,13 @@ const runSimulationFrame = (time: number): void => {
     accumulatedSimulationMs = 0;
   }
 
+  // Pace snapshots from the sim clock — setInterval drifts and clumps, which
+  // shows up as periodic position "catch-up" on the client.
+  if (clients.size > 0 && time >= nextSnapshotAt) {
+    nextSnapshotAt = time + SNAPSHOT_INTERVAL_MS;
+    broadcastSnapshot();
+  }
+
   requestSimulationFrame(runSimulationFrame);
 };
 
@@ -505,6 +521,27 @@ const snapshot = (): string => {
   refreshTransitionMetrics();
   const entities = world.entities.queryList(renderQuery);
   const limit = Math.min(entities.count, renderedEntityLimit);
+  const floats = entityFloatScratch;
+  const indices = entities.indices;
+  const entityIds = entities.entities;
+  for (let i = 0; i < limit; i++) {
+    const slot = indices[i]!;
+    const offset = i * 11;
+    floats[offset] = positionStore.x[slot]!;
+    floats[offset + 1] = positionStore.y[slot]!;
+    floats[offset + 2] = velocityStore.x[slot]!;
+    floats[offset + 3] = velocityStore.y[slot]!;
+    floats[offset + 4] = visualStore.hue[slot]!;
+    floats[offset + 5] = visualStore.radius[slot]!;
+    floats[offset + 6] = visualStore.alpha[slot]!;
+    floats[offset + 7] = visualStore.energy[slot]!;
+    floats[offset + 8] = visualStore.team[slot]!;
+    floats[offset + 9] = visualStore.kind[slot]!;
+    // Lower 16 bits of the packed handle — Float32-safe and dense in [0, capacity).
+    floats[offset + 10] = entityIndex(entityIds[i]!);
+  }
+  const entitiesB64 = encodeBase64(new Uint8Array(floats.buffer, 0, limit * 11 * 4));
+
   let payload =
     `{"frame":${frame},"mode":"${mode}","running":${running},"width":${WORLD_WIDTH},"height":${WORLD_HEIGHT}`;
   payload += `,"pulse":[${metric(pulseX)},${metric(pulseY)},${metric(Math.max(0, 1 - pulseAge / 1.8))}]`;
@@ -516,19 +553,9 @@ const snapshot = (): string => {
   payload += `,"entered":${entered},"exited":${exited},"spawned":${spawned},"destroyed":${destroyed}`;
   payload += `,"tickMs":${metric(lastTickDuration)},"heapMb":${metric(heapUsedMb)},"rendered":${limit}`;
   payload += `,"renderLimit":${renderedEntityLimit}`;
-  payload += `,"droneTarget":${desiredDroneCount},"capacity":${CAPACITY}},"stride":10,"entities":[`;
-
-  for (let i = 0; i < limit; i++) {
-    const slot = entities.indices[i]!;
-    if (i > 0) payload += ",";
-    payload += `${metric(positionStore.x[slot]!)},${metric(positionStore.y[slot]!)}`;
-    payload += `,${metric(velocityStore.x[slot]!)},${metric(velocityStore.y[slot]!)}`;
-    payload += `,${metric(visualStore.hue[slot]!)},${metric(visualStore.radius[slot]!)}`;
-    payload += `,${metric(visualStore.alpha[slot]!)},${metric(visualStore.energy[slot]!)}`;
-    payload += `,${visualStore.team[slot]!},${visualStore.kind[slot]!}`;
-  }
-
-  return `${payload}]}`;
+  payload += `,"droneTarget":${desiredDroneCount},"capacity":${CAPACITY}},"stride":11`;
+  payload += `,"entitiesB64":"${entitiesB64}"}`;
+  return payload;
 };
 
 const runProfile = (frames: number): void => {
@@ -564,6 +591,7 @@ const encodeEvent = (event: string, data: string): Uint8Array => ENCODER.encode(
 
 const broadcastSnapshot = (): void => {
   if (clients.size === 0) return;
+  nextSnapshotAt = performance.now() + SNAPSHOT_INTERVAL_MS;
   const chunk = encodeEvent("snapshot", snapshot());
   for (const controller of clients) {
     try {
@@ -574,7 +602,7 @@ const broadcastSnapshot = (): void => {
   }
 };
 
-const eventStream = (request: Request): Response => {
+const eventStream = (info: Deno.ServeHandlerInfo): Response => {
   let controllerRef: ReadableStreamDefaultController<Uint8Array> | undefined;
   const body = new ReadableStream<Uint8Array>({
     start(controller) {
@@ -587,7 +615,8 @@ const eventStream = (request: Request): Response => {
     },
   });
 
-  request.signal.addEventListener("abort", () => {
+  // Prefer info.completed over request.signal (legacy abort fires on every success).
+  info.completed.catch(() => {
     if (controllerRef) clients.delete(controllerRef);
   });
 
@@ -637,16 +666,15 @@ const page = (): Response =>
     },
   });
 
-Deno.serve({ hostname: "127.0.0.1", port: PORT }, (request) => {
+Deno.serve({ hostname: "127.0.0.1", port: PORT }, (request, info) => {
   const url = new URL(request.url);
-  if (url.pathname === "/events") return eventStream(request);
+  if (url.pathname === "/events") return eventStream(info);
   if (url.pathname === "/api/control" && request.method === "POST") return control(request);
   if (url.pathname === "/" || url.pathname === "/index.html") return page();
   return new Response("Not found", { status: 404 });
 });
 
 requestSimulationFrame(runSimulationFrame);
-setInterval(broadcastSnapshot, 1_000 / SNAPSHOT_FPS);
 
 console.log(`Miski visual demo running at http://127.0.0.1:${PORT}`);
 
@@ -691,7 +719,6 @@ const INDEX_HTML = String.raw`<!doctype html>
         --line-strong: rgb(240 246 224 / 0.28);
         --cyan: oklch(83% 0.15 190);
         --coral: oklch(67% 0.21 31);
-        --leaf: oklch(76% 0.17 145);
         --gold: oklch(84% 0.15 84);
         --shadow: rgb(0 0 0 / 0.42);
       }
@@ -728,8 +755,9 @@ const INDEX_HTML = String.raw`<!doctype html>
       .chrome {
         position: relative;
         z-index: 3;
-        display: grid;
-        grid-template-rows: auto 1fr auto;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
         gap: 16px;
         min-height: 100dvh;
         padding: 22px;
@@ -737,68 +765,19 @@ const INDEX_HTML = String.raw`<!doctype html>
       }
 
       .hud,
-      .inspector,
       .controlbar {
         pointer-events: auto;
       }
 
       .hud {
         display: grid;
-        grid-template-columns: minmax(260px, 0.9fr) minmax(360px, 1.3fr);
-        gap: 16px;
-        align-items: start;
-      }
-
-      .titlebar {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        align-items: center;
-      }
-
-      .brand {
-        display: inline-grid;
-        grid-template-columns: 42px auto;
-        gap: 10px;
-        align-items: center;
-        min-height: 42px;
-        border: 1px solid var(--line);
-        padding: 6px 12px 6px 6px;
-        background: var(--panel);
-        box-shadow: 0 18px 48px var(--shadow);
-        backdrop-filter: blur(22px);
-      }
-
-      .mark {
-        display: grid;
-        place-items: center;
-        width: 30px;
-        aspect-ratio: 1;
-        background: linear-gradient(135deg, var(--gold), var(--cyan));
-        color: rgb(3 5 5);
-        font-family: "DIN Condensed", "Avenir Next Condensed", sans-serif;
-        font-size: 1.2rem;
-        font-weight: 800;
-        line-height: 1;
-      }
-
-      .brand h1,
-      .mode-pill {
-        margin: 0;
-        font-family: "DIN Condensed", "Avenir Next Condensed", sans-serif;
-        font-size: 1.08rem;
-        font-weight: 700;
-        line-height: 1;
-        letter-spacing: 0;
-        text-transform: uppercase;
       }
 
       .metrics {
         display: grid;
-        grid-template-columns: repeat(4, minmax(92px, 1fr));
+        grid-template-columns: repeat(10, minmax(0, 1fr));
         gap: 1px;
-        justify-self: end;
-        width: min(100%, 690px);
+        width: 100%;
         overflow: clip;
         border: 1px solid var(--line);
         background: var(--line);
@@ -808,96 +787,23 @@ const INDEX_HTML = String.raw`<!doctype html>
 
       .metric {
         min-width: 0;
-        padding: 12px 14px;
+        padding: 6px 10px;
         background: var(--panel);
       }
 
       .metric span {
         display: block;
         color: var(--dim);
-        font-size: 0.68rem;
+        font-size: 0.62rem;
         letter-spacing: 0;
         text-transform: uppercase;
       }
 
       .metric strong {
         display: block;
-        margin-top: 7px;
+        margin-top: 3px;
         font-family: "DIN Condensed", "Avenir Next Condensed", sans-serif;
-        font-size: 1.8rem;
-        font-weight: 700;
-        line-height: 0.9;
-      }
-
-      .chips {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-      }
-
-      .chip {
-        border: 1px solid var(--line);
-        padding: 8px 10px;
-        background: var(--panel);
-        color: var(--muted);
-        font-size: 0.72rem;
-        letter-spacing: 0;
-        text-transform: uppercase;
-        backdrop-filter: blur(18px);
-      }
-
-      .middle {
-        display: grid;
-        grid-template-columns: minmax(188px, 248px) 1fr minmax(188px, 248px);
-        gap: 16px;
-        align-items: end;
-        min-height: 0;
-      }
-
-      .inspector {
-        display: grid;
-        gap: 1px;
-        overflow: clip;
-        align-self: end;
-        border: 1px solid var(--line);
-        background: var(--line);
-        box-shadow: 0 18px 54px var(--shadow);
-        backdrop-filter: blur(22px);
-      }
-
-      .inspector--right {
-        justify-self: end;
-      }
-
-      .panel-label,
-      .kv {
-        background: var(--panel);
-      }
-
-      .panel-label {
-        padding: 10px 12px;
-        color: var(--gold);
-        font-size: 0.72rem;
-        font-weight: 700;
-        letter-spacing: 0;
-        text-transform: uppercase;
-      }
-
-      .kv {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) auto;
-        gap: 12px;
-        align-items: baseline;
-        padding: 10px 12px;
-        color: var(--muted);
-        font-size: 0.76rem;
-        line-height: 1.1;
-      }
-
-      .kv b {
-        color: var(--ink);
-        font-family: "DIN Condensed", "Avenir Next Condensed", sans-serif;
-        font-size: 1.15rem;
+        font-size: 1.25rem;
         font-weight: 700;
         line-height: 0.95;
       }
@@ -907,7 +813,7 @@ const INDEX_HTML = String.raw`<!doctype html>
         grid-template-columns: auto minmax(150px, 1fr) minmax(150px, 1fr) minmax(150px, 1fr) auto;
         gap: 12px;
         align-items: center;
-        justify-self: center;
+        align-self: center;
         width: min(100%, 1280px);
         border: 1px solid var(--line);
         padding: 10px;
@@ -996,45 +902,11 @@ const INDEX_HTML = String.raw`<!doctype html>
       .accent {
         border-color: color-mix(in oklch, var(--gold), transparent 30%);
       }
-
-      .status {
-        display: inline-grid;
-        grid-template-columns: 9px auto;
-        gap: 8px;
-        align-items: center;
-      }
-
-      .status::before {
-        width: 9px;
-        height: 9px;
-        content: "";
-        background: var(--leaf);
-        box-shadow: 0 0 20px var(--leaf);
-      }
-    }
-
-    @layer utilities {
-      .hide-small {
-        display: inline;
-      }
     }
 
     @media (width < 1050px) {
-      .hud {
-        grid-template-columns: 1fr;
-      }
-
       .metrics {
-        justify-self: stretch;
-        width: 100%;
-      }
-
-      .middle {
-        grid-template-columns: minmax(0, 1fr);
-      }
-
-      .inspector--right {
-        justify-self: stretch;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
       }
 
       .controlbar {
@@ -1052,25 +924,16 @@ const INDEX_HTML = String.raw`<!doctype html>
         padding: 12px;
       }
 
-      .titlebar {
-        align-items: stretch;
-      }
-
       .metrics {
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
 
       .metric {
-        padding: 10px;
+        padding: 5px 10px;
       }
 
       .metric strong {
-        font-size: 1.45rem;
-      }
-
-      .chips,
-      .inspector {
-        display: none;
+        font-size: 1.1rem;
       }
 
       .controlbar {
@@ -1085,10 +948,6 @@ const INDEX_HTML = String.raw`<!doctype html>
       .segmented button,
       .actions button {
         flex: 1 1 78px;
-      }
-
-      .hide-small {
-        display: none;
       }
     }
 
@@ -1108,41 +967,19 @@ const INDEX_HTML = String.raw`<!doctype html>
     <canvas id="stage" aria-label="Live Miski ECS particle simulation"></canvas>
     <section class="chrome" aria-label="Miski ECS demo controls">
       <header class="hud">
-        <div class="titlebar">
-          <div class="brand">
-            <span class="mark" aria-hidden="true">M</span>
-            <h1>Miski ECS</h1>
-          </div>
-          <span class="chip status" id="status">streaming</span>
-          <span class="chip mode-pill" id="modeLabel">orbit</span>
-          <div class="chips">
-            <span class="chip">queryList</span>
-            <span class="chip">ArrayBuffer stores</span>
-            <span class="chip hide-small">archetype enter/exit</span>
-          </div>
-        </div>
         <div class="metrics" aria-live="polite">
           <div class="metric"><span>Entities</span><strong id="entities">0</strong></div>
           <div class="metric"><span>Tick</span><strong id="tick">0ms</strong></div>
+          <div class="metric"><span>Draw</span><strong id="draw">0ms</strong></div>
           <div class="metric"><span>Drones</span><strong id="drones">0</strong></div>
           <div class="metric"><span>Heap</span><strong id="heap">0mb</strong></div>
+          <div class="metric"><span>Rendered</span><strong id="rendered">0</strong></div>
+          <div class="metric"><span>Exited</span><strong id="exited">0</strong></div>
+          <div class="metric"><span>Capacity</span><strong id="capacity">0</strong></div>
+          <div class="metric"><span>Spawned</span><strong id="spawned">0</strong></div>
+          <div class="metric"><span>Destroyed</span><strong id="destroyed">0</strong></div>
         </div>
       </header>
-      <div class="middle">
-        <aside class="inspector" aria-label="Render query telemetry">
-          <div class="panel-label">Render query</div>
-          <div class="kv"><span>Rendered</span><b id="rendered">0</b></div>
-          <div class="kv"><span>Entered</span><b id="entered">0</b></div>
-          <div class="kv"><span>Exited</span><b id="exited">0</b></div>
-        </aside>
-        <div></div>
-        <aside class="inspector inspector--right" aria-label="World telemetry">
-          <div class="panel-label">World</div>
-          <div class="kv"><span>Capacity</span><b id="capacity">0</b></div>
-          <div class="kv"><span>Spawned</span><b id="spawned">0</b></div>
-          <div class="kv"><span>Destroyed</span><b id="destroyed">0</b></div>
-        </aside>
-      </div>
       <div class="controlbar">
         <div class="segmented" role="group" aria-label="Simulation mode">
           <button data-mode="orbit" aria-pressed="true">Orbit</button>
@@ -1185,33 +1022,154 @@ const INDEX_HTML = String.raw`<!doctype html>
   </main>
   <script type="module">
     const canvas = document.querySelector("#stage");
-    const context = canvas.getContext("2d", { alpha: false });
-    const pixelRatio = Math.min(devicePixelRatio || 1, 2);
+    const context = canvas.getContext("2d", { alpha: false, desynchronized: true });
+    const DEVICE_DPR = devicePixelRatio || 1;
     const state = {
       worldWidth: 1920,
       worldHeight: 1080,
-      entities: [],
-      stride: 10,
+      stride: 11,
       renderBudget: 900,
-      snapshotAt: 0,
-      snapshotIntervalMs: 1000 / 12,
+      snapshotIntervalMs: 1000 / 20,
       pulse: [960, 540, 0],
       metrics: {},
       mode: "orbit",
       running: true,
       connected: false,
       hueShift: 0,
+      drawMs: 0,
+      pixelRatio: Math.min(DEVICE_DPR, 2),
+    };
+
+    // Ring of two authoritative snapshots + one interpolated frame buffer.
+    // Render is delayed by ~1 snapshot so we lerp prev→curr instead of
+    // velocity-extrapolating (which snaps when steering diverges).
+    const snapSlots = [
+      { data: new Float32Array(0), floats: 0, at: 0 },
+      { data: new Float32Array(0), floats: 0, at: 0 },
+    ];
+    let currSnap = 0;
+    let interpEntities = new Float32Array(0);
+    // prev-snapshot offset by entity id (-1 = absent). Sized for world capacity.
+    const prevOffsetByEntity = new Int32Array(32001).fill(-1);
+
+    const COLOR_BUCKETS = 48;
+    const bucketCounts = new Uint32Array(COLOR_BUCKETS);
+    const bucketStarts = new Uint32Array(COLOR_BUCKETS);
+    const bucketCursor = new Uint32Array(COLOR_BUCKETS);
+    let bucketOffsets = new Uint32Array(4096);
+    const teamRotationCos = new Float32Array(4);
+    const teamRotationSin = new Float32Array(4);
+    const colorCache = new Map();
+
+    const ensureFloatCapacity = (floats) => {
+      if (interpEntities.length >= floats) return;
+      let next = Math.max(interpEntities.length, 1024);
+      while (next < floats) next *= 2;
+      interpEntities = new Float32Array(next);
+    };
+
+    const writeSnapshot = (b64, at) => {
+      const bytes = typeof Uint8Array.fromBase64 === "function"
+        ? Uint8Array.fromBase64(b64)
+        : (() => {
+          const binary = atob(b64);
+          const out = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i);
+          return out;
+        })();
+      const floatCount = bytes.byteLength / 4;
+      const next = currSnap ^ 1;
+      const slot = snapSlots[next];
+      if (slot.data.length < floatCount) slot.data = new Float32Array(floatCount);
+      slot.data.set(new Float32Array(bytes.buffer, bytes.byteOffset, floatCount));
+      slot.floats = floatCount;
+      slot.at = at;
+      currSnap = next;
+
+      const prev = snapSlots[currSnap ^ 1];
+      if (prev.at === 0) {
+        // First snapshot: mirror so interpolation has a valid prev.
+        if (prev.data.length < floatCount) prev.data = new Float32Array(floatCount);
+        prev.data.set(slot.data.subarray(0, floatCount));
+        prev.floats = floatCount;
+        prev.at = at - state.snapshotIntervalMs;
+      }
+
+      // Index prev by entity id for order-independent lerp (sparks spawn/despawn).
+      prevOffsetByEntity.fill(-1);
+      const stride = state.stride;
+      for (let o = 0; o < prev.floats; o += stride) {
+        const id = prev.data[o + 10] | 0;
+        if (id >= 0 && id < prevOffsetByEntity.length) prevOffsetByEntity[id] = o;
+      }
+    };
+
+    /** Build positions delayed by one snapshot interval (smooth lerp, no catch-up snap). */
+    const buildInterpolatedEntities = (now) => {
+      const curr = snapSlots[currSnap];
+      const prev = snapSlots[currSnap ^ 1];
+      const stride = state.stride;
+      if (curr.floats === 0) return curr.data.subarray(0, 0);
+
+      const span = Math.max(1, curr.at - prev.at);
+      const delay = Math.min(140, Math.max(35, state.snapshotIntervalMs || span));
+      const renderTime = now - delay;
+      let alpha = (renderTime - prev.at) / span;
+      if (!Number.isFinite(alpha)) alpha = 1;
+
+      ensureFloatCapacity(curr.floats);
+      const out = interpEntities;
+      const a = prev.data;
+      const b = curr.data;
+
+      if (alpha <= 0) {
+        out.set(b.subarray(0, curr.floats));
+        return out.subarray(0, curr.floats);
+      }
+
+      const coastSec = alpha >= 1
+        ? Math.min((alpha - 1) * span, delay * 0.35) / 1000
+        : 0;
+      const t = alpha >= 1 ? 1 : alpha;
+      const inv = 1 - t;
+
+      for (let o = 0; o < curr.floats; o += stride) {
+        const id = b[o + 10] | 0;
+        const prevO = id >= 0 && id < prevOffsetByEntity.length ? prevOffsetByEntity[id] : -1;
+        if (prevO >= 0) {
+          out[o] = a[prevO] * inv + b[o] * t;
+          out[o + 1] = a[prevO + 1] * inv + b[o + 1] * t;
+          if (coastSec > 0) {
+            out[o] += b[o + 2] * coastSec;
+            out[o + 1] += b[o + 3] * coastSec;
+          }
+          out[o + 5] = a[prevO + 5] * inv + b[o + 5] * t;
+          out[o + 6] = a[prevO + 6] * inv + b[o + 6] * t;
+          out[o + 7] = a[prevO + 7] * inv + b[o + 7] * t;
+        } else {
+          out[o] = b[o] + b[o + 2] * coastSec;
+          out[o + 1] = b[o + 1] + b[o + 3] * coastSec;
+          out[o + 5] = b[o + 5];
+          out[o + 6] = b[o + 6];
+          out[o + 7] = b[o + 7];
+        }
+        out[o + 2] = b[o + 2];
+        out[o + 3] = b[o + 3];
+        out[o + 4] = b[o + 4];
+        out[o + 8] = b[o + 8];
+        out[o + 9] = b[o + 9];
+        out[o + 10] = b[o + 10];
+      }
+      return out.subarray(0, curr.floats);
     };
 
     const ids = {
       entities: document.querySelector("#entities"),
       tick: document.querySelector("#tick"),
+      draw: document.querySelector("#draw"),
       drones: document.querySelector("#drones"),
       heap: document.querySelector("#heap"),
-      status: document.querySelector("#status"),
-      modeLabel: document.querySelector("#modeLabel"),
       rendered: document.querySelector("#rendered"),
-      entered: document.querySelector("#entered"),
       exited: document.querySelector("#exited"),
       capacity: document.querySelector("#capacity"),
       spawned: document.querySelector("#spawned"),
@@ -1223,12 +1181,27 @@ const INDEX_HTML = String.raw`<!doctype html>
       toggle: document.querySelector("#toggle"),
     };
 
+    const targetPixelRatio = (entityCount) => {
+      if (entityCount > 12000) return 1;
+      if (entityCount > 5000) return Math.min(DEVICE_DPR, 1.25);
+      if (entityCount > 2000) return Math.min(DEVICE_DPR, 1.5);
+      return Math.min(DEVICE_DPR, 2);
+    };
+
     const resize = () => {
-      canvas.width = Math.floor(innerWidth * pixelRatio);
-      canvas.height = Math.floor(innerHeight * pixelRatio);
+      const ratio = state.pixelRatio;
+      canvas.width = Math.floor(innerWidth * ratio);
+      canvas.height = Math.floor(innerHeight * ratio);
       canvas.style.width = innerWidth + "px";
       canvas.style.height = innerHeight + "px";
-      context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+      context.setTransform(ratio, 0, 0, ratio, 0, 0);
+    };
+
+    const ensureBucketCapacity = (count) => {
+      if (bucketOffsets.length >= count) return;
+      let next = bucketOffsets.length;
+      while (next < count) next *= 2;
+      bucketOffsets = new Uint32Array(next);
     };
 
     const command = (payload) =>
@@ -1254,10 +1227,10 @@ const INDEX_HTML = String.raw`<!doctype html>
       const metrics = state.metrics;
       ids.entities.textContent = String(metrics.active ?? 0);
       ids.tick.textContent = String(metrics.tickMs ?? 0) + "ms";
+      ids.draw.textContent = state.drawMs.toFixed(1) + "ms";
       ids.drones.textContent = String(metrics.drones ?? 0);
       ids.heap.textContent = String(metrics.heapMb ?? 0) + "mb";
       ids.rendered.textContent = String(metrics.rendered ?? 0);
-      ids.entered.textContent = String(metrics.entered ?? 0);
       ids.exited.textContent = String(metrics.exited ?? 0);
       ids.capacity.textContent = String(metrics.capacity ?? 0);
       ids.spawned.textContent = String(metrics.spawned ?? 0);
@@ -1271,8 +1244,6 @@ const INDEX_HTML = String.raw`<!doctype html>
       if (document.activeElement !== ids.renderControl && metrics.renderLimit) {
         ids.renderControl.value = String(metrics.renderLimit);
       }
-      ids.modeLabel.textContent = state.mode;
-      ids.status.textContent = state.connected ? "streaming" : "reconnecting";
       ids.toggle.textContent = state.running ? "Pause" : "Resume";
       document.querySelectorAll("[data-mode]").forEach((button) => {
         button.setAttribute("aria-pressed", String(button.dataset.mode === state.mode));
@@ -1292,11 +1263,11 @@ const INDEX_HTML = String.raw`<!doctype html>
       events.addEventListener("snapshot", (event) => {
         const payload = JSON.parse(event.data);
         const now = performance.now();
-        if (state.snapshotAt > 0) {
-          state.snapshotIntervalMs = Math.min(140, Math.max(35, now - state.snapshotAt));
+        const prevAt = snapSlots[currSnap].at;
+        if (prevAt > 0) {
+          state.snapshotIntervalMs = Math.min(140, Math.max(35, now - prevAt));
         }
-        state.snapshotAt = now;
-        state.entities = payload.entities;
+        if (payload.entitiesB64) writeSnapshot(payload.entitiesB64, now);
         state.stride = payload.stride;
         state.metrics = payload.metrics;
         state.mode = payload.mode;
@@ -1304,6 +1275,11 @@ const INDEX_HTML = String.raw`<!doctype html>
         state.worldWidth = payload.width;
         state.worldHeight = payload.height;
         state.pulse = payload.pulse;
+        const nextRatio = targetPixelRatio(state.metrics.rendered ?? 0);
+        if (Math.abs(nextRatio - state.pixelRatio) > 0.01) {
+          state.pixelRatio = nextRatio;
+          resize();
+        }
         updateHud();
       });
     };
@@ -1336,10 +1312,6 @@ const INDEX_HTML = String.raw`<!doctype html>
       context.restore();
     };
 
-    const colorCache = new Map();
-    const teamRotationCos = new Float32Array(4);
-    const teamRotationSin = new Float32Array(4);
-
     const updateTeamRotations = (time) => {
       const baseAngle = time * 0.35;
       for (let team = 0; team < 4; team++) {
@@ -1350,24 +1322,49 @@ const INDEX_HTML = String.raw`<!doctype html>
     };
 
     const colorFor = (hue, lightness) => {
-      const key = Math.round(hue) + ":" + lightness;
+      const key = ((hue | 0) * 128) + (lightness | 0);
       let color = colorCache.get(key);
       if (!color) {
-        color = "hsl(" + Math.round(hue) + " 92% " + lightness + "%)";
+        color = "hsl(" + (hue | 0) + " 92% " + lightness + "%)";
         colorCache.set(key, color);
       }
       return color;
     };
 
-    const drawEntity = (entities, offset, scaleX, scaleY, leadSeconds) => {
-      const baseX = entities[offset];
-      const baseY = entities[offset + 1];
+    const detailLevel = (count) => {
+      if (count > 10000) return 0;
+      if (count > 4500) return 1;
+      if (count > 1600) return 2;
+      return 3;
+    };
+
+    const fillBuckets = (entities, maxOffset, stride, hueShift) => {
+      const count = maxOffset / stride;
+      ensureBucketCapacity(count);
+      bucketCounts.fill(0);
+      for (let offset = 0; offset < maxOffset; offset += stride) {
+        const hue = entities[offset + 4] + hueShift;
+        const bucket = ((hue % 360) + 360) % 360 / 360 * COLOR_BUCKETS | 0;
+        bucketCounts[bucket]++;
+      }
+      let start = 0;
+      for (let b = 0; b < COLOR_BUCKETS; b++) {
+        bucketStarts[b] = start;
+        bucketCursor[b] = start;
+        start += bucketCounts[b];
+      }
+      for (let offset = 0, index = 0; offset < maxOffset; offset += stride, index++) {
+        const hue = entities[offset + 4] + hueShift;
+        const bucket = ((hue % 360) + 360) % 360 / 360 * COLOR_BUCKETS | 0;
+        bucketOffsets[bucketCursor[bucket]++] = offset;
+      }
+    };
+
+    const drawEntityFull = (entities, offset, scaleX, scaleY) => {
+      const x = entities[offset];
+      const y = entities[offset + 1];
       const velocityX = entities[offset + 2];
       const velocityY = entities[offset + 3];
-      const x = baseX + velocityX * leadSeconds;
-      const y = baseY + velocityY * leadSeconds;
-      const px = x - velocityX * 0.026;
-      const py = y - velocityY * 0.026;
       const hue = entities[offset + 4];
       const size = entities[offset + 5];
       const alpha = entities[offset + 6];
@@ -1376,10 +1373,9 @@ const INDEX_HTML = String.raw`<!doctype html>
       const kind = entities[offset + 9];
       const screenX = x * scaleX;
       const screenY = y * scaleY;
-      const prevX = px * scaleX;
-      const prevY = py * scaleY;
+      const prevX = (x - velocityX * 0.026) * scaleX;
+      const prevY = (y - velocityY * 0.026) * scaleY;
       const radius = Math.max(1, size * Math.min(scaleX, scaleY));
-      const glow = radius * (kind === 1 ? 5 : 3.5) * (0.6 + energy);
       const color = colorFor(hue + state.hueShift, kind === 1 ? 63 : 55);
 
       context.globalAlpha = alpha * 0.38;
@@ -1393,7 +1389,7 @@ const INDEX_HTML = String.raw`<!doctype html>
       context.globalAlpha = alpha * 0.18;
       context.fillStyle = color;
       context.beginPath();
-      context.arc(screenX, screenY, glow * 0.55, 0, Math.PI * 2);
+      context.arc(screenX, screenY, radius * (kind === 1 ? 2.75 : 1.9) * (0.6 + energy), 0, Math.PI * 2);
       context.fill();
 
       context.globalAlpha = alpha;
@@ -1428,10 +1424,86 @@ const INDEX_HTML = String.raw`<!doctype html>
       context.beginPath();
       context.arc(screenX, screenY, Math.max(0.8, radius * 0.38), 0, Math.PI * 2);
       context.fill();
+    };
+
+    const drawEntityMedium = (entities, offset, scaleX, scaleY) => {
+      const velocityX = entities[offset + 2];
+      const velocityY = entities[offset + 3];
+      const x = entities[offset] * scaleX;
+      const y = entities[offset + 1] * scaleY;
+      const radius = Math.max(1.2, entities[offset + 5] * Math.min(scaleX, scaleY));
+      const alpha = entities[offset + 6];
+      const color = colorFor(entities[offset + 4] + state.hueShift, entities[offset + 9] === 1 ? 63 : 55);
+
+      context.globalAlpha = alpha * 0.34;
+      context.strokeStyle = color;
+      context.lineWidth = Math.max(1, radius * 0.4);
+      context.beginPath();
+      context.moveTo(x - velocityX * 0.022 * scaleX, y - velocityY * 0.022 * scaleY);
+      context.lineTo(x, y);
+      context.stroke();
+
+      context.globalAlpha = alpha;
+      context.fillStyle = color;
+      context.beginPath();
+      context.arc(x, y, radius * 0.72, 0, Math.PI * 2);
+      context.fill();
+    };
+
+    const drawBatchedDots = (entities, maxOffset, stride, scaleX, scaleY, hueShift, useRects) => {
+      fillBuckets(entities, maxOffset, stride, hueShift);
+      const scale = Math.min(scaleX, scaleY);
+      for (let b = 0; b < COLOR_BUCKETS; b++) {
+        const start = bucketStarts[b];
+        const end = start + bucketCounts[b];
+        if (start === end) continue;
+        const sampleOffset = bucketOffsets[start];
+        const sampleHue = entities[sampleOffset + 4] + hueShift;
+        context.fillStyle = colorFor(sampleHue, 56);
+        context.beginPath();
+        for (let i = start; i < end; i++) {
+          const offset = bucketOffsets[i];
+          const x = entities[offset] * scaleX;
+          const y = entities[offset + 1] * scaleY;
+          const radius = Math.max(useRects ? 1.1 : 1.4, entities[offset + 5] * scale * (useRects ? 0.55 : 0.7));
+          if (useRects) {
+            const size = radius * 2;
+            context.rect(x - radius, y - radius, size, size);
+          } else {
+            context.moveTo(x + radius, y);
+            context.arc(x, y, radius, 0, Math.PI * 2);
+          }
+        }
+        context.globalAlpha = 0.82;
+        context.fill();
+      }
+      context.globalAlpha = 1;
+    };
+
+    const drawBatchedPoints = (entities, maxOffset, stride, scaleX, scaleY, hueShift) => {
+      fillBuckets(entities, maxOffset, stride, hueShift);
+      for (let b = 0; b < COLOR_BUCKETS; b++) {
+        const start = bucketStarts[b];
+        const end = start + bucketCounts[b];
+        if (start === end) continue;
+        const sampleOffset = bucketOffsets[start];
+        context.fillStyle = colorFor(entities[sampleOffset + 4] + hueShift, 58);
+        context.beginPath();
+        for (let i = start; i < end; i++) {
+          const offset = bucketOffsets[i];
+          const x = entities[offset] * scaleX;
+          const y = entities[offset + 1] * scaleY;
+          const size = Math.max(1.5, entities[offset + 5] * Math.min(scaleX, scaleY) * 0.9);
+          context.rect(x - size * 0.5, y - size * 0.5, size, size);
+        }
+        context.globalAlpha = 0.85;
+        context.fill();
+      }
       context.globalAlpha = 1;
     };
 
     const render = (timeStamp) => {
+      const frameStarted = performance.now();
       const width = innerWidth;
       const height = innerHeight;
       const time = timeStamp / 1000;
@@ -1446,17 +1518,35 @@ const INDEX_HTML = String.raw`<!doctype html>
       context.save();
       context.translate(offsetX, offsetY);
       drawPulse(scaleX, scaleY);
-      updateTeamRotations(time);
       context.globalCompositeOperation = "lighter";
       context.lineCap = "round";
-      const entities = state.entities;
+      const entities = buildInterpolatedEntities(timeStamp);
       const maxOffset = Math.min(entities.length, state.renderBudget * state.stride);
-      const snapshotAgeMs = state.snapshotAt === 0 ? 0 : timeStamp - state.snapshotAt;
-      const leadSeconds = Math.min(snapshotAgeMs, state.snapshotIntervalMs * 1.15) / 1000;
-      for (let offset = 0; offset < maxOffset; offset += state.stride) {
-        drawEntity(entities, offset, scaleX, scaleY, leadSeconds);
+      const count = maxOffset / state.stride;
+      const detail = detailLevel(count);
+
+      if (detail === 0) {
+        drawBatchedPoints(entities, maxOffset, state.stride, scaleX, scaleY, state.hueShift);
+      } else if (detail === 1) {
+        drawBatchedDots(entities, maxOffset, state.stride, scaleX, scaleY, state.hueShift, true);
+      } else if (detail === 2) {
+        for (let offset = 0; offset < maxOffset; offset += state.stride) {
+          drawEntityMedium(entities, offset, scaleX, scaleY);
+        }
+        context.globalAlpha = 1;
+      } else {
+        updateTeamRotations(time);
+        for (let offset = 0; offset < maxOffset; offset += state.stride) {
+          drawEntityFull(entities, offset, scaleX, scaleY);
+        }
+        context.globalAlpha = 1;
       }
       context.restore();
+
+      state.drawMs = performance.now() - frameStarted;
+      if ((timeStamp / 250 | 0) !== ((timeStamp - 16) / 250 | 0)) {
+        ids.draw.textContent = state.drawMs.toFixed(1) + "ms";
+      }
 
       requestAnimationFrame(render);
     };

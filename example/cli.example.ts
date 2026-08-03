@@ -6,7 +6,7 @@
  */
 
 // The only Miski imports we need:
-import { Component, type ComponentInstance, Query, type Schema, System, World } from "../mod.ts";
+import { Component, entityIndex, Query, type Schema, System, World } from "../mod.ts";
 
 // ############################################################################
 // DEMO CONFIG - not Miski specific
@@ -94,26 +94,20 @@ const printScreen = () => {
   );
   console.log(border);
 
-  // Count entities by type using queries and show predator energy
-  let predators = 0;
-  let prey = 0;
+  const predators = world.entities.queryList(predatorQuery);
+  const predatorCount = predators.count;
   let predatorEnergyDisplay = "";
 
-  const energyInstance = world.components.getInstance(energy);
-
-  for (const predEntity of world.archetypes.queryEntities(predatorQuery)) {
-    predators++;
-    if (energyInstance) {
-      energyInstance.proxy.entity = predEntity;
-      predatorEnergyDisplay += `[${predEntity}: ${energyInstance.proxy.value.toFixed(1)}] `;
-    }
+  for (let i = 0; i < predatorCount; i++) {
+    const entity = predators.entities[i]!;
+    const slot = predators.indices[i]!;
+    predatorEnergyDisplay += `[${entity}: ${energyStore.value[slot]!.toFixed(1)}] `;
   }
 
-  for (const _ of world.archetypes.queryEntities(preyQuery)) prey++;
+  const preyCount = world.entities.queryList(preyQuery).count;
+  const total = predatorCount + preyCount;
 
-  const total = predators + prey;
-
-  console.log(`Predators: ${predators} | Prey: ${prey} | Total: ${total} | FPS: ${fps}`);
+  console.log(`Predators: ${predatorCount} | Prey: ${preyCount} | Total: ${total} | FPS: ${fps}`);
   console.log(`Predator Energy: ${predatorEnergyDisplay || "None"}`);
   console.log(
     `Legend: ${PREDATOR_CHAR_HIGH} = well-fed predator | ${PREDATOR_CHAR_NORMAL} = normal predator | ${PREDATOR_CHAR_LOW} = starving predator | ${PREY_CHAR} = prey`,
@@ -198,66 +192,90 @@ const world = new World({
 // Initialize the world before use
 await world.init();
 
+// Prefer `.storage.partitions` for SoA access; index by query-list slots, not packed handles.
+const { partitions: positionStore } = world.components.require(position).storage;
+const { partitions: energyStore } = world.components.require(energy).storage;
+
+// Reusable scratch for cross-query spatial lookups (avoids per-frame array allocations).
+const scratchEntities = new Uint32Array(CAPACITY);
+const scratchX = new Float32Array(CAPACITY);
+const scratchY = new Float32Array(CAPACITY);
+const destroyScratch = new Uint32Array(CAPACITY);
+const takenScratch = new Uint8Array(CAPACITY);
+
 // ############################################################################
 // HELPERS
 // ############################################################################
 
-// Helper to safely destroy an entity
 const safeDestroyEntity = (entity: number): boolean => {
-  const isValid = world.entities.isEntity(entity);
-  const isActive = world.entities.isActive(entity);
-  addLog(`  Entity ${entity}: isEntity=${isValid}, isActive=${isActive}`);
-
-  try {
-    if (isActive) {
-      world.entities.destroy(entity);
-      addLog(`  ✓ Entity ${entity} destroyed successfully`);
-      return true;
-    } else {
-      addLog(`  ⚠ Entity ${entity} not active (already destroyed?)`);
-    }
-  } catch (error) {
-    addLog(`  ✗ Failed to destroy ${entity}: ${error}`);
+  if (!world.entities.isActive(entity)) {
+    addLog(`  Entity ${entity} not active (already destroyed?)`);
+    return false;
   }
-  return false;
+  world.entities.destroy(entity);
+  addLog(`  Entity ${entity} destroyed`);
+  return true;
+};
+
+const batchDestroyEntities = (entities: Uint32Array, count: number): void => {
+  for (let i = 0; i < count; i++) {
+    safeDestroyEntity(entities[i]!);
+  }
+};
+
+/** Copy a dense query's positions into scratch buffers. Returns the entity count. */
+const gatherPositions = (query: Query): number => {
+  const list = world.entities.queryList(query);
+  const count = list.count;
+  for (let i = 0; i < count; i++) {
+    const slot = list.indices[i]!;
+    scratchEntities[i] = list.entities[i]!;
+    scratchX[i] = positionStore.x[slot]!;
+    scratchY[i] = positionStore.y[slot]!;
+  }
+  return count;
 };
 
 // ############################################################################
 // ENTITIES
 // ############################################################################
 
-const creatureSpawner = (x: number, y: number) => {
-  const entity = world.entities.create();
+const randomVelocity = (): { x: number; y: number } => ({
+  x: (Math.random() - 0.5) * VELOCITY_SCALAR * 2,
+  y: (Math.random() - 0.5) * VELOCITY_SCALAR * 2,
+});
+
+// Atomic spawn: one archetype move via createWith instead of repeated addToEntity.
+const predatorSpawner = (x: number, y: number): number | undefined => {
+  const entity = world.entities.createWith([
+    [position, { x, y }],
+    [previousPosition, { x, y }],
+    [velocity, randomVelocity()],
+    [predator],
+    [energy, { value: PREDATOR_INITIAL_ENERGY }],
+  ]);
   if (entity === undefined) {
-    addLog(`⚠ Failed to create creature entity!`);
+    addLog(`Failed to create predator entity!`);
     return;
   }
-  addLog(`➕ Created entity ${entity}, isActive: ${world.entities.isActive(entity)}`);
-  world.components.addToEntity(position, entity, { x, y });
-  world.components.addToEntity(previousPosition, entity, { x, y });
-  world.components.addToEntity(velocity, entity, {
-    x: (Math.random() - 0.5) * VELOCITY_SCALAR * 2,
-    y: (Math.random() - 0.5) * VELOCITY_SCALAR * 2,
-  });
-  return entity;
-};
-
-const predatorSpawner = (x: number, y: number) => {
-  const entity = creatureSpawner(x, y);
-  if (entity === undefined) return;
-  world.components.addToEntity(predator, entity);
-  world.components.addToEntity(energy, entity, { value: PREDATOR_INITIAL_ENERGY });
   if (VERBOSE) {
-    addLog(`🎯 Created predator entity ${entity}`);
+    addLog(`Created predator entity ${entity}`);
   }
   return entity;
 };
 
-const preySpawner = (x: number, y: number) => {
-  const entity = creatureSpawner(x, y);
-  if (entity === undefined) return;
-  world.components.addToEntity(prey, entity);
-  world.components.addToEntity(reproductionTimer, entity, { value: 0 });
+const preySpawner = (x: number, y: number): number | undefined => {
+  const entity = world.entities.createWith([
+    [position, { x, y }],
+    [previousPosition, { x, y }],
+    [velocity, randomVelocity()],
+    [prey],
+    [reproductionTimer, { value: 0 }],
+  ]);
+  if (entity === undefined) {
+    addLog(`Failed to create prey entity!`);
+    return;
+  }
   return entity;
 };
 
@@ -274,35 +292,25 @@ spawnEntities(PREY_SPAWN_COUNT, preySpawner);
 // QUERIES
 // ############################################################################
 
-// QUERIES
-// Queries are used to select entities that have certain components.
-// They are defined by the `Query` class.
-
+// Keyed Query maps give systems typed component records (preferred over array QuerySpecs).
 const movementQuery = new Query({
-  all: [position, velocity],
+  all: { position, velocity },
 });
 
 const previousPositionQuery = new Query({
-  all: [position, previousPosition],
+  all: { position, previousPosition },
 });
 
-const predatorQuery = new Query({ all: [position, velocity, previousPosition, predator, energy] });
-const preyQuery = new Query({ all: [position, velocity, previousPosition, prey, reproductionTimer] });
-
-// ############################################################################
-// SYSTEMS
-// ############################################################################
-
-// Systems are functions that are executed on a set of entities.
-// They are defined by the `System` class.
-// Systems are executed in the order they are added to the world.
+const predatorQuery = new Query({
+  all: { position, velocity, previousPosition, predator, energy },
+});
+const preyQuery = new Query({
+  all: { position, velocity, previousPosition, prey, reproductionTimer },
+});
 
 // ############################################################################
 // HELPER FUNCTIONS
 // ############################################################################
-
-type Vec2Data = { x: number; y: number };
-type EntityPosition = { entity: number; x: number; y: number };
 
 const distance = (x1: number, y1: number, x2: number, y2: number): number => {
   const dx = x2 - x1;
@@ -310,43 +318,27 @@ const distance = (x1: number, y1: number, x2: number, y2: number): number => {
   return Math.sqrt(dx * dx + dy * dy);
 };
 
-const gatherEntityPositions = (query: Query, includeEntity = false): Vec2Data[] | EntityPosition[] => {
-  const posInstance = world.components.getInstance(position)!;
-  const positions: Array<Vec2Data | EntityPosition> = [];
-
-  for (const entity of world.entities.query(query)) {
-    posInstance.proxy.entity = entity;
-    const pos = includeEntity ?
-      { entity, x: posInstance.proxy.x, y: posInstance.proxy.y } :
-      { x: posInstance.proxy.x, y: posInstance.proxy.y };
-    positions.push(pos);
-  }
-
-  return positions;
-};
-
-const findNearestTarget = <T extends Vec2Data>(
+const findNearestInScratch = (
   currentX: number,
   currentY: number,
-  targets: T[],
+  count: number,
   detectionRange: number,
-): { target: T | null; distance: number } => {
-  let nearestTarget = null;
+): { index: number; distance: number } => {
+  let nearestIndex = -1;
   let nearestDistance = detectionRange;
 
-  for (let i = 0; i < targets.length; i++) {
-    const target = targets[i]!;
-    const dist = distance(currentX, currentY, target.x, target.y);
+  for (let i = 0; i < count; i++) {
+    const dist = distance(currentX, currentY, scratchX[i]!, scratchY[i]!);
     if (dist < nearestDistance) {
       nearestDistance = dist;
-      nearestTarget = target;
+      nearestIndex = i;
     }
   }
 
-  return { target: nearestTarget, distance: nearestDistance };
+  return { index: nearestIndex, distance: nearestDistance };
 };
 
-const applyWanderBehavior = (velX: number, velY: number): Vec2Data => {
+const applyWanderBehavior = (velX: number, velY: number): { x: number; y: number } => {
   let newVelX = velX + (Math.random() - 0.5) * WANDER_CHANGE_RATE;
   let newVelY = velY + (Math.random() - 0.5) * WANDER_CHANGE_RATE;
 
@@ -373,7 +365,7 @@ const moveTowardsTarget = (
   targetY: number,
   speed: number,
   targetDistance: number,
-): Vec2Data => {
+): { x: number; y: number } => {
   if (targetDistance > 0) {
     const dx = targetX - currentX;
     const dy = targetY - currentY;
@@ -392,7 +384,7 @@ const moveAwayFromTarget = (
   targetY: number,
   speed: number,
   targetDistance: number,
-): Vec2Data => {
+): { x: number; y: number } => {
   if (targetDistance > 0) {
     const dx = currentX - targetX;
     const dy = currentY - targetY;
@@ -404,43 +396,58 @@ const moveAwayFromTarget = (
   return { x: 0, y: 0 };
 };
 
+const capVelocity = (vx: number, vy: number): { x: number; y: number } => {
+  const speed = Math.sqrt(vx * vx + vy * vy);
+  if (speed > MAX_VELOCITY) {
+    return { x: (vx / speed) * MAX_VELOCITY, y: (vy / speed) * MAX_VELOCITY };
+  }
+  return { x: vx, y: vy };
+};
+
+// ############################################################################
+// SYSTEMS
+// ############################################################################
+
+// Systems receive a dense BorrowedEntityList: use `.indices` (slots) for SoA,
+// and `.entities` (packed handles) for identity APIs like destroy / isActive.
+
 // Predator AI: Chase nearest prey
 const predatorAISystem = new System({
   name: "predatorAI",
   query: predatorQuery,
   callback: (components, entities) => {
-    const { proxy: predatorPos } = components["position"] as ComponentInstance<Vec2>;
-    const { proxy: predatorVel } = components["velocity"] as ComponentInstance<Vec2>;
-
-    const preyPositions = gatherEntityPositions(preyQuery, true) as EntityPosition[];
+    const positionX = components.position.storage.partitions.x;
+    const positionY = components.position.storage.partitions.y;
+    const velocityX = components.velocity.storage.partitions.x;
+    const velocityY = components.velocity.storage.partitions.y;
+    const preyCount = gatherPositions(preyQuery);
 
     for (let i = 0; i < entities.count; i++) {
-      const predatorEntity = entities.entities[i]!;
-      predatorPos.entity = predatorEntity;
-      predatorVel.entity = predatorEntity;
-
-      const { target: nearestPrey, distance: nearestDistance } = findNearestTarget(
-        predatorPos.x,
-        predatorPos.y,
-        preyPositions,
+      const slot = entities.indices[i]!;
+      const px = positionX[slot]!;
+      const py = positionY[slot]!;
+      const { index, distance: nearestDistance } = findNearestInScratch(
+        px,
+        py,
+        preyCount,
         PREDATOR_DETECTION_RANGE,
       );
 
-      if (nearestPrey !== null) {
-        const velocity = moveTowardsTarget(
-          predatorPos.x,
-          predatorPos.y,
-          nearestPrey.x,
-          nearestPrey.y,
+      if (index >= 0) {
+        const next = moveTowardsTarget(
+          px,
+          py,
+          scratchX[index]!,
+          scratchY[index]!,
           PREDATOR_SPEED,
           nearestDistance,
         );
-        predatorVel.x = velocity.x;
-        predatorVel.y = velocity.y;
+        velocityX[slot] = next.x;
+        velocityY[slot] = next.y;
       } else {
-        const velocity = applyWanderBehavior(predatorVel.x, predatorVel.y);
-        predatorVel.x = velocity.x;
-        predatorVel.y = velocity.y;
+        const next = applyWanderBehavior(velocityX[slot]!, velocityY[slot]!);
+        velocityX[slot] = next.x;
+        velocityY[slot] = next.y;
       }
     }
   },
@@ -451,38 +458,38 @@ const preyAISystem = new System({
   name: "preyAI",
   query: preyQuery,
   callback: (components, entities) => {
-    const { proxy: preyPos } = components["position"] as ComponentInstance<Vec2>;
-    const { proxy: preyVel } = components["velocity"] as ComponentInstance<Vec2>;
-
-    const predatorPositions = gatherEntityPositions(predatorQuery, false) as Vec2Data[];
+    const positionX = components.position.storage.partitions.x;
+    const positionY = components.position.storage.partitions.y;
+    const velocityX = components.velocity.storage.partitions.x;
+    const velocityY = components.velocity.storage.partitions.y;
+    const predatorCount = gatherPositions(predatorQuery);
 
     for (let i = 0; i < entities.count; i++) {
-      const preyEntity = entities.entities[i]!;
-      preyPos.entity = preyEntity;
-      preyVel.entity = preyEntity;
-
-      const { target: nearestPredator, distance: nearestDistance } = findNearestTarget(
-        preyPos.x,
-        preyPos.y,
-        predatorPositions,
+      const slot = entities.indices[i]!;
+      const px = positionX[slot]!;
+      const py = positionY[slot]!;
+      const { index, distance: nearestDistance } = findNearestInScratch(
+        px,
+        py,
+        predatorCount,
         PREY_DETECTION_RANGE,
       );
 
-      if (nearestPredator !== null) {
-        const velocity = moveAwayFromTarget(
-          preyPos.x,
-          preyPos.y,
-          nearestPredator.x,
-          nearestPredator.y,
+      if (index >= 0) {
+        const next = moveAwayFromTarget(
+          px,
+          py,
+          scratchX[index]!,
+          scratchY[index]!,
           PREY_SPEED,
           nearestDistance,
         );
-        preyVel.x = velocity.x;
-        preyVel.y = velocity.y;
+        velocityX[slot] = next.x;
+        velocityY[slot] = next.y;
       } else {
-        const velocity = applyWanderBehavior(preyVel.x, preyVel.y);
-        preyVel.x = velocity.x;
-        preyVel.y = velocity.y;
+        const next = applyWanderBehavior(velocityX[slot]!, velocityY[slot]!);
+        velocityX[slot] = next.x;
+        velocityY[slot] = next.y;
       }
     }
   },
@@ -493,43 +500,33 @@ const separationSystem = new System({
   name: "separation",
   query: movementQuery,
   callback: (components, entities, dt: number) => {
-    const { proxy: position } = components["position"] as ComponentInstance<Vec2>;
-    const { proxy: velocity } = components["velocity"] as ComponentInstance<Vec2>;
+    const positionX = components.position.storage.partitions.x;
+    const positionY = components.position.storage.partitions.y;
+    const velocityX = components.velocity.storage.partitions.x;
+    const velocityY = components.velocity.storage.partitions.y;
+    const count = entities.count;
+    const indices = entities.indices;
 
-    // Build spatial index of all entity positions
-    const entityPositions: Array<{ entity: number; x: number; y: number }> = [];
-    for (let i = 0; i < entities.count; i++) {
-      const entity = entities.entities[i]!;
-      position.entity = entity;
-      entityPositions.push({
-        entity,
-        x: position.x,
-        y: position.y,
-      });
+    // Snapshot positions into scratch (same pattern as cross-query gathers).
+    for (let i = 0; i < count; i++) {
+      const slot = indices[i]!;
+      scratchX[i] = positionX[slot]!;
+      scratchY[i] = positionY[slot]!;
     }
 
-    // Store separation adjustments
-    const adjustments = new Map<number, { dx: number; dy: number }>();
-
-    // Calculate separation forces
-    for (let i = 0; i < entityPositions.length; i++) {
-      const entityA = entityPositions[i]!;
+    for (let i = 0; i < count; i++) {
       let separationX = 0;
       let separationY = 0;
       let neighborCount = 0;
+      const ax = scratchX[i]!;
+      const ay = scratchY[i]!;
 
-      // Check against all other entities
-      for (let j = 0; j < entityPositions.length; j++) {
+      for (let j = 0; j < count; j++) {
         if (i === j) continue;
-
-        const entityB = entityPositions[j]!;
-        const dx = entityA.x - entityB.x;
-        const dy = entityA.y - entityB.y;
+        const dx = ax - scratchX[j]!;
+        const dy = ay - scratchY[j]!;
         const dist = Math.sqrt(dx * dx + dy * dy);
-
-        // If too close, add separation force
         if (dist < SEPARATION_DISTANCE && dist > 0.01) {
-          // Separation force increases as distance decreases
           const force = (SEPARATION_DISTANCE - dist) / dist;
           separationX += dx * force;
           separationY += dy * force;
@@ -537,34 +534,16 @@ const separationSystem = new System({
         }
       }
 
-      // Store adjustments
-      if (neighborCount > 0) {
-        adjustments.set(entityA.entity, {
-          dx: separationX * dt * SEPARATION_FORCE,
-          dy: separationY * dt * SEPARATION_FORCE,
-        });
-      }
-    }
+      if (neighborCount === 0) continue;
 
-    // Apply adjustments to both velocity and position for immediate effect
-    for (const [entity, adjustment] of adjustments) {
-      position.entity = entity;
-      velocity.entity = entity;
-
-      // Apply to velocity for gradual push
-      velocity.x += adjustment.dx;
-      velocity.y += adjustment.dy;
-
-      // Cap velocity to prevent extreme speeds
-      const speed = Math.sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
-      if (speed > MAX_VELOCITY) {
-        velocity.x = (velocity.x / speed) * MAX_VELOCITY;
-        velocity.y = (velocity.y / speed) * MAX_VELOCITY;
-      }
-
-      // Apply directly to position for immediate separation
-      position.x += adjustment.dx * dt;
-      position.y += adjustment.dy * dt;
+      const slot = indices[i]!;
+      const dx = separationX * dt * SEPARATION_FORCE;
+      const dy = separationY * dt * SEPARATION_FORCE;
+      const capped = capVelocity(velocityX[slot]! + dx, velocityY[slot]! + dy);
+      velocityX[slot] = capped.x;
+      velocityY[slot] = capped.y;
+      positionX[slot] = positionX[slot]! + dx * dt;
+      positionY[slot] = positionY[slot]! + dy * dt;
     }
   },
 });
@@ -573,33 +552,38 @@ const movementSystem = new System({
   name: "movement",
   query: movementQuery,
   callback: (components, entities, dt: number) => {
-    const { proxy: position } = components["position"] as ComponentInstance<Vec2>;
-    const { proxy: velocity } = components["velocity"] as ComponentInstance<Vec2>;
+    const positionX = components.position.storage.partitions.x;
+    const positionY = components.position.storage.partitions.y;
+    const velocityX = components.velocity.storage.partitions.x;
+    const velocityY = components.velocity.storage.partitions.y;
 
     for (let i = 0; i < entities.count; i++) {
-      const entity = entities.entities[i]!;
-      position.entity = entity;
-      velocity.entity = entity;
+      const slot = entities.indices[i]!;
+      let x = positionX[slot]! + velocityX[slot]! * dt;
+      let y = positionY[slot]! + velocityY[slot]! * dt;
+      let vx = velocityX[slot]!;
+      let vy = velocityY[slot]!;
 
-      position.x += velocity.x * dt;
-      position.y += velocity.y * dt;
-
-      // boundary checks with canvas dimensions
-      if (position.x < 0) {
-        position.x = 0;
-        velocity.x = -velocity.x;
-      } else if (position.x >= WIDTH) {
-        position.x = WIDTH - 1;
-        velocity.x = -velocity.x;
+      if (x < 0) {
+        x = 0;
+        vx = -vx;
+      } else if (x >= WIDTH) {
+        x = WIDTH - 1;
+        vx = -vx;
       }
 
-      if (position.y < 0) {
-        position.y = 0;
-        velocity.y = -velocity.y;
-      } else if (position.y >= HEIGHT) {
-        position.y = HEIGHT - 1;
-        velocity.y = -velocity.y;
+      if (y < 0) {
+        y = 0;
+        vy = -vy;
+      } else if (y >= HEIGHT) {
+        y = HEIGHT - 1;
+        vy = -vy;
       }
+
+      positionX[slot] = x;
+      positionY[slot] = y;
+      velocityX[slot] = vx;
+      velocityY[slot] = vy;
     }
   },
 });
@@ -612,17 +596,15 @@ const renderPredatorSystem = new System({
   name: "renderPredator",
   query: predatorQuery,
   callback: (components, entities, alpha: number) => {
-    const { proxy: pos } = components["position"] as ComponentInstance<Vec2>;
-    const { proxy: prevPos } = components["previousPosition"] as ComponentInstance<Vec2>;
-    const { proxy: energyProxy } = components["energy"] as ComponentInstance<Energy>;
+    const positionX = components.position.storage.partitions.x;
+    const positionY = components.position.storage.partitions.y;
+    const prevX = components.previousPosition.storage.partitions.x;
+    const prevY = components.previousPosition.storage.partitions.y;
+    const energyValue = components.energy.storage.partitions.value;
 
     for (let i = 0; i < entities.count; i++) {
-      const entity = entities.entities[i]!;
-      pos.entity = entity;
-      prevPos.entity = entity;
-      energyProxy.entity = entity;
-
-      const energyPercent = (energyProxy.value / PREDATOR_MAX_ENERGY) * 100;
+      const slot = entities.indices[i]!;
+      const energyPercent = (energyValue[slot]! / PREDATOR_MAX_ENERGY) * 100;
       const char = energyPercent < 30 ?
         PREDATOR_CHAR_LOW :
         energyPercent > 80 ?
@@ -630,8 +612,8 @@ const renderPredatorSystem = new System({
         PREDATOR_CHAR_NORMAL;
 
       placeOnGrid(
-        interpolatePosition(prevPos.x, pos.x, alpha),
-        interpolatePosition(prevPos.y, pos.y, alpha),
+        interpolatePosition(prevX[slot]!, positionX[slot]!, alpha),
+        interpolatePosition(prevY[slot]!, positionY[slot]!, alpha),
         char,
       );
     }
@@ -642,16 +624,16 @@ const renderPreySystem = new System({
   name: "renderPrey",
   query: preyQuery,
   callback: (components, entities, alpha: number) => {
-    const { proxy: pos } = components["position"] as ComponentInstance<Vec2>;
-    const { proxy: prevPos } = components["previousPosition"] as ComponentInstance<Vec2>;
+    const positionX = components.position.storage.partitions.x;
+    const positionY = components.position.storage.partitions.y;
+    const prevX = components.previousPosition.storage.partitions.x;
+    const prevY = components.previousPosition.storage.partitions.y;
 
     for (let i = 0; i < entities.count; i++) {
-      const entity = entities.entities[i]!;
-      pos.entity = entity;
-      prevPos.entity = entity;
+      const slot = entities.indices[i]!;
       placeOnGrid(
-        interpolatePosition(prevPos.x, pos.x, alpha),
-        interpolatePosition(prevPos.y, pos.y, alpha),
+        interpolatePosition(prevX[slot]!, positionX[slot]!, alpha),
+        interpolatePosition(prevY[slot]!, positionY[slot]!, alpha),
         PREY_CHAR,
       );
     }
@@ -662,88 +644,71 @@ const renderPreySystem = new System({
 const collisionSystem = new System({
   name: "collision",
   query: predatorQuery,
-  callback: (components) => {
-    const { proxy: predatorPos } = components["position"] as ComponentInstance<Vec2>;
-    const { proxy: predatorEnergy } = components["energy"] as ComponentInstance<Energy>;
+  callback: (components, entities) => {
+    const positionX = components.position.storage.partitions.x;
+    const positionY = components.position.storage.partitions.y;
+    const energyValue = components.energy.storage.partitions.value;
+    const preyCount = gatherPositions(preyQuery);
+    takenScratch.fill(0, 0, preyCount);
+    let destroyCount = 0;
 
-    const preyToRemove = new Set<number>();
-    const preyEntities = gatherEntityPositions(preyQuery, true) as EntityPosition[];
+    for (let i = 0; i < entities.count; i++) {
+      const slot = entities.indices[i]!;
+      const px = positionX[slot]!;
+      const py = positionY[slot]!;
 
-    for (const predatorEntity of world.entities.query(predatorQuery)) {
-      predatorPos.entity = predatorEntity;
-      predatorEnergy.entity = predatorEntity;
-
-      for (let i = 0; i < preyEntities.length; i++) {
-        const preyData = preyEntities[i]!;
-
-        if (preyToRemove.has(preyData.entity)) continue;
-
-        const dist = distance(predatorPos.x, predatorPos.y, preyData.x, preyData.y);
-
+      for (let j = 0; j < preyCount; j++) {
+        if (takenScratch[j]) continue;
+        const dist = distance(px, py, scratchX[j]!, scratchY[j]!);
         if (dist < COLLISION_DISTANCE) {
-          predatorEnergy.value = Math.min(
-            predatorEnergy.value + PREDATOR_ENERGY_GAIN_FROM_PREY,
+          energyValue[slot] = Math.min(
+            energyValue[slot]! + PREDATOR_ENERGY_GAIN_FROM_PREY,
             PREDATOR_MAX_ENERGY,
           );
-          preyToRemove.add(preyData.entity);
-
+          takenScratch[j] = 1;
+          destroyScratch[destroyCount++] = scratchEntities[j]!;
           if (VERBOSE) {
-            addLog(`🍽 Predator ${predatorEntity} ate prey ${preyData.entity}`);
+            addLog(`Predator ${entities.entities[i]!} ate prey ${scratchEntities[j]!}`);
           }
-
           break;
         }
       }
     }
 
-    batchDestroyEntities(preyToRemove);
+    batchDestroyEntities(destroyScratch, destroyCount);
   },
 });
-
-const batchDestroyEntities = (entities: Set<number>): void => {
-  for (const entity of entities) {
-    safeDestroyEntity(entity);
-  }
-};
-
-const countEntitiesInQuery = (query: Query): number => {
-  let count = 0;
-  for (const _ of world.entities.query(query)) {
-    count++;
-  }
-  return count;
-};
 
 // Predator energy loss and starvation
 const predatorEnergySystem = new System({
   name: "predatorEnergy",
   query: predatorQuery,
   callback: (components, entities, dt: number) => {
-    const { proxy: energyProxy } = components["energy"] as ComponentInstance<Energy>;
-    const predatorsToRemove = new Set<number>();
+    const energyValue = components.energy.storage.partitions.value;
+    let destroyCount = 0;
 
     for (let i = 0; i < entities.count; i++) {
       const entity = entities.entities[i]!;
-      energyProxy.entity = entity;
-      energyProxy.value -= PREDATOR_ENERGY_LOSS_PER_SECOND * dt;
+      const slot = entities.indices[i]!;
+      let value = energyValue[slot]! - PREDATOR_ENERGY_LOSS_PER_SECOND * dt;
 
-      // Check for NaN or invalid values
-      if (isNaN(energyProxy.value) || !isFinite(energyProxy.value)) {
-        addLog(`✗ [${entity}] CRITICAL: Energy became ${energyProxy.value}!`);
-        predatorsToRemove.add(entity);
+      if (!Number.isFinite(value)) {
+        addLog(`[${entity}] CRITICAL: Energy became ${value}!`);
+        destroyScratch[destroyCount++] = entity;
         continue;
       }
 
-      if (energyProxy.value <= PREDATOR_STARVATION_THRESHOLD) {
-        predatorsToRemove.add(entity);
-        addLog(`☠ Predator ${entity} starved! Energy: ${energyProxy.value.toFixed(2)}`);
+      energyValue[slot] = value;
+      if (value <= PREDATOR_STARVATION_THRESHOLD) {
+        destroyScratch[destroyCount++] = entity;
+        addLog(`Predator ${entity} starved! Energy: ${value.toFixed(2)}`);
       }
     }
 
-    if (predatorsToRemove.size > 0) {
-      addLog(`→ Removing ${predatorsToRemove.size} predator(s): ${Array.from(predatorsToRemove).join(", ")}`);
+    if (destroyCount > 0) {
+      addLog(`Removing ${destroyCount} predator(s)`);
+      batchDestroyEntities(destroyScratch, destroyCount);
     }
-    batchDestroyEntities(predatorsToRemove);
   },
 });
 
@@ -752,74 +717,59 @@ const preyReproductionSystem = new System({
   name: "preyReproduction",
   query: preyQuery,
   callback: (components, entities, dt: number) => {
-    const { proxy: preyPos } = components["position"] as ComponentInstance<Vec2>;
-    const { proxy: reproTimer } = components["reproductionTimer"] as ComponentInstance<ReproductionTimer>;
+    const positionX = components.position.storage.partitions.x;
+    const positionY = components.position.storage.partitions.y;
+    const reproTimer = components.reproductionTimer.storage.partitions.value;
+    const preyCount = entities.count;
 
-    // Check if there are enough prey for reproduction
-    const preyCount = countEntitiesInQuery(preyQuery);
     if (preyCount < PREY_MIN_POPULATION_FOR_REPRODUCTION) {
-      return; // Not enough prey to reproduce
+      return;
     }
 
-    for (let i = 0; i < entities.count; i++) {
-      const entity = entities.entities[i]!;
-      preyPos.entity = entity;
-      reproTimer.entity = entity;
+    // Snapshot before any spawn: queryList views are invalidated by world mutations.
+    for (let i = 0; i < preyCount; i++) {
+      const slot = entities.indices[i]!;
+      scratchEntities[i] = entities.entities[i]!;
+      scratchX[i] = positionX[slot]!;
+      scratchY[i] = positionY[slot]!;
+    }
 
-      // Update reproduction timer
-      reproTimer.value += dt;
+    for (let i = 0; i < preyCount; i++) {
+      const entity = scratchEntities[i]!;
+      const slot = entityIndex(entity);
+      let timer = reproTimer[slot]! + dt;
+      reproTimer[slot] = timer;
 
-      // Check if ready to reproduce
-      if (reproTimer.value >= PREY_REPRODUCTION_COOLDOWN) {
-        // Look for nearby prey
-        let foundMate = false;
+      if (timer < PREY_REPRODUCTION_COOLDOWN) continue;
 
-        for (const otherEntity of world.entities.query(preyQuery)) {
-          if (otherEntity === entity) continue;
-
-          preyPos.entity = otherEntity;
-          const otherX = preyPos.x;
-          const otherY = preyPos.y;
-
-          preyPos.entity = entity;
-          const myX = preyPos.x;
-          const myY = preyPos.y;
-
-          const dist = distance(myX, myY, otherX, otherY);
-
-          if (dist < PREY_REPRODUCTION_DISTANCE) {
-            foundMate = true;
-            break;
-          }
+      let foundMate = false;
+      const myX = scratchX[i]!;
+      const myY = scratchY[i]!;
+      for (let j = 0; j < preyCount; j++) {
+        if (i === j) continue;
+        if (distance(myX, myY, scratchX[j]!, scratchY[j]!) < PREY_REPRODUCTION_DISTANCE) {
+          foundMate = true;
+          break;
         }
+      }
 
-        // If mate found, try to spawn new prey with small offset to avoid overlapping
-        if (foundMate) {
-          // Check if we have capacity before spawning
-          if (world.entities.getAvailableCount() > 0) {
-            preyPos.entity = entity;
-            const newPrey = preySpawner(
-              preyPos.x + (Math.random() - 0.5) * 2,
-              preyPos.y + (Math.random() - 0.5) * 2,
-            );
+      if (!foundMate || world.entities.getAvailableCount() === 0) {
+        reproTimer[slot] = PREY_REPRODUCTION_COOLDOWN / 2;
+        continue;
+      }
 
-            if (newPrey !== undefined) {
-              reproTimer.value = 0; // Only reset on successful reproduction
-              if (VERBOSE) {
-                addLog(`🐣 Prey ${entity} reproduced, created ${newPrey}`);
-              }
-            } else {
-              // Failed to spawn - retry in half the cooldown time
-              reproTimer.value = PREY_REPRODUCTION_COOLDOWN / 2;
-            }
-          } else {
-            // No capacity available - retry in half the cooldown time
-            reproTimer.value = PREY_REPRODUCTION_COOLDOWN / 2;
-          }
-        } else {
-          // No mate found - retry in half the cooldown time
-          reproTimer.value = PREY_REPRODUCTION_COOLDOWN / 2;
+      const newPrey = preySpawner(
+        myX + (Math.random() - 0.5) * 2,
+        myY + (Math.random() - 0.5) * 2,
+      );
+
+      if (newPrey !== undefined) {
+        reproTimer[slot] = 0;
+        if (VERBOSE) {
+          addLog(`Prey ${entity} reproduced, created ${newPrey}`);
         }
+      } else {
+        reproTimer[slot] = PREY_REPRODUCTION_COOLDOWN / 2;
       }
     }
   },
@@ -829,14 +779,15 @@ const updatePreviousPositionSystem = new System({
   name: "updatePreviousPosition",
   query: previousPositionQuery,
   callback: (components, entities) => {
-    const { proxy: position } = components["position"] as ComponentInstance<Vec2>;
-    const { proxy: previousPosition } = components["previousPosition"] as ComponentInstance<Vec2>;
+    const positionX = components.position.storage.partitions.x;
+    const positionY = components.position.storage.partitions.y;
+    const prevX = components.previousPosition.storage.partitions.x;
+    const prevY = components.previousPosition.storage.partitions.y;
+
     for (let i = 0; i < entities.count; i++) {
-      const entity = entities.entities[i]!;
-      position.entity = entity;
-      previousPosition.entity = entity;
-      previousPosition.x = position.x;
-      previousPosition.y = position.y;
+      const slot = entities.indices[i]!;
+      prevX[slot] = positionX[slot]!;
+      prevY[slot] = positionY[slot]!;
     }
   },
 });
@@ -882,23 +833,23 @@ function gameLoop(currentTime: number = performance.now()): void {
 
   let updates = 0;
   while (accumulator >= FIXED_TIME_STEP && updates < MAX_UPDATES) {
-    updatePreviousPosition();
+    // world.frame runs the tick then refreshes entered/exited/changed state.
+    world.frame(() => {
+      updatePreviousPosition();
 
-    // AI behavior
-    predatorAI();
-    preyAI();
+      // AI behavior
+      predatorAI();
+      preyAI();
 
-    // Physics - separation must run before movement
-    separation(FIXED_TIME_STEP / 1000);
-    movement(FIXED_TIME_STEP / 1000); // Convert to seconds
+      // Physics - separation must run before movement
+      separation(FIXED_TIME_STEP / 1000);
+      movement(FIXED_TIME_STEP / 1000);
 
-    // Game logic
-    collision();
-    predatorEnergy(FIXED_TIME_STEP / 1000);
-    preyReproduction(FIXED_TIME_STEP / 1000);
-
-    // Refresh world state for query tracking and change detection
-    world.refresh();
+      // Game logic
+      collision();
+      predatorEnergy(FIXED_TIME_STEP / 1000);
+      preyReproduction(FIXED_TIME_STEP / 1000);
+    });
 
     accumulator -= FIXED_TIME_STEP;
     updates++;

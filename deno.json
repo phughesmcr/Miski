@@ -102,7 +102,7 @@
       "command": "deno run -Ar example/visual.example.ts"
     },
     "demo:cli": {
-      "description": "Run the legacy terminal predator-prey demo",
+      "description": "Run the terminal predator-prey demo",
       "command": "deno run -Ar example/cli.example.ts"
     },
     "bench": {
