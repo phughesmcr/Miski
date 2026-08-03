@@ -71,7 +71,7 @@ Borrowed vs snapshot iterators:
 
 Layout sketch: `src/{world,component,entity,query,system,archetype,checkpoint,rollback,schema,value}/`. Demos live in `example/`; throughput and GC budgets in `bench/`. See [`test/README.md`](test/README.md) for how tests map to API domains.
 
-Validation: `deno task ci` before every PR. For performance-sensitive changes also run `deno task bench` and ideally `deno task bench:all`.
+Validation: `deno task ci` before every PR (includes the GC allocation gate). For performance-sensitive changes also run `deno task bench` and ideally `deno task bench:all` (throughput + retained memory).
 
 ## Naming and comments
 

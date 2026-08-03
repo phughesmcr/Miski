@@ -1,232 +1,148 @@
-# Miski ECS
+# 🍬 Miski
 
-__Miski__: Quechuan adjective meaning "sweet".
+**Quechuan** *miski* — *sweet*.
 
-__ECS__: Entity-Component-System; a software architecture pattern.
+A high-performance Entity-Component-System for TypeScript that tries to make
+data-oriented design feel like a treat, not a chore.
 
-__Miski ECS__: A sweet, high-performance ECS library written in Typescript.
+Typed-array SoA storage. Generational entity handles. Dense zero-allocation
+query loops. Built for game frames and simulations that cannot afford a GC
+sugar crash mid-frame.
 
-See [jsr.io/@phughesmcr/miski](https://jsr.io/@phughesmcr/miski) for complete documentation.
+[![JSR](https://jsr.io/badges/@phughesmcr/miski)](https://jsr.io/@phughesmcr/miski)
+[![MIT](https://badgen.net/badge/license/MIT/blue)](./LICENSE)
+[![TypeScript](https://badgen.net/badge/icon/typescript?icon=typescript&label)](https://www.typescriptlang.org/)
+[![Deno](https://img.shields.io/badge/deno-^2.2.10-lightgrey?logo=deno)](https://deno.com/)
+[![Bun](https://img.shields.io/badge/bun-%5E1.3.0-lightgrey?logo=bun)](https://bun.sh/)
+[![Node](https://img.shields.io/badge/node-%5E24.0.0-lightgrey?logo=node.js)](https://nodejs.org/)
 
-<p align="left">
-  <img src="https://badgen.net/badge/license/MIT/blue" alt="MIT License" />
-  <img src="https://badgen.net/badge/icon/typescript?icon=typescript&label" alt="Written in Typescript">
-  <img src="https://img.shields.io/badge/deno-^2.2.10-lightgrey?logo=deno" alt="Deno version" />
-  <img src="https://img.shields.io/badge/bun-%5E1.3.0-lightgrey?logo=bun" alt="Bun version" />
-  <img src="https://img.shields.io/badge/node-%5E24.0.0-lightgrey?logo=node.js" alt="Node version" />
-</p>
+Hungry for every overload? Full API docs live at
+**[jsr.io/@phughesmcr/miski](https://jsr.io/@phughesmcr/miski)**.
 
-## Purpose
+---
 
-Miski's purpose is to provide a performant, stable, developer-friendly ECS architecture for modern web projects.
+## Why Miski?
 
-Since ECS libraries are primarily used in games and other performance-critical applications, performant here means:
+Because ECS should be *miski* — sweet to write, sharp under the hood.
 
-* Miski aims to minimize garbage collection and memory allocation pressure, reducing the risk of dropped frames.
-* Miski takes advantage of web standards like `ArrayBuffer` and `WeakMap` to provide fast, cache-friendly component storage, querying, and iteration.
+| | |
+| --- | --- |
+| **Performant** | `ArrayBuffer`-backed SoA storage, dense `queryList` iteration, and hot paths budgeted for zero steady-state allocation. Your frames stay smooth; the collector stays bored. |
+| **Predictable** | Deterministic results for a given call sequence. Still alpha (`1.0.0-alpha.x`) — breaking changes are called out in docs and tags, no surprise ingredients. |
+| **Focused** | Runtime deps are first-party only (`bitpool`, `booleanarray`, `partitionedbuffer`). No unrelated third-party surface. Just the pantry we need. |
 
-Stable here means:
+**On the menu:** good predictable performance · a clean developer-friendly API ·
+a readable open-source codebase.
 
-* The API will not change meaningfully.
-* The results produced by the library are predictable and consistent.
-* No 3rd-party dependencies.
+**Off the menu:** being the fastest/smallest ECS on the web · API interchange
+with other libraries · polyfills for older runtimes. We cook for modern
+JavaScript — no leftovers.
 
-Developer-friendly here means:
+---
 
-* The library is well-documented, self-documenting, and has a clean, readable codebase.
-* The library is easy to understand, learn, and use.
-* The library is easy to extend, customize, and integrate into existing projects.
+## What's inside
 
-### Goals
+- Cache-friendly typed-array SoA component storage
+- Generational entity handles with slot-indexed iteration
+- More than 32 components per world; optional per-component owner caps
+- Define components, queries, and systems once — reuse across worlds
+- Query ops: `all` · `any` · `none` · non-filtering `include`
+- Dense zero-allocation `queryList` (`entities` + storage `indices`)
+- `world.frame(fn)` tick helper with entered / exited / changed tracking
+- Typed `createEcsWorld` named-map bootstrap
+- Atomic bundles and bulk add/remove for spawn, load, and query-wide transitions
+- Component-subset checkpoints and speculative world rollback
+- Schema compile + stable FNV hash for tooling and saves
+- MIT licensed — share freely, keep the wrappers on
 
-* To provide good and predictable performance
-* To provide a developer-friendly API
-* To provide a clean, readable, self-documenting, open-source codebase
+---
 
-### Not Goals
+## Install
 
-Because Miski is designed to be used inside your own projects, we let you configure bundling and performance tuning to suit your needs, therefore the following are not priorities of this project:
-
-* To be the fastest or smallest ECS on the web
-* To provide an API that is interchangeable with other ECS libraries
-* To provide polyfills, workarounds, or older browser support for modern ECMAScript features
-
-## Features
-
-* Modern modular ESNext data-oriented Typescript codebase
-* Fast, cache-friendly ArrayBuffer-based component data storage
-* Generational entity handles with slot-indexed SoA storage
-* Simple, developer-friendly, human-readable API
-* Ability to register more than 32 components in one world
-* Ability to limit the number of entities a component can be added to
-* Define components, systems and queries once, reuse them across multiple worlds
-* Query operators: `all` (AND), `any` (OR), `none` (NOT), plus non-filtering `include`
-* Dense zero-allocation `queryList` API with packed `entities` + storage `indices` (slots)
-* `world.frame(fn)` tick helper that refreshes entered/exited/changed state
-* Typed `createEcsWorld` named-map bootstrap (`spawn`, `storage`, `frame`)
-* Component schema compile + stable FNV hash for tooling and saves
-* Component-subset checkpoints and speculative world rollback points
-* Value canonicalization through typed-array storage on public writes
-* Atomic bulk component add/remove APIs for spawn, load, and query-wide transitions
-* Opt-in snapshot helpers for tools, tests, and non-frame-critical code
-* `world.archetypes.queryEntered` & `world.archetypes.queryExited` methods
-* Use `world.components.getChanged(...)` to get data-component entities changed by add-with-data, public setters, or proxies
-* MIT license
-
-## Performance Snapshot
-
-Miski is optimized for Deno game-loop workloads where predictable frame time and low GC pressure matter.
-
-Recent local benchmark results on Deno 2.9.4, aarch64 macOS:
-
-| Benchmark | Result |
-| --- | ---: |
-| `isActive` hot check | 6.5 ns |
-| `entityHas` ownership check | 6.5 ns |
-| `instance.has` ownership check | 4.3 ns |
-| Direct typed-array write + `instance.markChanged` | 9.6 ns |
-| `readEntityDataInto` reused object | 20.4 ns |
-| Add/remove tag component | 68.8 ns |
-| Add/remove data component | 121.3 ns |
-| Move entity across common gameplay archetypes | 333.5 ns |
-| Bulk add/remove tag component - 7,168 entities | 464.8 us, 64.8 ns/entity |
-| Bulk add/remove data component - 7,168 entities | 669.4 us, 93.4 ns/entity |
-| Query cache miss after refresh | 1.8 us |
-| Cached dense `queryList` iteration | 946.1 ns |
-| Cached dense `queryList` iteration with `include` | 1.9 us |
-| Dense changed iteration with no changed entities | 10.7 ns |
-| Spawn/despawn 128 projectiles - repeated `addToEntity` | 70.9 us |
-| Spawn/despawn 128 projectiles - `createWith` bundle | 60.1 us |
-| Game frame - move, query renderables, refresh | 6.8 us |
-
-GC allocation pressure is budgeted separately. Hot entity, component check, direct write, cached query list, changed, owner iteration, and bulk add/remove transition paths are effectively allocation-free in steady state. The current `deno task bench:gc` run reports:
-
-| Allocation Scenario | Steady-State Allocation |
-| --- | ---: |
-| Entity create/destroy recycled hot path | 0.0000 B/iter |
-| `isActive` and `entityHas` hot checks | 0.0000 B/iter |
-| `instance.has` hot ownership check | 0.0000 B/iter |
-| Direct typed-array component writes | 0.0000 B/iter |
-| Direct typed-array writes + `instance.markChanged` | 0.0000 B/iter |
-| `readEntityDataInto` reused output object | 0.0000 B/iter |
-| Cached `queryList` entity iteration | 0.0000 B/iter |
-| Cached `queryList` entity iteration with `include` | 0.0000 B/iter |
-| Included-component render loop | 0.0000 B/iter |
-| Component changed dense iterator | 0.0487 B/iter |
-| Component owners iterator | 0.0000 B/iter |
-| Spawn/despawn 128 projectiles - repeated `addToEntity` | 0.0000 B/iter |
-| Spawn/despawn 128 projectiles - `createWith` bundle | 0.0000 B/iter |
-| Add/remove data component runtime transition | 0.0000 B/iter |
-| Bulk add/remove tag component - 896 entities | 0.0000 B/iter |
-| Bulk add/remove data component - 896 entities | 0.0000 B/iter |
-| Game frame system + cached render query + refresh | 56.0048 B/iter |
-
-Against a local ECS benchmark shape derived from `noctjs/ecs-benchmark`, Miski ranks in the top three by normalized geomean when using Deno and Miski's dense/bulk APIs for hot query loops. Cross-library benchmark numbers are sensitive to runtime, machine, benchmark shape, and API style, so treat this as a comparison aid rather than a universal ranking.
-
-## Installation
-
-```ts
-import { World, ... } from "@phughesmcr/miski";
-```
-
-### Node
+Pick your runtime. Same package, same sweetness.
 
 ```bash
+# Node
 npx jsr add @phughesmcr/miski
-```
 
-### Deno
-
-```bash
+# Deno
 deno add jsr:@phughesmcr/miski
-```
 
-### Bun
-
-```bash
+# Bun
 bunx jsr add @phughesmcr/miski
 ```
 
-## Development
-
-Miski uses Deno 2.x for local validation and CI.
-
-Contributor conventions (see also `CONTRIBUTING.md`): prefer `.storage.partitions` for SoA access; index typed arrays by slot (`entityIndex` / `queryList` `indices`), not by packed entity handles; keep comments ASCII-only in `src/`.
-
-Run the full contributor check before opening a pull request:
-
-```bash
-deno task ci
+```ts
+import { Component, Query, System, World } from "@phughesmcr/miski";
 ```
 
-For local formatting plus lint and type checks, run:
+---
 
-```bash
-deno task prep
-```
+## Quick start
 
-Run tests with:
+One complete bite — components, world, spawn, system, frame:
 
-```bash
-deno task test
-```
+```ts
+import { Component, Query, System, World } from "@phughesmcr/miski";
 
-Run demos with:
+type Vec2 = {
+  x: Float32ArrayConstructor;
+  y: Float32ArrayConstructor;
+};
 
-```bash
-deno task demo
-deno task demo:cli
-```
+const Position = new Component<Vec2>({
+  name: "position",
+  schema: { x: Float32Array, y: Float32Array },
+});
 
-Benchmarks are manual and are not part of PR CI:
+const Velocity = new Component<Vec2>({
+  name: "velocity",
+  schema: { x: Float32Array, y: Float32Array },
+});
 
-```bash
-deno task bench
-deno task bench:memory
-deno task bench:gc
-deno task bench:all
-```
-
-## Quick Start API Reference
-
-Below are the essentials of the Miski API. For full API documentation see [jsr.io/@phughesmcr/miski](https://jsr.io/@phughesmcr/miski).
-
-Each concept in this reference builds on the previous concept, it should be read in order.
-
-### World
-
-The world object is the primary container for all things Miski.
-
-We can create a new world like so:
-
-```typescript
 const world = new World({
-  capacity: 1000, // The maximum number of entities to allow in the world (minimum 8, maximum 65536)
-  components: [
-    positionComponent, // We'll create this in the components section below
-  ],
+  capacity: 1024,
+  components: [Position, Velocity],
 });
-```
 
-<span style="background-color: #aa0010; color: #ffffff; padding: 4px; border-radius: 4px;">
-⚠️ Components cannot be added to a world after its creation.
-</span>
+await world.init();
 
-<span style="background-color: #1000aa; color: #ffffff; padding: 4px; border-radius: 4px;">
-ℹ️ The world requires frequent maintenance (usually once per frame):
-</span>
+const entity = world.entities.createWithOrThrow([
+  [Position, { x: 0, y: 0 }],
+  [Velocity, { x: 1, y: 0.5 }],
+]);
 
-```typescript
-world.refresh();
-// Or wrap a tick so refresh always runs:
+const movement = new System({
+  name: "movement",
+  query: new Query({
+    all: { position: Position, velocity: Velocity },
+  }),
+  callback: (components, entities, dt: number) => {
+    const pos = components.position.storage.partitions;
+    const vel = components.velocity.storage.partitions;
+
+    for (let i = 0; i < entities.count; i++) {
+      const slot = entities.indices[i]!;
+      pos.x[slot]! += vel.x[slot]! * dt;
+      pos.y[slot]! += vel.y[slot]! * dt;
+    }
+  },
+});
+
+const runMovement = world.systems.create(movement);
+
 world.frame(() => {
-  // systems / mutations — read entered/exited/changed inside this callback
+  runMovement(1 / 60);
+  // read entered / exited / changed here — refresh runs after the callback
 });
+
+console.log(world.components.getEntityData(Position, entity));
+// → { x: ~0.0167, y: ~0.0083 }
 ```
 
-For a typed named-map bootstrap:
+Prefer a typed named map? Same dessert, different plate:
 
-```typescript
+```ts
 import { createEcsWorld } from "@phughesmcr/miski";
 
 const game = createEcsWorld({
@@ -236,506 +152,305 @@ const game = createEcsWorld({
     Health: { hp: Uint16Array, maxHp: Uint16Array },
   },
 });
+
 await game.init();
-const entity = game.spawn({ Position: { x: 0, y: 0 }, Health: { hp: 10, maxHp: 10 } });
-game.storage.Position.get(entity, "x");
+const e = game.spawn({
+  Position: { x: 0, y: 0 },
+  Health: { hp: 10, maxHp: 10 },
+});
+game.storage.Position.get(e, "x");
 ```
+
+> **House rule.** Components are fixed at world creation — the kitchen closes
+> after `new World`. Call `world.refresh()` (or wrap a tick in `world.frame`)
+> so entered / exited / changed stay fresh.
+
+Want to see it move? `deno task demo` · `deno task demo:cli`
+
+---
+
+## Core concepts
+
+The recipe card. Read top to bottom — each section seasons the next.
+
+### World
+
+Everything lives in a world: entities, components, systems, archetypes.
+Think of it as the bakery where the rest of the kitchen works.
+
+```ts
+const world = new World({ capacity: 1024, components: [Position, Velocity] });
+await world.init();
+world.refresh();           // once per frame
+world.frame(() => { /* … */ }); // refresh always runs after the callback
+```
+
+Capacity is clamped between **8** and **65536**. Cozy studio or full stadium —
+your call.
 
 ### Components
 
-A component is a data structure that gives entities their state.
+The ingredients. Data (or tag) shapes registered on a world. Create once; reuse
+across as many worlds as you like.
 
-Components can be created once and used across multiple worlds.
-
-For example, to create a 2d position component:
-
-```typescript
-// Optional schema:
-type Vec2 = { x: Float32ArrayConstructor, y: Float32ArrayConstructor }; // defines what input we want (number only)
-
-const positionComponent = new Component<Vec2>({
-  // ⚠️ There are some names you cannot use for components or their schema properties.
-  // You can use `isValidName()` to check if a name is valid.
+```ts
+// Data component
+const Position = new Component<Vec2>({
   name: "position",
-
-  // The schema relates to the input type above, in this case Vec2.
-  // It defines how we want to store the expected datatype (number).
-  // Since we know a Vec2 requires X and Y to be Float32Array, we can define the schema like so:
-  schema: {
-    x: Float32Array,
-    y: Float32Array,
-  },
+  schema: { x: Float32Array, y: Float32Array },
 });
-```
 
-When the public write type is narrower than the storage schema, provide both shapes. `TValue` is what callers may write through `addToEntity`, `setEntityData`, bundle data, and the proxy; `TStorage` is the runtime schema that determines the typed-array partitions:
+// Tag (no schema) — a label, not a filling
+const Active = new Component<null>({ name: "active" });
 
-```typescript
+// Owner cap — only one of these in the jar
+const Player = new Component<null>({ name: "player", maxEntities: 1 });
+
+// Narrower public writes than storage
 type FacingValue = { dir: 0 | 1 | 2 | 3 };
 type FacingStorage = { dir: Uint8ArrayConstructor };
-
-const facingComponent = new Component<FacingValue, FacingStorage>({
+const Facing = new Component<FacingValue, FacingStorage>({
   name: "facing",
   schema: { dir: Uint8Array },
 });
-
-world.components.addToEntity(facingComponent, entity, { dir: 2 }); // ok
-// world.components.addToEntity(facingComponent, entity, { dir: 7 }); // type error
 ```
 
-#### Tags
+**Ownership & data** — attach, detach, and bundle without crumbs on the floor:
 
-We can create a tag component by omitting the schema object and (optionally) providing a null type:
+```ts
+world.components.addToEntity(Position, entity, { x: 10, y: 20 });
+world.components.removeFromEntity(Position, entity);
+world.components.entityHas(Position, entity);
 
-```typescript
-const activeComponent = new Component<null>({
-  name: "active"
-});
-```
-
-#### MaxEntities
-
-By default a component can be added to as many entities as the world's capacity, we can change this behaviour like so:
-
-```typescript
-const player = new Component<null>({
-  name: "player",
-  maxEntities: 1,
-});
-```
-
-#### Adding and Removing Components
-
-We can add and remove components from entities like so:
-
-```typescript
-// Add the component to an entity:
-world.components.addToEntity(positionComponent, entity);
-
-// Add with initial data:
-world.components.addToEntity(positionComponent, entity, { x: 10, y: 20 });
-```
-
-```typescript
-// Remove the component from an entity:
-world.components.removeFromEntity(positionComponent, entity);
-```
-
-Bundles add or upsert multiple components atomically and move the entity once to its final archetype:
-
-```typescript
+// Atomic multi-component transition (one archetype move)
 world.components.addBundle(entity, [
-  [positionComponent, { x: 10, y: 20 }],
-  [facingComponent, { dir: 0 }],
-  [renderableComponent],
+  [Position, { x: 10, y: 20 }],
+  [Facing, { dir: 0 }],
 ]);
 
-const spawned = world.entities.createWith([
-  [positionComponent, { x: 1, y: 2 }],
-  [renderableComponent],
-]);
-
-const spawnedOrThrow = world.entities.createWithOrThrow([
-  [positionComponent, { x: 1, y: 2 }],
-  [renderableComponent],
-]);
+// Bulk over a dense query result
+const list = world.entities.queryList(new Query({ all: [Position] }));
+world.components.addToEntities(Active, list);
 ```
 
-Bundle preflight rejects duplicate components, unregistered components, inactive target entities, tag data, and component owner-capacity overflow before mutating ownership, data, changed state, archetypes, or query caches.
+**Hot-path writes** — when every nanosecond counts, go straight to the SoA
+partitions. Index by **storage slot**, not the packed entity handle. Use
+`entityIndex(entity)` or `queryList` `indices`. `.partitions` is a friendly
+alias of `.storage.partitions`.
 
-For spawn, load, and other bulk transitions across a dense query result, resolve the query once and use the batch APIs:
-
-```typescript
-const query = new Query({ all: [positionComponent] });
-const entities = world.entities.queryList(query);
-
-// Add a tag or data component to every entity in the dense list:
-const added = world.components.addToEntities(renderableComponent, entities);
-
-// Remove it again:
-const removed = world.components.removeFromEntities(renderableComponent, entities);
-```
-
-The return value is the number of entities whose ownership changed.
-
-Batch add/remove preflights the full dense list before mutating anything. Inactive entities, duplicate entity IDs, and capacity failures throw before ownership, component data, archetypes, changed state, or query caches are changed. Removal remains idempotent for active entities that do not own the component. These APIs are optimized for bulk archetype movement, but they are still transitions; avoid using them as per-frame whole-world toggles when a tag, query filter, or data field can represent the same state.
-
-#### Test for Component presence
-
-We can also test if entities have components:
-
-```typescript
-// Check if an entity has a component
-const hasPosition: boolean = world.components.entityHas(positionComponent, entity);
-```
-
-Inside hot loops that already hold a component instance, use the direct instance check:
-
-```typescript
-const hasFacing = facingInstance.has(entity);
-```
-
-#### Modifying an Entity's Component properties
-
-To access the component's data from a specific world, we have to get the ComponentInstance, like so:
-
-```typescript
-// returns ComponentInstance<T> or undefined
-const positionInstance = world.components.getInstance(positionComponent);
-
-// For multiple components:
-const instances = world.components.getInstances([positionComponent, ...]);
-```
-
-<span style="background-color: #1000aa; color: #ffffff; padding: 4px; border-radius: 4px;">
-ℹ️ The component instance is accessible quickly using Systems (see below).
-</span>
-
-Once we have the component instance we can modify entity properties.
-
-There are two ways to do this:
-
-The first is quick but unsafe (no automatic change tracking and no ownership checks). Prefer `.storage.partitions` for SoA access (`.partitions` is an alias). Index by storage slot via `entityIndex(entity)` or `queryList` `indices`, not by the packed entity handle:
-
-```typescript
+```ts
 import { entityIndex } from "@phughesmcr/miski";
 
-positionInstance.storage.partitions.x[entityIndex(entity)] = 1;
-positionInstance.markChanged(entity); // ownership-guarded manual changed mark
-```
+const instance = world.components.getInstance(Position)!;
+instance.storage.partitions.x[entityIndex(entity)] = 1;
+instance.markChanged(entity); // ownership-guarded
 
-The second is slower but safer (with change tracking and type guards):
+// Safer (slower) — proxy tracks changed + typeguards
+instance.proxy.entity = entity;
+instance.proxy.x = 1;
 
-```typescript
-positionInstance.proxy.entity = entity;
-positionInstance.proxy.x = 1;
-```
+// Public guarded APIs — the polite path
+world.components.getEntityData(Position, entity);
+world.components.setEntityData(Position, entity, { x: 10, y: 20 });
+world.components.markChanged(Position, entity);
 
-The second way, using `.proxy`, has the advantage of also adding the entity to changed tracking as well as performing some basic typeguarding.
-
-For convenience, the public data APIs perform ownership and data-storage checks:
-
-```typescript
-const data = world.components.getEntityData(positionComponent, entity);
-world.components.setEntityData(positionComponent, entity, { x: 10, y: 20 });
-world.components.markChanged(positionComponent, entity);
-```
-
-These public methods throw Miski errors for inactive entities, unregistered components, tag components, and active entities that do not own the requested data component. Direct typed-array storage remains the explicit opt-out path for performance-sensitive code that wants raw access without guards.
-
-For example:
-
-```typescript
-import { entityIndex } from "@phughesmcr/miski";
-
-// Direct storage access - no change tracking (index by slot)
-positionInstance.storage.partitions.x[entityIndex(101)] = 1;
-
-// Proxy access - with change tracking (packed handle)
-positionInstance.proxy.entity = 444;
-positionInstance.proxy.x = 1;
-
-// Only entity 444 appears in changed tracking
-const changed = world.components.getChanged(positionComponent);
-for (const entity of changed) {
-  console.log(entity); // 444 only, not 101
-}
-```
-
-<span style="background-color: #1000aa; color: #ffffff; padding: 4px; border-radius: 4px;">
-ℹ️  The `changed` tracking is reset with every `world.refresh()`.
-</span>
-
-You can also access the changed entities of a component like so:
-
-```typescript
-const changed = world.components.getChanged(positionComponent);
-```
-
-`getChanged(...)` is backed by a borrowed dense iterator for data components and returns each entity at most once per refresh window, even when multiple fields change. Tag components currently return an empty changed iterator. Use `getChangedSnapshot(...)` when retained stable IDs are needed.
-
-For non-throwing reads, use `readEntityData(...)`. To avoid allocating a fresh data object in hot paths, reuse an output object with `readEntityDataInto(...)`:
-
-```typescript
+// Zero-alloc read into a reused object — no disposable cups
 const out = { x: 0, y: 0 };
-if (world.components.readEntityDataInto(positionComponent, entity, out)) {
-  // out.x and out.y were overwritten.
-}
+world.components.readEntityDataInto(Position, entity, out);
 ```
 
-`readEntityDataInto(...)` returns `false` for inactive entities, non-owners, and tag components without changing `out`. Only unregistered components throw.
+`getChanged(...)` resets each `world.refresh()` — a fresh tray every frame.
+Tags skip changed tracking. Need retained IDs outside the hot path? Reach for
+the `*Snapshot` helpers.
 
 ### Entities
 
-Entities are packed generational handles (slot index + generation). Destroying and recreating an entity reuses the slot but invalidates the old handle via `world.entities.isActive(entity)`.
+Packed generational handles (slot + generation). Destroying an entity recycles
+the slot; old handles fail `isActive` — no zombie leftovers.
 
-Use `entityIndex(entity)` / `entityGeneration(entity)` / `packEntity(slot, gen)` when you need to inspect handles. Prefer query-list `indices` (slots) for SoA partition access, and `entities` (packed handles) for identity APIs.
+```ts
+const e = world.entities.create();           // Entity | undefined
+const e2 = world.entities.createOrThrow();   // throws when full
+const e3 = world.entities.createWith([[Position, { x: 1, y: 2 }]]);
 
-```typescript
-// Create (will return undefined if no entities are available)
-const entity = world.entities.create();
-// Destroy
-world.entities.destroy(entity);
-// Test if entity is active in the world (generation-aware)
-world.entities.isActive(entity);
-// Test if an entity is valid in the world
-world.entities.isEntity(entity);
-world.entities.isEntity(4235); // will return false if the world capacity is 1000 as above
-// Get the number of active entities in a world
-const active = world.entities.getActiveCount();
-// Get the number of remaining available entities in a world
-const available = world.entities.getAvailableCount();
+world.entities.destroy(e2);
+world.entities.isActive(e);
+world.entities.getActiveCount();
+world.entities.getAvailableCount();
 ```
+
+Peek under the wrapper with `entityIndex` · `entityGeneration` · `packEntity`.
 
 ### Queries
 
-Queries help us to find relationships between entities and components.
+Ask the world who's who. Filters taste like boolean algebra:
 
-```typescript
-const positionQuery = new Query({
-  all: [positionComponent],
-  any: [...],
-  none: [...],
-  include: [...],
+```ts
+const q = new Query({
+  all: [Position, Velocity],   // AND — must have every one
+  any: [Sprite],               // OR  — at least one
+  none: [Hidden],              // NOT — leave these out
+  include: [Facing],           // exposed, does not filter
 });
-```
 
-`all` is an AND filter. `any` is an OR filter: when supplied, an entity must have at least one of those components. `none` is a NOT filter. `include` is non-filtering: included component instances are exposed to callbacks and component queries but do not change entity membership.
+const entities = world.entities.query(q);     // convenience iterator
+const list = world.entities.queryList(q);     // dense borrowed view
 
-We can then access the entities and components which match our query:
-
-```typescript
-const components = world.components.query(positionQuery);
-const entities = world.entities.query(positionQuery);
-```
-
-For performance-sensitive loops, use `queryList` to get a dense reusable view of packed handles and slots:
-
-```typescript
-const result = world.entities.queryList(positionQuery);
-for (let i = 0; i < result.count; i++) {
-  const entity = result.entities[i]; // packed handle (identity APIs)
-  const slot = result.indices[i]; // storage slot (SoA partitions)
-  positionX[slot] += 1;
-  world.entities.isActive(entity);
+for (let i = 0; i < list.count; i++) {
+  const entity = list.entities[i]!; // packed handle — identity APIs
+  const slot = list.indices[i]!;    // storage slot — SoA partitions
 }
-```
 
-`queryList` returns a borrowed, pooled view, not a stable snapshot. The result is valid only until the next world mutation, query invalidation, or `world.refresh()`. Read `entities` / `indices` only for entries `0 <= i < count`; callers that need stable entity IDs must explicitly opt into allocation:
+// Borrowed views are valid until the next mutation / refresh.
+// Need a take-home box? Opt into allocation:
+world.entities.querySnapshot(q);
+world.entities.toArray(list);
 
-```typescript
-const snapshot = world.entities.querySnapshot(positionQuery);
-const copied = world.entities.toArray(world.entities.queryList(positionQuery));
-```
-
-Other borrowed hot-path iterators follow the same rule:
-
-```typescript
-const active = world.entities.getActive();
-const owners = world.components.getOwners(positionComponent);
-const changed = world.components.getChanged(positionComponent);
-```
-
-Stable convenience snapshots are available for setup code, tools, debugging, and tests:
-
-```typescript
-const activeSnapshot = world.entities.getActiveSnapshot();
-const ownerSnapshot = world.components.getOwnersSnapshot(positionComponent);
-const changedSnapshot = world.components.getChangedSnapshot(positionComponent);
-```
-
-We can also access entities which have entered or exited the query since the last `world.refresh()`:
-
-```typescript
-const entered = world.archetypes.queryEntered(positionQuery);
-const exited = world.archetypes.queryExited(positionQuery);
+world.archetypes.queryEntered(q);
+world.archetypes.queryExited(q);
 ```
 
 ### Systems
 
-Systems are functions which use queries to modify entity properties.
+Where the work happens. Author with keyed component maps for typed instance
+records. Callbacks receive a borrowed `BorrowedEntityList` — same shape as
+`queryList`, same zero-alloc manners.
 
-It is recommended (but not necessary) that all data mutation take place inside a system.
-
-Author systems with `new System` and keyed component maps in `new Query`. The callback receives a typed component instance record:
-
-```typescript
-const movementSystem = new System({
-  name: "movementSystem",
+```ts
+const movement = new System({
+  name: "movement",
   query: new Query({
-    all: { position: positionComponent, velocity: velocityComponent },
+    all: { position: Position, velocity: Velocity },
+    include: { facing: Facing },
+    none: { hidden: Hidden },
   }),
   callback: (components, entities, dt: number) => {
-    const { position, velocity } = components;
-    const positionStorage = position.storage.partitions;
-    const velocityStorage = velocity.storage.partitions;
-
+    const { x, y } = components.position.storage.partitions;
     for (let i = 0; i < entities.count; i++) {
-      const slot = entities.indices[i];
-      positionStorage.x[slot] += velocityStorage.x[slot] * dt;
-      positionStorage.y[slot] += velocityStorage.y[slot] * dt;
+      const slot = entities.indices[i]!;
+      x[slot]! += 1 * dt;
+      // components.hidden is intentionally unavailable — filtered out of the bowl
     }
   },
 });
+
+const run = world.systems.create(movement);
+run(1 / 60);
 ```
 
-System callbacks receive a borrowed `BorrowedEntityList`, the same dense view returned by `world.entities.queryList(...)`. This is a breaking migration from iterator-style callbacks. Existing callback loops should change from:
+Array-based `QuerySpec` / dynamic callbacks still work for stringy, late-bound
+code — cast instances before touching concrete partitions.
 
-```typescript
-for (const entity of entities) {
-  // ...
-}
-```
+### Checkpoints, rollback, schema
 
-to:
+Save a slice. Speculate. Undo. Hash a recipe for later.
 
-```typescript
-for (let i = 0; i < entities.count; i++) {
-  const entity = entities.entities[i]; // packed handle
-  const slot = entities.indices[i]; // SoA slot
-  // ...
-}
-```
-
-`world.entities.query(...)` remains available as a convenience iterator API outside the system hot path.
-
-`any` components are OR filters and are also exposed in the callback record. `include` components are exposed without filtering membership. `none` components are query filters only:
-
-```typescript
-const renderSystem = new System({
-  name: "renderSystem",
-  query: new Query({
-    all: { position: positionComponent },
-    any: { sprite: spriteComponent },
-    include: { facing: facingComponent },
-    none: { hidden: hiddenComponent },
-  }),
-  callback: (components, entities) => {
-    components.position; // ComponentInstance<Vec2>
-    components.sprite; // ComponentInstance<Sprite>
-    components.facing; // ComponentInstance<FacingValue, FacingStorage>
-    // components.hidden is intentionally unavailable here.
-    for (let i = 0; i < entities.count; i++) {
-      const entity = entities.entities[i];
-      const slot = entities.indices[i];
-      if (components.facing.has(entity)) {
-        const dir = components.facing.storage.partitions.dir[slot];
-      }
-      // render...
-    }
-  },
-});
-```
-
-#### Dynamic compatibility
-
-Array-based `QuerySpec` values and `SystemCallback` remain supported for dynamic string/query based code. Dynamic component records intentionally expose unknown schemas, so cast or narrow a component instance before touching concrete storage properties:
-
-```typescript
-const positionSystem = new System({
-  name: "positionSystem",
-  query: positionQuery,
-  callback: (components, entities) => {
-    const position = components.position as ComponentInstance<Vec2>;
-    const { x, y } = position.storage.partitions;
-    for (let i = 0; i < entities.count; i++) {
-      const slot = entities.indices[i];
-      x[slot] += 1;
-      y[slot] += 1;
-    }
-  },
-});
-```
-
-Once created a system can be registered with the world:
-
-```typescript
-const systemInstance = world.systems.create(positionSystem);
-```
-
-Once registered, systems are then called like normal functions:
-
-```typescript
-systemInstance();
-```
-
-### Checkpoints, rollback, and schema tooling
-
-Capture a component subset for save/debug tooling:
-
-```typescript
-const checkpoint = world.captureCheckpoint([entity], positionComponent, healthComponent);
+```ts
+const checkpoint = world.captureCheckpoint([entity], Position);
 world.applyCheckpoint(checkpoint);
-```
 
-Speculative simulation uses a full-world rollback point:
-
-```typescript
-import { captureWorldRollbackPoint, commitWorldRollbackPoint, restoreWorldRollbackPoint } from "@phughesmcr/miski";
+import {
+  captureWorldRollbackPoint,
+  restoreWorldRollbackPoint,
+} from "@phughesmcr/miski";
 
 const point = captureWorldRollbackPoint(world);
-// mutate...
-restoreWorldRollbackPoint(world, point); // or commitWorldRollbackPoint(world, point)
-```
+restoreWorldRollbackPoint(world, point);
 
-Schema helpers compile storage shapes and produce a stable FNV hash:
-
-```typescript
 import { compileComponentSchema, componentSchemaHash } from "@phughesmcr/miski";
 
-const schema = compileComponentSchema({
-  Position: { x: Float32Array, y: Float32Array },
-});
-const hash = componentSchemaHash({
-  Position: { x: Float32Array, y: Float32Array },
-});
+compileComponentSchema({ Position: { x: Float32Array, y: Float32Array } });
+componentSchemaHash({ Position: { x: Float32Array, y: Float32Array } });
 ```
 
-`world.queryRevision(query)` returns a monotonically increasing token that bumps when any component in the query is written.
+`world.queryRevision(query)` bumps when any component in the query is written —
+a little ding every time the batter changes.
+
+---
+
+## Performance
+
+Sweet doesn't mean soft. Miski is tuned for Deno game-loop workloads where
+**frame time** and **GC pressure** matter more than winning a synthetic
+leaderboard.
+
+Local tasting notes — Deno 2.9.4, aarch64 macOS:
+
+| Path | Result |
+| --- | ---: |
+| `isActive` / `entityHas` | ~6.5 ns |
+| Direct typed-array write + `markChanged` | ~9.6 ns |
+| Cached dense `queryList` | ~946 ns |
+| Add/remove data component | ~121 ns |
+| Archetype move (common gameplay) | ~334 ns |
+| Bulk add/remove data — 7,168 entities | ~93 ns/entity |
+| Spawn/despawn 128 via `createWith` | ~60 µs |
+| Game frame (move + query + refresh) | ~6.8 µs |
+
+Hot entity, ownership, direct-write, cached query, changed/owner iteration, and
+bulk transition paths are **effectively allocation-free** in steady state
+(`deno task bench:gc`). A representative game-frame path allocates
+~56 B/iter — a nibble, not a feast.
+
+Figures are illustrative local snapshots, not CI throughput gates. Absolute
+timings vary by machine and workload. Being the fastest ECS on the web is
+explicitly **not** a project goal. We'd rather be consistently delicious.
+
+```bash
+deno task bench          # throughput
+deno task bench:memory   # retained heap / ArrayBuffer
+deno task bench:gc       # allocation budgets (also in CI)
+deno task bench:all
+```
+
+---
+
+## Development
+
+Miski uses **Deno 2.x** for local validation and CI. Kitchen rules and floor
+plans live in [`CONTRIBUTING.md`](./CONTRIBUTING.md).
+
+```bash
+deno task ci      # fmt · lint · types · tests · docs · publish dry-run
+deno task prep    # format + lint + typecheck
+deno task test
+deno task demo
+deno task demo:cli
+```
+
+House style in brief: prefer `.storage.partitions` for SoA access; index typed
+arrays by slot (`entityIndex` / `queryList` `indices`), not packed handles;
+keep comments ASCII-only in `src/`.
+
+---
 
 ## Contributing
 
-Contributions are welcome and encouraged. The aim of the project is performance - both in terms of speed and GC allocation pressure.
+Pull requests, issues, and feature ideas are all welcome — bring your appetite.
+The performance bar is **speed and GC pressure** on real gameplay paths; see
+`bench/` for the tasting suite.
 
-The benchmark suite covers the gameplay paths ECS users usually care about: world setup, repeated-add versus bundle spawn/despawn lifecycle, multi-component destroy cleanup, archetype transitions, direct writes with manual changed marking, allocation-free reads, included-component render loops, owner and changed iteration, cached and invalidated queries, zero-alloc bulk component transitions, entered/exited query tracking, 64-component worlds, plain TypeScript data-layout baselines, system updates, and whole-frame loops. It also has dedicated internal manager/cache throughput coverage plus retained memory and GC allocation budget checks. Run public and internal throughput benchmarks with:
+Please run `deno task ci` before a PR (`bench:gc` is part of CI). For
+performance-sensitive changes, also run `deno task bench` and ideally
+`deno task bench:all`.
 
-```bash
-deno task bench
-```
-
-Run individual throughput suites with:
-
-```bash
-deno task bench:user
-deno task bench:internal
-```
-
-Retained memory usage is measured separately because it uses V8's exposed GC hook to stabilize heap and ArrayBuffer measurements:
-
-```bash
-deno task bench:memory
-```
-
-GC allocation pressure is measured separately because it requires V8's exposed GC hook and budget checks:
-
-```bash
-deno task bench:gc
-```
-
-Please run `deno task ci` before opening a PR. For performance-sensitive changes, also run `deno task bench` and `deno task bench:all`.
-
-## Feature Requests
-
-Feature requests are welcome and invited. Please open an issue on Github to make a request.
+---
 
 ## Acknowledgements
 
-Miski is inspired by [ape-ecs](https://github.com/fritzy/ape-ecs), [BECSY](https://github.com/LastOliveGames/becsy), [bitECS](https://github.com/NateTheGreatt/bitECS), [ECSY](https://github.com/ecsyjs/ecsy), [Geotic](https://github.com/ddmills/geotic), [HECS](https://github.com/gohyperr/hecs), [Wolf ECS](https://github.com/EnderShadow8/wolf-ecs), and [Structurae](https://github.com/zandaqo/structurae).
+Standing on the shoulders of sweet giants:
+[ape-ecs](https://github.com/fritzy/ape-ecs),
+[BECSY](https://github.com/LastOliveGames/becsy),
+[bitECS](https://github.com/NateTheGreatt/bitECS),
+[ECSY](https://github.com/ecsyjs/ecsy),
+[Geotic](https://github.com/ddmills/geotic),
+[HECS](https://github.com/gohyperr/hecs),
+[Wolf ECS](https://github.com/EnderShadow8/wolf-ecs), and
+[Structurae](https://github.com/zandaqo/structurae).
+
+---
 
 ## License
 
-Miski is released under the MIT license. See `LICENSE` for further details.
-
-&copy; 2024 The Miski Authors. All rights reserved.
-
-See `AUTHORS.md` for author details.
+[MIT](./LICENSE) — free as candy on a counter.
+© 2024 [The Miski Authors](./AUTHORS.md)
