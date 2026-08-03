@@ -79,6 +79,10 @@ export type {
   CompiledComponentSchema,
   ComponentSchema,
   ComponentsFromSchemaMap,
+  RegistryFromMaps,
   SchemaComponentMap,
+  TagMap,
+  TagsFromMap,
+  TagSpec,
 } from "@/schema/schema.ts";
 export type { EcsWorldConfig, SpawnSpec, StorageFromMap } from "@/world/ecs-world.ts";

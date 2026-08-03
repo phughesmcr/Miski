@@ -84,6 +84,42 @@ Deno.test("createEcsWorld spawn and storage access", async () => {
   assertEquals(ecs.storage.Position.get(entity, "y"), 5, "spawn writes y");
 });
 
+Deno.test("createEcsWorld tags spawn, ownership, and collisions", async () => {
+  const ecs = createEcsWorld({
+    capacity: 16,
+    components: {
+      Position: { x: Float32Array, y: Float32Array },
+    },
+    tags: {
+      Player: true,
+      Hero: { maxEntities: 1 },
+    },
+  });
+  await ecs.init();
+
+  const player = ecs.spawn({ Position: { x: 1, y: 2 }, Player: true, Hero: true });
+  assert(ecs.world.components.entityHas(ecs.components.Player, player), "Player tag attached");
+  assert(ecs.world.components.entityHas(ecs.components.Hero, player), "Hero tag attached");
+  assertStrictEquals(ecs.storage.Player.partitions, null, "tag storage has no partitions");
+
+  assertThrows(
+    () => ecs.spawn({ Position: { x: 0, y: 0 }, Hero: true }),
+    RangeError,
+    "can only be added to 1",
+  );
+
+  assertThrows(
+    () =>
+      createEcsWorld({
+        capacity: 8,
+        components: { Player: { x: Float32Array } },
+        tags: { Player: true },
+      }),
+    Error,
+    "collides with a component name",
+  );
+});
+
 Deno.test("compileComponentSchema hash is stable for equivalent maps", () => {
   const left = compileComponentSchema({
     Health: { hp: Uint16Array, maxHp: Uint16Array },
@@ -94,6 +130,36 @@ Deno.test("compileComponentSchema hash is stable for equivalent maps", () => {
     Health: { maxHp: Uint16Array, hp: Uint16Array },
   });
   assertStrictEquals(left.schemaHash, right, "schema hash ignores key order");
+});
+
+Deno.test("compileComponentSchema hash includes tags and maxEntities", () => {
+  const withPlayer = compileComponentSchema(
+    { Position: { x: Float32Array, y: Float32Array } },
+    { Player: true, Hero: { maxEntities: 1 } },
+  );
+  const reordered = componentSchemaHash(
+    { Position: { x: Float32Array, y: Float32Array } },
+    { Hero: { maxEntities: 1 }, Player: true },
+  );
+  assertStrictEquals(withPlayer.schemaHash, reordered, "tag key order does not change hash");
+
+  const uncappedHero = componentSchemaHash(
+    { Position: { x: Float32Array, y: Float32Array } },
+    { Player: true, Hero: true },
+  );
+  assert(
+    withPlayer.schemaHash !== uncappedHero,
+    "maxEntities changes the schema hash",
+  );
+
+  const noTags = componentSchemaHash({ Position: { x: Float32Array, y: Float32Array } });
+  assert(withPlayer.schemaHash !== noTags, "adding tags changes the schema hash");
+  assertStrictEquals(withPlayer.tagMap.Player, true, "compiled tagMap preserves true");
+  assertEquals(
+    withPlayer.tagMap.Hero,
+    { maxEntities: 1 },
+    "compiled tagMap preserves maxEntities",
+  );
 });
 
 Deno.test("canonicalizeStoredValue coerces through typed storage", () => {

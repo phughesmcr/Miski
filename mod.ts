@@ -208,13 +208,22 @@
  *   components: {
  *     Position: { x: Float32Array, y: Float32Array },
  *   },
+ *   tags: {
+ *     Player: true,
+ *   },
  * });
  * await game.init();
- * const entity = game.spawn({ Position: { x: 0, y: 0 } });
+ * const entity = game.spawn({ Position: { x: 0, y: 0 }, Player: true });
  * game.storage.Position.get(entity, "x");
  *
- * const hash = componentSchemaHash({ Position: { x: Float32Array, y: Float32Array } });
- * const schema = compileComponentSchema({ Position: { x: Float32Array, y: Float32Array } });
+ * const hash = componentSchemaHash(
+ *   { Position: { x: Float32Array, y: Float32Array } },
+ *   { Player: true },
+ * );
+ * const schema = compileComponentSchema(
+ *   { Position: { x: Float32Array, y: Float32Array } },
+ *   { Player: true },
+ * );
  *
  * const point = captureWorldRollbackPoint(world);
  * // mutate...
@@ -302,6 +311,7 @@ export type {
   PartitionStorage,
   QueryEntityList,
   QuerySpec,
+  RegistryFromMaps,
   Schema,
   SchemaComponentMap,
   SchemaOrNull,
@@ -316,6 +326,9 @@ export type {
   SystemRecord,
   SystemSpec,
   TagComponentSpec,
+  TagMap,
+  TagsFromMap,
+  TagSpec,
   TypedArray,
   TypedArrayConstructor,
   TypedQuerySpec,

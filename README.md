@@ -144,12 +144,17 @@ const game = createEcsWorld({
     Position: { x: Float32Array, y: Float32Array },
     Health: { hp: Uint16Array, maxHp: Uint16Array },
   },
+  tags: {
+    Player: true,
+    Hero: { maxEntities: 1 },
+  },
 });
 
 await game.init();
 const e = game.spawn({
   Position: { x: 0, y: 0 },
   Health: { hp: 10, maxHp: 10 },
+  Player: true,
 });
 game.storage.Position.get(e, "x");
 ```
