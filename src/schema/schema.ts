@@ -1,6 +1,6 @@
 import { Component } from "@/component/component.ts";
 import type { ComponentSpec, DynamicComponent } from "@/types/component.ts";
-import type { ComponentValue, TypedArrayConstructor } from "@/types/partitions.ts";
+import type { ComponentValue, SchemaProperty, TypedArrayConstructor } from "@/types/partitions.ts";
 
 const FNV_OFFSET = 0xcbf29ce484222325n;
 const FNV_PRIME = 0x100000001b3n;
@@ -16,6 +16,35 @@ const CONSTRUCTOR_TAGS = new Map<TypedArrayConstructor, string>([
   [Float32Array, "f32"],
   [Float64Array, "f64"],
 ]);
+
+/**
+ * Name a reusable component storage shape from a schema object.
+ *
+ * Prefer defining the schema once (via {@link defineComponentSchema}), then aliasing:
+ * ```ts
+ * const vec2 = defineComponentSchema({ x: Float32Array, y: Float32Array });
+ * type Vec2 = ComponentSchema<typeof vec2>;
+ * ```
+ *
+ * Avoids hand-writing `Float32ArrayConstructor` while keeping explicit typed-array
+ * control in the schema value. Readonly from `const` inference is stripped so
+ * storage shapes stay writable through proxies and public APIs.
+ */
+export type ComponentSchema<S extends Record<string, SchemaProperty>> = {
+  -readonly [K in keyof S]: S[K];
+};
+
+/**
+ * Capture a component schema object with precise constructor types.
+ *
+ * Use with {@link ComponentSchema} when you want a named storage alias, or pass
+ * the result straight into `new Component({ schema })`.
+ */
+export function defineComponentSchema<const S extends Record<string, SchemaProperty>>(
+  schema: S,
+): ComponentSchema<S> {
+  return schema;
+}
 
 /** Component property maps keyed by component name. */
 export type SchemaComponentMap = Record<string, Record<string, TypedArrayConstructor>>;

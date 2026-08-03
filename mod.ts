@@ -17,14 +17,13 @@
  *
  * @example Create Components
  * ```ts
- * // Schema uses typed-array constructors (storage shape).
- * type Vec2 = { x: Float32ArrayConstructor; y: Float32ArrayConstructor };
- * const positionComponent = new Component<Vec2>({
+ * // Schema uses typed-array constructors (storage shape). Name it without
+ * // hand-writing Float32ArrayConstructor:
+ * const vec2 = defineComponentSchema({ x: Float32Array, y: Float32Array });
+ * type Vec2 = ComponentSchema<typeof vec2>;
+ * const positionComponent = new Component({
  *   name: "position",
- *   schema: {
- *     x: Float32Array,
- *     y: Float32Array,
- *   },
+ *   schema: vec2,
  * });
  * ```
  *
@@ -252,7 +251,12 @@ export { asSlotIndex, entityGeneration, entityIndex, MAX_WORLD_CAPACITY, packEnt
 
 // --- Tooling ---
 export { canonicalizeStoredValue } from "@/value/canonicalize.ts";
-export { compileComponentSchema, componentSchemaHash, mergeComponentSchemas } from "@/schema/schema.ts";
+export {
+  compileComponentSchema,
+  componentSchemaHash,
+  defineComponentSchema,
+  mergeComponentSchemas,
+} from "@/schema/schema.ts";
 export { createEcsWorld, createEcsWorldFromSchema, createEcsWorldWithSchema, EcsWorld } from "@/world/ecs-world.ts";
 
 export type {
@@ -284,6 +288,7 @@ export type {
   ComponentMap,
   ComponentPartitions,
   ComponentRecord,
+  ComponentSchema,
   ComponentsFromSchemaMap,
   ComponentSpec,
   ComponentValue,

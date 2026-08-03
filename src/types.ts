@@ -77,6 +77,7 @@ export type {
   CompiledComponentEntry,
   CompiledComponentProperty,
   CompiledComponentSchema,
+  ComponentSchema,
   ComponentsFromSchemaMap,
   SchemaComponentMap,
 } from "@/schema/schema.ts";

@@ -83,22 +83,15 @@ import { Component, Query, System, World } from "@phughesmcr/miski";
 One complete bite — components, world, spawn, system, frame:
 
 ```ts
-import { Component, Query, System, World } from "@phughesmcr/miski";
+import { Component, defineComponentSchema, Query, System, World } from "@phughesmcr/miski";
+import type { ComponentSchema } from "@phughesmcr/miski";
 
-type Vec2 = {
-  x: Float32ArrayConstructor;
-  y: Float32ArrayConstructor;
-};
+// Schema is the source of truth — pick the typed array you mean.
+const vec2 = defineComponentSchema({ x: Float32Array, y: Float32Array });
+type Vec2 = ComponentSchema<typeof vec2>;
 
-const Position = new Component<Vec2>({
-  name: "position",
-  schema: { x: Float32Array, y: Float32Array },
-});
-
-const Velocity = new Component<Vec2>({
-  name: "velocity",
-  schema: { x: Float32Array, y: Float32Array },
-});
+const Position = new Component({ name: "position", schema: vec2 });
+const Velocity = new Component({ name: "velocity", schema: vec2 });
 
 const world = new World({
   capacity: 1024,
@@ -194,24 +187,24 @@ The ingredients. Data (or tag) shapes registered on a world. Create once; reuse
 across as many worlds as you like.
 
 ```ts
-// Data component
-const Position = new Component<Vec2>({
-  name: "position",
-  schema: { x: Float32Array, y: Float32Array },
-});
+// Data component — schema picks the typed array; alias without *Constructor noise
+const vec2 = defineComponentSchema({ x: Float32Array, y: Float32Array });
+type Vec2 = ComponentSchema<typeof vec2>;
+const Position = new Component({ name: "position", schema: vec2 });
 
 // Tag (no schema) — a label, not a filling
-const Active = new Component<null>({ name: "active" });
+const Active = new Component({ name: "active" });
 
 // Owner cap — only one of these in the jar
-const Player = new Component<null>({ name: "player", maxEntities: 1 });
+const Player = new Component({ name: "player", maxEntities: 1 });
 
 // Narrower public writes than storage
 type FacingValue = { dir: 0 | 1 | 2 | 3 };
-type FacingStorage = { dir: Uint8ArrayConstructor };
+const facingSchema = defineComponentSchema({ dir: Uint8Array });
+type FacingStorage = ComponentSchema<typeof facingSchema>;
 const Facing = new Component<FacingValue, FacingStorage>({
   name: "facing",
-  schema: { dir: Uint8Array },
+  schema: facingSchema,
 });
 ```
 

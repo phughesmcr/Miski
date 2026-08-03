@@ -1,8 +1,9 @@
-import { Component, World } from "../mod.ts";
-import type { ComponentSpec, DynamicComponent, Entity } from "../mod.ts";
+import { Component, defineComponentSchema, World } from "../mod.ts";
+import type { ComponentSchema, ComponentSpec, DynamicComponent, Entity } from "../mod.ts";
 import { assert } from "./helpers.ts";
 
-export type Vec2 = { x: Float32ArrayConstructor; y: Float32ArrayConstructor };
+export const vec2Schema = defineComponentSchema({ x: Float32Array, y: Float32Array });
+export type Vec2 = ComponentSchema<typeof vec2Schema>;
 
 export function vec2Component(
   name = "position",
@@ -10,7 +11,7 @@ export function vec2Component(
 ): Component<Vec2> {
   return new Component<Vec2>({
     name,
-    schema: { x: Float32Array, y: Float32Array },
+    schema: vec2Schema,
     ...options,
   });
 }

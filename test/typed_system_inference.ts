@@ -2,11 +2,12 @@
  * Compile-only type inference checks. Included in `deno task check`, not `deno test`.
  * See test/README.md.
  */
-import { Component, Query, System, World } from "../mod.ts";
+import { Component, defineComponentSchema, Query, System, World } from "../mod.ts";
 import type {
   BorrowedEntityList,
   ComponentData,
   ComponentInstance,
+  ComponentSchema,
   DynamicComponentInstance,
   Entity,
   QuerySpec,
@@ -14,7 +15,7 @@ import type {
   SystemCallback,
   SystemInstance,
 } from "../mod.ts";
-import { tagComponent, type Vec2, vec2Component } from "./fixtures.ts";
+import { tagComponent, type Vec2, vec2Component, vec2Schema } from "./fixtures.ts";
 // @ts-expect-error AnySystemCallback is not exported from the public mod.ts surface.
 import type { AnySystemCallback } from "../mod.ts";
 
@@ -33,6 +34,17 @@ expectType<Component<null, null>>(inferredTag);
 expectType<Component<Vec2, Vec2>>(inferredPosition);
 // @ts-expect-error bare schema components are not tags
 expectType<Component<null>>(inferredPosition);
+
+// ComponentSchema / defineComponentSchema: name storage without *Constructor aliases
+type Vec2FromHelper = ComponentSchema<typeof vec2Schema>;
+expectType<Vec2>(null as unknown as Vec2FromHelper);
+const reusedSchemaPosition = new Component({ name: "reusedSchemaPosition", schema: vec2Schema });
+expectType<Component<Vec2, Vec2>>(reusedSchemaPosition);
+const intGrid = defineComponentSchema({ x: Int16Array, y: Int16Array });
+type IntGrid = ComponentSchema<typeof intGrid>;
+expectType<Int16ArrayConstructor>((null as unknown as IntGrid)["x"]);
+// @ts-expect-error schema helper preserves the chosen typed-array constructor
+expectType<Float32ArrayConstructor>((null as unknown as IntGrid)["x"]);
 
 const world = new World({ capacity: 8, components: [position, velocity, renderable, disabled] });
 
