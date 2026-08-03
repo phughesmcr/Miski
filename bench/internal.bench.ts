@@ -5,7 +5,7 @@ import { BooleanArray } from "@phughesmcr/booleanarray";
 import { ArchetypeManager } from "../src/archetype/archetype-manager.ts";
 import { Archetype } from "../src/archetype/archetype.ts";
 import { ComponentManager } from "../src/component/component-manager.ts";
-import { ReusableEntityIterator } from "../src/entity/entity.ts";
+import { asEntity, asSlotIndex, ReusableEntityIterator } from "../src/entity/entity.ts";
 import { EntityManager } from "../src/entity/entity-manager.ts";
 import { QueryCache } from "../src/query/query-cache.ts";
 import { QueryEntityResult, QueryResultPool } from "../src/query/query-pool.ts";
@@ -36,15 +36,16 @@ if (
 }
 
 for (let entity = 0; entity < MEDIUM_CAPACITY; entity++) {
-  componentManager.addInstanceToEntity(positionInstance, entity, { x: entity, y: entity * 0.5 });
+  const e = asEntity(entity);
+  componentManager.addInstanceToEntity(positionInstance, e, { x: entity, y: entity * 0.5 });
   if ((entity & 1) === 0) {
-    componentManager.addInstanceToEntity(velocityInstance, entity, { x: 1, y: -1 });
+    componentManager.addInstanceToEntity(velocityInstance, e, { x: 1, y: -1 });
   }
   if (entity % 4 === 0) {
-    componentManager.addInstanceToEntity(renderableInstance, entity);
+    componentManager.addInstanceToEntity(renderableInstance, e);
   }
   if (entity % 64 === 0) {
-    componentManager.addInstanceToEntity(sleepingInstance, entity);
+    componentManager.addInstanceToEntity(sleepingInstance, e);
   }
 }
 
@@ -78,7 +79,7 @@ const renderableQueryInstance = createQueryInstance(
 const archetypeBitfield = bitfieldFor(componentCount, positionInstance, velocityInstance);
 const movementArchetype = new Archetype(SMALL_CAPACITY, [positionInstance, velocityInstance], archetypeBitfield);
 for (let entity = 0; entity < SMALL_CAPACITY; entity++) {
-  movementArchetype.addEntity(entity);
+  movementArchetype.addEntity(asEntity(entity));
 }
 movementArchetype.refresh();
 
@@ -97,16 +98,17 @@ const archetypeQueryList = {
   count: 2,
 };
 for (let entity = 0; entity < SMALL_CAPACITY; entity++) {
-  archetypeManager.addComponent(entity, positionInstance);
-  if ((entity & 1) === 0) archetypeManager.addComponent(entity, velocityInstance);
-  if (entity % 4 === 0) archetypeManager.addComponent(entity, renderableInstance);
-  if (entity % 64 === 0) archetypeManager.addComponent(entity, sleepingInstance);
+  const e = asEntity(entity);
+  archetypeManager.addComponent(e, positionInstance);
+  if ((entity & 1) === 0) archetypeManager.addComponent(e, velocityInstance);
+  if (entity % 4 === 0) archetypeManager.addComponent(e, renderableInstance);
+  if (entity % 64 === 0) archetypeManager.addComponent(e, sleepingInstance);
 }
 archetypeManager.refresh(archetypeQueryList);
 
 const queryResult = new QueryEntityResult(MEDIUM_CAPACITY);
 for (let i = 0; i < MEDIUM_CAPACITY; i++) {
-  queryResult.add(i, i);
+  queryResult.add(asEntity(i), asSlotIndex(i));
 }
 
 const bulkTransitionEntities = new Uint32Array(SMALL_CAPACITY);
@@ -119,7 +121,7 @@ const queryCache = new QueryCache(queryResultPool);
 const cacheId = "position:velocity:!sleeping";
 {
   const result = queryCache.acquireEntitiesForFill(cacheId);
-  for (let i = 0; i < MEDIUM_CAPACITY; i += 2) result.add(i, i);
+  for (let i = 0; i < MEDIUM_CAPACITY; i += 2) result.add(asEntity(i), asSlotIndex(i));
   queryCache.storeEntities(cacheId, result);
 }
 queryCache.ensureComponents(cacheId, {
@@ -127,8 +129,8 @@ queryCache.ensureComponents(cacheId, {
   [velocityInstance.name]: velocityInstance,
 });
 
-const dataEntity = 128;
-const transitionEntity = 257;
+const dataEntity = asEntity(128);
+const transitionEntity = asEntity(257);
 const setData = { x: 1, y: -1 };
 const addData = { x: 2, y: -2 };
 
@@ -196,7 +198,7 @@ Deno.bench({
   name: "EntityManager isActive hot check",
   group: "internal entity manager",
   fn: () => {
-    numericSink ^= entityManager.isActive(512) ? 1 : 0;
+    numericSink ^= entityManager.isActive(asEntity(512)) ? 1 : 0;
   },
 });
 
@@ -345,8 +347,8 @@ Deno.bench({
   name: "Archetype add/remove entity bookkeeping",
   group: "internal archetypes",
   fn: () => {
-    transitionArchetype.addEntity(17);
-    transitionArchetype.removeEntity(17);
+    transitionArchetype.addEntity(asEntity(17));
+    transitionArchetype.removeEntity(asEntity(17));
     transitionArchetype.refresh();
   },
 });
@@ -386,8 +388,8 @@ Deno.bench({
   group: "internal archetype manager",
   baseline: true,
   fn: () => {
-    archetypeManager.addComponent(3, accelerationInstance);
-    archetypeManager.removeComponent(3, accelerationInstance);
+    archetypeManager.addComponent(asEntity(3), accelerationInstance);
+    archetypeManager.removeComponent(asEntity(3), accelerationInstance);
   },
 });
 
@@ -423,7 +425,7 @@ Deno.bench({
   fn: () => {
     const result = queryResultPool.acquireEntityResult();
     for (let i = 0; i < MEDIUM_CAPACITY; i++) {
-      result.add(i, i);
+      result.add(asEntity(i), asSlotIndex(i));
     }
     entitySink ^= result.count;
     queryResultPool.releaseEntityResult(result);
@@ -476,7 +478,7 @@ Deno.bench({
   fn: () => {
     queryCache.invalidate();
     const result = queryCache.acquireEntitiesForFill(cacheId);
-    for (let i = 0; i < MEDIUM_CAPACITY; i += 2) result.add(i, i);
+    for (let i = 0; i < MEDIUM_CAPACITY; i += 2) result.add(asEntity(i), asSlotIndex(i));
     queryCache.storeEntities(cacheId, result);
     entitySink ^= result.count;
   },

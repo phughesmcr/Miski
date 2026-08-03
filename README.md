@@ -47,7 +47,7 @@ for modern JavaScript — no leftovers.
 - More than 32 components per world; optional per-component owner caps
 - Define components, queries, and systems once — reuse across worlds
 - Query ops: `all` · `any` · `none` · non-filtering `include`
-- Dense zero-allocation `queryList` (`entities` + storage `indices`)
+- Dense zero-allocation `queryList` (`entities` + storage `slots`)
 - `world.frame(fn)` tick helper with entered / exited / changed tracking
 - Typed `createEcsWorld` named-map bootstrap
 - Atomic bundles and bulk add/remove for spawn, load, and query-wide transitions
@@ -115,7 +115,7 @@ const movement = new System({
     const vel = components.velocity.storage.partitions;
 
     for (let i = 0; i < entities.count; i++) {
-      const slot = entities.indices[i]!;
+      const slot = entities.slots[i]!;
       pos.x[slot]! += vel.x[slot]! * dt;
       pos.y[slot]! += vel.y[slot]! * dt;
     }
@@ -232,9 +232,14 @@ world.components.addToEntities(Active, list);
 ```
 
 **Hot-path writes** — when every nanosecond counts, go straight to the SoA
-partitions. Index by **storage slot**, not the packed entity handle. Use
-`entityIndex(entity)` or `queryList` `indices`. `.partitions` is a friendly
+partitions. House rule: **`slots` for storage, `entities` for identity.**
+Index partitions by storage slot (`entityIndex(entity)` or `queryList` /
+system `slots`), never by the packed handle. `.partitions` is a friendly
 alias of `.storage.partitions`.
+
+> Brands on `Entity` / `SlotIndex` catch swaps at function APIs (`destroy`,
+> `getAt`, …). Raw `TypedArray` indexing still accepts either number — do not
+> write `partitions.x[entity]`.
 
 ```ts
 import { entityIndex } from "@phughesmcr/miski";
@@ -296,8 +301,13 @@ const list = world.entities.queryList(q);     // dense borrowed view
 
 for (let i = 0; i < list.count; i++) {
   const entity = list.entities[i]!; // packed handle — identity APIs
-  const slot = list.indices[i]!;    // storage slot — SoA partitions
+  const slot = list.slots[i]!;    // storage slot — SoA partitions
 }
+
+// Zero-alloc dual walk (slot first):
+list.each((slot, entity) => {
+  /* partitions[slot] … destroy(entity) … */
+});
 
 // Borrowed views are valid until the next mutation / refresh.
 // Need a take-home box? Opt into allocation:
@@ -325,7 +335,7 @@ const movement = new System({
   callback: (components, entities, dt: number) => {
     const { x, y } = components.position.storage.partitions;
     for (let i = 0; i < entities.count; i++) {
-      const slot = entities.indices[i]!;
+      const slot = entities.slots[i]!;
       x[slot]! += 1 * dt;
       // components.hidden is intentionally unavailable — filtered out of the bowl
     }
@@ -416,9 +426,10 @@ deno task demo
 deno task demo:cli
 ```
 
-House style in brief: prefer `.storage.partitions` for SoA access; index typed
-arrays by slot (`entityIndex` / `queryList` `indices`), not packed handles;
-keep comments ASCII-only in `src/`.
+House style in brief: prefer `.storage.partitions` for SoA access; `slots` for
+storage, `entities` for identity; index typed arrays by slot
+(`entityIndex` / `queryList` `slots`), not packed handles; keep comments
+ASCII-only in `src/`.
 
 ---
 

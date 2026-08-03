@@ -100,7 +100,7 @@ const printScreen = () => {
 
   for (let i = 0; i < predatorCount; i++) {
     const entity = predators.entities[i]!;
-    const slot = predators.indices[i]!;
+    const slot = predators.slots[i]!;
     predatorEnergyDisplay += `[${entity}: ${energyStore.value[slot]!.toFixed(1)}] `;
   }
 
@@ -228,7 +228,7 @@ const gatherPositions = (query: Query): number => {
   const list = world.entities.queryList(query);
   const count = list.count;
   for (let i = 0; i < count; i++) {
-    const slot = list.indices[i]!;
+    const slot = list.slots[i]!;
     scratchEntities[i] = list.entities[i]!;
     scratchX[i] = positionStore.x[slot]!;
     scratchY[i] = positionStore.y[slot]!;
@@ -408,7 +408,7 @@ const capVelocity = (vx: number, vy: number): { x: number; y: number } => {
 // SYSTEMS
 // ############################################################################
 
-// Systems receive a dense BorrowedEntityList: use `.indices` (slots) for SoA,
+// Systems receive a dense BorrowedEntityList: use `.slots` for SoA,
 // and `.entities` (packed handles) for identity APIs like destroy / isActive.
 
 // Predator AI: Chase nearest prey
@@ -423,7 +423,7 @@ const predatorAISystem = new System({
     const preyCount = gatherPositions(preyQuery);
 
     for (let i = 0; i < entities.count; i++) {
-      const slot = entities.indices[i]!;
+      const slot = entities.slots[i]!;
       const px = positionX[slot]!;
       const py = positionY[slot]!;
       const { index, distance: nearestDistance } = findNearestInScratch(
@@ -465,7 +465,7 @@ const preyAISystem = new System({
     const predatorCount = gatherPositions(predatorQuery);
 
     for (let i = 0; i < entities.count; i++) {
-      const slot = entities.indices[i]!;
+      const slot = entities.slots[i]!;
       const px = positionX[slot]!;
       const py = positionY[slot]!;
       const { index, distance: nearestDistance } = findNearestInScratch(
@@ -505,11 +505,11 @@ const separationSystem = new System({
     const velocityX = components.velocity.storage.partitions.x;
     const velocityY = components.velocity.storage.partitions.y;
     const count = entities.count;
-    const indices = entities.indices;
+    const slots = entities.slots;
 
     // Snapshot positions into scratch (same pattern as cross-query gathers).
     for (let i = 0; i < count; i++) {
-      const slot = indices[i]!;
+      const slot = slots[i]!;
       scratchX[i] = positionX[slot]!;
       scratchY[i] = positionY[slot]!;
     }
@@ -536,7 +536,7 @@ const separationSystem = new System({
 
       if (neighborCount === 0) continue;
 
-      const slot = indices[i]!;
+      const slot = slots[i]!;
       const dx = separationX * dt * SEPARATION_FORCE;
       const dy = separationY * dt * SEPARATION_FORCE;
       const capped = capVelocity(velocityX[slot]! + dx, velocityY[slot]! + dy);
@@ -558,7 +558,7 @@ const movementSystem = new System({
     const velocityY = components.velocity.storage.partitions.y;
 
     for (let i = 0; i < entities.count; i++) {
-      const slot = entities.indices[i]!;
+      const slot = entities.slots[i]!;
       let x = positionX[slot]! + velocityX[slot]! * dt;
       let y = positionY[slot]! + velocityY[slot]! * dt;
       let vx = velocityX[slot]!;
@@ -603,7 +603,7 @@ const renderPredatorSystem = new System({
     const energyValue = components.energy.storage.partitions.value;
 
     for (let i = 0; i < entities.count; i++) {
-      const slot = entities.indices[i]!;
+      const slot = entities.slots[i]!;
       const energyPercent = (energyValue[slot]! / PREDATOR_MAX_ENERGY) * 100;
       const char = energyPercent < 30 ?
         PREDATOR_CHAR_LOW :
@@ -630,7 +630,7 @@ const renderPreySystem = new System({
     const prevY = components.previousPosition.storage.partitions.y;
 
     for (let i = 0; i < entities.count; i++) {
-      const slot = entities.indices[i]!;
+      const slot = entities.slots[i]!;
       placeOnGrid(
         interpolatePosition(prevX[slot]!, positionX[slot]!, alpha),
         interpolatePosition(prevY[slot]!, positionY[slot]!, alpha),
@@ -653,7 +653,7 @@ const collisionSystem = new System({
     let destroyCount = 0;
 
     for (let i = 0; i < entities.count; i++) {
-      const slot = entities.indices[i]!;
+      const slot = entities.slots[i]!;
       const px = positionX[slot]!;
       const py = positionY[slot]!;
 
@@ -689,7 +689,7 @@ const predatorEnergySystem = new System({
 
     for (let i = 0; i < entities.count; i++) {
       const entity = entities.entities[i]!;
-      const slot = entities.indices[i]!;
+      const slot = entities.slots[i]!;
       let value = energyValue[slot]! - PREDATOR_ENERGY_LOSS_PER_SECOND * dt;
 
       if (!Number.isFinite(value)) {
@@ -728,7 +728,7 @@ const preyReproductionSystem = new System({
 
     // Snapshot before any spawn: queryList views are invalidated by world mutations.
     for (let i = 0; i < preyCount; i++) {
-      const slot = entities.indices[i]!;
+      const slot = entities.slots[i]!;
       scratchEntities[i] = entities.entities[i]!;
       scratchX[i] = positionX[slot]!;
       scratchY[i] = positionY[slot]!;
@@ -785,7 +785,7 @@ const updatePreviousPositionSystem = new System({
     const prevY = components.previousPosition.storage.partitions.y;
 
     for (let i = 0; i < entities.count; i++) {
-      const slot = entities.indices[i]!;
+      const slot = entities.slots[i]!;
       prevX[slot] = positionX[slot]!;
       prevY[slot] = positionY[slot]!;
     }

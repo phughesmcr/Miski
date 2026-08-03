@@ -103,7 +103,7 @@ Deno.test("include exposes optional component instances without filtering render
       const facing = renderComponents.facing.partitions.dir;
       for (let i = 0; i < entities.count; i++) {
         const entity = entities.entities[i]!;
-        const slot = entities.indices[i]!;
+        const slot = entities.slots[i]!;
         const dir = renderComponents.facing.has(entity) ? facing[slot] : 0;
         const hp = renderComponents.health.has(entity) ? renderComponents.health.partitions.hp[slot] : 0;
         rendered.push(`${entity}:${posX[slot]},${posY[slot]}:${dir}:${hp}`);

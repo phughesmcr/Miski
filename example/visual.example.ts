@@ -282,7 +282,7 @@ const steeringSystem = world.systems.create(
         }
       }
 
-      const indices = drones.indices;
+      const slots = drones.slots;
       const count = drones.count;
       const positionX = components.position.storage.partitions.x;
       const positionY = components.position.storage.partitions.y;
@@ -296,7 +296,7 @@ const steeringSystem = world.systems.create(
       const brainDrag = components.brain.storage.partitions.drag;
 
       for (let i = 0; i < count; i++) {
-        const slot = indices[i]!;
+        const slot = slots[i]!;
         const x = positionX[slot]!;
         const y = positionY[slot]!;
         const team = visualTeam[slot]! | 0;
@@ -366,7 +366,7 @@ const movementSystem = world.systems.create(
     name: "movementSystem",
     query: movementQuery,
     callback: (components, movers, dt: number) => {
-      const indices = movers.indices;
+      const slots = movers.slots;
       const count = movers.count;
       const positionX = components.position.storage.partitions.x;
       const positionY = components.position.storage.partitions.y;
@@ -374,7 +374,7 @@ const movementSystem = world.systems.create(
       const velocityY = components.velocity.storage.partitions.y;
 
       for (let i = 0; i < count; i++) {
-        const slot = indices[i]!;
+        const slot = slots[i]!;
         let x = positionX[slot]! + velocityX[slot]! * dt;
         let y = positionY[slot]! + velocityY[slot]! * dt;
 
@@ -404,7 +404,7 @@ const lifetimeSystem = world.systems.create(
     name: "lifetimeSystem",
     query: sparkQuery,
     callback: (components, sparks, dt: number) => {
-      const indices = sparks.indices;
+      const slots = sparks.slots;
       const entities = sparks.entities;
       const count = sparks.count;
       const age = components.lifetime.storage.partitions.age;
@@ -416,7 +416,7 @@ const lifetimeSystem = world.systems.create(
       const velocityY = components.velocity.storage.partitions.y;
       let expiredCount = 0;
       for (let i = 0; i < count; i++) {
-        const slot = indices[i]!;
+        const slot = slots[i]!;
         const nextAge = age[slot]! + dt;
         age[slot] = nextAge;
         const progress = nextAge / ttl[slot]!;
@@ -522,10 +522,10 @@ const snapshot = (): string => {
   const entities = world.entities.queryList(renderQuery);
   const limit = Math.min(entities.count, renderedEntityLimit);
   const floats = entityFloatScratch;
-  const indices = entities.indices;
+  const slots = entities.slots;
   const entityIds = entities.entities;
   for (let i = 0; i < limit; i++) {
-    const slot = indices[i]!;
+    const slot = slots[i]!;
     const offset = i * 11;
     floats[offset] = positionStore.x[slot]!;
     floats[offset + 1] = positionStore.y[slot]!;

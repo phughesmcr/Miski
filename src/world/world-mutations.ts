@@ -3,6 +3,8 @@ import type { Component } from "@/component/component.ts";
 import type { ComponentInstance } from "@/component/component-instance.ts";
 import type { ComponentBundleCommitEntry, ComponentManager } from "@/component/component-manager.ts";
 import {
+  asEntity,
+  asSlotIndex,
   createEntityArray,
   createSlotArray,
   type Entity,
@@ -238,9 +240,9 @@ export class WorldMutations {
         if (
           this.#componentManager.addInstanceToEntity(
             instance,
-            this.#batchEntities[i]!,
+            asEntity(this.#batchEntities[i]!),
             data,
-            this.#batchSlots[i]!,
+            asSlotIndex(this.#batchSlots[i]!),
             true,
           )
         ) {
@@ -286,7 +288,7 @@ export class WorldMutations {
     try {
       let changedCount = 0;
       for (let i = 0; i < count; i++) {
-        if (this.#componentManager.removeInstanceFromEntity(instance, this.#batchEntities[i]!)) {
+        if (this.#componentManager.removeInstanceFromEntity(instance, asEntity(this.#batchEntities[i]!))) {
           changedCount++;
         }
       }
@@ -308,12 +310,12 @@ export class WorldMutations {
     }
 
     for (let i = 0; i < count; i++) {
-      const entity = entities.entities[i]!;
+      const entity = asEntity(entities.entities[i]!);
       if (!this.#entityManager.isActive(entity)) {
         this.#clearBatchEntities(i);
         throw new EntityNotFoundError(formatEntityNotActive(entity));
       }
-      const slot = entities.indices[i]!;
+      const slot = asSlotIndex(entities.slots[i]!);
       if (this.#batchSeen[slot] === 1) {
         this.#clearBatchEntities(i);
         throw new RangeError(`Duplicate entity ${entity} in batch entity list.`);

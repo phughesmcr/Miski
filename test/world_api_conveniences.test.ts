@@ -88,7 +88,7 @@ Deno.test("addToEntities reports zero ownership changes for a pure data upsert",
   const changed = world.components.addToEntities(position, {
     count: 2,
     entities: [first, second],
-    indices: [first, second],
+    slots: [first, second],
   }, { x: 9 });
 
   assertStrictEquals(changed, 0, "Expected no ownership changes");

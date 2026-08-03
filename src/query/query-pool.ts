@@ -1,28 +1,36 @@
 import { createEntityArray, createSlotArray, type EntityArray } from "@/entity/entity.ts";
 import { ReusableEntityIterator } from "@/entity/entity.ts";
-import type { Entity, EntityResultSink, SlotIndex } from "@/entity/entity.ts";
+import type {
+  BorrowedEntityIndices,
+  BorrowedEntityListEachFn,
+  BorrowedSlotIndices,
+  Entity,
+  EntityResultSink,
+  SlotIndex,
+} from "@/entity/entity.ts";
 
 /** Mutable pooled backing store for the public borrowed QueryEntityList view. */
 export class QueryEntityResult implements EntityResultSink {
   #iterator: ReusableEntityIterator;
+  #entityBuffer: Uint32Array;
+  #slotBuffer: EntityArray;
   count: number = 0;
   /** Packed entity handles for identity. */
-  readonly entities: Uint32Array;
-  /**
-   * Slot indices for SoA storage access.
-   * Alias kept as `indices` for hot-loop partition indexing.
-   */
-  readonly indices: EntityArray;
+  readonly entities: BorrowedEntityIndices;
+  /** Slot indices for SoA storage access. */
+  readonly slots: BorrowedSlotIndices;
 
   constructor(size: number) {
-    this.entities = createEntityArray(size);
-    this.indices = createSlotArray(size);
-    this.#iterator = new ReusableEntityIterator(this.entities);
+    this.#entityBuffer = createEntityArray(size);
+    this.#slotBuffer = createSlotArray(size);
+    this.entities = this.#entityBuffer as unknown as BorrowedEntityIndices;
+    this.slots = this.#slotBuffer as unknown as BorrowedSlotIndices;
+    this.#iterator = new ReusableEntityIterator(this.#entityBuffer);
   }
 
   add(entity: Entity, slot: SlotIndex): void {
-    this.entities[this.count] = entity;
-    this.indices[this.count] = slot;
+    this.#entityBuffer[this.count] = entity;
+    this.#slotBuffer[this.count] = slot;
     this.count++;
   }
 
@@ -35,6 +43,18 @@ export class QueryEntityResult implements EntityResultSink {
   }
 
   /**
+   * Zero-alloc dual walk: slot first (SoA), then packed handle (identity).
+   */
+  each(fn: BorrowedEntityListEachFn): void {
+    const entities = this.#entityBuffer;
+    const slots = this.#slotBuffer;
+    const count = this.count;
+    for (let i = 0; i < count; i++) {
+      fn(slots[i]! as SlotIndex, entities[i]! as Entity, i);
+    }
+  }
+
+  /**
    * Iterate the valid packed entity handles.
    *
    * Unlike {@link QueryEntityResult.iterate}, each call returns a fresh
@@ -42,7 +62,7 @@ export class QueryEntityResult implements EntityResultSink {
    */
   *[Symbol.iterator](): IterableIterator<Entity> {
     for (let i = 0; i < this.count; i++) {
-      yield this.entities[i]! as Entity;
+      yield this.#entityBuffer[i]! as Entity;
     }
   }
 }

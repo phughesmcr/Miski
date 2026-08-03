@@ -10,8 +10,10 @@
  * - **Tooling** - `createEcsWorld`, schema hash, checkpoints, rollback, canonicalize
  *
  * Prefer `.storage.partitions` for SoA access (`.partitions` is an alias).
- * Index typed arrays by storage slot via `entityIndex(entity)` or `queryList` `indices`,
- * not by the packed entity handle.
+ * House rule: `slots` for storage / partitions; `entities` for identity
+ * (`destroy`, `isActive`, attach). Index typed arrays via `entityIndex(entity)`
+ * or `queryList` `slots` — never with a packed handle. Brands catch swaps at
+ * function APIs; raw `TypedArray` indexing still accepts either number.
  *
  * ## Core
  *
@@ -128,7 +130,7 @@
  *   const view = world.entities.queryList(positionQuery);
  *   for (let i = 0; i < view.count; i++) {
  *     const entity = view.entities[i]!; // packed handle (identity / isActive)
- *     const slot = view.indices[i]!; // storage slot for .storage.partitions
+ *     const slot = view.slots[i]!; // storage slot for .storage.partitions
  *     console.log(entity, slot);
  *   }
  * });
@@ -171,7 +173,7 @@
  *     const positionX = position.storage!.partitions.x;
  *     for (let i = 0; i < entities.count; i++) {
  *       const entity = entities.entities[i]!;
- *       const slot = entities.indices[i]!;
+ *       const slot = entities.slots[i]!;
  *       position.proxy.entity = entity;
  *       if (facing.has(entity)) {
  *         const dir = facing.storage!.partitions.dir[slot];
@@ -256,7 +258,14 @@ export {
 } from "@/world/world.ts";
 export { isValidWorldSpec } from "@/world/utils.ts";
 export { isValidName } from "@/utils.ts";
-export { asSlotIndex, entityGeneration, entityIndex, MAX_WORLD_CAPACITY, packEntity } from "@/entity/entity.ts";
+export {
+  asEntity,
+  asSlotIndex,
+  entityGeneration,
+  entityIndex,
+  MAX_WORLD_CAPACITY,
+  packEntity,
+} from "@/entity/entity.ts";
 
 // --- Tooling ---
 export { canonicalizeStoredValue } from "@/value/canonicalize.ts";
@@ -282,6 +291,7 @@ export type {
   BorrowedEntityIndices,
   BorrowedEntityIterator,
   BorrowedEntityList,
+  BorrowedEntityListEachFn,
   BorrowedSlotIndices,
   CheckpointEntitySet,
   CompiledComponentEntry,

@@ -192,7 +192,7 @@ export async function populateMovementWorld(
       const vx = velocityStorage.partitions.x;
       const vy = velocityStorage.partitions.y;
       for (let i = 0; i < entities.count; i++) {
-        const slot = entities.indices[i]!;
+        const slot = entities.slots[i]!;
         px[slot] = (px[slot] ?? 0) + (vx[slot] ?? 0) * dt;
         py[slot] = (py[slot] ?? 0) + (vy[slot] ?? 0) * dt;
       }

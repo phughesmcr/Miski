@@ -2,13 +2,21 @@ export type {
   BorrowedEntityIndices,
   BorrowedEntityIterator,
   BorrowedEntityList,
+  BorrowedEntityListEachFn,
   BorrowedSlotIndices,
   Entity,
   EntityResultSink,
   QueryEntityList,
   SlotIndex,
 } from "@/entity/entity.ts";
-export { asSlotIndex, entityGeneration, entityIndex, MAX_WORLD_CAPACITY, packEntity } from "@/entity/entity.ts";
+export {
+  asEntity,
+  asSlotIndex,
+  entityGeneration,
+  entityIndex,
+  MAX_WORLD_CAPACITY,
+  packEntity,
+} from "@/entity/entity.ts";
 export type {
   ComponentConstructor,
   ComponentInstances,

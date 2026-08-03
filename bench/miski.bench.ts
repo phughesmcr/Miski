@@ -583,7 +583,7 @@ Deno.bench({
     let total = 0;
     for (let i = 0; i < result.count; i++) {
       const entity = result.entities[i]!;
-      const slot = result.indices[i]!;
+      const slot = result.slots[i]!;
       total += px[slot] ?? 0;
       if (healthInstance.has(entity)) total += current[slot] ?? 0;
       if (renderStateInstance.has(entity)) total += sprite[slot] ?? 0;

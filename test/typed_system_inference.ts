@@ -2,7 +2,7 @@
  * Compile-only type inference checks. Included in `deno task check`, not `deno test`.
  * See test/README.md.
  */
-import { Component, defineComponentSchema, Query, System, World } from "../mod.ts";
+import { Component, defineComponentSchema, entityIndex, Query, System, World } from "../mod.ts";
 import type {
   BorrowedEntityList,
   ComponentData,
@@ -61,7 +61,8 @@ const manualTypedSystem = new System({
     expectType<ComponentInstance<Vec2>>(components.velocity);
     expectType<ComponentInstance<null>>(components.renderable);
     expectType<BorrowedEntityList>(entities);
-    entities.indices[0];
+    entities.slots[0];
+    entities.each((_slot, _entity, _i) => {});
     expectType<number>(dt);
 
     components.position.partitions.x;
@@ -77,6 +78,19 @@ const manualTypedInstance = world.systems.create(manualTypedSystem);
 manualTypedInstance(1 / 60);
 // @ts-expect-error system instance arguments are inferred from the callback.
 manualTypedInstance("fast");
+
+// -- Entity vs SlotIndex brands at function APIs (not TypedArray indexing).
+{
+  const entity = 0 as Entity;
+  const slot = entityIndex(entity);
+  const positionInstance = world.components.require(position);
+  positionInstance.getAt(slot, "x");
+  // @ts-expect-error packed handles are not storage slots.
+  positionInstance.getAt(entity, "x");
+  // @ts-expect-error slots are not packed entity handles.
+  world.entities.destroy(slot);
+  world.entities.isActive(entity);
+}
 
 const stringPosition = world.components.getInstance("position");
 expectType<DynamicComponentInstance | undefined>(stringPosition);
@@ -101,7 +115,7 @@ expectType<SystemInstance<SystemCallback> | undefined>(namedSystem);
 // @ts-expect-error string component lookup cannot infer a schema for data writes.
 world.components.addToEntity("position", 0 as Entity, { x: 1, y: 2 });
 // @ts-expect-error string component lookup cannot infer a schema for batch data writes.
-world.components.addToEntities("position", { count: 0, entities: [], indices: [] }, { x: 1, y: 2 });
+world.components.addToEntities("position", { count: 0, entities: [], slots: [] }, { x: 1, y: 2 });
 // @ts-expect-error tag components do not accept data payloads.
 world.components.addToEntity(renderable, 0 as Entity, {});
 // @ts-expect-error tag components do not have settable component data.
@@ -130,7 +144,7 @@ const compatibilityCallback: SystemCallback = (components, entities, label) => {
   if (!dynamicPosition) return;
   expectType<ComponentInstance<SchemaOrNull>>(dynamicPosition);
   expectType<BorrowedEntityList>(entities);
-  entities.indices[0];
+  entities.slots[0];
   expectType<unknown>(label);
 
   // @ts-expect-error dynamic compatibility callbacks do not expose concrete schema properties without narrowing.

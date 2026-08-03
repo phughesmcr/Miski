@@ -6,13 +6,13 @@
  * inspect or construct handles. Prefer {@link SlotIndex} values from query
  * lists for SoA partition access.
  */
-export type Entity = number;
+export type Entity = number & { readonly __entityBrand: unique symbol };
 
 /**
  * Raw entity slot index in `[0, capacity)`. Use with partition access and
  * {@link ComponentInstance.getAt} / `setAt` in hot loops.
  */
-export type SlotIndex = number;
+export type SlotIndex = number & { readonly __slotBrand: unique symbol };
 
 /** Integer array type used for dense entity/slot ID lists. */
 export type EntityArray = Uint8Array | Uint16Array | Uint32Array;
@@ -40,23 +40,30 @@ export type BorrowedSlotIndices = {
 /**
  * The minimal dense entity list shape accepted by batch mutation APIs.
  *
- * Anywhere this type appears as an input, a plain `{ count, entities, indices }`
- * object is sufficient; iteration support is not required.
+ * Anywhere this type appears as an input, a plain `{ count, entities, slots }`
+ * object is sufficient (including `Uint32Array` buffers); iteration support is
+ * not required. Values are re-branded at the mutation boundary.
  *
  * - {@link QueryEntityList.entities}: packed handles for identity / `isActive`
- * - {@link QueryEntityList.indices}: slot indices for partition / storage access
+ * - {@link QueryEntityList.slots}: slot indices for partition / storage access
  */
 export type QueryEntityList = {
-  /** Number of valid entries in {@link QueryEntityList.entities} / {@link QueryEntityList.indices}. */
+  /** Number of valid entries in {@link QueryEntityList.entities} / {@link QueryEntityList.slots}. */
   readonly count: number;
-  /** Borrowed packed entity handles. Read only entries `0 <= i < count`. */
-  readonly entities: BorrowedEntityIndices;
+  /** Packed entity handles. Read only entries `0 <= i < count`. */
+  readonly entities: { readonly [index: number]: number };
   /**
-   * Borrowed slot indices for SoA storage access.
-   * Prefer `partitions.x[list.indices[i]]` in hot loops.
+   * Slot indices for SoA storage access.
+   * Prefer `partitions.x[list.slots[i]]` in hot loops.
    */
-  readonly indices: BorrowedSlotIndices;
+  readonly slots: { readonly [index: number]: number };
 };
+
+/**
+ * Callback for zero-alloc dual iteration over a borrowed entity list.
+ * Argument order is storage-primary: slot, then packed handle.
+ */
+export type BorrowedEntityListEachFn = (slot: SlotIndex, entity: Entity, i: number) => void;
 
 /**
  * A borrowed, reusable view of entity IDs.
@@ -66,11 +73,24 @@ export type QueryEntityList = {
  * snapshot is required.
  *
  * Iterable for convenience (`for (const entity of list)` yields packed handles);
- * use the `count`/`indices` pair directly in hot loops to avoid iterator overhead.
+ * use the `count`/`slots` pair directly in hot loops to avoid iterator overhead.
+ *
+ * **House rule:** `slots` for storage / partitions; `entities` for identity.
+ * Brands catch swaps at function APIs; raw `TypedArray` indexing still accepts
+ * either number — do not index partitions with a packed handle.
  */
 export type BorrowedEntityList = QueryEntityList & {
+  /** Borrowed packed entity handles (branded). */
+  readonly entities: BorrowedEntityIndices;
+  /** Borrowed slot indices (branded). */
+  readonly slots: BorrowedSlotIndices;
   /** Iterate the valid packed entity handles `0 <= i < count`. */
   [Symbol.iterator](): IterableIterator<Entity>;
+  /**
+   * Zero-alloc dual walk: slot first (SoA), then packed handle (identity).
+   * Prefer this or an explicit `slots[i]` loop over indexing partitions with handles.
+   */
+  each(fn: BorrowedEntityListEachFn): void;
 };
 
 // 16 + 15 = 31 bits used; the high bit stays zero so packed handles stay <= 0x7fffffff.
@@ -83,8 +103,8 @@ const GEN_MASK = (1 << GEN_BITS) - 1;
 export const MAX_WORLD_CAPACITY: number = 1 << INDEX_BITS;
 
 /** Raw slot index encoded in the low bits of a packed entity handle. */
-export function entityIndex(entity: Entity | number): number {
-  return (entity as number) & INDEX_MASK;
+export function entityIndex(entity: Entity | number): SlotIndex {
+  return ((entity as number) & INDEX_MASK) as SlotIndex;
 }
 
 /** Generation encoded in the high bits of a packed entity handle. */
@@ -94,12 +114,17 @@ export function entityGeneration(entity: Entity | number): number {
 
 /** Pack a slot index and generation into an entity handle (gen is masked to GEN_BITS). */
 export function packEntity(index: number, gen: number): Entity {
-  return (((gen & GEN_MASK) << INDEX_BITS) | (index & INDEX_MASK));
+  return (((gen & GEN_MASK) << INDEX_BITS) | (index & INDEX_MASK)) as Entity;
 }
 
-/** Identity cast kept for API symmetry with packed handles. */
+/** Brand a raw slot index for APIs that require {@link SlotIndex}. */
 export function asSlotIndex(index: number): SlotIndex {
-  return index;
+  return index as SlotIndex;
+}
+
+/** Brand a raw packed handle for APIs that require {@link Entity}. */
+export function asEntity(entity: number): Entity {
+  return entity as Entity;
 }
 
 /** Pack a storage slot into an entity handle at API / query edges. */
@@ -125,6 +150,7 @@ export function createSlotArray(capacity: number, length: number = capacity): En
 export class ReusableEntityIterator implements IterableIterator<Entity> {
   count: number;
   cursor: number;
+  /** Packed entity handle buffer (not storage slots). */
   indices: Uint32Array;
   result: IteratorResult<Entity>;
 

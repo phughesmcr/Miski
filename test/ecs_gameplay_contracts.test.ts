@@ -1,9 +1,18 @@
 /// <reference lib="deno.ns" />
 
-import { Component, entityIndex, EntityNotFoundError, Query, System, World, WorldStateError } from "../mod.ts";
+import {
+  asEntity,
+  Component,
+  entityIndex,
+  EntityNotFoundError,
+  Query,
+  System,
+  World,
+  WorldStateError,
+} from "../mod.ts";
+import type { BorrowedEntityIterator, BorrowedEntityList, ComponentInstance, QueryEntityList } from "../mod.ts";
 import { assert, assertEquals, assertRejects, assertStrictEquals, assertThrows, ids, listIds } from "./helpers.ts";
 import { createEntity, createTestWorld, tagComponent, type Vec2, vec2Component } from "./fixtures.ts";
-import type { BorrowedEntityIterator, BorrowedEntityList, ComponentInstance, Entity, QueryEntityList } from "../mod.ts";
 
 type Health = { current: Uint16ArrayConstructor; max: Uint16ArrayConstructor };
 
@@ -168,7 +177,7 @@ Deno.test("proxy rejects out-of-range entity targets before mutating component s
 
   assertThrows(
     () => {
-      proxy.entity = 8;
+      proxy.entity = asEntity(8);
     },
     EntityNotFoundError,
     "Entity 8 is out of range.",
@@ -189,7 +198,7 @@ Deno.test("manual typed query and system expose keyed component instances in cal
     query: new Query({ all: { position, velocity } }),
     callback: (components, entities, dt: number) => {
       for (let i = 0; i < entities.count; i++) {
-        const slot = entities.indices[i]!;
+        const slot = entities.slots[i]!;
         components.position.partitions.x[slot] = components.position.partitions.x[slot]! +
           components.velocity.partitions.x[slot]! * dt;
         components.position.partitions.y[slot] = components.position.partitions.y[slot]! +
@@ -245,7 +254,7 @@ Deno.test("systems receive matching component instances, borrowed entity lists, 
       const velocityStore = velocityInstance.storage;
       assert(positionStore !== null && velocityStore !== null, "Expected movement components to have storage");
       for (let i = 0; i < entities.count; i++) {
-        const slot = entities.indices[i]!;
+        const slot = entities.slots[i]!;
         const nextX = (positionStore.partitions.x[slot] ?? Number.NaN) +
           (velocityStore.partitions.x[slot] ?? Number.NaN) * dt;
         const nextY = (positionStore.partitions.y[slot] ?? Number.NaN) +
@@ -290,7 +299,7 @@ Deno.test("typed systems receive keyed component records and borrowed entity lis
   world.components.addToEntity(position, first, { x: 1, y: 2 });
   world.components.addToEntity(velocity, first, { x: 3, y: 4 });
 
-  const seen: Entity[][] = [];
+  const seen: number[][] = [];
   const movement = new System({
     name: "typedMovement",
     query: new Query({ all: { position, velocity } }),
@@ -301,7 +310,7 @@ Deno.test("typed systems receive keyed component records and borrowed entity lis
       const velocityStorage = components.velocity.storage;
       assert(positionStorage !== null && velocityStorage !== null, "Expected data components to have storage");
       for (let i = 0; i < entities.count; i++) {
-        const slot = entities.indices[i]!;
+        const slot = entities.slots[i]!;
         positionStorage.partitions.x[slot] = (positionStorage.partitions.x[slot] ?? 0) +
           (velocityStorage.partitions.x[slot] ?? 0) * dt;
       }
@@ -546,15 +555,15 @@ Deno.test("snapshot helpers return stable arrays across retained and nested use"
   assertEquals(world.entities.querySnapshot(moving), [first, second], "Expected fresh snapshot to see current state");
 });
 
-Deno.test("queryList indices are readonly at the public type boundary", () => {
+Deno.test("queryList slots are readonly at the public type boundary", () => {
   const assertReadonlyIndices = (list: QueryEntityList): void => {
     // @ts-expect-error QueryEntityList exposes a borrowed read-only index view.
-    list.indices[0] = 1;
+    list.slots[0] = 1;
   };
   const assertBorrowedSubtype = (list: BorrowedEntityList, iterator: BorrowedEntityIterator): void => {
     // Borrowed (iterable) lists remain valid inputs for the minimal batch list shape.
     const minimal: QueryEntityList = list;
-    minimal.indices[0];
+    minimal.slots[0];
     iterator.next();
   };
   void assertReadonlyIndices;
@@ -687,27 +696,35 @@ Deno.test("world state guards make lifecycle misuse explicit", async () => {
   const position = vec2Component();
   const world = new World({ capacity: 8, components: [position] });
   const query = new Query({ all: [position] });
-  const emptyList = { count: 0, entities: new Uint32Array(0), indices: new Uint32Array(0) };
+  const emptyList = { count: 0, entities: new Uint32Array(0), slots: new Uint32Array(0) };
 
   assertThrows(() => world.refresh(), WorldStateError, "World has not been initialized");
   assertThrows(() => world.entities.create(), WorldStateError, "World has not been initialized");
-  assertThrows(() => world.entities.destroy(0), WorldStateError, "World has not been initialized");
+  assertThrows(() => world.entities.destroy(asEntity(0)), WorldStateError, "World has not been initialized");
   assertThrows(() => ids(world.entities.query(query)), WorldStateError, "World has not been initialized");
   assertThrows(() => world.entities.queryList(query), WorldStateError, "World has not been initialized");
-  assertThrows(() => world.components.addToEntity(position, 0), WorldStateError, "World has not been initialized");
+  assertThrows(
+    () => world.components.addToEntity(position, asEntity(0)),
+    WorldStateError,
+    "World has not been initialized",
+  );
   assertThrows(
     () => world.components.addToEntities(position, emptyList),
     WorldStateError,
     "World has not been initialized",
   );
-  assertThrows(() => world.components.removeFromEntity(position, 0), WorldStateError, "World has not been initialized");
+  assertThrows(
+    () => world.components.removeFromEntity(position, asEntity(0)),
+    WorldStateError,
+    "World has not been initialized",
+  );
   assertThrows(
     () => world.components.removeFromEntities(position, emptyList),
     WorldStateError,
     "World has not been initialized",
   );
   assertThrows(
-    () => world.components.setEntityData(position, 0, { x: 1, y: 2 }),
+    () => world.components.setEntityData(position, asEntity(0), { x: 1, y: 2 }),
     WorldStateError,
     "World has not been initialized",
   );
@@ -722,17 +739,21 @@ Deno.test("world state guards make lifecycle misuse explicit", async () => {
   await world.destroy();
   assertThrows(() => world.refresh(), WorldStateError, "World has already been destroyed");
   assertThrows(() => world.entities.create(), WorldStateError, "World has already been destroyed");
-  assertThrows(() => world.entities.destroy(0), WorldStateError, "World has already been destroyed");
+  assertThrows(() => world.entities.destroy(asEntity(0)), WorldStateError, "World has already been destroyed");
   assertThrows(() => ids(world.entities.query(query)), WorldStateError, "World has already been destroyed");
   assertThrows(() => world.entities.queryList(query), WorldStateError, "World has already been destroyed");
-  assertThrows(() => world.components.addToEntity(position, 0), WorldStateError, "World has already been destroyed");
+  assertThrows(
+    () => world.components.addToEntity(position, asEntity(0)),
+    WorldStateError,
+    "World has already been destroyed",
+  );
   assertThrows(
     () => world.components.addToEntities(position, emptyList),
     WorldStateError,
     "World has already been destroyed",
   );
   assertThrows(
-    () => world.components.removeFromEntity(position, 0),
+    () => world.components.removeFromEntity(position, asEntity(0)),
     WorldStateError,
     "World has already been destroyed",
   );
@@ -742,7 +763,7 @@ Deno.test("world state guards make lifecycle misuse explicit", async () => {
     "World has already been destroyed",
   );
   assertThrows(
-    () => world.components.setEntityData(position, 0, { x: 1, y: 2 }),
+    () => world.components.setEntityData(position, asEntity(0), { x: 1, y: 2 }),
     WorldStateError,
     "World has already been destroyed",
   );
@@ -808,7 +829,7 @@ Deno.test("captured lifecycle API methods observe the current world state", asyn
 
   assertThrows(() => createEntity(), WorldStateError, "World has already been destroyed");
   assertThrows(() => queryList(query), WorldStateError, "World has already been destroyed");
-  assertThrows(() => addToEntity(position, 0), WorldStateError, "World has already been destroyed");
+  assertThrows(() => addToEntity(position, asEntity(0)), WorldStateError, "World has already been destroyed");
   assertThrows(() => queryComponents(query), WorldStateError, "World has already been destroyed");
   assertThrows(() => queryEntities(query), WorldStateError, "World has already been destroyed");
   assertThrows(() => createSystem(system), WorldStateError, "World has already been destroyed");
@@ -879,7 +900,7 @@ Deno.test("high-volume game-loop smoke test keeps query results deterministic un
   const sleeping = tagComponent("sleeping");
   const world = await createTestWorld([position, velocity, sleeping], 2048);
 
-  const expectedMovers: number[] = [];
+  const expectedMovers: ReturnType<typeof createEntity>[] = [];
   for (let i = 0; i < 1024; i++) {
     const entity = createEntity(world);
     world.components.addToEntity(position, entity, { x: i, y: -i });

@@ -1,18 +1,19 @@
 /// <reference lib="deno.ns" />
 
 import {
+  asEntity,
   Component,
   ComponentDataError,
   ComponentOwnershipError,
+  entityIndex,
   EntityNotFoundError,
   NotRegisteredError,
   Query,
   WorldStateError,
 } from "../mod.ts";
-import { entityIndex } from "../mod.ts";
+import type { QueryEntityList } from "../mod.ts";
 import { ArchetypeManager } from "../src/archetype/archetype-manager.ts";
 import { EntityManager } from "../src/entity/entity-manager.ts";
-import type { QueryEntityList } from "../mod.ts";
 import { assert, assertEquals, assertRejects, assertThrows, ids } from "./helpers.ts";
 import { createEntity, createTestWorld, tagComponent, vec2Component } from "./fixtures.ts";
 
@@ -109,7 +110,11 @@ Deno.test("failed refresh blocks lifecycle APIs like destroy errors", async () =
     assertThrows(() => world.refresh(), Error, "refresh failed");
     assertEquals(world.state, "error", "Expected failed refresh to move world into error state");
     assertThrows(() => world.entities.create(), WorldStateError, "World has encountered an error");
-    assertThrows(() => world.components.addToEntity(position, 0), WorldStateError, "World has encountered an error");
+    assertThrows(
+      () => world.components.addToEntity(position, asEntity(0)),
+      WorldStateError,
+      "World has encountered an error",
+    );
     assertThrows(() => ids(world.entities.query(query)), WorldStateError, "World has encountered an error");
   } finally {
     ArchetypeManager.prototype.refresh = originalRefresh;
@@ -229,7 +234,12 @@ Deno.test("public component writes reject invalid data instead of silently disca
   const inheritedData = Object.create({ x: 99, z: 3 }) as Partial<{ x: number; y: number }>;
   world.components.setEntityData(position, entity, inheritedData);
   assertThrows(
-    () => world.components.addToEntities(renderableAsData, { count: 1, entities: [entity], indices: [entity] }, {}),
+    () =>
+      world.components.addToEntities(
+        renderableAsData,
+        { count: 1, entities: [entity], slots: [entityIndex(entity)] },
+        {},
+      ),
     ComponentDataError,
     "has no data storage",
   );
@@ -394,9 +404,9 @@ Deno.test("components cannot be added to inactive entities", async () => {
   const position = vec2Component();
   const world = await createTestWorld([position], 8);
 
-  assert(!world.entities.isActive(3), "Expected entity 3 to be inactive");
+  assert(!world.entities.isActive(asEntity(3)), "Expected entity 3 to be inactive");
   assertThrows(
-    () => world.components.addToEntity(position, 3, { x: 1, y: 2 }),
+    () => world.components.addToEntity(position, asEntity(3), { x: 1, y: 2 }),
     EntityNotFoundError,
     "Entity 3 is not active.",
   );
@@ -416,7 +426,7 @@ Deno.test("component removal rejects inactive entities and stays idempotent for 
   world.components.addToEntity(velocity, owner, { x: 5, y: 6 });
 
   assertThrows(
-    () => world.components.removeFromEntity(velocity, 7),
+    () => world.components.removeFromEntity(velocity, asEntity(7)),
     EntityNotFoundError,
     "Entity 7 is not active.",
   );
@@ -428,7 +438,7 @@ Deno.test("component removal rejects inactive entities and stays idempotent for 
   const list: QueryEntityList = {
     count: 2,
     entities: new Uint32Array([owner, nonOwner]),
-    indices: new Uint32Array([owner, nonOwner]),
+    slots: new Uint32Array([owner, nonOwner]),
   };
   assertEquals(world.components.removeFromEntities(velocity, list), 1, "Expected only actual owners to be removed");
   assert(!world.components.entityHas(velocity, owner), "Expected owner to lose velocity");
@@ -445,7 +455,7 @@ Deno.test("batch component removal rejects inactive entities without partial mut
   const list: QueryEntityList = {
     count: 2,
     entities: new Uint32Array([first, 7]),
-    indices: new Uint32Array([first, 7]),
+    slots: new Uint32Array([first, 7]),
   };
   assertThrows(
     () => world.components.removeFromEntities(position, list),
@@ -470,7 +480,7 @@ Deno.test("batch component add capacity failures leave all state unchanged", asy
   const list: QueryEntityList = {
     count: 2,
     entities: new Uint32Array([first, second]),
-    indices: new Uint32Array([first, second]),
+    slots: new Uint32Array([first, second]),
   };
   assertThrows(
     () => world.components.addToEntities(player, list),
@@ -495,7 +505,7 @@ Deno.test("batch component transitions reject duplicate entity targets before mu
   const duplicateList: QueryEntityList = {
     count: 2,
     entities: new Uint32Array([entity, entity]),
-    indices: new Uint32Array([entity, entity]),
+    slots: new Uint32Array([entity, entity]),
   };
   assertThrows(
     () => world.components.addToEntities(velocity, duplicateList, { x: 3, y: 4 }),
@@ -520,12 +530,12 @@ Deno.test("public component data APIs reject inactive, unregistered, tag, and no
   world.components.addToEntity(tag, owner);
 
   assertThrows(
-    () => world.components.getEntityData(position, 7),
+    () => world.components.getEntityData(position, asEntity(7)),
     EntityNotFoundError,
     "Entity 7 is not active.",
   );
   assertThrows(
-    () => world.components.setEntityData(position, 7, { x: 3, y: 4 }),
+    () => world.components.setEntityData(position, asEntity(7), { x: 3, y: 4 }),
     EntityNotFoundError,
     "Entity 7 is not active.",
   );

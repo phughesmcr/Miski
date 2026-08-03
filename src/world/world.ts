@@ -4,7 +4,7 @@ import { VERSION } from "@/constants.ts";
 import { ArchetypeManager } from "@/archetype/archetype-manager.ts";
 import { ComponentManager, type ComponentManagerSnapshot } from "@/component/component-manager.ts";
 import { EntityManager } from "@/entity/entity-manager.ts";
-import { type Entity, entityIndex, type QueryEntityList } from "@/entity/entity.ts";
+import { asEntity, type Entity, entityIndex, type QueryEntityList } from "@/entity/entity.ts";
 import {
   ComponentDataError,
   ComponentOwnershipError,
@@ -121,7 +121,7 @@ export class World {
   #copyEntityList(list: QueryEntityList): Entity[] {
     const result = new Array<Entity>(list.count);
     for (let i = 0; i < list.count; i++) {
-      result[i] = list.entities[i]!;
+      result[i] = asEntity(list.entities[i]!);
     }
     return result;
   }
