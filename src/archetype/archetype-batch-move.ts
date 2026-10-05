@@ -1,6 +1,8 @@
 import { createSlotArray, type EntityArray } from "@/entity/entity.ts";
 import type { DynamicComponentInstance } from "@/types/component.ts";
 import type { Archetype } from "./archetype.ts";
+import type { MembershipTracker } from "./membership-tracker.ts";
+import type { TransitionWindow } from "./transition-window.ts";
 
 /** Resolves the archetype reached by adding or removing one component. */
 export type TransitionArchetypeGetter = (
@@ -35,7 +37,15 @@ export class ArchetypeBatchMove {
   /** Reusable target archetypes for batch component transitions */
   #bulkTargets: Archetype[];
 
-  constructor(capacity: number) {
+  /** Records each moved slot's window-start archetype */
+  #window: TransitionWindow;
+
+  /** Records archetypes whose population crossed the empty boundary */
+  #tracker: MembershipTracker;
+
+  constructor(capacity: number, window: TransitionWindow, tracker: MembershipTracker) {
+    this.#window = window;
+    this.#tracker = tracker;
     this.#bulkSlots = createSlotArray(capacity);
     this.#bulkGroupCounts = [];
     this.#bulkGroupOffsets = [];
@@ -125,9 +135,15 @@ export class ArchetypeBatchMove {
       const target = targets[group]!;
       const offset = offsets[group]!;
       const groupSize = counts[group] ?? 0;
-      source.removeEntities(this.#bulkSlots, offset, groupSize);
-      target.addEntities(this.#bulkSlots, offset, groupSize);
       const end = offset + groupSize;
+      for (let i = offset; i < end; i++) {
+        this.#window.touch(this.#bulkSlots[i]!, source);
+      }
+      source.removeEntities(this.#bulkSlots, offset, groupSize);
+      if (source.getPopulationCount() === 0) this.#tracker.markEmptied(source);
+      const targetWasEmpty = target.getPopulationCount() === 0;
+      target.addEntities(this.#bulkSlots, offset, groupSize);
+      if (targetWasEmpty) this.#tracker.markPopulated(target);
       for (let i = offset; i < end; i++) {
         entityArchetypes[this.#bulkSlots[i]!] = target;
         this.#bulkSlots[i] = 0;

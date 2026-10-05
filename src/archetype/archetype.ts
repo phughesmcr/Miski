@@ -12,16 +12,16 @@ const ENTERED_LISTED = 1 << 1;
 const ENTITY_ACTIVE = 1 << 2;
 const EXITED_LISTED = 1 << 5;
 
-function* activeSlotIterator(
+/** Walk the slots listed as entered this window that are still entered (not since departed). */
+function* enteredSlotIterator(
   list: EntityArray,
   flags: Uint8Array,
-  activeMask: number,
   count: number,
   packSlot: PackSlot,
 ): IterableIterator<Entity> {
   for (let i = 0; i < count; i++) {
     const slot = list[i]!;
-    if (hasFlag(flags, slot, activeMask)) yield packSlot(slot);
+    if (hasFlag(flags, slot, ENTERED_ACTIVE)) yield packSlot(slot);
   }
 }
 
@@ -98,6 +98,24 @@ export class Archetype {
   /** The Archetype's unique identifier */
   readonly id: string;
 
+  /**
+   * Creation order within its {@link ArchetypeManager}; query archetype lists stay sorted by it.
+   * @internal
+   */
+  registryIndex: number = -1;
+
+  /**
+   * Queued for query-list insertion after becoming non-empty.
+   * @internal
+   */
+  populatedPending: boolean = false;
+
+  /**
+   * Queued for query-list pruning after becoming empty.
+   * @internal
+   */
+  emptiedPending: boolean = false;
+
   /** Cached remove-component transition edges by component instance id */
   readonly removeTransitions: Archetype[];
 
@@ -119,10 +137,12 @@ export class Archetype {
   ) {
     this.#entityCapacity = capacity;
     this.#packSlot = packSlot;
-    bitfield = bitfield ??
-      (components.length > 0 ?
-        BooleanArray.fromObjects(components.length, ID_KEY, components) :
-        new BooleanArray(Math.max(transitionCapacity, 1)));
+    if (bitfield === undefined) {
+      // Component ids are world-registry positions, so size by the highest id rather than the count.
+      let size = Math.max(transitionCapacity, 1);
+      for (let i = 0; i < components.length; i++) size = Math.max(size, components[i]!.id + 1);
+      bitfield = BooleanArray.fromObjects(size, ID_KEY, components);
+    }
     this.bitfield = bitfield;
     this.id = bitfield.buffer.toString();
     this.components = components;
@@ -241,20 +261,6 @@ export class Archetype {
   }
 
   /**
-   * Create a new Archetype from an existing Archetype
-   * @returns A new Archetype
-   */
-  clone(): Archetype {
-    return new Archetype(
-      this.#entityCapacity,
-      this.components,
-      this.bitfield.clone(),
-      this.#packSlot,
-      this.#transitionCapacity,
-    );
-  }
-
-  /**
    * Get the number of entities currently associated with this Archetype
    * @returns The number of entities in the Archetype
    */
@@ -267,27 +273,17 @@ export class Archetype {
    * @returns An iterator of Entities which have entered the Archetype
    */
   getEntered(): IterableIterator<Entity> {
-    return activeSlotIterator(
-      this.#enteredList,
-      this.#flags,
-      ENTERED_ACTIVE,
-      this.#enteredListCount,
-      this.#packSlot,
-    );
+    return enteredSlotIterator(this.#enteredList, this.#flags, this.#enteredListCount, this.#packSlot);
   }
 
   /**
    * Get an iterator of Entities which inhabit this Archetype
    * @returns An iterator of Entities which inhabit the Archetype
    */
-  getEntities(): IterableIterator<Entity> {
-    return activeSlotIterator(
-      this.#entityList,
-      this.#flags,
-      ENTITY_ACTIVE,
-      this.#populationCount,
-      this.#packSlot,
-    );
+  *getEntities(): IterableIterator<Entity> {
+    for (let i = 0; i < this.#populationCount; i++) {
+      yield this.#packSlot(this.#entityList[i]!);
+    }
   }
 
   /**
@@ -367,14 +363,6 @@ export class Archetype {
    */
   isDirty(): boolean {
     return this.#enteredCount > 0 || this.#exitedListCount > 0;
-  }
-
-  /**
-   * Check if a given Archetype has no entities associated with it
-   * @returns `true` if this Archetype is empty
-   */
-  isEmpty(): boolean {
-    return this.#populationCount === 0;
   }
 
   /**

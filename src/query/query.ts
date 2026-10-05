@@ -191,13 +191,30 @@ class QueryRuntime<TComponents extends ComponentMap = UntypedQueryComponents> im
   declare readonly $inferComponents: ComponentInstances<TComponents>;
 
   /**
-   * Compose a new Query from an array of Queries
+   * Compose a new Query that matches entities matching every input query (their logical `AND`).
+   *
+   * `all`, `none` and `include` components are unioned. A query holds a single `any` group, so
+   * at most one input may have a non-empty `any`: it passes through unchanged and stays an `AND`
+   * with the other inputs' requirements. Unioning several `any` groups would turn
+   * `(A | B) AND (C | D)` into `A | B | C | D`, so that case is rejected instead.
+   * Components from an `any` group are exposed to callbacks but are not guaranteed to be present.
    * @param queries - The Queries to compose
    * @returns A new Query object
+   * @throws {SpecError} if more than one input has a non-empty `any` group, or the combined spec is invalid
    */
   static compose<const TQueries extends readonly Query<ComponentMap>[]>(
     queries: TQueries,
   ): Query<ComposedQueryComponents<TQueries>> {
+    let anyGroups = 0;
+    for (let i = 0; i < queries.length; i++) {
+      if (queries[i]!.anyEntries.length > 0) anyGroups++;
+    }
+    if (anyGroups > 1) {
+      throw new SpecError(
+        "Query.compose accepts at most one input query with a non-empty `any` group; " +
+          "merging several would change (A | B) AND (C | D) into A | B | C | D.",
+      );
+    }
     const allEntries = queries.flatMap((query) => query.allEntries);
     const anyEntries = queries.flatMap((query) => query.anyEntries);
     const noneEntries = queries.flatMap((query) => query.noneEntries);
@@ -276,7 +293,10 @@ class QueryRuntime<TComponents extends ComponentMap = UntypedQueryComponents> im
 export type QueryComponents<TQuery> = TQuery extends Query<infer TComponents extends ComponentMap> ? TComponents :
   never;
 
-/** Component map produced by composing several typed queries. */
+/**
+ * Component map produced by composing several typed queries.
+ * Like any typed query, components from an `any` group are exposed to callbacks without a presence guarantee.
+ */
 export type ComposedQueryComponents<TQueries extends readonly Query<ComponentMap>[]> =
   QueryComponents<TQueries[number]> extends infer TUnion ?
     (TUnion extends unknown ? (value: TUnion) => void : never) extends (value: infer TIntersection) => void ?
@@ -295,7 +315,10 @@ export interface QueryConstructor {
     const TNone extends ComponentMap = Record<never, never>,
     const TInclude extends ComponentMap = Record<never, never>,
   >(spec: TypedQuerySpec<TAll, TAny, TNone, TInclude>): Query<TAll & TAny & TInclude>;
-  /** Compose multiple queries into one combined query. */
+  /**
+   * Compose queries into one that matches entities matching every input (logical `AND`).
+   * At most one input may have a non-empty `any` group; otherwise a {@link SpecError} is thrown.
+   */
   compose<const TQueries extends readonly Query<ComponentMap>[]>(
     queries: TQueries,
   ): Query<ComposedQueryComponents<TQueries>>;

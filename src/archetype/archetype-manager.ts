@@ -6,6 +6,51 @@ import type { DynamicComponentInstance } from "@/types/component.ts";
 import type { QueryInstance, QueryInstanceList } from "@/types/query.ts";
 import { Archetype } from "./archetype.ts";
 import { ArchetypeBatchMove, type TransitionArchetypeGetter } from "./archetype-batch-move.ts";
+import { MembershipTracker } from "./membership-tracker.ts";
+import { TransitionWindow, type TransitionWindowSnapshot } from "./transition-window.ts";
+
+/** Rollback copy of every archetype's entered/exited window plus per-entity window origins. */
+export type ArchetypeTransitionSnapshot = {
+  readonly archetypes: Map<Archetype, { entered: Entity[]; exited: Entity[] }>;
+  readonly window: TransitionWindowSnapshot;
+};
+
+/**
+ * Index of the first listed archetype whose registry index is not below `index`.
+ * Query archetype lists are kept sorted by registry index so incremental updates match a full rebuild.
+ */
+function lowerBound(query: QueryInstance, index: number): number {
+  const list = query.archetypes;
+  let low = 0;
+  let high = query.archetypeCount;
+  while (low < high) {
+    const mid = (low + high) >>> 1;
+    if (list[mid]!.registryIndex < index) low = mid + 1;
+    else high = mid;
+  }
+  return low;
+}
+
+/** Insert an archetype into a query's sorted archetype list if it is not already listed. */
+function listArchetype(query: QueryInstance, archetype: Archetype): void {
+  const list = query.archetypes;
+  const count = query.archetypeCount;
+  const position = lowerBound(query, archetype.registryIndex);
+  if (position < count && list[position] === archetype) return;
+  for (let i = count; i > position; i--) list[i] = list[i - 1]!;
+  list[position] = archetype;
+  query.archetypeCount = count + 1;
+}
+
+/** Remove an archetype from a query's sorted archetype list if it is listed. */
+function unlistArchetype(query: QueryInstance, archetype: Archetype): void {
+  const list = query.archetypes;
+  const count = query.archetypeCount;
+  const position = lowerBound(query, archetype.registryIndex);
+  if (position >= count || list[position] !== archetype) return;
+  for (let i = position; i < count - 1; i++) list[i] = list[i + 1]!;
+  query.archetypeCount = count - 1;
+}
 
 /** ArchetypeManager handles creation and allocation of Archetypes */
 export class ArchetypeManager {
@@ -24,11 +69,18 @@ export class ArchetypeManager {
   /** Number of components registered in the world (transition edge array size). */
   #componentCount: number;
 
-  /** Reusable cache for entity component lookup. */
-  #componentCache: Record<string, DynamicComponentInstance>;
+  /**
+   * Whether every query-to-archetype mapping must be rebuilt from scratch.
+   * Ordinary entity moves only queue the archetypes whose emptiness changed; this is reserved for
+   * initialization and bulk rewrites (rollback).
+   */
+  #membershipRebuildRequired: boolean;
 
-  /** Whether query-to-archetype mappings need to be rebuilt */
-  #queryMembershipDirty: boolean;
+  /** Archetypes whose population crossed the empty boundary since membership was last reconciled */
+  readonly #tracker: MembershipTracker = new MembershipTracker();
+
+  /** Archetype each entity occupied when the current refresh window began */
+  readonly #window: TransitionWindow;
 
   /** Dense archetype list parallel to {@link registry} (hot membership rebuilds). */
   readonly #archetypes: Archetype[] = [];
@@ -63,13 +115,13 @@ export class ArchetypeManager {
    * @param archetype - The archetype to register
    */
   #registerArchetype(archetypeId: string, archetype: Archetype): void {
+    archetype.registryIndex = this.#archetypeCount;
     this.registry.set(archetypeId, archetype);
     this.#archetypes[this.#archetypeCount++] = archetype;
   }
 
   /**
-   * Move an entity to a
-   * new archetype and mark query membership dirty.
+   * Move an entity to a new archetype, recording its window origin and any emptiness change.
    * @param entity - The entity to move
    * @param archetype - The target archetype
    * @returns The target archetype
@@ -79,10 +131,14 @@ export class ArchetypeManager {
     const oldArchetype = this.entityArchetypes[slot];
     if (oldArchetype === archetype) return archetype;
 
-    oldArchetype?.removeEntity(entity, slot);
+    this.#window.touch(slot, oldArchetype);
+    if (oldArchetype !== undefined) {
+      oldArchetype.removeEntity(entity, slot);
+      if (oldArchetype.getPopulationCount() === 0) this.#tracker.markEmptied(oldArchetype);
+    }
     archetype.addEntity(entity, slot);
+    if (archetype.getPopulationCount() === 1) this.#tracker.markPopulated(archetype);
     this.entityArchetypes[slot] = archetype;
-    this.#queryMembershipDirty = true;
 
     return archetype;
   }
@@ -101,7 +157,7 @@ export class ArchetypeManager {
     instance: DynamicComponentInstance,
     add: boolean,
   ): number {
-    const moved = this.#batchMove.moveEntities(
+    return this.#batchMove.moveEntities(
       this.entityArchetypes,
       this.root,
       this.#getTransitionForBatch,
@@ -110,8 +166,6 @@ export class ArchetypeManager {
       instance,
       add,
     );
-    if (moved > 0) this.#queryMembershipDirty = true;
-    return moved;
   }
 
   /**
@@ -249,6 +303,42 @@ export class ArchetypeManager {
   }
 
   /**
+   * Add newly populated archetypes to the query lists they match.
+   * @param queries - Dense query list to update
+   * @param includeDirtyArchetypes - Also list empty archetypes whose entered/exited window is still open
+   */
+  #listPopulatedArchetypes(queries: QueryInstanceList, includeDirtyArchetypes: boolean): void {
+    const tracker = this.#tracker;
+    const queryArray = queries.queries;
+    const queryCount = queries.count;
+    for (let i = 0; i < tracker.populatedCount; i++) {
+      const archetype = tracker.populated[i]!;
+      if (archetype.getPopulationCount() === 0 && !(includeDirtyArchetypes && archetype.isDirty())) continue;
+      for (let q = 0; q < queryCount; q++) {
+        const query = queryArray[q]!;
+        if (archetype.isCandidate(query)) listArchetype(query, archetype);
+      }
+    }
+    tracker.clearPopulated();
+  }
+
+  /** Drop archetypes that emptied out from the query lists that still hold them. */
+  #unlistEmptiedArchetypes(queries: QueryInstanceList): void {
+    const tracker = this.#tracker;
+    const queryArray = queries.queries;
+    const queryCount = queries.count;
+    for (let i = 0; i < tracker.emptiedCount; i++) {
+      const archetype = tracker.emptied[i]!;
+      if (archetype.getPopulationCount() !== 0) continue;
+      for (let q = 0; q < queryCount; q++) {
+        const query = queryArray[q]!;
+        if (archetype.isCandidate(query)) unlistArchetype(query, archetype);
+      }
+    }
+    tracker.clearEmptied();
+  }
+
+  /**
    * Create a new ArchetypeManager
    * @param capacity - The maximum number of entities this manager can handle
    * @param componentCount - The number of components registered in the world
@@ -264,10 +354,10 @@ export class ArchetypeManager {
     this.#packSlot = packSlot;
     this.registry = new Map();
     this.entityArchetypes = new Array(capacity);
-    this.#componentCache = Object.create(null);
-    this.#queryMembershipDirty = true;
+    this.#membershipRebuildRequired = true;
     this.#singleQueryList = { queries: [], count: 0 };
-    this.#batchMove = new ArchetypeBatchMove(capacity);
+    this.#window = new TransitionWindow(capacity, packSlot);
+    this.#batchMove = new ArchetypeBatchMove(capacity, this.#window, this.#tracker);
     this.#getTransitionForBatch = (from, component, isAdd) => this.#getTransitionArchetype(from, component, isAdd);
 
     // Create root archetype with properly sized bitfield for components
@@ -321,32 +411,6 @@ export class ArchetypeManager {
   }
 
   /**
-   * Get the components associated with an entity
-   * @param entity - The entity to get the components for
-   * @returns A record of component instances
-   */
-  getEntityComponents(entity: Entity): Readonly<Record<string, DynamicComponentInstance>> {
-    // Clear cache
-    for (const key in this.#componentCache) {
-      delete this.#componentCache[key];
-    }
-
-    const archetype = this.getEntityArchetype(entity);
-    if (!archetype) return this.#componentCache;
-
-    // Reuse cache object
-    const components = archetype.components;
-    const len = components.length;
-    for (let i = 0; i < len; i++) {
-      const component = components[i];
-      if (component) {
-        this.#componentCache[component.name] = component;
-      }
-    }
-    return this.#componentCache;
-  }
-
-  /**
    * Called by `world.destroy()`
    *
    * Destroy the ArchetypeManager
@@ -365,9 +429,10 @@ export class ArchetypeManager {
     this.#requireEntitySlot(entity, slot);
     const archetype = this.entityArchetypes[slot];
     if (archetype !== undefined) {
+      this.#window.touch(slot, archetype);
       archetype.removeEntity(entity, slot);
+      if (archetype.getPopulationCount() === 0) this.#tracker.markEmptied(archetype);
       this.entityArchetypes[slot] = undefined;
-      this.#queryMembershipDirty = true;
     }
     return this;
   }
@@ -395,12 +460,12 @@ export class ArchetypeManager {
   }
 
   /**
-   * Check if the ArchetypeManager manages an Archetype
-   * @param archetype The Archetype
-   * @returns `true` if the ArchetypeManager manages the Archetype, `false` otherwise
+   * Get the archetype an entity occupied when the current refresh window began.
+   * @param entity The Entity
+   * @returns The archetype, or `undefined` if the entity did not exist at window start
    */
-  has(archetype: Archetype): boolean {
-    return this.registry.has(archetype.id);
+  getWindowOrigin(entity: Entity): Archetype | undefined {
+    return this.#window.originOf(entity);
   }
 
   /**
@@ -410,15 +475,6 @@ export class ArchetypeManager {
    */
   isEntityInRoot(entity: Entity): boolean {
     return this.getEntityArchetype(entity) === this.root;
-  }
-
-  /**
-   * Get the Archetypes associated with a QueryInstance
-   * @param query The QueryInstance
-   * @returns Matching archetypes, or undefined when the query has no matches
-   */
-  query(query: QueryInstance): QueryInstance | undefined {
-    return query.archetypeCount > 0 ? query : undefined;
   }
 
   /**
@@ -440,39 +496,42 @@ export class ArchetypeManager {
    * @returns this
    */
   refresh(queries: QueryInstanceList, retainTransitions: boolean = false): this {
-    if (this.#queryMembershipDirty) {
+    if (this.#membershipRebuildRequired) {
       this.#rebuildQueryMembership(queries, retainTransitions, !retainTransitions);
-      this.#queryMembershipDirty = false;
-    } else if (!retainTransitions) {
+      this.#membershipRebuildRequired = false;
+      this.#tracker.clearPopulated();
+      if (!retainTransitions) {
+        this.#tracker.clearEmptied();
+        this.#window.clear();
+      }
+      return this;
+    }
+    if (this.#tracker.populatedCount > 0) this.#listPopulatedArchetypes(queries, retainTransitions);
+    if (!retainTransitions) {
+      this.#unlistEmptiedArchetypes(queries);
       const archetypes = this.#archetypes;
       const archetypeCount = this.#archetypeCount;
       for (let i = 0; i < archetypeCount; i++) {
         archetypes[i]!.refresh();
       }
+      this.#window.clear();
     }
     return this;
   }
 
   /**
-   * Rebuild query-to-archetype mappings if transitions changed them.
+   * Reconcile query-to-archetype mappings with archetypes that became populated since the last call.
+   * Only archetypes whose emptiness changed are visited; a full rebuild happens only when required.
    * @param queries - The registered query instances
    * @param retainTransitions - Keep entered/exited state while refreshing membership
    * @returns this
    */
   ensureQueryMembership(queries: QueryInstanceList, retainTransitions: boolean = true): this {
-    if (this.#queryMembershipDirty) {
+    if (this.#membershipRebuildRequired) {
       this.refresh(queries, retainTransitions);
+    } else if (this.#tracker.populatedCount > 0) {
+      this.#listPopulatedArchetypes(queries, retainTransitions);
     }
-    return this;
-  }
-
-  /**
-   * Reset an Entity to the root archetype
-   * @param entity The Entity
-   * @returns this
-   */
-  reset(entity: Entity): this {
-    this.set(this.root, entity);
     return this;
   }
 
@@ -518,26 +577,34 @@ export class ArchetypeManager {
     const currentArchetype = this.entityArchetypes[slot];
     if (currentArchetype === archetype) return archetype;
 
-    currentArchetype?.removeEntity(entity, slot);
+    this.#window.touch(slot, currentArchetype);
+    if (currentArchetype !== undefined) {
+      currentArchetype.removeEntity(entity, slot);
+      if (currentArchetype.getPopulationCount() === 0) this.#tracker.markEmptied(currentArchetype);
+    }
     this.entityArchetypes[slot] = archetype;
     archetype.addEntity(entity, slot);
-    this.#queryMembershipDirty = true;
+    if (archetype.getPopulationCount() === 1) this.#tracker.markPopulated(archetype);
     return archetype;
   }
 
   /** Capture transition windows for rollback, retaining archetype identity. */
-  captureTransitions(): Map<Archetype, { entered: Entity[]; exited: Entity[] }> {
-    return new Map(this.#archetypes.map((archetype) => [archetype, archetype.captureTransitions()]));
+  captureTransitions(): ArchetypeTransitionSnapshot {
+    return {
+      archetypes: new Map(this.#archetypes.map((archetype) => [archetype, archetype.captureTransitions()])),
+      window: this.#window.capture(),
+    };
   }
 
   /** Restore pre-scope windows and discard transitions from speculative archetypes. */
-  restoreTransitions(states: Map<Archetype, { entered: Entity[]; exited: Entity[] }>): void {
+  restoreTransitions(snapshot: ArchetypeTransitionSnapshot): void {
     for (const archetype of this.#archetypes) {
       archetype.refresh();
-      const state = states.get(archetype);
+      const state = snapshot.archetypes.get(archetype);
       if (state !== undefined) archetype.restoreTransitions(state);
     }
-    this.#queryMembershipDirty = true;
+    this.#window.restore(snapshot.window);
+    this.#membershipRebuildRequired = true;
   }
 
   /**
@@ -563,6 +630,6 @@ export class ArchetypeManager {
       this.entityArchetypes[entityIndex(entity)] = archetype;
       archetype.addEntity(entity);
     }
-    this.#queryMembershipDirty = true;
+    this.#membershipRebuildRequired = true;
   }
 }

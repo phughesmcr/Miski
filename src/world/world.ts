@@ -1,10 +1,8 @@
-import { BooleanArray } from "@phughesmcr/booleanarray";
-
 import { VERSION } from "@/constants.ts";
 import { ArchetypeManager } from "@/archetype/archetype-manager.ts";
 import { ComponentManager, type ComponentManagerSnapshot } from "@/component/component-manager.ts";
 import { EntityManager } from "@/entity/entity-manager.ts";
-import { asEntity, type Entity, entityIndex, type QueryEntityList } from "@/entity/entity.ts";
+import { asEntity, type Entity, type QueryEntityList } from "@/entity/entity.ts";
 import {
   ComponentDataError,
   ComponentOwnershipError,
@@ -83,13 +81,8 @@ export class World {
 
   readonly #checkpointHost: CheckpointWorld;
 
-  readonly #visitedExitedEntities = new Set<Entity>();
-
   /** Active rollback shell, if any */
   #rollbackState: WorldRollbackState | undefined;
-
-  /** Cache of entities visited by archetype query helpers */
-  readonly #visitedArchetypeEntities: BooleanArray;
 
   /** The World's current state */
   #state: WorldState;
@@ -142,59 +135,48 @@ export class World {
     return result;
   }
 
+  /** Live entities of every archetype matching the query; each entity inhabits exactly one archetype. */
   *#queryArchetypeEntities(query: Query): IterableIterator<Entity> {
-    yield* this.#queryArchetypeMembership(query, "entities");
-  }
-
-  *#queryArchetypeEntered(query: Query): IterableIterator<Entity> {
-    yield* this.#queryArchetypeMembership(query, "entered");
-  }
-
-  *#queryArchetypeExited(query: Query): IterableIterator<Entity> {
-    yield* this.#queryArchetypeMembership(query, "exited");
+    const queryInstance = this.#queryManager.instanceWithMembership(query);
+    const matching = queryInstance.archetypes;
+    const matchingCount = queryInstance.archetypeCount;
+    for (let i = 0; i < matchingCount; i++) {
+      yield* matching[i]!.getEntities();
+    }
   }
 
   /**
-   * Iterate query membership with cross-archetype deduplication.
-   * @param query - The query to resolve
-   * @param mode - Which archetype entity stream to walk
+   * Entities that match the query now but did not match it when the refresh window began.
+   * An entity currently inhabits one archetype, so it can be listed by at most one matching archetype.
    */
-  *#queryArchetypeMembership(
-    query: Query,
-    mode: "entities" | "entered" | "exited",
-  ): IterableIterator<Entity> {
-    this.#visitedArchetypeEntities.clear();
-    this.#visitedExitedEntities.clear();
+  *#queryArchetypeEntered(query: Query): IterableIterator<Entity> {
     const queryInstance = this.#queryManager.instanceWithMembership(query);
-    if (queryInstance.archetypeCount === 0) {
-      return;
+    const matching = queryInstance.archetypes;
+    const matchingCount = queryInstance.archetypeCount;
+    for (let i = 0; i < matchingCount; i++) {
+      for (const entity of matching[i]!.getEntered()) {
+        if (this.#archetypeManager.getWindowOrigin(entity)?.isCandidate(queryInstance)) continue;
+        yield entity;
+      }
     }
+  }
+
+  /**
+   * Entities that matched the query when the refresh window began but do not match it now.
+   * Each is reported by the archetype it started the window in, which is unique per entity.
+   */
+  *#queryArchetypeExited(query: Query): IterableIterator<Entity> {
+    const queryInstance = this.#queryManager.instanceWithMembership(query);
     const matching = queryInstance.archetypes;
     const matchingCount = queryInstance.archetypeCount;
     for (let i = 0; i < matchingCount; i++) {
       const archetype = matching[i]!;
-      const entities = mode === "entities" ?
-        archetype.getEntities() :
-        mode === "entered" ?
-        archetype.getEntered() :
-        archetype.getExited();
-      for (const entity of entities) {
-        if (
-          mode === "exited" ?
-            this.#visitedExitedEntities.has(entity) :
-            this.#visitedArchetypeEntities.get(entityIndex(entity))
-        ) continue;
-        if (
-          mode === "exited" && this.#archetypeManager.getEntityArchetype(entity)?.isCandidate(queryInstance)
-        ) {
-          continue;
-        }
-        if (mode === "exited") this.#visitedExitedEntities.add(entity);
-        else this.#visitedArchetypeEntities.set(entityIndex(entity), true);
+      for (const entity of archetype.getExited()) {
+        if (this.#archetypeManager.getWindowOrigin(entity) !== archetype) continue;
+        if (this.#archetypeManager.getEntityArchetype(entity)?.isCandidate(queryInstance)) continue;
         yield entity;
       }
     }
-    this.#visitedArchetypeEntities.clear();
   }
 
   /** Resolve a registered data component instance for guarded public data access. */
@@ -339,7 +321,6 @@ export class World {
     );
 
     this.#archetypeManager = new ArchetypeManager(capacity, components.length, packSlot);
-    this.#visitedArchetypeEntities = new BooleanArray(capacity);
 
     this.#queryManager = new QueryManager(
       {

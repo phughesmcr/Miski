@@ -2,8 +2,11 @@
 
 import {
   asEntity,
+  asSlotIndex,
+  CapacityError,
   captureWorldRollbackPoint,
   commitWorldRollbackPoint,
+  type Entity,
   entityIndex,
   Query,
   restoreWorldRollbackPoint,
@@ -72,16 +75,17 @@ Deno.test("historical exits retain each departed generation and reject stale arc
   const position = vec2Component();
   const world = await createTestWorld([position], 8);
   const query = new Query({ all: [position] });
-  const departed = [];
+  const departed: Entity[] = [];
   for (let index = 0; index < 20; index++) {
     const entity = createEntity(world);
     world.components.addToEntity(position, entity);
-    departed.push(entity);
+    // Exits are relative to the window start, so the entity must be a member before the window opens.
+    world.refresh();
     world.entities.destroy(entity);
+    assertEquals(ids(world.archetypes.queryExited(query)), [entity], "Exits must preserve complete handles");
+    departed.push(entity);
   }
-  const current = createEntity(world);
-  world.components.addToEntity(position, current);
-  assertEquals(ids(world.archetypes.queryExited(query)), departed, "Exits must preserve complete handles");
+  assertEquals(new Set(departed).size, 20, "Every recycled generation must produce a distinct handle");
   assertEquals(world.archetypes.getEntityArchetype(departed[0]!), undefined, "Stale handle has no archetype");
   assertEquals(world.archetypes.isEntityInRoot(departed[0]!), false, "Stale handle cannot identify replacement");
   world.refresh();
@@ -177,5 +181,82 @@ Deno.test("same-handle leave, reenter, and leave records one historical exit", a
   world.components.addToEntity(position, entity);
   world.components.removeFromEntity(position, entity);
   assertEquals(ids(world.archetypes.queryExited(query)), [entity], "Repeated exit must deduplicate the same handle");
+  await world.destroy();
+});
+
+Deno.test("failed spawn preflight preserves lifecycle windows, revisions, and handle allocation", async () => {
+  const position = vec2Component();
+  const capped = vec2Component("capped", { maxEntities: 1 });
+  const world = await createTestWorld([position, capped]);
+  const owner = world.entities.createWithOrThrow([[capped]]);
+  const query = new Query({ none: [position] });
+  world.entities.queryList(query);
+  world.refresh();
+  const revision = world.queryRevision(query);
+
+  assertThrows(
+    () => world.entities.createWithOrThrow([[position, { x: Number.MAX_VALUE }]]),
+    TypeError,
+    "outside its storage range",
+  );
+  assertThrows(() => world.entities.createWith([[capped]]), RangeError, "can only be added");
+  assertThrows(() => world.entities.createWith([[position], [position]]), RangeError, "Duplicate component");
+  assertEquals(world.entities.getActiveSnapshot(), [owner], "Failed spawn must preserve active handles");
+  assertEquals(ids(world.archetypes.queryEntered(query)), [], "Failed spawn must not publish entries");
+  assertEquals(ids(world.archetypes.queryExited(query)), [], "Failed spawn must not publish phantom exits");
+  assertEquals(world.queryRevision(query), revision, "Failed spawn must not advance query revisions");
+  assertEquals(
+    world.entities.createWithOrThrow([[position, { x: 2 }]]),
+    asEntity(1),
+    "No handles are allocated on failure",
+  );
+  await world.destroy();
+});
+
+Deno.test("full-world bundle creation reports payload errors before capacity errors", async () => {
+  const position = vec2Component();
+  const world = await createTestWorld([position]);
+  const entities = Array.from({ length: world.entities.capacity }, () => world.entities.createOrThrow());
+  assertThrows(
+    () => world.entities.createWith([[position, { x: Number.MAX_VALUE }]]),
+    TypeError,
+    "outside its storage range",
+  );
+  assertThrows(
+    () => world.entities.createWithOrThrow([[position, { x: Number.MAX_VALUE }]]),
+    TypeError,
+    "outside its storage range",
+  );
+  assertEquals(
+    world.entities.createWith([[position, { x: 1 }]]),
+    undefined,
+    "Soft capacity failure must return undefined for a valid payload",
+  );
+  assertThrows(
+    () => world.entities.createWithOrThrow([[position, { x: 1 }]]),
+    CapacityError,
+    "capacity",
+  );
+  assertEquals(world.entities.getActiveSnapshot(), entities, "Capacity failure must preserve active handles");
+  await world.destroy();
+});
+
+Deno.test("active iteration bounds select raw slots across recycled entity generations", async () => {
+  const world = await createTestWorld([tagComponent("tag")]);
+  const first = world.entities.createOrThrow();
+  const second = world.entities.createOrThrow();
+  world.entities.destroy(first);
+  const recycled = world.entities.createOrThrow();
+  assert(recycled !== first, "The slot must carry a recycled generation");
+  assertEquals(
+    ids(world.entities.getActive(entityIndex(recycled), asSlotIndex(1))),
+    [recycled],
+    "Raw bounds must include the recycled handle and exclude the upper slot",
+  );
+  assertEquals(
+    world.entities.getActiveSnapshot(entityIndex(second), asSlotIndex(world.entities.capacity)),
+    [second],
+    "Capacity is a valid exclusive upper bound",
+  );
   await world.destroy();
 });

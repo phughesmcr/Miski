@@ -128,25 +128,45 @@ export class WorldMutations {
     return entity;
   }
 
-  /** Create an entity and atomically attach a bundle. */
+  /**
+   * Create an entity and atomically attach a bundle.
+   * The bundle is validated before capacity is checked, and the entity is placed straight into its
+   * final archetype so it is never observed in (or reported as exiting) the root archetype.
+   */
   createEntityWithBundle(
     bundle: readonly ComponentBundleEntryInput[],
     throwOnCapacity: boolean,
   ): Entity | undefined {
-    const entity = this.createEntity();
-    if (entity === undefined) {
-      if (throwOnCapacity) {
-        throw new CapacityError(`World is at capacity (${this.#entityManager.capacity} entities).`);
-      }
-      return undefined;
-    }
-
+    const count = this.#preflightBundle(bundle);
+    let entity: Entity | undefined;
     try {
-      this.addBundleToEntity(entity, bundle);
+      this.#componentManager.preflightAddBundleToEntity(this.#bundleEntries, undefined, count);
+      if (this.#entityManager.getAvailableCount() === 0) {
+        if (throwOnCapacity) {
+          throw new CapacityError(`World is at capacity (${this.#entityManager.capacity} entities).`);
+        }
+        return undefined;
+      }
+      entity = this.#entityManager.create()!;
+      const addedCount = this.#componentManager.addBundleToEntity(
+        this.#bundleEntries,
+        entity,
+        count,
+        this.#bundleAdded,
+      );
+      if (addedCount > 0) {
+        this.#archetypeManager.addComponentSet(entity, this.#bundleAdded, addedCount);
+      } else {
+        this.#archetypeManager.createEntity(entity);
+      }
+      this.#notifyEntityLifecycle();
+      this.invalidateCommittedTransition(true);
       return entity;
     } catch (error) {
-      this.#rollbackCreatedEntity(entity);
+      if (entity !== undefined) this.#rollbackCreatedEntity(entity);
       throw error;
+    } finally {
+      this.#clearBundleEntries();
     }
   }
 
@@ -159,16 +179,7 @@ export class WorldMutations {
     const count = this.#preflightBundle(bundle);
     try {
       this.#componentManager.preflightAddBundleToEntity(this.#bundleEntries, entity, count);
-      const addedCount = this.#componentManager.addBundleToEntity(
-        this.#bundleEntries,
-        entity,
-        count,
-        this.#bundleAdded,
-      );
-      if (addedCount > 0) {
-        this.#archetypeManager.addComponentSet(entity, this.#bundleAdded, addedCount);
-      }
-      this.invalidateCommittedTransition(addedCount > 0);
+      this.#commitBundleToEntity(entity, count);
     } finally {
       this.#clearBundleEntries();
     }
@@ -331,6 +342,9 @@ export class WorldMutations {
    * @returns Active staged entry count in {@link #bundleEntries}
    */
   #preflightBundle(bundle: readonly ComponentBundleEntryInput[]): number {
+    if (!Array.isArray(bundle)) {
+      throw new TypeError("Bundle must be an array of [component] or [component, data] tuples.");
+    }
     for (let i = 0; i < bundle.length; i++) {
       const entry = bundle[i];
       if (!Array.isArray(entry) || (entry.length !== 1 && entry.length !== 2)) {
@@ -373,7 +387,21 @@ export class WorldMutations {
     return this.#bundleEntryCount;
   }
 
-  /** Roll back a newly-created entity after bundle preflight fails. */
+  /** Commit a staged bundle after all payload and capacity checks pass. */
+  #commitBundleToEntity(entity: Entity, count: number): void {
+    const addedCount = this.#componentManager.addBundleToEntity(
+      this.#bundleEntries,
+      entity,
+      count,
+      this.#bundleAdded,
+    );
+    if (addedCount > 0) {
+      this.#archetypeManager.addComponentSet(entity, this.#bundleAdded, addedCount);
+    }
+    this.invalidateCommittedTransition(addedCount > 0);
+  }
+
+  /** Roll back a newly-created entity after an unexpected bundle commit failure. */
   #rollbackCreatedEntity(entity: Entity): void {
     let changed = this.#archetypeManager.getEntityArchetype(entity) !== undefined;
     const archetype = this.#archetypeManager.getEntityArchetype(entity);
