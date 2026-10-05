@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Miski ECS Visual Demo</title>
+    <link rel="stylesheet" href="/style.css">
+  </head>
+  <body>
+    <main class="app">
+      <canvas id="stage" aria-label="Live Miski ECS particle simulation"></canvas>
+      <section class="chrome" aria-label="Miski ECS demo controls">
+        <header class="hud">
+          <div class="metrics" aria-live="polite">
+            <div class="metric"><span>Entities</span><strong id="entities">0</strong></div>
+            <div class="metric"><span>Tick</span><strong id="tick">0ms</strong></div>
+            <div class="metric"><span>Draw</span><strong id="draw">0ms</strong></div>
+            <div class="metric"><span>Drones</span><strong id="drones">0</strong></div>
+            <div class="metric"><span>Heap</span><strong id="heap">0mb</strong></div>
+            <div class="metric"><span>Rendered</span><strong id="rendered">0</strong></div>
+            <div class="metric"><span>Exited</span><strong id="exited">0</strong></div>
+            <div class="metric"><span>Capacity</span><strong id="capacity">0</strong></div>
+            <div class="metric"><span>Spawned</span><strong id="spawned">0</strong></div>
+            <div class="metric"><span>Destroyed</span><strong id="destroyed">0</strong></div>
+          </div>
+        </header>
+        <div class="controlbar">
+          <div class="segmented" role="group" aria-label="Simulation mode">
+            <button data-mode="orbit" aria-pressed="true">Orbit</button>
+            <button data-mode="storm" aria-pressed="false">Storm</button>
+            <button data-mode="lattice" aria-pressed="false">Lattice</button>
+          </div>
+          <label class="slider">
+            <span>Intensity</span>
+            <input id="intensity" type="range" min="0.2" max="2.4" value="1" step="0.05">
+          </label>
+          <label class="slider">
+            <span>Drones <output id="droneTarget">${desiredDroneCount}</output></span>
+            <input
+              id="droneControl"
+              type="range"
+              min="${MIN_DRONES}"
+              max="${MAX_DRONES}"
+              value="${desiredDroneCount}"
+              step="64"
+            >
+          </label>
+          <label class="slider">
+            <span>Render <output id="renderTarget">${renderedEntityLimit}</output></span>
+            <input
+              id="renderControl"
+              type="range"
+              min="${MIN_DRONES}"
+              max="${MAX_RENDERED_ENTITIES}"
+              value="${renderedEntityLimit}"
+              step="64"
+            >
+          </label>
+          <div class="actions">
+            <button class="accent" id="burst">Pulse</button>
+            <button id="toggle">Pause</button>
+            <button class="danger" id="reset">Reset</button>
+          </div>
+        </div>
+      </section>
+    </main>
+    <script type="module" src="/client.js"></script>
+  </body>
+</html>

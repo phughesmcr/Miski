@@ -6,7 +6,7 @@
  */
 
 // The only Miski imports we need:
-import { Component, entityIndex, Query, type Schema, System, World } from "../mod.ts";
+import { asEntity, Component, type Entity, entityIndex, Query, type Schema, System, World } from "../mod.ts";
 
 // ############################################################################
 // DEMO CONFIG - not Miski specific
@@ -207,7 +207,7 @@ const takenScratch = new Uint8Array(CAPACITY);
 // HELPERS
 // ############################################################################
 
-const safeDestroyEntity = (entity: number): boolean => {
+const safeDestroyEntity = (entity: Entity): boolean => {
   if (!world.entities.isActive(entity)) {
     addLog(`  Entity ${entity} not active (already destroyed?)`);
     return false;
@@ -219,7 +219,7 @@ const safeDestroyEntity = (entity: number): boolean => {
 
 const batchDestroyEntities = (entities: Uint32Array, count: number): void => {
   for (let i = 0; i < count; i++) {
-    safeDestroyEntity(entities[i]!);
+    safeDestroyEntity(asEntity(entities[i]!));
   }
 };
 
@@ -246,7 +246,7 @@ const randomVelocity = (): { x: number; y: number } => ({
 });
 
 // Atomic spawn: one archetype move via createWith instead of repeated addToEntity.
-const predatorSpawner = (x: number, y: number): number | undefined => {
+const predatorSpawner = (x: number, y: number): Entity | undefined => {
   const entity = world.entities.createWith([
     [position, { x, y }],
     [previousPosition, { x, y }],
@@ -264,7 +264,7 @@ const predatorSpawner = (x: number, y: number): number | undefined => {
   return entity;
 };
 
-const preySpawner = (x: number, y: number): number | undefined => {
+const preySpawner = (x: number, y: number): Entity | undefined => {
   const entity = world.entities.createWith([
     [position, { x, y }],
     [previousPosition, { x, y }],
@@ -279,7 +279,7 @@ const preySpawner = (x: number, y: number): number | undefined => {
   return entity;
 };
 
-const spawnEntities = (count: number, spawner: (x: number, y: number) => number | undefined): void => {
+const spawnEntities = (count: number, spawner: (x: number, y: number) => Entity | undefined): void => {
   for (let i = 0; i < count; i++) {
     spawner(Math.random() * WIDTH, Math.random() * HEIGHT);
   }

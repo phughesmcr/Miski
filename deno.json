@@ -47,7 +47,7 @@
     "@phughesmcr/partitionedbuffer": "jsr:@phughesmcr/partitionedbuffer@^0.4.1"
   },
   "lint": {
-    "exclude": ["bench/**/*.ts", "example/**/*.ts", "test/**/*.ts"],
+    "exclude": ["bench/**/*.ts", "example/**/*.ts", "example/**/*.js", "test/**/*.ts"],
     "rules": {
       "tags": [
         "jsr",
@@ -139,7 +139,7 @@
     },
     "check": {
       "description": "Type-check the project graph",
-      "command": "deno check mod.ts src/**/*.ts test/**/*.ts bench/**/*.ts example/**/*.ts"
+      "command": "deno check mod.ts src/**/*.ts test/**/*.ts bench/**/*.ts example/**/*.ts && deno check --config example/visual/deno.json example/visual/client.js"
     },
     "test": {
       "description": "Run tests with the committed lockfile",
