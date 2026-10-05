@@ -16,6 +16,8 @@ const CONSTRUCTOR_TAGS = new Map<TypedArrayConstructor, string>([
   [Uint32Array, "u32"],
   [Float32Array, "f32"],
   [Float64Array, "f64"],
+  // Append-only: tags are hashed, so never renumber or reorder the entries above.
+  [Uint8ClampedArray, "u8c"],
 ]);
 
 /**

@@ -125,7 +125,10 @@ export class EcsWorld<
         throw new Error(`Unknown component "${key}" in spawn spec.`);
       }
       if (this.#tagNames.has(key)) {
-        if (spec[name] !== true) {
+        // `undefined` means absent, matching data keys and the optional `?: true` SpawnSpec shape.
+        const flag = spec[name];
+        if (flag === undefined) continue;
+        if (flag !== true) {
           throw new TypeError(`Tag "${key}" must be spawned with true.`);
         }
         bundle.push([component]);

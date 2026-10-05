@@ -7,7 +7,7 @@ export type Vec2 = { x: Float32ArrayConstructor; y: Float32ArrayConstructor };
 export type Health = { current: Uint16ArrayConstructor; max: Uint16ArrayConstructor };
 export type RenderState = { sprite: Uint16ArrayConstructor; layer: Uint8ArrayConstructor };
 export type Lifetime = { ttl: Float32ArrayConstructor };
-export type Parent = { entity: Uint32ArrayConstructor };
+export type Parent = { parentEntity: Uint32ArrayConstructor };
 
 export type BenchmarkComponents = ReturnType<typeof createBenchmarkComponents>;
 export type WideComponents = ReturnType<typeof createWideComponents>;
@@ -31,7 +31,7 @@ export function createBenchmarkComponents() {
     schema: { sprite: Uint16Array, layer: Uint8Array },
   });
   const lifetime = new Component<Lifetime>({ name: "lifetime", schema: { ttl: Float32Array } });
-  const parent = new Component<Parent>({ name: "parent", schema: { entity: Uint32Array } });
+  const parent = new Component<Parent>({ name: "parent", schema: { parentEntity: Uint32Array } });
   const renderable = new Component<null>({ name: "renderable" });
   const player = new Component<null>({ name: "player", maxEntities: 1 });
   const enemy = new Component<null>({ name: "enemy" });

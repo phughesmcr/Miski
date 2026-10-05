@@ -2,7 +2,8 @@ import type { TypedArray } from "@/types/partitions.ts";
 
 /**
  * Canonicalize one numeric value exactly as its declared typed column will store it.
- * Rejects non-finite inputs and values that overflow the storage type.
+ * Rejects non-finite inputs, and finite inputs that a floating-point column would overflow to infinity.
+ * Integer columns wrap or truncate like any typed-array write (`Uint8Array` 300 stores 44); they do not reject.
  */
 export function canonicalizeStoredValue(
   component: string,

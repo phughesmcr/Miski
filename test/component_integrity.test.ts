@@ -3,6 +3,7 @@
 import {
   asEntity,
   captureWorldRollbackPoint,
+  compileComponentSchema,
   Component,
   ComponentOwnershipError,
   entityIndex,
@@ -11,6 +12,60 @@ import {
 } from "../mod.ts";
 import { createEntity, createTestWorld, tagComponent, vec2Component } from "./fixtures.ts";
 import { assert, assertEquals, assertThrows, ids } from "./helpers.ts";
+
+Deno.test("component schemas reject proxy cursor fields at every constructor boundary", () => {
+  for (const key of ["entity", "slot"]) {
+    const schema = { [key]: Float32Array, x: Float32Array };
+    assertThrows(() => new Component({ name: "position", schema }), TypeError, "Invalid component specification");
+    assertThrows(() => compileComponentSchema({ position: schema }), TypeError, "Invalid component specification");
+  }
+});
+
+Deno.test("dense and capped storage initialize every new owner with zero defaults", async () => {
+  for (const maxEntities of [undefined, 4]) {
+    const position = vec2Component("position", { maxEntities });
+    const world = await createTestWorld([position]);
+    const instance = world.components.require(position);
+    const bundled = world.entities.createWithOrThrow([[position]]);
+    const single = createEntity(world);
+    world.components.addToEntity(position, single);
+    const batched = createEntity(world);
+    world.components.addToEntities(position, {
+      count: 1,
+      entities: [batched],
+      slots: [entityIndex(batched)],
+    });
+    const emptyPayload = world.entities.createWithOrThrow([[position, {}]]);
+    for (const entity of [bundled, single, batched, emptyPayload]) {
+      assertEquals(world.components.getEntityData(position, entity), { x: 0, y: 0 }, "New ownership defaults to zero");
+      assertEquals(instance.get(entity, "x"), 0, "Guarded reads agree with copied data");
+      instance.proxy!.entity = entity;
+      assertEquals(instance.proxy!.y, 0, "Proxy reads agree with copied data");
+    }
+    const checkpoint = world.captureCheckpoint([bundled, single, batched, emptyPayload], position);
+    instance.set(single, "x", 9);
+    world.applyCheckpoint(checkpoint);
+    assertEquals(instance.get(single, "x"), 0, "Default data survives a checkpoint roundtrip");
+    world.components.setEntityData(position, single, { x: 3, y: 4 });
+    world.components.removeFromEntity(position, single);
+    world.components.addToEntity(position, single);
+    assertEquals(
+      world.components.getEntityData(position, single),
+      { x: 0, y: 0 },
+      "Reacquired storage clears prior values",
+    );
+    world.refresh();
+    const revision = instance.revision;
+    world.components.addToEntity(position, single);
+    assertEquals(instance.revision, revision, "Adding an existing owner without data is idempotent");
+    assertEquals(
+      ids(world.components.getChanged(position)),
+      [],
+      "Default-only ownership does not mark numeric changes",
+    );
+    await world.destroy();
+  }
+});
 
 Deno.test("component entity access rejects stale, malformed and unowned identities", async () => {
   const position = vec2Component();

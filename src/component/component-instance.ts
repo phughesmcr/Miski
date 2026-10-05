@@ -34,7 +34,14 @@ export class ComponentInstance<
   /** The ComponentInstance's storage */
   readonly storage: TStorage extends null ? null : PartitionStorage<TStorage>;
 
-  /** Typed-array partitions for direct storage access, or `null` for tag components */
+  /**
+   * Typed-array partitions for direct storage access, or `null` for tag components.
+   *
+   * Direct access is an unguarded escape hatch: writes are not ownership-checked or change-tracked, and writes to
+   * non-owner slots are never reported by `getChanged`. For components with `maxEntities`, a non-owner write may
+   * temporarily occupy one of the capped dense rows; those rows are reclaimed (and their data discarded) the next
+   * time an add needs them, so stray writes can never block an owner from being added.
+   */
   get partitions(): ComponentPartitions<TStorage> {
     return (this.storage?.partitions ?? null) as ComponentPartitions<TStorage>;
   }

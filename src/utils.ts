@@ -12,12 +12,12 @@ function isNumber(n: unknown): n is number {
   return typeof n === "number";
 }
 
-/** @returns `true` if n is a number, >= 0, <= 2^32 - 1 (4294967295)*/
+/** @returns `true` if n is an integer, >= 0, <= 2^32 - 1 (4294967295)*/
 export function isUint32(n: unknown): n is number {
-  return isNumber(n) && !isNaN(n) && n >= MIN_UINT32 && n <= MAX_UINT32;
+  return isNumber(n) && Number.isInteger(n) && n >= MIN_UINT32 && n <= MAX_UINT32;
 }
 
-/** @returns true if `n` is a Uint32 > 0 */
+/** @returns true if `n` is an integer Uint32 > 0 */
 export function isPositiveUint32(n: unknown): n is number {
   return isUint32(n) && n > 0;
 }

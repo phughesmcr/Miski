@@ -16,6 +16,37 @@ type ComponentSpecRuntime<TStorage extends SchemaOrNull> = {
 };
 
 /**
+ * Typed-array constructors a component column may use: numeric, number-addressed storage only.
+ * BigInt64Array / BigUint64Array (bigint-valued) and Float16Array (absent from the public
+ * `TypedArrayConstructor` type) are rejected at validation instead of failing later at world construction.
+ */
+const SUPPORTED_COLUMN_CONSTRUCTORS: ReadonlySet<unknown> = new Set<unknown>([
+  Int8Array,
+  Uint8Array,
+  Uint8ClampedArray,
+  Int16Array,
+  Uint16Array,
+  Int32Array,
+  Uint32Array,
+  Float32Array,
+  Float64Array,
+]);
+
+/** @returns `true` if `constructor` is a typed-array constructor supported for component columns */
+export function isSupportedColumnConstructor(constructor: unknown): boolean {
+  return SUPPORTED_COLUMN_CONSTRUCTORS.has(constructor);
+}
+
+/** @returns the first schema key whose column constructor is unsupported, or `undefined` */
+function findUnsupportedColumn(schema: Record<string, unknown>): string | undefined {
+  for (const key of Object.keys(schema)) {
+    const property = schema[key];
+    if (!isSupportedColumnConstructor(Array.isArray(property) ? property[0] : property)) return key;
+  }
+  return undefined;
+}
+
+/**
  * Component specification type guard.
  * @param spec - The component's specification.
  * @returns `true` if the spec is valid, `false` otherwise
@@ -27,8 +58,11 @@ export function isValidComponentSpec<
   if (!spec || typeof spec !== "object") return false;
   const s = spec as ComponentSpec<TValue, TStorage>;
   if (!isValidName(s.name)) return false;
-  if (s.maxEntities != null && (!isPositiveUint32(s.maxEntities) || s.maxEntities === 0)) return false;
+  if (s.maxEntities != null && !isPositiveUint32(s.maxEntities)) return false;
   if (s.schema && !isSchema(s.schema)) return false;
+  if (s.schema && findUnsupportedColumn(s.schema as Record<string, unknown>) !== undefined) return false;
+  // Proxy cursor names cannot also be numeric storage columns.
+  if (s.schema && (Object.hasOwn(s.schema, "entity") || Object.hasOwn(s.schema, "slot"))) return false;
   return true;
 }
 
@@ -75,6 +109,17 @@ class ComponentRuntime<
    */
   constructor(spec: ComponentSpec<TValue, TStorage>) {
     if (!isValidComponentSpec(spec)) {
+      const schema = (spec as { schema?: unknown } | null | undefined)?.schema;
+      if (schema && typeof schema === "object" && isSchema(schema)) {
+        const key = findUnsupportedColumn(schema as Record<string, unknown>);
+        if (key !== undefined) {
+          throw new TypeError(
+            `Invalid component specification: column "${key}" must use a number-valued typed array ` +
+              "(Int8Array, Uint8Array, Uint8ClampedArray, Int16Array, Uint16Array, Int32Array, Uint32Array, " +
+              "Float32Array, Float64Array).",
+          );
+        }
+      }
       throw new TypeError("Invalid component specification.");
     }
     const runtimeSpec = spec as ComponentSpecRuntime<TStorage>;

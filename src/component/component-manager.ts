@@ -1,5 +1,5 @@
 import { BooleanArray } from "@phughesmcr/booleanarray";
-import { getPartitionByteSize, PartitionedBuffer } from "@phughesmcr/partitionedbuffer";
+import { getPartitionByteSize, Partition, PartitionedBuffer } from "@phughesmcr/partitionedbuffer";
 
 import { $_COMPONENT_ID_KEY, $_PARTITION_KEY } from "@/constants.ts";
 import { createEntityArray, createSlotArray, type EntityArray, packEntity, type PackSlot } from "@/entity/entity.ts";
@@ -30,10 +30,28 @@ function roundUpToMultiple(value: number, multiple: number): number {
   return remainder === 0 ? value : value + multiple - remainder;
 }
 
+/**
+ * Dense rows needed for a capped component's sparse storage, or `null` for dense (capacity-sized) storage.
+ * A cap that can never bind (at or above world capacity) is stored densely, so it never over-allocates
+ * and cannot be starved by stray raw writes.
+ */
+function getSparseRowCount(component: DynamicComponent, capacity: number): number | null {
+  const maxEntities = component.maxEntities;
+  return maxEntities === null || maxEntities >= capacity ? null : maxEntities;
+}
+
 function getComponentStorageSize(component: DynamicComponent, capacity: number): number {
   const schema = component[$_PARTITION_KEY].schema;
   if (schema === null) return 0;
-  return getPartitionByteSize(schema, component.maxEntities ?? capacity);
+  return getPartitionByteSize(schema, getSparseRowCount(component, capacity) ?? capacity);
+}
+
+/** The component's own partition, or a world-sized copy when its owner cap exceeds world capacity. */
+function getWorldPartition(component: DynamicComponent, capacity: number): DynamicComponent[typeof $_PARTITION_KEY] {
+  const partition = component[$_PARTITION_KEY];
+  const rows = getSparseRowCount(component, capacity);
+  if (rows === partition.maxOwners) return partition;
+  return new Partition({ name: component.name, schema: partition.schema, maxOwners: rows } as never);
 }
 
 /** A preflighted bundle entry ready for component-manager commit. */
@@ -136,7 +154,7 @@ export class ComponentManager {
     for (const component of components) {
       const maxEntities = component.maxEntities;
       // instance storage
-      const storage = this.#buffer.addPartition(component[$_PARTITION_KEY]);
+      const storage = this.#buffer.addPartition(getWorldPartition(component, capacity));
       const instanceId = this.#states.length;
       const coercionScratch: Record<string, TypedArray> = Object.create(null);
       const storageKeys: string[] = [];
@@ -161,8 +179,9 @@ export class ComponentManager {
         new StorageProxy({
           storage,
           markChanged: (slot: number) => {
+            // Only owners are tracked: raw writes to non-owner slots are an unguarded escape hatch.
             const state = this.#states[instanceId];
-            if (state !== undefined) this.#markChanged(state, slot);
+            if (state !== undefined && state.owners?.[slot] === 1) this.#markChanged(state, slot);
           },
           has: (entity: Entity) => this.#entityOwnsInstanceId(instanceId, entity),
           packSlot,
@@ -353,15 +372,32 @@ export class ComponentManager {
     changed.set(slot, false);
   }
 
+  /**
+   * Map a capped component's dense row for `slot` before ownership changes, so a storage failure can never leave a
+   * half-committed add. Raw writes to non-owner slots (direct partitions, proxy cursor, `setAt`) map rows too and
+   * are never released by removal; when the dense rows run out they are reclaimed here, after which at most
+   * `ownerCount` rows are mapped and `ownerCount < maxEntities` guarantees room.
+   */
+  #reserveSparseSlot(state: ComponentState, owners: Uint8Array, slot: number): void {
+    const column = state.storageColumns[0]!;
+    if (column[slot] !== undefined) return;
+    try {
+      column[slot] = 0;
+      return;
+    } catch (error) {
+      if (!(error instanceof RangeError)) throw error;
+    }
+    const sparse = column as TypedArray & { deleteEntity(entity: number): boolean };
+    for (let other = 0; other < this.#capacity; other++) {
+      if (owners[other] !== 1 && other !== slot && column[other] !== undefined) sparse.deleteEntity(other);
+    }
+    column[slot] = 0;
+  }
+
   /** Reset one entity's component storage slot to its default empty value. */
-  #clearEntityStorage(storage: Record<string, unknown>, slot: number): void {
+  #clearEntityStorage(storage: Record<string, TypedArray>, slot: number): void {
     for (const key in storage) {
-      const partition = storage[key];
-      if (ArrayBuffer.isView(partition as ArrayBufferView)) {
-        (partition as TypedArray)[slot] = 0;
-      } else if (partition !== undefined && partition !== null) {
-        Reflect.deleteProperty(partition, String(slot));
-      }
+      storage[key]![slot] = 0;
     }
   }
 
@@ -403,14 +439,16 @@ export class ComponentManager {
     if (!alreadyOwned && maxEntities !== 0 && state.ownerCount >= maxEntities) {
       throw new RangeError(`Component "${instance.type.name}" can only be added to ${maxEntities} entities.`);
     }
+    if (!alreadyOwned && state.usesSparseStorage) this.#reserveSparseSlot(state, owners, slot);
     const ownershipChanged = this.#acquireOwnership(state, owners, slot);
     if (ownershipChanged) this.#bumpRevision(state);
     if (storage !== null) {
       if (data !== undefined) {
         const changed = writeEntityStorageData(state, data as Record<string, number>, slot, ownershipChanged);
-        if (changed) this.#markChanged(state, slot);
+        // A payload always marks a new owner changed, whatever the previous (zero, stale, or unmapped) cell held.
+        if (changed || ownershipChanged) this.#markChanged(state, slot);
       } else if (ownershipChanged) {
-        this.#clearEntityStorage(storage.partitions as Record<string, unknown>, slot);
+        this.#clearEntityStorage(storage.partitions as Record<string, TypedArray>, slot);
       }
     }
 
@@ -570,23 +608,26 @@ export class ComponentManager {
   /**
    * Preflight capacity for adding a set of registered component instances to one entity.
    * @param entries - Unique registered component instances and optional data
-   * @param entity - The target entity
+   * @param entity - The target entity, or undefined to preflight a fresh owner before entity creation
    * @throws {RangeError} If the entity is out of component capacity or any max owner count would overflow
    * @internal
    */
   preflightAddBundleToEntity(
     entries: readonly ComponentBundleCommitEntry[],
-    entity: Entity,
+    entity: Entity | undefined,
     count: number = entries.length,
   ): void {
-    if (entityIndex(entity) >= this.#capacity) {
+    if (entity !== undefined && entityIndex(entity) >= this.#capacity) {
       throw new RangeError(`Entity ${entity} is outside component capacity.`);
     }
     for (let i = 0; i < count; i++) {
       const instance = entries[i]!.instance;
       const state = this.#states[instance.id];
       const maxEntities = state?.maxEntities ?? 0;
-      if (state === undefined || maxEntities === 0 || state.owners?.[entityIndex(entity)] === 1) continue;
+      if (
+        state === undefined || maxEntities === 0 ||
+        (entity !== undefined && state.owners?.[entityIndex(entity)] === 1)
+      ) continue;
       if (state.ownerCount >= maxEntities) {
         throw new RangeError(
           `Component "${instance.type.name}" can only be added to ${maxEntities} entities.`,
