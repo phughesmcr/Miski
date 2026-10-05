@@ -30,9 +30,10 @@ export class MiskiError extends Error {
   /**
    * Create a Miski error.
    * @param message - Optional human-readable error message.
+   * @param options - Optional standard error options, such as the underlying `cause`.
    */
-  constructor(message?: string) {
-    super(message);
+  constructor(message?: string, options?: ErrorOptions) {
+    super(message, options);
     this.name = "MiskiError";
   }
 }
@@ -49,8 +50,8 @@ export function isMiskiError(error: unknown): error is MiskiError {
 /** Creates a new error class extending MiskiError */
 function createErrorClass(name: string, defaultMessage: string): typeof MiskiError {
   return class extends MiskiError {
-    constructor(message?: string) {
-      super(message ?? defaultMessage);
+    constructor(message?: string, options?: ErrorOptions) {
+      super(message ?? defaultMessage, options);
       this.name = name;
     }
   };

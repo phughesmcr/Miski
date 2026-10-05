@@ -12,6 +12,7 @@ import {
   WorldStateError,
 } from "@/errors.ts";
 import { QueryManager } from "@/query/query-manager.ts";
+import { isInHookScope } from "@/system/hook-scope.ts";
 import { SystemManager } from "@/system/system-manager.ts";
 import type { Component } from "@/component/component.ts";
 import type { ComponentInstance } from "@/component/component-instance.ts";
@@ -41,6 +42,7 @@ import {
   validateRollbackState,
 } from "@/rollback/rollback.ts";
 import { constructWorldAPIs } from "./world-api-facade.ts";
+import { noop } from "@/utils.ts";
 import { assertWorldState, isValidWorldSpec } from "./utils.ts";
 import { WorldMutations } from "./world-mutations.ts";
 
@@ -87,6 +89,19 @@ export class World {
   /** The World's current state */
   #state: WorldState;
 
+  #initializing = false;
+
+  #destroying = false;
+
+  /** Settles (never rejects) when the in-flight `init()` has finished, successfully or not. */
+  #initSettled: Promise<void> | undefined;
+
+  /** Resolves when teardown begins, releasing waiters that would otherwise wait on a pending hook. */
+  readonly #teardownStarted: PromiseWithResolvers<void> = Promise.withResolvers<void>();
+
+  /** The first error that moved the world into the `error` state. */
+  #failure: { readonly cause: unknown } | undefined;
+
   /** The promise that resolves when the World is ready */
   readonly #initPromise: Promise<WorldState>;
 
@@ -106,16 +121,36 @@ export class World {
   readonly systems: WorldSystemAPI;
 
   #assertInitialized(): void {
+    if (this.#state === "error") throw this.#stateError("World has encountered an error");
     assertWorldState("initialized", this.#state);
+  }
+
+  /** A state error that carries the root cause when the world is in the `error` state. */
+  #stateError(message: string): Error {
+    if (this.#state === "error" && this.#failure !== undefined) {
+      return new WorldStateError(message, { cause: this.#failure.cause });
+    }
+    return new WorldStateError(message);
   }
 
   #assertSystemRegistrationAvailable(): void {
+    if (this.#destroying && !this.#initializing) throw new WorldStateError("World is being destroyed");
     if (this.#state === "uninitialized" || this.#state === "initialized") return;
-    assertWorldState("initialized", this.#state);
+    this.#assertInitialized();
   }
 
-  #enterErrorState(): void {
+  #enterErrorState(cause: unknown): void {
+    this.#failure ??= { cause };
     this.#state = "error";
+  }
+
+  #assertNotInHook(operation: string): void {
+    if (isInHookScope()) {
+      throw new WorldStateError(
+        `${operation} cannot be awaited from a system init or destroy hook: ` +
+          "the world waits for the hook to finish, so the hook would wait on itself",
+      );
+    }
   }
 
   #copyEntityList(list: QueryEntityList): Entity[] {
@@ -359,11 +394,13 @@ export class World {
         queryComponents: (query: Query) => this.#queryManager.components(query),
         queryEntityList: (query: Query) => {
           this.#assertInitialized();
+          if (this.#initializing) throw new WorldStateError("World is being initialized");
+          if (this.#destroying) throw new WorldStateError("World is being destroyed");
           return this.#queryManager.entityList(query);
         },
       },
-      () => {
-        if (this.#state === "initialized") this.#enterErrorState();
+      (error) => {
+        if (this.#state === "initialized") this.#enterErrorState(error);
       },
     );
 
@@ -421,51 +458,112 @@ export class World {
   }
 
   /**
-   * Initialize the World
+   * Initialize the World and wait for all system init hooks and the initial refresh.
+   * Hooks may mutate the world; system callbacks wait until initialization completes.
    * @throws {WorldStateError} - If the World is already initialized, or has already been destroyed
    */
   async init(): Promise<void> {
+    if (this.#state === "error") throw this.#stateError("World has encountered an error");
     assertWorldState("uninitialized", this.#state);
+    this.#initializing = true;
+    const run = this.#runInit();
+    this.#initSettled = run.then(noop, noop);
+    await run;
+  }
+
+  async #runInit(): Promise<void> {
     try {
       this.#archetypeManager.init();
       this.#state = "initialized";
       await this.#systemManager.init();
-      this.#initResolver?.("initialized");
+      // A late hook registered by an init hook may have failed; surface its error, not a generic one.
+      this.#throwFailure();
       this.refresh();
-      assertWorldState("initialized", this.#state);
+      this.#assertInitialized();
+      this.#initResolver?.("initialized");
     } catch (error) {
-      this.#enterErrorState();
+      this.#enterErrorState(error);
       this.#initResolver?.("error");
       throw error;
+    } finally {
+      this.#initializing = false;
     }
   }
 
+  /** Rethrow the root cause if the world has entered the `error` state. */
+  #throwFailure(): void {
+    if (this.#state === "error" && this.#failure !== undefined) throw this.#failure.cause;
+  }
+
   /**
-   * Destroy the World
-   * @throws {WorldStateError} - If the World has not yet been initialized, or has already been destroyed
+   * Destroy the World, awaiting any in-flight init and pending late init hooks before running every destroy hook.
+   * System registration and callbacks close immediately (except for hooks still being initialized);
+   * hooks may still mutate entities.
+   *
+   * Only systems whose init completed successfully are destroyed. Teardown also cleans up a world that
+   * is in the error state (for example after a failed `init()`): it runs those destroy hooks and, if they
+   * all succeed, leaves the world `destroyed`. A destroy-hook failure unregisters all systems and leaves
+   * the world in the error state. Destroy hooks of an errored world see the world in the error state.
+   *
+   * Do not await this from a system init or destroy hook: teardown waits for the hook, so it would wait
+   * on itself. Such calls are rejected where the runtime supports async context tracking.
+   * @throws {WorldStateError} - If the World has not yet been initialized, or has already been destroyed,
+   * or teardown is already in progress
    */
   async destroy(): Promise<void> {
-    assertWorldState("initialized", this.#state);
+    if (this.#state === "uninitialized" || this.#state === "destroyed") {
+      assertWorldState("initialized", this.#state);
+    }
+    this.#assertNotInHook("world.destroy()");
+    if (this.#destroying) throw new WorldStateError("World is being destroyed");
+    this.#destroying = true;
+    this.#teardownStarted.resolve();
     try {
+      // `init()` always settles: a hook waiting on readiness is released by the teardown signal.
+      if (this.#initializing) await this.#initSettled;
+      const startedInError = this.#state === "error";
+      await this.#systemManager.onReady();
       await this.#systemManager.destroyAll();
-      this.#state = "destroyed";
+      if (this.#state === "initialized") {
+        this.#state = "destroyed";
+      } else if (startedInError) {
+        this.#state = "destroyed";
+      } else {
+        this.#throwFailure();
+        this.#assertInitialized();
+      }
     } catch (error) {
-      this.#enterErrorState();
+      this.#enterErrorState(error);
       throw error;
+    } finally {
+      this.#destroying = false;
     }
   }
 
   /**
-   * Wait for the World to be ready
-   * @throws {WorldStateError} - If the World has already been destroyed or has encountered an error
+   * Wait for initial setup and all currently pending late system init hooks.
+   *
+   * Do not await this from a system init or destroy hook: readiness waits for the hook, so it would wait on
+   * itself. Such calls are rejected where the runtime supports async context tracking, and any waiting call
+   * is rejected as soon as teardown starts.
+   * @throws {WorldStateError} - If the World has already been destroyed or has encountered an error;
+   * the root cause of an error is available as `cause`
    */
   async onReady(): Promise<void> {
-    const state = await this.#initPromise;
+    this.#assertNotInHook("world.onReady()");
+    if (this.#destroying) throw new WorldStateError("World is being destroyed");
+    const state = await Promise.race([this.#initPromise, this.#teardownStarted.promise.then(() => undefined)]);
+    if (state === undefined || this.#destroying) throw new WorldStateError("World is being destroyed");
     if (state !== "initialized") {
-      throw new WorldStateError(`World failed to initialize: state is "${state}"`);
+      throw this.#stateError(`World failed to initialize: state is "${state}"`);
     }
     if (this.#state !== "initialized") {
-      throw new WorldStateError(`World is not ready: state is "${this.#state}"`);
+      throw this.#stateError(`World is not ready: state is "${this.#state}"`);
+    }
+    await Promise.race([this.#systemManager.onReady(), this.#teardownStarted.promise]);
+    if (this.#destroying) throw new WorldStateError("World is being destroyed");
+    if (this.#state !== "initialized") {
+      throw this.#stateError(`World is not ready: state is "${this.#state}"`);
     }
   }
 
@@ -476,12 +574,12 @@ export class World {
    * @throws {WorldStateError} - If the World has not yet been initialized, or has already been destroyed
    */
   refresh(retainChanged: boolean = false, retainTransitions: boolean = false): void {
-    assertWorldState("initialized", this.#state);
+    this.#assertInitialized();
     try {
       this.#archetypeManager.refresh(this.#queryManager.registeredQueries, retainTransitions);
       if (!retainChanged) this.#componentManager.refresh();
     } catch (error) {
-      this.#enterErrorState();
+      this.#enterErrorState(error);
       throw error;
     }
   }
@@ -492,11 +590,23 @@ export class World {
    */
   frame<T>(fn: () => T): T {
     this.#assertInitialized();
+    let result: T;
     try {
-      return fn();
-    } finally {
-      this.refresh();
+      result = fn();
+    } catch (error) {
+      // The callback's error is the one the caller needs. Refresh only a world that can still be refreshed,
+      // and never let a refresh failure replace it.
+      if (this.#state === "initialized") {
+        try {
+          this.refresh();
+        } catch {
+          // refresh() already moved the world into the error state
+        }
+      }
+      throw error;
     }
+    this.refresh();
+    return result;
   }
 
   /**

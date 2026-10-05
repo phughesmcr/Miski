@@ -67,9 +67,18 @@ export type SystemSpec<
   query: Query<TComponents>;
   /** The core function of the system. Invoked when the registered SystemInstance is called. */
   callback: TypedSystemCallback<TComponents, TArgs, TReturn>;
-  /** The function to call when the system is initialized. */
+  /**
+   * The function to call when the system is initialized.
+   * The world waits for it (and `onReady()` includes it), so it must not await `world.onReady()`,
+   * `world.destroy()`, or anything else that waits for this hook to finish. Such calls are rejected with a
+   * `WorldStateError` where the runtime supports async context tracking.
+   */
   init?: (world: WorldContext) => void | Promise<void>;
-  /** The function to call when the system is destroyed. */
+  /**
+   * The function to call when the system is destroyed. It only runs for a system whose `init` completed
+   * successfully. If the failure of another system's init put the world in the error state, it still runs
+   * during `world.destroy()`, with the world in that state.
+   */
   destroy?: (world: WorldContext) => void | Promise<void>;
 };
 

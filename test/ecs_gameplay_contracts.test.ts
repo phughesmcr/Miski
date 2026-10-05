@@ -415,8 +415,10 @@ Deno.test("late async system init rejection is ignored after the system is destr
   });
 
   world.systems.create(lateSystem);
-  await world.systems.destroy(lateSystem);
+  // Destroying a system waits for its pending init; the init failure is moot once the system is discarded.
+  const destruction = world.systems.destroy(lateSystem);
   rejectInit(new Error("stale late init failed"));
+  await destruction;
   await Promise.resolve();
   await Promise.resolve();
 
