@@ -2,7 +2,6 @@ import { $_SYSTEM_DESTROY_KEY, $_SYSTEM_INIT_KEY } from "@/constants.ts";
 import { NoComponentsFoundError, SpecError } from "@/errors.ts";
 import { Query } from "@/query/query.ts";
 import type { ComponentInstances, ComponentMap } from "@/types/component.ts";
-import type { BorrowedEntityList } from "@/entity/entity.ts";
 import type { SystemInstance, SystemPrivateMethods, SystemSpec, TypedSystemCallback } from "@/types/system.ts";
 import type { SystemBindings } from "@/types/system.ts";
 import type { UntypedQueryComponents } from "@/types/query.ts";
@@ -16,16 +15,6 @@ import { isObject, isValidName, noop } from "@/utils.ts";
  * @returns The created system instance
  * @throws {NoComponentsFoundError} If the system query returned no components
  */
-type CallableSystem<
-  TComponents extends ComponentMap,
-  TArgs extends unknown[],
-  TReturn,
-> = (
-  components: ComponentInstances<TComponents>,
-  entities: BorrowedEntityList,
-  ...args: TArgs
-) => TReturn;
-
 export function createSystemInstance<
   TComponents extends ComponentMap,
   TArgs extends unknown[],
@@ -35,26 +24,17 @@ export function createSystemInstance<
   system: System<TComponents, TArgs, TReturn>,
 ): SystemInstance<TypedSystemCallback<TComponents, TArgs, TReturn>> {
   const components = bindings.queryComponents(system.query) as ComponentInstances<TComponents>;
-  const callback = system.callback as CallableSystem<TComponents, unknown[], TReturn>;
+  const callback = system.callback;
   const query = system.query;
 
   if (Object.keys(components).length === 0) {
     throw new NoComponentsFoundError("System query returned no components");
   }
 
-  // Fixed-arity forwarder: no rest/spread on the hot path, and no dependence on
-  // `callback.length` (which would break trailing default parameters).
-  // Four user-arg slots covers current call sites; omitted args stay `undefined`,
-  // so callback defaults still apply.
-  return ((arg0?: unknown, arg1?: unknown, arg2?: unknown, arg3?: unknown) =>
-    callback(
-      components,
-      bindings.queryEntityList(query),
-      arg0,
-      arg1,
-      arg2,
-      arg3,
-    )) as unknown as SystemInstance<TypedSystemCallback<TComponents, TArgs, TReturn>>;
+  return ((...args: TArgs) =>
+    callback(components, bindings.queryEntityList(query), ...args)) as unknown as SystemInstance<
+      TypedSystemCallback<TComponents, TArgs, TReturn>
+    >;
 }
 
 /**

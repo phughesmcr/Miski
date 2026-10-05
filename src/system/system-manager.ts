@@ -49,9 +49,9 @@ export class SystemManager {
   constructor(world: WorldContext, bindings: SystemBindings, onLifecycleError: LifecycleErrorHandler = () => {}) {
     this.#world = world;
     this.#bindings = bindings;
-    this.#records = {};
-    this.#registry = {};
-    this.#publicRegistry = Object.freeze({});
+    this.#records = Object.create(null);
+    this.#registry = Object.create(null);
+    this.#publicRegistry = Object.freeze(Object.create(null));
     this.#onLifecycleError = onLifecycleError;
   }
 
@@ -62,7 +62,7 @@ export class SystemManager {
 
   /** Refresh the public registry view after cold-path system registry changes. */
   #refreshPublicRegistry(): void {
-    this.#publicRegistry = Object.freeze({ ...this.#registry });
+    this.#publicRegistry = Object.freeze(Object.assign(Object.create(null), this.#registry));
   }
 
   /** Remove a current record by identity so stale async failures cannot delete replacement systems. */
