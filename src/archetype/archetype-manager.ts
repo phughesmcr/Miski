@@ -224,7 +224,6 @@ export class ArchetypeManager {
     for (let q = 0; q < queryCount; q++) {
       const query = queryArray[q]!;
       query.archetypeCount = 0;
-      query.isDirty = false;
     }
 
     const archetypes = this.#archetypes;

@@ -9,7 +9,7 @@ import type {
   SlotIndex,
 } from "@/entity/entity.ts";
 
-/** Mutable pooled backing store for the public borrowed QueryEntityList view. */
+/** Retained backing store for the public borrowed QueryEntityList view. */
 export class QueryEntityResult implements EntityResultSink {
   #iterator: ReusableEntityIterator;
   #entityBuffer: Uint32Array;
@@ -64,25 +64,5 @@ export class QueryEntityResult implements EntityResultSink {
     for (let i = 0; i < this.count; i++) {
       yield this.#entityBuffer[i]! as Entity;
     }
-  }
-}
-
-/** Pool for reusing query result objects */
-export class QueryResultPool {
-  #entityResults: QueryEntityResult[] = [];
-  #size: number;
-
-  constructor(size: number) {
-    this.#size = size;
-    this.#entityResults = [];
-  }
-
-  acquireEntityResult(): QueryEntityResult {
-    return this.#entityResults.pop() ?? new QueryEntityResult(this.#size);
-  }
-
-  releaseEntityResult(result: QueryEntityResult): void {
-    result.clear();
-    this.#entityResults.push(result);
   }
 }

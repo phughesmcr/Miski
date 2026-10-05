@@ -7,8 +7,9 @@ import { Archetype } from "../src/archetype/archetype.ts";
 import { ComponentManager } from "../src/component/component-manager.ts";
 import { asEntity, asSlotIndex, ReusableEntityIterator } from "../src/entity/entity.ts";
 import { EntityManager } from "../src/entity/entity-manager.ts";
-import { QueryCache } from "../src/query/query-cache.ts";
-import { QueryEntityResult, QueryResultPool } from "../src/query/query-pool.ts";
+import { QueryManager } from "../src/query/query-manager.ts";
+import { Query } from "../src/query/query.ts";
+import { QueryEntityResult } from "../src/query/query-pool.ts";
 import type { DynamicComponentInstance, QueryInstance } from "../src/types.ts";
 import type { ComponentInstance } from "../mod.ts";
 import { createBenchmarkComponents, MEDIUM_CAPACITY, SMALL_CAPACITY, type Vec2 } from "./fixtures.ts";
@@ -116,18 +117,18 @@ for (let i = 0; i < SMALL_CAPACITY; i++) {
   bulkTransitionEntities[i] = i;
 }
 
-const queryResultPool = new QueryResultPool(MEDIUM_CAPACITY);
-const queryCache = new QueryCache(queryResultPool);
-const cacheId = "position:velocity:!sleeping";
-{
-  const result = queryCache.acquireEntitiesForFill(cacheId);
-  for (let i = 0; i < MEDIUM_CAPACITY; i += 2) result.add(asEntity(i), asSlotIndex(i));
-  queryCache.storeEntities(cacheId, result);
-}
-queryCache.ensureComponents(cacheId, {
-  [positionInstance.name]: positionInstance,
-  [velocityInstance.name]: velocityInstance,
-});
+const cachedQuery = new Query({ all: [components.position, components.velocity], none: [components.sleeping] });
+const queryManager = new QueryManager(
+  {
+    getInstances: (definitions) => componentManager.getInstances(definitions),
+    componentCount,
+    isInitialized: () => true,
+  },
+  MEDIUM_CAPACITY,
+  (queries) => archetypeManager.ensureQueryMembership(queries),
+  (query) => archetypeManager.registerQuery(query),
+);
+queryManager.entityList(cachedQuery);
 
 const dataEntity = asEntity(128);
 const transitionEntity = asEntity(257);
@@ -170,7 +171,7 @@ function createQueryInstance(
     archetypeCount: 0,
     components: Object.freeze(componentsByName),
     id: `${and.toString()}:${or.toString()}:${not.toString()}:${include.toString()}`,
-    isDirty: true,
+    resultVersion: -1,
   };
 }
 
@@ -423,12 +424,11 @@ Deno.bench({
   group: "internal query cache",
   baseline: true,
   fn: () => {
-    const result = queryResultPool.acquireEntityResult();
+    queryResult.clear();
     for (let i = 0; i < MEDIUM_CAPACITY; i++) {
-      result.add(asEntity(i), asSlotIndex(i));
+      queryResult.add(asEntity(i), asSlotIndex(i));
     }
-    entitySink ^= result.count;
-    queryResultPool.releaseEntityResult(result);
+    entitySink ^= queryResult.count;
   },
 });
 
@@ -445,42 +445,27 @@ Deno.bench({
 });
 
 Deno.bench({
-  name: "QueryResultPool acquire/release",
+  name: "QueryManager components hit",
   group: "internal query cache",
   fn: () => {
-    const result = queryResultPool.acquireEntityResult();
-    queryResultPool.releaseEntityResult(result);
+    objectSink = queryManager.components(cachedQuery);
   },
 });
 
 Deno.bench({
-  name: "QueryCache components hit",
+  name: "QueryManager entities hit",
   group: "internal query cache",
   fn: () => {
-    objectSink = queryCache.ensureComponents(cacheId, {
-      [positionInstance.name]: positionInstance,
-      [velocityInstance.name]: velocityInstance,
-    });
+    entitySink ^= queryManager.entityList(cachedQuery).count;
   },
 });
 
 Deno.bench({
-  name: "QueryCache entities hit",
+  name: "QueryManager invalidate and refill retained result",
   group: "internal query cache",
   fn: () => {
-    entitySink ^= queryCache.getCachedEntities(cacheId)!.count;
-  },
-});
-
-Deno.bench({
-  name: "QueryCache invalidate and recompute pooled result",
-  group: "internal query cache",
-  fn: () => {
-    queryCache.invalidate();
-    const result = queryCache.acquireEntitiesForFill(cacheId);
-    for (let i = 0; i < MEDIUM_CAPACITY; i += 2) result.add(asEntity(i), asSlotIndex(i));
-    queryCache.storeEntities(cacheId, result);
-    entitySink ^= result.count;
+    queryManager.invalidate();
+    entitySink ^= queryManager.entityList(cachedQuery).count;
   },
 });
 

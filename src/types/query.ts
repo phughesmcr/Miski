@@ -1,5 +1,6 @@
 import type { BooleanArray } from "@phughesmcr/booleanarray";
 
+import type { QueryEntityResult } from "@/query/query-pool.ts";
 import type { Archetype } from "@/archetype/archetype.ts";
 import type { ComponentMap, DynamicComponent, DynamicComponentInstance } from "@/types/component.ts";
 
@@ -49,12 +50,10 @@ export type QueryInstance = {
   components: Readonly<Record<string, DynamicComponentInstance>>;
   /** The QueryInstance's unique identifier */
   id: string;
-  /**
-   * `true` if the object is in a dirty state
-   *
-   * A query becomes dirty when an archetype is added or removed
-   */
-  isDirty: boolean;
+  /** Retained borrowed entity buffer, allocated on the first entity query. */
+  result?: QueryEntityResult;
+  /** Entity cache version last written into the retained buffer. */
+  resultVersion: number;
   /** A BooleanArray for the OR match criteria */
   or: BooleanArray;
   /** A BooleanArray for the NOT match criteria */

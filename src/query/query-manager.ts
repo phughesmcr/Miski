@@ -1,12 +1,12 @@
-import { ID_KEY } from "@/constants.ts";
 import { BooleanArray } from "@phughesmcr/booleanarray";
+
+import { ID_KEY } from "@/constants.ts";
 import { componentDisplayName, formatComponentNotRegistered, NotRegisteredError } from "@/errors.ts";
 import type { DynamicComponentInstance } from "@/types/component.ts";
 import type { Entity } from "@/entity/entity.ts";
 import type { QueryInstance, QueryInstanceList } from "@/types/query.ts";
 import type { ComponentInstanceGetter, QueryManagerDependencies } from "@/types/world-api.ts";
-import { QueryCache } from "./query-cache.ts";
-import { type QueryEntityResult, QueryResultPool } from "./query-pool.ts";
+import { QueryEntityResult } from "./query-pool.ts";
 import type { NormalizedQueryComponentEntry, Query } from "./query.ts";
 
 type QueryComponent = Parameters<ComponentInstanceGetter>[0][number];
@@ -78,7 +78,7 @@ function createQueryInstance(getInstances: ComponentInstanceGetter, size: number
   const include = new BooleanArray(size).setFromObjects(ID_KEY, includeInstances, true);
 
   // Build lookup table for quick component access
-  const components: Record<string, RegisteredComponentInstance> = {};
+  const components: Record<string, RegisteredComponentInstance> = Object.create(null);
   addComponentsToLookup(components, query.allEntries, andInstances);
   addComponentsToLookup(components, query.anyEntries, orInstances);
   addComponentsToLookup(components, query.includeEntries, includeInstances);
@@ -97,7 +97,7 @@ function createQueryInstance(getInstances: ComponentInstanceGetter, size: number
     archetypes: [],
     archetypeCount: 0,
     components,
-    isDirty: true,
+    resultVersion: -1,
     id,
   };
 }
@@ -116,20 +116,20 @@ export class QueryManager {
   /** Dense registered query instances (avoids Map.values() on the hot path). */
   readonly #queries: QueryInstance[] = [];
 
-  /** Reusable dense-list view over {@link #queries} — never reallocated. */
+  /** Reusable dense-list view over {@link #queries} - never reallocated. */
   readonly #queryList: { queries: QueryInstance[]; count: number };
 
-  /** Cache for query results */
-  readonly cache: QueryCache;
+  /** Capacity of each query's lazily allocated entity result. */
+  readonly #capacity: number;
 
-  /** Pool for reusing query result objects */
-  readonly pool: QueryResultPool;
+  /** Current entity-result invalidation version. */
+  #version = 0;
 
   /** Map of query IDs to their instances */
   readonly instancesByID: Map<string, QueryInstance>;
 
   /** Map of Query objects to their IDs */
-  readonly idsByQuery: Map<Query, string>;
+  readonly idsByQuery: WeakMap<Query, string>;
 
   /** Whether global query cache invalidation has already been recorded. */
   cacheInvalidated: boolean;
@@ -148,10 +148,9 @@ export class QueryManager {
     this.#ensureQueryMembership = ensureQueryMembership;
     this.#registerQueryMembership = registerQueryMembership;
     this.#queryList = { queries: this.#queries, count: 0 };
-    this.pool = new QueryResultPool(capacity);
-    this.cache = new QueryCache(this.pool);
+    this.#capacity = capacity;
     this.instancesByID = new Map();
-    this.idsByQuery = new Map();
+    this.idsByQuery = new WeakMap();
     this.cacheInvalidated = false;
   }
 
@@ -163,7 +162,7 @@ export class QueryManager {
   /** Get components for a query */
   components(query: Query): Record<string, DynamicComponentInstance> {
     const instance = this.register(query);
-    return this.cache.ensureComponents(instance.id, instance.components);
+    return instance.components;
   }
 
   /** Get entities for a query */
@@ -174,22 +173,21 @@ export class QueryManager {
   /** Get entities for a query as a dense reusable list */
   entityList(query: Query): QueryEntityResult {
     const instance = this.register(query);
-    const queryId = instance.id;
     this.ensureQueryMembership();
 
-    const cached = this.cache.getCachedEntities(queryId);
-    if (cached !== undefined) {
+    if (instance.resultVersion === this.#version) {
       this.cacheInvalidated = false;
-      return cached;
+      return instance.result!;
     }
 
-    const result = this.cache.acquireEntitiesForFill(queryId);
+    const result = instance.result ??= new QueryEntityResult(this.#capacity);
+    result.clear();
     const archetypes = instance.archetypes;
     const archetypeCount = instance.archetypeCount;
     for (let i = 0; i < archetypeCount; i++) {
       archetypes[i]!.writeEntitiesIntoResult(result);
     }
-    this.cache.storeEntities(queryId, result);
+    instance.resultVersion = this.#version;
     this.cacheInvalidated = false;
     return result;
   }
@@ -245,7 +243,7 @@ export class QueryManager {
   /** Invalidate entity query caches after a committed entity/component transition. */
   invalidate(): void {
     if (!this.cacheInvalidated) {
-      this.cache.invalidate();
+      this.#version++;
       this.cacheInvalidated = true;
     }
   }

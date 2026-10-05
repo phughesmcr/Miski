@@ -6,8 +6,8 @@ import { isObject } from "@/utils.ts";
 
 /** A normalized query component with the callback key authored by the user. */
 export type NormalizedQueryComponentEntry = {
-  key: string;
-  component: DynamicComponent;
+  readonly key: string;
+  readonly component: DynamicComponent;
 };
 
 type NormalizedQueryEntrySpec = {
@@ -38,9 +38,9 @@ function normalizeQueryEntries(
   ): NormalizedQueryComponentEntry[] => {
     if (clause === undefined) return [];
     if (Array.isArray(clause)) {
-      return clause.map((component) => ({ key: component.name, component }));
+      return clause.map((component) => Object.freeze({ key: component.name, component }));
     }
-    return Object.entries(clause).map(([key, component]) => ({ key, component }));
+    return Object.entries(clause).map(([key, component]) => Object.freeze({ key, component }));
   };
 
   return {
@@ -52,7 +52,7 @@ function normalizeQueryEntries(
 }
 
 function entriesToComponentMap(entries: readonly NormalizedQueryComponentEntry[]): Record<string, DynamicComponent> {
-  const result: Record<string, DynamicComponent> = {};
+  const result: Record<string, DynamicComponent> = Object.create(null);
   for (let i = 0; i < entries.length; i++) {
     const entry = entries[i]!;
     const key = entry.key;
@@ -169,6 +169,9 @@ export interface Query<TComponents extends ComponentMap = UntypedQueryComponents
   /** Non-filtering component instances exposed to callbacks */
   readonly include: Readonly<DynamicComponent[]>;
 
+  /** Components whose membership or data changes affect the query revision. */
+  readonly dependencyComponents: readonly DynamicComponent[];
+
   /** `all` entries keyed as authored for component callbacks. */
   readonly allEntries: Readonly<NormalizedQueryComponentEntry[]>;
 
@@ -222,6 +225,9 @@ class QueryRuntime<TComponents extends ComponentMap = UntypedQueryComponents> im
   /** Non-filtering component instances exposed to callbacks */
   readonly include: Readonly<DynamicComponent[]>;
 
+  /** Components whose membership or data changes affect the query revision. */
+  readonly dependencyComponents: readonly DynamicComponent[];
+
   /** `all` entries keyed as authored for component callbacks. */
   readonly allEntries: Readonly<NormalizedQueryComponentEntry[]>;
 
@@ -253,6 +259,12 @@ class QueryRuntime<TComponents extends ComponentMap = UntypedQueryComponents> im
     this.any = uniqueEntryComponents(entries.any);
     this.none = uniqueEntryComponents(entries.none);
     this.include = uniqueEntryComponents(entries.include);
+    this.dependencyComponents = uniqueEntryComponents([
+      ...entries.all,
+      ...entries.any,
+      ...entries.none,
+      ...entries.include,
+    ]);
     this.allEntries = Object.freeze(entries.all);
     this.anyEntries = Object.freeze(entries.any);
     this.noneEntries = Object.freeze(entries.none);
