@@ -1,4 +1,4 @@
-import { Component } from "@/component/component.ts";
+import { Component, isValidComponentSpec } from "@/component/component.ts";
 import type { ComponentSpec, DynamicComponent } from "@/types/component.ts";
 import type { ComponentValue, SchemaProperty, TypedArrayConstructor } from "@/types/partitions.ts";
 import { isPositiveUint32 } from "@/utils.ts";
@@ -53,8 +53,8 @@ export type SchemaComponentMap = Record<string, Record<string, TypedArrayConstru
 /**
  * Tag declaration for {@link createEcsWorld} / schema compile.
  *
- * - `true` — uncapped tag
- * - `{ maxEntities }` — ownership cap (same rules as ComponentSpec)
+ * - `true` - uncapped tag
+ * - `{ maxEntities }` - ownership cap (same rules as ComponentSpec)
  */
 export type TagSpec = true | { readonly maxEntities: number };
 
@@ -118,50 +118,42 @@ export function createTagFromSpec(name: string, spec: TagSpec): Component<null, 
   if (spec === true) {
     return new Component({ name });
   }
-  if (!isPositiveUint32(spec.maxEntities) || spec.maxEntities === 0) {
+  if (!isPositiveUint32(spec.maxEntities) || !Number.isInteger(spec.maxEntities)) {
     throw new TypeError(`Tag "${name}" maxEntities must be a positive integer.`);
   }
   return new Component({ name, maxEntities: spec.maxEntities });
 }
 
-function assertNoNameCollisions(
-  componentNames: readonly string[],
-  tagNames: readonly string[],
-): void {
-  const seen = new Set<string>();
-  for (const name of componentNames) {
-    if (seen.has(name)) {
-      throw new Error(`Duplicate component name "${name}".`);
-    }
-    seen.add(name);
-  }
-  for (const name of tagNames) {
-    if (seen.has(name)) {
-      throw new Error(`Tag "${name}" collides with a component name.`);
-    }
-    seen.add(name);
-  }
+type NormalizedSchema = {
+  componentMap: Record<string, Readonly<Record<string, TypedArrayConstructor>>>;
+  tagMap: Record<string, TagSpec>;
+  entries: readonly CompiledComponentEntry[];
+};
+
+function compareEntryNames(a: CompiledComponentEntry, b: CompiledComponentEntry): number {
+  return a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
 }
 
-function compileDataEntries<M extends SchemaComponentMap>(
-  input: M,
-): {
-  componentMap: Record<string, Readonly<Record<string, TypedArrayConstructor>>>;
-  entries: CompiledComponentEntry[];
-  components: Record<string, DynamicComponent>;
-} {
-  if (typeof input !== "object" || input === null) {
+/** Validate and capture schema metadata without allocating component identities. */
+function normalizeSchema(input: SchemaComponentMap, tags?: TagMap): NormalizedSchema {
+  if (typeof input !== "object" || input === null || Array.isArray(input)) {
     throw new TypeError("Component schema must be an object.");
   }
-  const componentMap: Record<string, Readonly<Record<string, TypedArrayConstructor>>> = {};
+  if (tags !== undefined && (typeof tags !== "object" || tags === null || Array.isArray(tags))) {
+    throw new TypeError("Tag schema must be an object.");
+  }
+  const componentMap: NormalizedSchema["componentMap"] = Object.create(null);
+  const tagMap: NormalizedSchema["tagMap"] = Object.create(null);
   const entries: CompiledComponentEntry[] = [];
-  const components: Record<string, DynamicComponent> = {};
   for (const componentName of Object.keys(input).toSorted()) {
+    if (tags !== undefined && Object.hasOwn(tags, componentName)) {
+      throw new Error(`Tag "${componentName}" collides with a component name.`);
+    }
     const inputProperties = input[componentName];
-    if (typeof inputProperties !== "object" || inputProperties === null) {
+    if (typeof inputProperties !== "object" || inputProperties === null || Array.isArray(inputProperties)) {
       throw new TypeError(`Component ${componentName} must be an object.`);
     }
-    const properties: Record<string, TypedArrayConstructor> = {};
+    const properties: Record<string, TypedArrayConstructor> = Object.create(null);
     const compiledProperties: CompiledComponentProperty[] = [];
     for (const propertyName of Object.keys(inputProperties).toSorted()) {
       const constructor = inputProperties[propertyName]!;
@@ -173,43 +165,52 @@ function compileDataEntries<M extends SchemaComponentMap>(
       compiledProperties.push(Object.freeze({ name: propertyName, tag }));
     }
     const frozenProperties = Object.freeze(properties);
+    if (!isValidComponentSpec({ name: componentName, schema: frozenProperties })) {
+      throw new TypeError("Invalid component specification.");
+    }
     componentMap[componentName] = frozenProperties;
     entries.push(Object.freeze({ name: componentName, properties: Object.freeze(compiledProperties) }));
-    components[componentName] = createComponentFromSchema(
-      componentName,
-      frozenProperties,
-    );
   }
-  return { componentMap, entries, components };
-}
-
-function compileTagEntries<T extends TagMap>(
-  tags: T,
-): {
-  tagMap: Record<string, TagSpec>;
-  entries: CompiledComponentEntry[];
-  components: Record<string, DynamicComponent>;
-} {
-  if (typeof tags !== "object" || tags === null) {
-    throw new TypeError("Tag schema must be an object.");
-  }
-  const tagMap: Record<string, TagSpec> = {};
-  const entries: CompiledComponentEntry[] = [];
-  const components: Record<string, DynamicComponent> = {};
-  for (const tagName of Object.keys(tags).toSorted()) {
-    const spec = tags[tagName]!;
-    if (spec !== true && (typeof spec !== "object" || spec === null || !("maxEntities" in spec))) {
+  for (const tagName of Object.keys(tags ?? {}).toSorted()) {
+    const spec = tags![tagName]!;
+    if (spec !== true && (typeof spec !== "object" || spec === null || !Object.hasOwn(spec, "maxEntities"))) {
       throw new TypeError(`Tag "${tagName}" must be true or { maxEntities }.`);
     }
-    const component = createTagFromSpec(tagName, spec);
+    if (spec !== true && (!isPositiveUint32(spec.maxEntities) || !Number.isInteger(spec.maxEntities))) {
+      throw new TypeError(`Tag "${tagName}" maxEntities must be a positive integer.`);
+    }
+    if (!isValidComponentSpec({ name: tagName })) {
+      throw new TypeError("Invalid component specification.");
+    }
     tagMap[tagName] = spec === true ? true : Object.freeze({ maxEntities: spec.maxEntities });
     const entry: CompiledComponentEntry = spec === true ?
       { name: tagName, properties: Object.freeze([]), isTag: true } :
       { name: tagName, properties: Object.freeze([]), isTag: true, maxEntities: spec.maxEntities };
     entries.push(Object.freeze(entry));
-    components[tagName] = component;
   }
-  return { tagMap, entries, components };
+  return {
+    componentMap: Object.freeze(componentMap),
+    tagMap: Object.freeze(tagMap),
+    entries: Object.freeze(entries.toSorted(compareEntryNames)),
+  };
+}
+
+function constructComponents(schema: NormalizedSchema): Record<string, DynamicComponent> {
+  const components: Record<string, DynamicComponent> = Object.create(null);
+  for (const entry of schema.entries) {
+    components[entry.name] = entry.isTag === true ?
+      createTagFromSpec(entry.name, schema.tagMap[entry.name]!) :
+      createComponentFromSchema(entry.name, schema.componentMap[entry.name]!);
+  }
+  return Object.freeze(components);
+}
+
+/** @internal Build validated component definitions without calculating a schema hash. */
+export function createComponentRegistry<M extends SchemaComponentMap, T extends TagMap>(
+  input: M,
+  tags?: T,
+): RegistryFromMaps<M, T> {
+  return constructComponents(normalizeSchema(input, tags)) as RegistryFromMaps<M, T>;
 }
 
 /**
@@ -222,32 +223,13 @@ export function compileComponentSchema<
   M extends SchemaComponentMap,
   T extends TagMap = Record<never, never>,
 >(input: M, tags?: T): CompiledComponentSchema<M, T> {
-  const data = compileDataEntries(input);
-  const tagNames = tags === undefined ? [] : Object.keys(tags);
-  assertNoNameCollisions(Object.keys(input), tagNames);
-
-  const tagResult = tags === undefined ?
-    {
-      tagMap: {} as Record<string, TagSpec>,
-      entries: [] as CompiledComponentEntry[],
-      components: {} as Record<string, DynamicComponent>,
-    } :
-    compileTagEntries(tags);
-
-  const entries = Object.freeze(
-    [...data.entries, ...tagResult.entries].toSorted((a, b) => a.name.localeCompare(b.name)),
-  );
-  const components = Object.freeze({
-    ...data.components,
-    ...tagResult.components,
-  }) as RegistryFromMaps<M, T>;
-
+  const schema = normalizeSchema(input, tags);
   return Object.freeze({
-    componentMap: Object.freeze(data.componentMap) as M,
-    tagMap: Object.freeze(tagResult.tagMap) as T,
-    components,
-    entries,
-    schemaHash: hashEntries(entries),
+    componentMap: schema.componentMap as M,
+    tagMap: schema.tagMap as T,
+    components: constructComponents(schema) as RegistryFromMaps<M, T>,
+    entries: schema.entries,
+    schemaHash: hashEntries(schema.entries),
   });
 }
 
@@ -266,20 +248,11 @@ export function mergeComponentSchemas<
     throw new Error("Cannot merge component schemas with duplicate names.");
   }
   const entries = Object.freeze(
-    [...left.entries, ...right.entries].toSorted((a, b) => a.name.localeCompare(b.name)),
+    [...left.entries, ...right.entries].toSorted(compareEntryNames),
   );
-  const componentMap: Record<string, Readonly<Record<string, TypedArrayConstructor>>> = {
-    ...left.componentMap,
-    ...right.componentMap,
-  };
-  const tagMap: Record<string, TagSpec> = {
-    ...left.tagMap,
-    ...right.tagMap,
-  };
-  const components: Record<string, DynamicComponent> = {
-    ...left.components,
-    ...right.components,
-  };
+  const componentMap = Object.assign(Object.create(null), left.componentMap, right.componentMap);
+  const tagMap = Object.assign(Object.create(null), left.tagMap, right.tagMap);
+  const components = Object.assign(Object.create(null), left.components, right.components);
   return Object.freeze({
     componentMap: Object.freeze(componentMap) as A & B,
     tagMap: Object.freeze(tagMap) as TA & TB,
@@ -294,7 +267,7 @@ export function componentSchemaHash(
   components: SchemaComponentMap,
   tags?: TagMap,
 ): string {
-  return compileComponentSchema(components, tags).schemaHash;
+  return hashEntries(normalizeSchema(components, tags).entries);
 }
 
 function hashEntries(entries: readonly CompiledComponentEntry[]): string {
@@ -308,40 +281,9 @@ function hashEntries(entries: readonly CompiledComponentEntry[]): string {
 
 function fnv1a64(value: string): string {
   let hash = FNV_OFFSET;
-  function write(byte: number): void {
+  for (const byte of new TextEncoder().encode(value)) {
     hash ^= BigInt(byte);
     hash = (hash * FNV_PRIME) & UINT64_MASK;
-  }
-  for (let index = 0; index < value.length; index++) {
-    const first = value.charCodeAt(index);
-    if (first < 0x80) {
-      write(first);
-    } else if (first < 0x800) {
-      write(0xc0 | (first >> 6));
-      write(0x80 | (first & 0x3f));
-    } else if (first >= 0xd800 && first <= 0xdbff) {
-      const second = value.charCodeAt(index + 1);
-      if (second >= 0xdc00 && second <= 0xdfff) {
-        index++;
-        const point = 0x10000 + ((first - 0xd800) << 10) + (second - 0xdc00);
-        write(0xf0 | (point >> 18));
-        write(0x80 | ((point >> 12) & 0x3f));
-        write(0x80 | ((point >> 6) & 0x3f));
-        write(0x80 | (point & 0x3f));
-      } else {
-        write(0xef);
-        write(0xbf);
-        write(0xbd);
-      }
-    } else if (first >= 0xdc00 && first <= 0xdfff) {
-      write(0xef);
-      write(0xbf);
-      write(0xbd);
-    } else {
-      write(0xe0 | (first >> 12));
-      write(0x80 | ((first >> 6) & 0x3f));
-      write(0x80 | (first & 0x3f));
-    }
   }
   return hash.toString(16).padStart(16, "0");
 }

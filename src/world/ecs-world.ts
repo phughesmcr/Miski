@@ -1,12 +1,10 @@
 import type { ComponentInstance } from "@/component/component-instance.ts";
-import type { Component } from "@/component/component.ts";
 import type { Entity } from "@/entity/entity.ts";
 import { Query } from "@/query/query.ts";
 import {
   compileComponentSchema,
   type CompiledComponentSchema,
-  createComponentFromSchema,
-  createTagFromSpec,
+  createComponentRegistry,
   type RegistryFromMaps,
   type SchemaComponentMap,
   type TagMap,
@@ -54,30 +52,6 @@ function keysOf<T extends object>(value: T): (keyof T)[] {
   return Object.keys(value) as (keyof T)[];
 }
 
-function createRegistry<
-  M extends SchemaComponentMap,
-  T extends TagMap,
->(components: M, tags: T | undefined): RegistryFromMaps<M, T> {
-  const registry = {} as RegistryFromMaps<M, T>;
-  for (const name of keysOf(components)) {
-    const key = String(name);
-    if (tags !== undefined && Object.prototype.hasOwnProperty.call(tags, key)) {
-      throw new Error(`Tag "${key}" collides with a component name.`);
-    }
-    (registry as Record<string, Component<ComponentValue<M[keyof M]>, M[keyof M]>>)[key] = createComponentFromSchema(
-      key,
-      components[name]!,
-    );
-  }
-  if (tags !== undefined) {
-    for (const name of keysOf(tags)) {
-      const key = String(name);
-      (registry as Record<string, Component<null, null>>)[key] = createTagFromSpec(key, tags[name]!);
-    }
-  }
-  return registry;
-}
-
 /**
  * Primary developer surface for a typed ECS world.
  *
@@ -103,10 +77,10 @@ export class EcsWorld<
   /** Create a typed world, optionally reusing precompiled component definitions. */
   constructor(
     config: EcsWorldConfig<M, T>,
-    definitions: RegistryFromMaps<M, T> = createRegistry(config.components, config.tags),
+    definitions: RegistryFromMaps<M, T> = createComponentRegistry(config.components, config.tags),
   ) {
-    this.components = {} as RegistryFromMaps<M, T>;
-    this.storage = {} as StorageFromMap<M, T>;
+    this.components = Object.create(null) as RegistryFromMaps<M, T>;
+    this.storage = Object.create(null) as StorageFromMap<M, T>;
     this.capacity = config.capacity;
     this.#tagNames = new Set(config.tags === undefined ? [] : Object.keys(config.tags));
 
@@ -120,6 +94,7 @@ export class EcsWorld<
       componentList.push(component);
     }
 
+    Object.freeze(this.components);
     this.world = new World({ capacity: config.capacity, components: componentList });
     for (const name of keysOf(this.components)) {
       const key = String(name);
@@ -127,6 +102,7 @@ export class EcsWorld<
         (this.components as Record<string, DynamicComponent>)[key]!,
       );
     }
+    Object.freeze(this.storage);
   }
 
   /** Ensure the underlying world is initialized. */

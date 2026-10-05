@@ -377,6 +377,9 @@ Rollback restores dense and capped sparse storage, ownership, and the changed
 and archetype transition windows captured before the scope. Revision tokens
 continue forward after restoration.
 
+Schema hashes use deterministic code-unit ordering. Regenerate persisted hashes
+for schemas mixing uppercase and lowercase names before upgrading.
+
 `world.queryRevision(query)` bumps when any component in the query is written —
 a little ding every time the batter changes.
 

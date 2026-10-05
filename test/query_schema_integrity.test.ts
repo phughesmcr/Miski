@@ -1,5 +1,16 @@
 /// <reference lib="deno.ns" />
-import { Component, Query, System } from "../mod.ts";
+
+import {
+  compileComponentSchema,
+  Component,
+  componentSchemaHash,
+  createEcsWorld,
+  createEcsWorldFromSchema,
+  mergeComponentSchemas,
+  Query,
+  System,
+} from "../mod.ts";
+import { $_COMPONENT_ID_KEY } from "../src/constants.ts";
 import { createSystemInstance } from "../src/system/system.ts";
 import { assert, assertEquals, assertStrictEquals, assertThrows, listIds } from "./helpers.ts";
 import { createTestWorld, vec2Component } from "./fixtures.ts";
@@ -105,4 +116,58 @@ Deno.test("query entity results retain their buffer across invalidation", async 
   assertEquals(listIds(first), [], "removal clears the valid prefix");
   assertEquals(snapshot, [entity], "snapshots retain stable identity after mutation");
   await world.destroy();
+});
+
+Deno.test("schema hashing does not allocate component identities and merge preserves definitions", async () => {
+  const before = new Component({ name: "before" })[$_COMPONENT_ID_KEY];
+  const hash = componentSchemaHash({ position: { y: Float32Array, x: Float32Array } }, { hero: { maxEntities: 1 } });
+  const after = new Component({ name: "after" })[$_COMPONENT_ID_KEY];
+  assertStrictEquals(after, before + 1, "metadata hashing leaves the global component id unchanged");
+  const left = compileComponentSchema({ position: { x: Float32Array, y: Float32Array } });
+  const right = compileComponentSchema({}, { hero: { maxEntities: 1 } });
+  const merged = mergeComponentSchemas(left, right);
+  assertStrictEquals(merged.schemaHash, hash, "merge and direct hash use the same canonical ordering");
+  assertStrictEquals(merged.components.position, left.components.position, "merge retains data definition identity");
+  assertStrictEquals(merged.components.hero, right.components.hero, "merge retains tag definition identity");
+  for (const map of [merged.componentMap, merged.tagMap, merged.components]) {
+    assertStrictEquals(Object.getPrototypeOf(map), null, "schema registries have no inherited keys");
+    assert(Object.isFrozen(map), "schema registries are frozen");
+  }
+  const ecs = createEcsWorldFromSchema(8, merged);
+  await ecs.init();
+  assertStrictEquals(ecs.components.position, left.components.position, "world keeps compiled component identities");
+  ecs.spawn({ position: { x: 1 }, hero: true });
+  assertThrows(() => ecs.spawn({ hero: true }), Error, "can only be added to 1");
+  assertThrows(() => ecs.spawn({ constructor: {} } as never), Error, "Unknown component");
+  await ecs.world.destroy();
+});
+
+Deno.test("plain schema bootstrap and hashing share validation", () => {
+  for (const name of ["constructor", "__proto__", "toString", "éclair", "🚀"]) {
+    const input = { [name]: { x: Float32Array } };
+    assertThrows(() => componentSchemaHash(input), TypeError, "Invalid component specification");
+    assertThrows(() => compileComponentSchema(input), TypeError, "Invalid component specification");
+    assertThrows(
+      () => createEcsWorld({ capacity: 8, components: input }),
+      TypeError,
+      "Invalid component specification",
+    );
+  }
+  const ordered = compileComponentSchema({ apple: { x: Float32Array }, Zebra: { x: Float32Array } });
+  assertEquals(ordered.entries.map((entry) => entry.name), ["Zebra", "apple"], "ordering uses code units, not locale");
+  assertStrictEquals(
+    ordered.schemaHash,
+    componentSchemaHash({ Zebra: { x: Float32Array }, apple: { x: Float32Array } }),
+    "ordering ignores authored order",
+  );
+  assertThrows(() => mergeComponentSchemas(ordered, ordered), Error, "duplicate names");
+  assertThrows(() => componentSchemaHash({ position: { x: Float32Array } }, { position: true }), Error, "collides");
+  for (const maxEntities of [0, -1, 1.5, Infinity]) {
+    assertThrows(() => componentSchemaHash({}, { hero: { maxEntities } }), TypeError, "positive integer");
+    assertThrows(
+      () => createEcsWorld({ capacity: 8, components: {}, tags: { hero: { maxEntities } } }),
+      TypeError,
+      "positive integer",
+    );
+  }
 });

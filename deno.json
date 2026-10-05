@@ -11,7 +11,7 @@
     "allowUnreachableCode": false,
     "allowUnusedLabels": false,
     "erasableSyntaxOnly": true,
-    "lib": ["esnext"],
+    "lib": ["esnext", "dom"],
     "module": "esnext",
     "noErrorTruncation": true,
     "noFallthroughCasesInSwitch": true,

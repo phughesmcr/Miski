@@ -93,4 +93,10 @@ export type {
   TagsFromMap,
   TagSpec,
 } from "@/schema/schema.ts";
-export type { EcsWorldConfig, SpawnSpec, StorageFromMap } from "@/world/ecs-world.ts";
+export type {
+  DataStorageFromMap,
+  EcsWorldConfig,
+  SpawnSpec,
+  StorageFromMap,
+  TagStorageFromMap,
+} from "@/world/ecs-world.ts";
