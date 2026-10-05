@@ -8,7 +8,7 @@ import type {
 } from "@phughesmcr/partitionedbuffer";
 
 import type { StorageProxy } from "@/component/storage-proxy.ts";
-import type { Entity } from "@/entity/entity.ts";
+import type { Entity, PackSlot, SlotIndex } from "@/entity/entity.ts";
 
 export type { Partition, PartitionStorage, Schema, SchemaProperty, TypedArray, TypedArrayConstructor };
 
@@ -17,8 +17,12 @@ export type { Partition, PartitionStorage, Schema, SchemaProperty, TypedArray, T
  * @param T The Schema / Partition type of the StorageProxy
  */
 export type StorageProxySpec<T> = {
-  /** Mark the current entity as changed for this component. */
-  markChanged(entity: Entity): void;
+  /** Mark the actual storage slot as changed for this component. */
+  markChanged(slot: SlotIndex): void;
+  /** Validate a packed entity target against liveness and ownership. */
+  has(entity: Entity): boolean;
+  /** Pack a raw slot into its current entity handle. */
+  packSlot?: PackSlot;
   /** The Partition data of the StorageProxy */
   storage: PartitionStorage<T>;
   /** The capacity of the World */

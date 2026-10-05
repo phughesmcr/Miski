@@ -12,7 +12,7 @@
  * Prefer `.storage.partitions` for SoA access (`.partitions` is an alias).
  * House rule: `slots` for storage / partitions; `entities` for identity
  * (`destroy`, `isActive`, attach). Index typed arrays via `entityIndex(entity)`
- * or `queryList` `slots` — never with a packed handle. Brands catch swaps at
+ * or `queryList` `slots` - never with a packed handle. Brands catch swaps at
  * function APIs; raw `TypedArray` indexing still accepts either number.
  *
  * ## Core

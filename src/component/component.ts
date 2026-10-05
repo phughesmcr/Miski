@@ -49,7 +49,7 @@ export function isValidComponentArray(array: unknown): array is Array<DynamicCom
 /**
  * Component implementation used by the {@link Component} constructor.
  *
- * Prefer importing {@link Component} — construct overloads live on that value so
+ * Prefer importing {@link Component} - construct overloads live on that value so
  * bare `new Component({ schema })` infers storage instead of collapsing to `never`.
  */
 class ComponentRuntime<
@@ -136,10 +136,25 @@ class ComponentRuntime<
  * Construct overloads: tag specs, bare `{ schema }` (infers storage), or
  * explicit `ComponentSpec` / dual generics for branded writes.
  */
-export type Component<
+export interface Component<
   TValue extends SchemaOrNull = null,
   TStorage extends SchemaOrNull = TValue,
-> = ComponentRuntime<TValue, TStorage>;
+> extends ComponentPrivateMethods<TStorage> {
+  /** The maximum number of owners allowed in each world. */
+  readonly maxEntities: number | null;
+  /** The component's label. */
+  readonly name: string;
+  /** The declared numeric column constructors. */
+  readonly schema: Schema<TStorage> | null;
+  /** Bytes occupied by one entity's component data. */
+  readonly size: number;
+  /** Whether the component has no numeric columns. */
+  readonly isTag: boolean;
+  /** Runtime string tag. */
+  readonly [Symbol.toStringTag]: string;
+  /** Preserve the value shape for typed component consumers. */
+  readonly __valueType?: TValue;
+}
 
 /** A Component is a collection of properties that are stored in a world */
 export const Component: ComponentConstructor = ComponentRuntime as unknown as ComponentConstructor;

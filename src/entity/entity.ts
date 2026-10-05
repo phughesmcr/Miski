@@ -77,7 +77,7 @@ export type BorrowedEntityListEachFn = (slot: SlotIndex, entity: Entity, i: numb
  *
  * **House rule:** `slots` for storage / partitions; `entities` for identity.
  * Brands catch swaps at function APIs; raw `TypedArray` indexing still accepts
- * either number — do not index partitions with a packed handle.
+ * either number - do not index partitions with a packed handle.
  */
 export type BorrowedEntityList = QueryEntityList & {
   /** Borrowed packed entity handles (branded). */

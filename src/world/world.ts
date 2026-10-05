@@ -33,6 +33,7 @@ import {
   applyComponentCheckpoint,
   captureComponentCheckpoint,
   type CheckpointEntitySet,
+  type CheckpointWorld,
   type ComponentCheckpoint,
 } from "@/checkpoint/checkpoint.ts";
 import {
@@ -48,7 +49,7 @@ import { WorldMutations } from "./world-mutations.ts";
 type WorldRollbackState = {
   readonly entityJson: string;
   readonly componentSnapshot: ComponentManagerSnapshot;
-  readonly revision: number;
+  readonly transitions: ReturnType<ArchetypeManager["captureTransitions"]>;
 };
 
 type ComponentReference<
@@ -67,7 +68,7 @@ export class World {
 
   readonly #componentManager: ComponentManager;
 
-  #entityManager: EntityManager;
+  readonly #entityManager: EntityManager;
 
   readonly #mutations: WorldMutations;
 
@@ -77,6 +78,12 @@ export class World {
 
   /** Monotonic world revision for query/component change tokens */
   #revision = 0;
+
+  #entityRevision = 0;
+
+  readonly #checkpointHost: CheckpointWorld;
+
+  readonly #visitedExitedEntities = new Set<Entity>();
 
   /** Active rollback shell, if any */
   #rollbackState: WorldRollbackState | undefined;
@@ -157,6 +164,7 @@ export class World {
     mode: "entities" | "entered" | "exited",
   ): IterableIterator<Entity> {
     this.#visitedArchetypeEntities.clear();
+    this.#visitedExitedEntities.clear();
     const queryInstance = this.#queryManager.instanceWithMembership(query);
     if (queryInstance.archetypeCount === 0) {
       return;
@@ -171,13 +179,18 @@ export class World {
         archetype.getEntered() :
         archetype.getExited();
       for (const entity of entities) {
-        if (this.#visitedArchetypeEntities.get(entityIndex(entity))) continue;
+        if (
+          mode === "exited" ?
+            this.#visitedExitedEntities.has(entity) :
+            this.#visitedArchetypeEntities.get(entityIndex(entity))
+        ) continue;
         if (
           mode === "exited" && this.#archetypeManager.getEntityArchetype(entity)?.isCandidate(queryInstance)
         ) {
           continue;
         }
-        this.#visitedArchetypeEntities.set(entityIndex(entity), true);
+        if (mode === "exited") this.#visitedExitedEntities.add(entity);
+        else this.#visitedArchetypeEntities.set(entityIndex(entity), true);
         yield entity;
       }
     }
@@ -294,6 +307,7 @@ export class World {
     }
     this.#archetypeManager.destroyEntity(entity);
     this.#entityManager.destroy(entity);
+    this.#entityRevision = ++this.#revision;
     this.#mutations.invalidateCommittedTransition(true);
   }
 
@@ -316,7 +330,13 @@ export class World {
     const { capacity, components } = spec;
     this.#entityManager = new EntityManager(capacity);
     const packSlot = (slot: number) => this.#entityManager.packSlot(slot);
-    this.#componentManager = new ComponentManager(capacity, components, () => ++this.#revision, packSlot);
+    this.#componentManager = new ComponentManager(
+      capacity,
+      components,
+      () => ++this.#revision,
+      packSlot,
+      (entity) => this.#entityManager.isActive(entity),
+    );
 
     this.#archetypeManager = new ArchetypeManager(capacity, components.length, packSlot);
     this.#visitedArchetypeEntities = new BooleanArray(capacity);
@@ -343,6 +363,9 @@ export class World {
       capacity,
       componentCount: components.length,
       isInitialized: () => this.#state === "initialized",
+      notifyEntityLifecycle: () => {
+        this.#entityRevision = ++this.#revision;
+      },
       invalidateQueries: () => {
         if (!this.#queryManager.cacheInvalidated) {
           this.#queryManager.invalidate();
@@ -362,6 +385,25 @@ export class World {
         if (this.#state === "initialized") this.#enterErrorState();
       },
     );
+
+    this.#checkpointHost = {
+      isEntityAlive: (entity) => this.#entityManager.isActive(entity),
+      entityHasComponent: (entity, component) => this.#componentManager.entityHas(component, entity),
+      getComponentInstance: (component) => this.#componentManager.require(component),
+      getOwnerCount: (component) => {
+        let count = 0;
+        const owners = this.#componentManager.getOwners(component);
+        if (owners !== undefined) { for (const _entity of owners) count++; }
+        return count;
+      },
+      validateComponentData: (component, properties) =>
+        this.#mutations.validateComponentData(this.#componentManager.require(component), properties),
+      setComponentEntityData: (entity, component, properties) =>
+        this.#setComponentEntityData(component, entity, properties),
+      addComponentToEntity: (entity, component, properties) =>
+        this.#mutations.addComponentToEntity(component, entity, properties),
+      removeComponentFromEntity: (entity, component) => this.#mutations.removeComponentFromEntity(component, entity),
+    };
 
     // Public APIs
     const APIs: WorldAPIResult = constructWorldAPIs({
@@ -481,63 +523,31 @@ export class World {
    * Unrelated component writes leave this value unchanged.
    */
   queryRevision(query: Query): number {
-    const components = [
-      ...query.all,
-      ...query.any,
-      ...query.include,
-    ];
-    if (components.length === 0) return this.#revision;
-    return this.#componentManager.latestChangedRevision(components);
+    this.#assertInitialized();
+    const lifecycleRevision = query.all.length === 0 && query.any.length === 0 ? this.#entityRevision : 0;
+    return Math.max(lifecycleRevision, this.#componentManager.latestChangedRevision(query.dependencyComponents));
   }
 
   /** Capture membership and values for selected components across an entity set. */
   captureCheckpoint(entitySet: CheckpointEntitySet, ...components: DynamicComponent[]): ComponentCheckpoint {
     this.#assertInitialized();
-    return captureComponentCheckpoint(this, entitySet, components);
+    return captureComponentCheckpoint(this.#checkpointHost, entitySet, components);
   }
 
   /** Restore a component-subset checkpoint captured from this world. */
   applyCheckpoint(checkpoint: ComponentCheckpoint): void {
     this.#assertInitialized();
-    applyComponentCheckpoint(this, checkpoint);
-  }
-
-  /** @internal CheckpointWorld */
-  isEntityAlive(entity: Entity): boolean {
-    return this.#entityManager.isActive(entity);
-  }
-
-  /** @internal CheckpointWorld */
-  entityHasComponent(entity: Entity, component: DynamicComponent): boolean {
-    return this.#componentManager.entityHas(component, entity);
-  }
-
-  /** @internal CheckpointWorld */
-  getComponentInstance(component: DynamicComponent): ComponentInstance<SchemaOrNull, SchemaOrNull> {
-    return this.#componentManager.require(component);
-  }
-
-  /** @internal CheckpointWorld */
-  addComponentToEntity(
-    entity: Entity,
-    component: DynamicComponent,
-    properties: Record<string, number>,
-  ): void {
-    this.#mutations.addComponentToEntity(component, entity, properties);
-  }
-
-  /** @internal CheckpointWorld */
-  removeComponentFromEntity(entity: Entity, component: DynamicComponent): void {
-    this.#mutations.removeComponentFromEntity(component, entity);
+    applyComponentCheckpoint(this.#checkpointHost, checkpoint);
   }
 
   /** @internal */
   [captureRollbackState](): WorldRollbackState {
+    this.#assertInitialized();
     if (this.#rollbackState !== undefined) throw new Error("A world rollback scope is already active.");
     const state: WorldRollbackState = {
       entityJson: this.#entityManager.stringify(),
       componentSnapshot: this.#componentManager.captureSnapshot(),
-      revision: this.#revision,
+      transitions: this.#archetypeManager.captureTransitions(),
     };
     this.#rollbackState = state;
     return state;
@@ -545,6 +555,7 @@ export class World {
 
   /** @internal */
   [validateRollbackState](state: WorldRollbackState): void {
+    this.#assertInitialized();
     if (this.#rollbackState !== state) throw new TypeError("Invalid world rollback state.");
   }
 
@@ -558,15 +569,15 @@ export class World {
   [restoreRollbackState](state: WorldRollbackState): void {
     this[validateRollbackState](state);
     this.#rollbackState = undefined;
-    this.#entityManager = EntityManager.fromJSON(state.entityJson);
-    this.#mutations.replaceEntityManager(this.#entityManager);
+    this.#entityManager.restoreJSON(state.entityJson);
     this.#componentManager.restoreSnapshot(state.componentSnapshot);
     this.#archetypeManager.rebuildFromOwnership(
       this.#entityManager.getActive(),
       (entity) => this.#componentManager.getEntityComponents(entity),
     );
+    this.#archetypeManager.restoreTransitions(state.transitions);
     this.#queryManager.invalidate();
-    this.#revision = state.revision + 1;
+    this.#entityRevision = ++this.#revision;
   }
 }
 

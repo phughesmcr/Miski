@@ -269,7 +269,9 @@ the `*Snapshot` helpers.
 ### :ghost: Entities
 
 Packed generational handles (slot + generation). Destroying an entity recycles
-the slot; old handles fail `isActive` — no zombie leftovers.
+the slot; old handles fail `isActive` until the slot wraps its 15-bit generation
+counter after 32,768 allocations. Rollback retains the allocation counter, so
+handles issued during speculative work are skipped by subsequent allocations.
 
 ```ts
 const e = world.entities.create();           // Entity | undefined
@@ -370,6 +372,10 @@ import { compileComponentSchema, componentSchemaHash } from "@phughesmcr/miski";
 compileComponentSchema({ Position: { x: Float32Array, y: Float32Array } });
 componentSchemaHash({ Position: { x: Float32Array, y: Float32Array } });
 ```
+
+Rollback restores dense and capped sparse storage, ownership, and the changed
+and archetype transition windows captured before the scope. Revision tokens
+continue forward after restoration.
 
 `world.queryRevision(query)` bumps when any component in the query is written —
 a little ding every time the batter changes.

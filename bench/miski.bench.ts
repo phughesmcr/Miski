@@ -317,18 +317,19 @@ Deno.bench({
 });
 
 Deno.bench({
-  name: "create + destroy recycled entity",
+  name: "create + destroy recycled entity + refresh",
   group: "entity lifecycle",
   baseline: true,
   fn: () => {
     const entity = mustCreateEntity(lifecycle.world);
     lifecycle.world.entities.destroy(entity);
     entitySink ^= entity;
+    lifecycle.world.refresh();
   },
 });
 
 Deno.bench({
-  name: "create 256 entities then destroy 256",
+  name: "create 256 entities then destroy 256 + refresh",
   group: "entity lifecycle",
   fn: () => {
     const created = new Array<Entity>(256);
@@ -339,27 +340,30 @@ Deno.bench({
       lifecycle.world.entities.destroy(created[i]!);
     }
     entitySink ^= created[0]!;
+    lifecycle.world.refresh();
   },
 });
 
 Deno.bench({
-  name: "spawn/despawn 128 projectiles - repeated addToEntity",
+  name: "spawn/despawn 128 projectiles - repeated addToEntity + refresh",
   group: "entity lifecycle",
   baseline: true,
   fn: () => {
     spawnProjectileBatchRepeated(repeatedSpawnEntities);
     destroyRepeatedBatch(repeatedSpawnEntities);
     entitySink ^= repeatedSpawnEntities[0]!;
+    repeatedSpawnLifecycle.world.refresh();
   },
 });
 
 Deno.bench({
-  name: "spawn/despawn 128 projectiles - createWith bundle",
+  name: "spawn/despawn 128 projectiles - createWith bundle + refresh",
   group: "entity lifecycle",
   fn: () => {
     spawnProjectileBatchWithCreateWith(bundledSpawnEntities);
     destroyBundledBatch(bundledSpawnEntities);
     entitySink ^= bundledSpawnEntities[0]!;
+    bundledSpawnLifecycle.world.refresh();
   },
 });
 
@@ -372,18 +376,19 @@ Deno.bench({
 });
 
 Deno.bench({
-  name: "destroy entity with 1 component and respawn",
+  name: "destroy entity with 1 component and respawn + refresh",
   group: "entity lifecycle",
   fn: () => {
     lifecycle.world.entities.destroy(destroyOneComponentEntity);
     destroyOneComponentEntity = mustCreateEntity(lifecycle.world);
     lifecycle.world.components.addToEntity(lifecycle.components.position, destroyOneComponentEntity, { x: 0, y: 0 });
     entitySink ^= destroyOneComponentEntity;
+    lifecycle.world.refresh();
   },
 });
 
 Deno.bench({
-  name: "destroy entity with 3 components and respawn",
+  name: "destroy entity with 3 components and respawn + refresh",
   group: "entity lifecycle",
   fn: () => {
     lifecycle.world.entities.destroy(destroyThreeComponentEntity);
@@ -392,11 +397,12 @@ Deno.bench({
     lifecycle.world.components.addToEntity(lifecycle.components.velocity, destroyThreeComponentEntity, { x: 1, y: 1 });
     lifecycle.world.components.addToEntity(lifecycle.components.renderable, destroyThreeComponentEntity);
     entitySink ^= destroyThreeComponentEntity;
+    lifecycle.world.refresh();
   },
 });
 
 Deno.bench({
-  name: "destroy entity with 6 components and respawn",
+  name: "destroy entity with 6 components and respawn + refresh",
   group: "entity lifecycle",
   baseline: true,
   fn: () => {
@@ -404,17 +410,19 @@ Deno.bench({
     destroySixComponentEntity = mustCreateEntity(lifecycle.world);
     addSixComponentEntity(destroySixComponentEntity);
     entitySink ^= destroySixComponentEntity;
+    lifecycle.world.refresh();
   },
 });
 
 Deno.bench({
-  name: "destroy entity with 6 components and respawn via addBundle",
+  name: "destroy entity with 6 components and respawn via addBundle + refresh",
   group: "entity lifecycle",
   fn: () => {
     lifecycle.world.entities.destroy(destroySixBundleEntity);
     destroySixBundleEntity = mustCreateEntity(lifecycle.world);
     addSixComponentBundle(destroySixBundleEntity);
     entitySink ^= destroySixBundleEntity;
+    lifecycle.world.refresh();
   },
 });
 

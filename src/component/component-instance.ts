@@ -1,3 +1,4 @@
+import { ComponentDataError, ComponentOwnershipError } from "@/errors.ts";
 import type { ComponentInstanceSpec } from "@/types/component.ts";
 import type {
   ComponentPartitions,
@@ -7,6 +8,7 @@ import type {
   TypedArray,
 } from "@/types/partitions.ts";
 import { asSlotIndex, type Entity, entityIndex, type SlotIndex } from "@/entity/entity.ts";
+import { hasOwnProperty } from "@/utils.ts";
 import type { Component } from "./component.ts";
 
 /** A ComponentInstance is the world-local representation of a component */
@@ -86,13 +88,19 @@ export class ComponentInstance<
     if (partitions === undefined) {
       throw new TypeError(`Component ${this.name} has no data storage.`);
     }
-    return partitions[key]![entityIndex(entity)]!;
+    if (!this.has(entity)) {
+      throw new ComponentOwnershipError(`Entity ${entity} does not own component ${this.name}.`);
+    }
+    return this.getAt(entityIndex(entity), key);
   }
 
   /** Write a property for a packed entity handle. */
   set(entity: Entity, key: string, value: number): void {
     if (this.proxy === null) {
       throw new TypeError(`Component ${this.name} has no data storage.`);
+    }
+    if (!hasOwnProperty(this.storage!.partitions, key)) {
+      throw new ComponentDataError(`Component ${this.name} does not define data field "${key}".`);
     }
     this.proxy.entity = entity;
     (this.proxy as Record<string, number>)[key] = value;
@@ -104,6 +112,9 @@ export class ComponentInstance<
     if (partitions === undefined) {
       throw new TypeError(`Component ${this.name} has no data storage.`);
     }
+    if (!hasOwnProperty(partitions, key)) {
+      throw new ComponentDataError(`Component ${this.name} does not define data field "${key}".`);
+    }
     return partitions[key]![slot]!;
   }
 
@@ -111,6 +122,9 @@ export class ComponentInstance<
   setAt(slot: SlotIndex, key: string, value: number): void {
     if (this.proxy === null) {
       throw new TypeError(`Component ${this.name} has no data storage.`);
+    }
+    if (!hasOwnProperty(this.storage!.partitions, key)) {
+      throw new ComponentDataError(`Component ${this.name} does not define data field "${key}".`);
     }
     this.proxy.slot = asSlotIndex(slot);
     (this.proxy as Record<string, number>)[key] = value;

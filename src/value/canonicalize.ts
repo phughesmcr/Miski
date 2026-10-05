@@ -18,5 +18,6 @@ export function canonicalizeStoredValue(
   if (!Number.isFinite(coerced)) {
     throw new TypeError(`Component ${component} property "${key}" is outside its storage range.`);
   }
-  return Object.is(coerced, -0) ? 0 : coerced;
+  if (Object.is(coerced, -0)) scratch[0] = 0;
+  return scratch[0]!;
 }

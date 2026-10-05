@@ -1,7 +1,7 @@
 import { BooleanArray } from "@phughesmcr/booleanarray";
 
 import { type Entity, type EntityArray, entityIndex, packEntity, type PackSlot } from "@/entity/entity.ts";
-import { NotRegisteredError } from "@/errors.ts";
+import { EntityNotFoundError, formatEntityNotActive, NotRegisteredError } from "@/errors.ts";
 import type { DynamicComponentInstance } from "@/types/component.ts";
 import type { QueryInstance, QueryInstanceList } from "@/types/query.ts";
 import { Archetype } from "./archetype.ts";
@@ -51,6 +51,12 @@ export class ArchetypeManager {
   /** Pack slot -> entity for archetype public iterators / query writes */
   #packSlot: PackSlot;
 
+  #requireEntitySlot(entity: Entity, slot: number): void {
+    if (slot !== entityIndex(entity) || slot >= this.#capacity || this.#packSlot(slot) !== entity) {
+      throw new EntityNotFoundError(formatEntityNotActive(entity));
+    }
+  }
+
   /**
    * Register a newly created archetype in both the id map and dense list.
    * @param archetypeId - Stable bitfield-derived id
@@ -69,6 +75,7 @@ export class ArchetypeManager {
    * @returns The target archetype
    */
   #moveEntity(entity: Entity, archetype: Archetype, slot: number = entityIndex(entity)): Archetype {
+    this.#requireEntitySlot(entity, slot);
     const oldArchetype = this.entityArchetypes[slot];
     if (oldArchetype === archetype) return archetype;
 
@@ -257,7 +264,7 @@ export class ArchetypeManager {
     this.#packSlot = packSlot;
     this.registry = new Map();
     this.entityArchetypes = new Array(capacity);
-    this.#componentCache = {};
+    this.#componentCache = Object.create(null);
     this.#queryMembershipDirty = true;
     this.#singleQueryList = { queries: [], count: 0 };
     this.#batchMove = new ArchetypeBatchMove(capacity);
@@ -324,7 +331,7 @@ export class ArchetypeManager {
       delete this.#componentCache[key];
     }
 
-    const archetype = this.entityArchetypes[entityIndex(entity)];
+    const archetype = this.getEntityArchetype(entity);
     if (!archetype) return this.#componentCache;
 
     // Reuse cache object
@@ -355,6 +362,7 @@ export class ArchetypeManager {
   /** Remove a destroyed entity from whichever archetype currently owns it. */
   destroyEntity(entity: Entity): this {
     const slot = entityIndex(entity);
+    this.#requireEntitySlot(entity, slot);
     const archetype = this.entityArchetypes[slot];
     if (archetype !== undefined) {
       archetype.removeEntity(entity, slot);
@@ -370,7 +378,9 @@ export class ArchetypeManager {
    * @returns The Archetype associated with the Entity or undefined
    */
   getEntityArchetype(entity: Entity): Archetype | undefined {
-    return this.entityArchetypes[entityIndex(entity)];
+    const slot = entityIndex(entity);
+    if (this.#packSlot(slot) !== entity) return undefined;
+    return this.entityArchetypes[slot];
   }
 
   /**
@@ -399,7 +409,7 @@ export class ArchetypeManager {
    * @returns `true` if the Entity is in the root archetype, `false` otherwise
    */
   isEntityInRoot(entity: Entity): boolean {
-    return this.entityArchetypes[entityIndex(entity)] === this.root;
+    return this.getEntityArchetype(entity) === this.root;
   }
 
   /**
@@ -500,6 +510,7 @@ export class ArchetypeManager {
       throw new NotRegisteredError("Invalid archetype.");
     }
     const slot = entityIndex(entity);
+    this.#requireEntitySlot(entity, slot);
     if (slot >= this.entityArchetypes.length || slot < 0) {
       throw new RangeError("Invalid entity.");
     }
@@ -512,6 +523,21 @@ export class ArchetypeManager {
     archetype.addEntity(entity, slot);
     this.#queryMembershipDirty = true;
     return archetype;
+  }
+
+  /** Capture transition windows for rollback, retaining archetype identity. */
+  captureTransitions(): Map<Archetype, { entered: Entity[]; exited: Entity[] }> {
+    return new Map(this.#archetypes.map((archetype) => [archetype, archetype.captureTransitions()]));
+  }
+
+  /** Restore pre-scope windows and discard transitions from speculative archetypes. */
+  restoreTransitions(states: Map<Archetype, { entered: Entity[]; exited: Entity[] }>): void {
+    for (const archetype of this.#archetypes) {
+      archetype.refresh();
+      const state = states.get(archetype);
+      if (state !== undefined) archetype.restoreTransitions(state);
+    }
+    this.#queryMembershipDirty = true;
   }
 
   /**

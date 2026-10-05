@@ -385,10 +385,11 @@ const scenarios: Scenario[] = [
       objectSink = new World({ capacity: 256, components: mixed.components.all });
     },
   },
-  budgeted("entity create/destroy recycled hot path", 250_000, () => {
+  budgeted("entity create/destroy recycled hot path + refresh", 250_000, () => {
     const entity = mustCreateEntity(lifecycle.world);
     lifecycle.world.entities.destroy(entity);
     entitySink ^= entity;
+    lifecycle.world.refresh();
   }),
   budgeted("isActive and entityHas hot checks", 250_000, () => {
     numericSink ^= mixed.world.entities.isActive(mutationEntity) ? 1 : 0;
@@ -398,7 +399,7 @@ const scenarios: Scenario[] = [
     numericSink ^= healthInstance.has(healthOwnerEntity) ? 1 : 0;
   }),
   {
-    name: "batch create/destroy 128 allocating control array reused",
+    name: "batch create/destroy 128 allocating control array reused + refresh",
     iterations: 50_000,
     maxSteadyStateBeforeGcBytesPerIter: ZERO_ALLOC_BUDGET_BYTES_PER_ITER,
     fn: () => {
@@ -409,26 +410,29 @@ const scenarios: Scenario[] = [
         lifecycle.world.entities.destroy(batchEntities[i]!);
       }
       entitySink ^= batchEntities[0]!;
+      lifecycle.world.refresh();
     },
   },
   {
-    name: "spawn/despawn 128 projectiles - repeated addToEntity",
+    name: "spawn/despawn 128 projectiles - repeated addToEntity + refresh",
     iterations: 10_000,
     maxSteadyStateBeforeGcBytesPerIter: PROJECTILE_SPAWN_DESPAWN_BUDGET_BYTES_PER_ITER,
     fn: () => {
       spawnProjectileBatchRepeated(repeatedSpawnEntities);
       destroyRepeatedBatch(repeatedSpawnEntities);
       entitySink ^= repeatedSpawnEntities[0]!;
+      repeatedSpawnLifecycle.world.refresh();
     },
   },
   {
-    name: "spawn/despawn 128 projectiles - createWith bundle",
+    name: "spawn/despawn 128 projectiles - createWith bundle + refresh",
     iterations: 10_000,
     maxSteadyStateBeforeGcBytesPerIter: ZERO_ALLOC_BUDGET_BYTES_PER_ITER,
     fn: () => {
       spawnProjectileBatchWithCreateWith(bundledSpawnEntities);
       destroyBundledBatch(bundledSpawnEntities);
       entitySink ^= bundledSpawnEntities[0]!;
+      bundledSpawnLifecycle.world.refresh();
     },
   },
   budgeted("direct typed-array component writes", 250_000, () => {

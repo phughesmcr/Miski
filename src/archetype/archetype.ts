@@ -1,7 +1,8 @@
 import { BooleanArray } from "@phughesmcr/booleanarray";
 import { ID_KEY } from "@/constants.ts";
-import { createSlotArray, type EntityArray, packEntity } from "@/entity/entity.ts";
+import { createEntityArray, createSlotArray, type EntityArray, packEntity } from "@/entity/entity.ts";
 import { asSlotIndex, type Entity, entityIndex, type PackSlot } from "@/entity/entity.ts";
+import { EntityNotFoundError, formatEntityNotActive } from "@/errors.ts";
 import type { EntityResultSink } from "@/entity/entity.ts";
 import type { DynamicComponentInstance } from "@/types/component.ts";
 import type { QueryInstance } from "@/types/query.ts";
@@ -9,7 +10,6 @@ import type { QueryInstance } from "@/types/query.ts";
 const ENTERED_ACTIVE = 1 << 0;
 const ENTERED_LISTED = 1 << 1;
 const ENTITY_ACTIVE = 1 << 2;
-const EXITED_ACTIVE = 1 << 4;
 const EXITED_LISTED = 1 << 5;
 
 function* activeSlotIterator(
@@ -57,11 +57,10 @@ export class Archetype {
   /** Number of entries in the entered list */
   #enteredListCount: number;
 
-  /** Number of currently active exited entities */
-  #exitedCount: number;
+  /** Packed historical handles departed during this refresh window. */
+  #exitedList: Uint32Array;
 
-  /** Slots marked exited during this refresh window */
-  #exitedList: EntityArray;
+  readonly #lastExitedEntities: Uint32Array;
 
   /** Number of entries in the exited list */
   #exitedListCount: number;
@@ -134,13 +133,28 @@ export class Archetype {
     this.#flags = new Uint8Array(capacity);
     this.#entityList = createSlotArray(capacity);
     this.#entityPositions = createSlotArray(capacity);
-    this.#exitedCount = 0;
-    this.#exitedList = createSlotArray(capacity);
+    this.#exitedList = createEntityArray(capacity);
+    this.#lastExitedEntities = createEntityArray(capacity);
     this.#exitedListCount = 0;
     this.#populationCount = 0;
     this.#transitionCapacity = Math.max(transitionCapacity, bitfield.size ?? 0, components.length);
     this.addTransitions = new Array(this.#transitionCapacity);
     this.removeTransitions = new Array(this.#transitionCapacity);
+  }
+
+  #requireEntitySlot(entity: Entity, slot: number): void {
+    if (slot !== entityIndex(entity) || slot >= this.#entityCapacity || this.#packSlot(slot) !== entity) {
+      throw new EntityNotFoundError(formatEntityNotActive(entity));
+    }
+  }
+
+  #appendExited(entity: Entity): void {
+    if (this.#exitedListCount === this.#exitedList.length) {
+      const expanded = createEntityArray(this.#entityCapacity, this.#exitedList.length * 2);
+      expanded.set(this.#exitedList);
+      this.#exitedList = expanded;
+    }
+    this.#exitedList[this.#exitedListCount++] = entity;
   }
 
   #activateEntity(slot: number): boolean {
@@ -187,13 +201,11 @@ export class Archetype {
     this.#entityPositions[slot] = 0;
 
     flag &= ~ENTITY_ACTIVE;
-    if ((flag & EXITED_ACTIVE) === 0) {
-      if ((flag & EXITED_LISTED) === 0) {
-        flag |= EXITED_LISTED;
-        this.#exitedList[this.#exitedListCount++] = slot;
-      }
-      flag |= EXITED_ACTIVE;
-      this.#exitedCount++;
+    const entity = this.#packSlot(slot);
+    if ((flag & EXITED_LISTED) === 0 || this.#lastExitedEntities[slot] !== entity) {
+      this.#appendExited(entity);
+      flag |= EXITED_LISTED;
+      this.#lastExitedEntities[slot] = entity;
     }
     flags[slot] = flag;
     this.#populationCount--;
@@ -207,6 +219,7 @@ export class Archetype {
    * @returns The Archetype with the Entity added
    */
   addEntity(entity: Entity, slot: number = entityIndex(entity)): Archetype {
+    this.#requireEntitySlot(entity, slot);
     this.#activateEntity(slot);
     return this;
   }
@@ -306,14 +319,32 @@ export class Archetype {
    * An iterator of Entities which have exited this Archetype since it's last refresh
    * @returns An iterator of Entities which have exited the Archetype
    */
-  getExited(): IterableIterator<Entity> {
-    return activeSlotIterator(
-      this.#exitedList,
-      this.#flags,
-      EXITED_ACTIVE,
-      this.#exitedListCount,
-      this.#packSlot,
-    );
+  *getExited(): IterableIterator<Entity> {
+    for (let index = 0; index < this.#exitedListCount; index++) {
+      yield this.#exitedList[index]! as Entity;
+    }
+  }
+
+  /** Snapshot the transition window independently from reversible population. */
+  captureTransitions(): { entered: Entity[]; exited: Entity[] } {
+    return { entered: [...this.getEntered()], exited: [...this.getExited()] };
+  }
+
+  /** Restore the window captured before speculative mutations. */
+  restoreTransitions(state: { entered: Entity[]; exited: Entity[] }): void {
+    this.refresh();
+    for (const entity of state.entered) {
+      const slot = entityIndex(entity);
+      this.#enteredList[this.#enteredListCount++] = slot;
+      setFlag(this.#flags, slot, ENTERED_LISTED | ENTERED_ACTIVE, true);
+      this.#enteredCount++;
+    }
+    for (const entity of state.exited) {
+      this.#appendExited(entity);
+      const slot = entityIndex(entity);
+      this.#lastExitedEntities[slot] = entity;
+      setFlag(this.#flags, slot, EXITED_LISTED, true);
+    }
   }
 
   /**
@@ -335,7 +366,7 @@ export class Archetype {
    * @returns `true` if this Archetype is dirty, `false` otherwise
    */
   isDirty(): boolean {
-    return this.#enteredCount > 0 || this.#exitedCount > 0;
+    return this.#enteredCount > 0 || this.#exitedListCount > 0;
   }
 
   /**
@@ -356,10 +387,10 @@ export class Archetype {
     this.#entityPositions.fill(0);
     this.#enteredList.fill(0);
     this.#exitedList.fill(0);
+    this.#lastExitedEntities.fill(0);
     this.#populationCount = 0;
     this.#enteredCount = 0;
     this.#enteredListCount = 0;
-    this.#exitedCount = 0;
     this.#exitedListCount = 0;
   }
 
@@ -373,14 +404,11 @@ export class Archetype {
       setFlag(this.#flags, slot, ENTERED_ACTIVE, false);
       setFlag(this.#flags, slot, ENTERED_LISTED, false);
     }
-    for (let i = 0; i < this.#exitedListCount; i++) {
-      const slot = this.#exitedList[i]!;
-      setFlag(this.#flags, slot, EXITED_ACTIVE, false);
-      setFlag(this.#flags, slot, EXITED_LISTED, false);
+    for (let index = 0; index < this.#exitedListCount; index++) {
+      setFlag(this.#flags, entityIndex(this.#exitedList[index]!), EXITED_LISTED, false);
     }
     this.#enteredCount = 0;
     this.#enteredListCount = 0;
-    this.#exitedCount = 0;
     this.#exitedListCount = 0;
     return this;
   }
@@ -392,6 +420,7 @@ export class Archetype {
    * @returns The Archetype with the Entity removed
    */
   removeEntity(entity: Entity, slot: number = entityIndex(entity)): Archetype {
+    this.#requireEntitySlot(entity, slot);
     this.#deactivateEntity(slot);
     return this;
   }

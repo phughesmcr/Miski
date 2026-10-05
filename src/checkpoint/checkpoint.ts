@@ -1,5 +1,5 @@
 import type { Entity } from "@/entity/entity.ts";
-import { EntityNotFoundError } from "@/errors.ts";
+import { CapacityError, EntityNotFoundError } from "@/errors.ts";
 import type { DynamicComponent } from "@/types/component.ts";
 
 /** Entity collection accepted by {@link World.captureCheckpoint}. */
@@ -9,7 +9,7 @@ export type CheckpointEntitySet =
 
 type CapturedComponent =
   | { readonly present: false }
-  | { readonly present: true; readonly properties: Readonly<Record<string, number>> };
+  | { readonly present: true; readonly properties?: Readonly<Record<string, number>> };
 
 type CapturedEntity = {
   readonly entity: Entity;
@@ -28,13 +28,15 @@ export interface CheckpointWorld {
   entityHasComponent(entity: Entity, component: DynamicComponent): boolean;
   getComponentInstance(component: DynamicComponent): {
     get(entity: Entity, key: string): number;
-    set(entity: Entity, key: string, value: number): void;
     type: { schema: Record<string, unknown> | null };
   };
+  getOwnerCount(component: DynamicComponent): number;
+  validateComponentData(component: DynamicComponent, properties: Record<string, number> | undefined): void;
+  setComponentEntityData(entity: Entity, component: DynamicComponent, properties: Record<string, number>): void;
   addComponentToEntity(
     entity: Entity,
     component: DynamicComponent,
-    properties: Record<string, number>,
+    properties?: Record<string, number>,
   ): void;
   removeComponentFromEntity(entity: Entity, component: DynamicComponent): void;
 }
@@ -89,6 +91,7 @@ export function captureComponentCheckpoint(
     const captured = components.map((component, index): CapturedComponent => {
       if (!world.entityHasComponent(entity, component)) return { present: false };
       const storage = world.getComponentInstance(component);
+      if (storage.type.schema === null) return { present: true };
       const properties: Record<string, number> = {};
       for (const key of keys[index]!) properties[key] = storage.get(entity, key);
       return { present: true, properties: Object.freeze(properties) };
@@ -115,22 +118,40 @@ export function applyComponentCheckpoint(world: CheckpointWorld, checkpoint: Com
     if (!world.isEntityAlive(entity)) throw new EntityNotFoundError(`Entity ${entity} is not active.`);
   }
 
-  for (const { entity, components: capturedComponents } of data.entities) {
+  // Validate the final ownership counts before any part of the checkpoint changes.
+  for (let index = 0; index < data.components.length; index++) {
+    const component = data.components[index]!;
+    let finalOwners = world.getOwnerCount(component);
+    for (const { entity, components } of data.entities) {
+      const captured = components[index]!;
+      const present = world.entityHasComponent(entity, component);
+      finalOwners += Number(captured.present) - Number(present);
+      if (captured.present) world.validateComponentData(component, captured.properties);
+    }
+    const cap = component.maxEntities;
+    if (cap !== null && cap !== undefined && finalOwners > cap) {
+      throw new CapacityError(`Component ${component.name} exceeds its maximum owner count.`);
+    }
+  }
+
+  // Free capped memberships first, so application never depends on entity order.
+  for (const { entity, components } of data.entities) {
     for (let index = 0; index < data.components.length; index++) {
       const component = data.components[index]!;
-      const captured = capturedComponents[index]!;
-      const present = world.entityHasComponent(entity, component);
-      if (!captured.present) {
-        if (present) world.removeComponentFromEntity(entity, component);
-        continue;
+      if (!components[index]!.present && world.entityHasComponent(entity, component)) {
+        world.removeComponentFromEntity(entity, component);
       }
-      if (!present) {
-        world.addComponentToEntity(entity, component, captured.properties as Record<string, number>);
-        continue;
-      }
-      const storage = world.getComponentInstance(component);
-      for (const [key, value] of Object.entries(captured.properties)) {
-        storage.set(entity, key, value);
+    }
+  }
+  for (const { entity, components } of data.entities) {
+    for (let index = 0; index < data.components.length; index++) {
+      const component = data.components[index]!;
+      const captured = components[index]!;
+      if (!captured.present) continue;
+      if (!world.entityHasComponent(entity, component)) {
+        world.addComponentToEntity(entity, component, captured.properties);
+      } else if (captured.properties !== undefined) {
+        world.setComponentEntityData(entity, component, captured.properties);
       }
     }
   }

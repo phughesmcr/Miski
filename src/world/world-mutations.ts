@@ -15,7 +15,6 @@ import {
 import type { EntityManager } from "@/entity/entity-manager.ts";
 import {
   CapacityError,
-  ComponentDataError,
   componentDisplayName,
   EntityNotFoundError,
   formatComponentNotRegistered,
@@ -25,7 +24,6 @@ import {
 import type { SchemaOrNull } from "@/types/partitions.ts";
 import type { DynamicComponentInstance } from "@/types/component.ts";
 import type { ComponentBundleEntryInput } from "@/types/world-api.ts";
-import { hasOwnProperty, isObject } from "@/utils.ts";
 
 type ComponentReference<
   TValue extends SchemaOrNull,
@@ -43,6 +41,7 @@ export type WorldMutationsDeps = {
   readonly componentCount: number;
   readonly isInitialized: () => boolean;
   readonly invalidateQueries: () => void;
+  readonly notifyEntityLifecycle: () => void;
 };
 
 /**
@@ -50,11 +49,12 @@ export type WorldMutationsDeps = {
  * Constructed by World and invoked from its public API facades.
  */
 export class WorldMutations {
-  #entityManager: EntityManager;
+  readonly #entityManager: EntityManager;
   readonly #componentManager: ComponentManager;
   readonly #archetypeManager: ArchetypeManager;
   readonly #isInitialized: () => boolean;
   readonly #invalidateQueries: () => void;
+  readonly #notifyEntityLifecycle: () => void;
 
   /** Dense scratch storage for preflighted batch component transitions (packed handles) */
   readonly #batchEntities: EntityArray;
@@ -83,6 +83,7 @@ export class WorldMutations {
     this.#archetypeManager = deps.archetypeManager;
     this.#isInitialized = deps.isInitialized;
     this.#invalidateQueries = deps.invalidateQueries;
+    this.#notifyEntityLifecycle = deps.notifyEntityLifecycle;
     this.#batchEntities = createEntityArray(deps.capacity);
     this.#batchSlots = createSlotArray(deps.capacity);
     this.#batchSeen = new Uint8Array(deps.capacity);
@@ -107,32 +108,7 @@ export class WorldMutations {
     instance: ComponentInstance<TValue, TStorage>,
     data: unknown,
   ): void {
-    if (data === undefined) return;
-    if (instance.storage === null) {
-      throw new ComponentDataError(`Component ${instance.type.name} has no data storage.`);
-    }
-    if (!isObject(data)) {
-      throw new TypeError(`Component data for "${instance.type.name}" must be an object.`);
-    }
-
-    const knownKeys = this.#componentManager.getStorageKeyLookup(instance);
-    if (knownKeys === undefined) {
-      throw new ComponentDataError(`Component ${instance.type.name} has no data storage.`);
-    }
-    const values = data as Record<string, unknown>;
-    for (const key in values) {
-      if (!hasOwnProperty(values, key)) continue;
-      if (knownKeys[key] !== 1) {
-        throw new ComponentDataError(`Component ${instance.type.name} does not define data field "${key}".`);
-      }
-      const value = values[key];
-      if (value === undefined) {
-        throw new ComponentDataError(`Component ${instance.type.name} data field "${key}" cannot be undefined.`);
-      }
-      if (typeof value !== "number" || !Number.isFinite(value)) {
-        throw new ComponentDataError(`Component ${instance.type.name} data field "${key}" must be a finite number.`);
-      }
-    }
+    this.#componentManager.validateInstanceData(instance, data);
   }
 
   /** Invalidate entity query caches once for a committed ownership transition batch. */
@@ -142,16 +118,12 @@ export class WorldMutations {
     }
   }
 
-  /** Replace the entity manager after world rollback restore. */
-  replaceEntityManager(entityManager: EntityManager): void {
-    this.#entityManager = entityManager;
-  }
-
   /** Create an active entity and attach it to the root archetype. */
   createEntity(): Entity | undefined {
     const entity = this.#entityManager.create();
     if (entity === undefined) return undefined;
     this.#archetypeManager.createEntity(entity);
+    this.#notifyEntityLifecycle();
     this.invalidateCommittedTransition(true);
     return entity;
   }
@@ -304,6 +276,9 @@ export class WorldMutations {
 
   /** Preflight a borrowed dense entity list before an atomic batch mutation. */
   #preflightBatchEntities(entities: QueryEntityList): number {
+    if (!entities || !entities.entities || !entities.slots) {
+      throw new TypeError("Batch entity list must include entity and slot buffers.");
+    }
     const count = entities.count;
     if (!Number.isInteger(count) || count < 0 || count > this.#batchEntities.length) {
       throw new RangeError(`Batch entity list count ${count} is outside world capacity.`);
@@ -315,7 +290,11 @@ export class WorldMutations {
         this.#clearBatchEntities(i);
         throw new EntityNotFoundError(formatEntityNotActive(entity));
       }
-      const slot = asSlotIndex(entities.slots[i]!);
+      const slot = entityIndex(entity);
+      if (entities.slots[i] !== slot) {
+        this.#clearBatchEntities(i);
+        throw new RangeError(`Batch entity ${entity} has an invalid storage slot.`);
+      }
       if (this.#batchSeen[slot] === 1) {
         this.#clearBatchEntities(i);
         throw new RangeError(`Duplicate entity ${entity} in batch entity list.`);
@@ -407,6 +386,7 @@ export class WorldMutations {
     this.#archetypeManager.destroyEntity(entity);
     if (this.#entityManager.isActive(entity)) {
       this.#entityManager.destroy(entity);
+      this.#notifyEntityLifecycle();
     }
     this.invalidateCommittedTransition(changed);
   }

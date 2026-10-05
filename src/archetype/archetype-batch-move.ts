@@ -13,7 +13,7 @@ export type TransitionArchetypeGetter = (
  * Owns reusable scratch buffers for batch single-component archetype transitions.
  * Used by {@link ArchetypeManager} for `addComponents` / `removeComponents`.
  *
- * Group lists keep capacity across calls — never truncate with `.length = 0`, which
+ * Group lists keep capacity across calls - never truncate with `.length = 0`, which
  * reallocates V8 elements backing stores on the hot path.
  */
 export class ArchetypeBatchMove {

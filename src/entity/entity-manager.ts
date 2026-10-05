@@ -16,18 +16,6 @@ import {
 } from "@/entity/entity.ts";
 import type { EntityManagerSerialized } from "@/types/component.ts";
 import { isPositiveUint32, isUint32, numberArrayFromString } from "@/utils.ts";
-import { ROLLBACK_PAGE_SIZE } from "@/rollback/page.ts";
-
-type EntityManagerRollbackState = {
-  freeHead: number;
-  nextFresh: number;
-  liveCount: number;
-  readonly occupiedPages: Array<Uint32Array | undefined>;
-  readonly generationPages: Array<Uint32Array | undefined>;
-  readonly capturedPages: number[];
-  /** Full occupancy word snapshot taken lazily on first capture. */
-  occupiedWords?: Uint32Array;
-};
 
 /** An EntityManager is responsible for creating and destroying entities */
 export class EntityManager {
@@ -40,6 +28,9 @@ export class EntityManager {
   /** Per-slot generation counters */
   readonly #generation: Uint32Array;
 
+  /** Unmasked allocation generation; retained across rollback (handles wrap at 15 bits). */
+  readonly #nextGeneration: Uint32Array;
+
   /** Scratch storage for active packed entity iteration */
   #activeEntities: Uint32Array;
 
@@ -50,9 +41,6 @@ export class EntityManager {
   #activeIterator: ReusableEntityIterator;
 
   readonly #capacity: number;
-  readonly #occupiedPagePool: Uint32Array[] = [];
-  readonly #generationPagePool: Uint32Array[] = [];
-  #rollbackStatePool: EntityManagerRollbackState | undefined;
 
   /**
    * Create a new EntityManager from a JSON string
@@ -75,6 +63,7 @@ export class EntityManager {
       const gens = numberArrayFromString(parsed.generations);
       for (let i = 0; i < gens.length && i < capacity; i++) {
         manager.#generation[i] = gens[i]!;
+        manager.#nextGeneration[i] = gens[i]! + (pool.isOccupied(i) ? 1 : 0);
       }
     }
     return manager;
@@ -99,6 +88,10 @@ export class EntityManager {
     this.#capacity = capacity;
     this.pool = pool;
     this.#generation = new Uint32Array(capacity);
+    this.#nextGeneration = new Uint32Array(capacity);
+    for (let slot = 0; slot < capacity; slot++) {
+      if (pool.isOccupied(slot)) this.#nextGeneration[slot] = 1;
+    }
     this.#activeEntities = createEntityArray(capacity);
     this.#activeSlots = new Uint32Array(capacity);
     this.#activeIterator = new ReusableEntityIterator(this.#activeEntities);
@@ -128,7 +121,10 @@ export class EntityManager {
     if (slot === -1) {
       return undefined;
     }
-    return packEntity(slot, this.#generation[slot]!);
+    const generation = this.#nextGeneration[slot]!;
+    this.#generation[slot] = generation;
+    this.#nextGeneration[slot] = (generation + 1) >>> 0;
+    return packEntity(slot, generation);
   }
 
   /**
@@ -143,7 +139,7 @@ export class EntityManager {
     const slot = entityIndex(entity);
     this.pool.release(slot);
     // Generation is stored unmasked but compared via ENTITY_GEN_MASK on pack/isActive.
-    this.#generation[slot] = (this.#generation[slot]! + 1) >>> 0;
+    this.#generation[slot] = this.#nextGeneration[slot]!;
   }
 
   /**
@@ -176,6 +172,7 @@ export class EntityManager {
    * @returns `true` if the entity exists, `false` otherwise
    */
   isActive(entity: Entity): boolean {
+    if (!this.isEntity(entity)) return false;
     const slot = entityIndex(entity);
     if (slot >= this.#capacity) return false;
     if (!this.pool.isOccupied(slot)) return false;
@@ -188,6 +185,7 @@ export class EntityManager {
    * @returns `true` if the slot index is in range
    */
   isEntity(entity: Entity): entity is Entity {
+    if (!Number.isInteger(entity) || entity < 0 || entity > 0x7fffffff) return false;
     const slot = entityIndex(entity);
     return (slot === 0 || isPositiveUint32(slot)) && slot < this.#capacity;
   }
@@ -215,110 +213,15 @@ export class EntityManager {
     );
   }
 
-  /** @internal Begin a pooled entity rollback shell; pages fill lazily. */
-  beginRollbackState(): EntityManagerRollbackState {
-    const state = this.#rollbackStatePool ?? {
-      freeHead: 0,
-      nextFresh: 0,
-      liveCount: 0,
-      occupiedPages: [],
-      generationPages: [],
-      capturedPages: [],
-    };
-    this.#rollbackStatePool = undefined;
-    state.liveCount = this.pool.occupiedCount;
-    state.occupiedWords = undefined;
-    return state;
-  }
-
-  /** @internal Capture the page containing `slot` once per rollback scope. */
-  captureRollbackPage(state: EntityManagerRollbackState, slot: number): void {
-    if (!Number.isSafeInteger(slot) || slot < 0 || slot >= this.#capacity) {
-      throw new TypeError("Invalid entity rollback page.");
+  /** Restore reversible identity state without reissuing speculative handles. */
+  restoreJSON(json: string): void {
+    const restored = EntityManager.fromJSON(json);
+    if (restored.capacity !== this.#capacity) throw new RangeError("Entity capacity mismatch.");
+    this.pool = restored.pool;
+    this.#generation.set(restored.#generation);
+    for (let slot = 0; slot < this.#capacity; slot++) {
+      if (!this.pool.isOccupied(slot)) this.#generation[slot] = this.#nextGeneration[slot]!;
+      this.#nextGeneration[slot] = Math.max(this.#nextGeneration[slot]!, restored.#nextGeneration[slot]!);
     }
-    const page = Math.floor(slot / ROLLBACK_PAGE_SIZE);
-    if (state.generationPages[page] !== undefined) return;
-
-    if (state.occupiedWords === undefined) {
-      state.occupiedWords = this.pool.toUint32Array();
-    }
-
-    const start = page * ROLLBACK_PAGE_SIZE;
-    const length = Math.min(ROLLBACK_PAGE_SIZE, this.#capacity - start);
-    const aliveWord = start >>> 5;
-
-    let occupied = this.#occupiedPagePool.pop();
-    if (occupied === undefined || occupied.length !== 1) occupied = new Uint32Array(1);
-    occupied[0] = state.occupiedWords[aliveWord]!;
-
-    let generation = this.#generationPagePool.pop();
-    if (generation === undefined || generation.length !== length) generation = new Uint32Array(length);
-    generation.set(this.#generation.subarray(start, start + length));
-
-    state.occupiedPages[page] = occupied;
-    state.generationPages[page] = generation;
-    state.capturedPages.push(page);
-  }
-
-  /** @internal Validate before any rollback owner mutates live state. */
-  validateRollbackState(state: EntityManagerRollbackState): void {
-    if (state.liveCount < 0 || state.liveCount > this.#capacity) {
-      throw new TypeError("Invalid entity rollback state.");
-    }
-    for (let index = 0; index < state.capturedPages.length; index++) {
-      const page = state.capturedPages[index]!;
-      const start = page * ROLLBACK_PAGE_SIZE;
-      const length = Math.min(ROLLBACK_PAGE_SIZE, this.#capacity - start);
-      const occupied = state.occupiedPages[page];
-      const generation = state.generationPages[page];
-      if (
-        !Number.isSafeInteger(page) || page < 0 || start >= this.#capacity ||
-        occupied === undefined || occupied.length !== 1 ||
-        generation === undefined || generation.length !== length
-      ) {
-        throw new TypeError("Invalid entity rollback state.");
-      }
-    }
-  }
-
-  /** @internal Restore occupancy and generations for captured pages. */
-  restoreRollbackState(state: EntityManagerRollbackState): void {
-    const words = this.pool.toUint32Array();
-    for (let index = 0; index < state.capturedPages.length; index++) {
-      const page = state.capturedPages[index]!;
-      const start = page * ROLLBACK_PAGE_SIZE;
-      const length = Math.min(ROLLBACK_PAGE_SIZE, this.#capacity - start);
-      const aliveWord = start >>> 5;
-      const capturedAliveWord = state.occupiedPages[page]![0]!;
-      const capturedGeneration = state.generationPages[page]!;
-
-      for (let offset = 0; offset < length; offset++) {
-        const slot = start + offset;
-        const capturedAlive = (capturedAliveWord & (1 << (slot & 31))) !== 0;
-        if (capturedAlive) {
-          this.#generation[slot] = capturedGeneration[offset]!;
-        } else if (this.pool.isOccupied(slot)) {
-          // Invalidate handles issued for slots that were dead at capture time.
-          this.#generation[slot] = (this.#generation[slot]! + 1) >>> 0;
-        }
-      }
-
-      words[aliveWord] = capturedAliveWord;
-    }
-    this.pool = new BitPool(BooleanArray.fromUint32Array(this.#capacity, Array.from(words)));
-  }
-
-  /** @internal Return page buffers to the pool after commit or restore. */
-  releaseRollbackState(state: EntityManagerRollbackState): void {
-    for (let index = 0; index < state.capturedPages.length; index++) {
-      const page = state.capturedPages[index]!;
-      this.#occupiedPagePool.push(state.occupiedPages[page]!);
-      this.#generationPagePool.push(state.generationPages[page]!);
-      state.occupiedPages[page] = undefined;
-      state.generationPages[page] = undefined;
-    }
-    state.capturedPages.length = 0;
-    state.occupiedWords = undefined;
-    this.#rollbackStatePool = state;
   }
 }
