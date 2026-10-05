@@ -1,6 +1,6 @@
 {
   "name": "@phughesmcr/miski",
-  "version": "1.0.0-alpha.3",
+  "version": "1.0.0-beta.1",
   "license": "MIT",
   "exports": "./mod.ts",
   "lock": true,
@@ -47,7 +47,7 @@
     "@phughesmcr/partitionedbuffer": "jsr:@phughesmcr/partitionedbuffer@^0.4.1"
   },
   "lint": {
-    "exclude": ["bench/**/*.ts", "example/**/*.ts", "example/**/*.js", "test/**/*.ts"],
+    "exclude": ["bench/**/*.ts", "example/**/*.ts", "example/**/*.js", "test/**"],
     "rules": {
       "tags": [
         "jsr",
@@ -78,6 +78,7 @@
     "include": [
       "deno.json",
       "README.md",
+      "CHANGELOG.md",
       "LICENSE",
       "mod.ts",
       "src/**/*.ts"
@@ -94,8 +95,8 @@
   },
   "tasks": {
     "bundle": {
-      "description": "Bundle the codebase using Bun",
-      "command": "bun build ./mod.ts --outdir ./dist --sourcemap=linked --minify"
+      "description": "Build a standalone browser-compatible ESM bundle",
+      "command": "deno bundle --platform browser --format esm --sourcemap=linked --minify --output dist/miski.mjs mod.ts"
     },
     "demo": {
       "description": "Run the visual browser demo",
@@ -139,19 +140,27 @@
     },
     "check": {
       "description": "Type-check the project graph",
-      "command": "deno check mod.ts src/**/*.ts test/**/*.ts bench/**/*.ts example/**/*.ts && deno check --config example/visual/deno.json example/visual/client.js"
+      "command": "deno check mod.ts src/**/*.ts test/**/*.ts bench/**/*.ts example/**/*.ts && deno check --config example/visual/deno.json example/visual/client.js && deno check scripts/consumer-smoke.ts scripts/check-docs.ts"
+    },
+    "check:docs": {
+      "description": "Type-check the JSDoc examples in mod.ts (deno check --doc)",
+      "command": "deno run -A scripts/check-docs.ts"
     },
     "test": {
       "description": "Run tests with the committed lockfile",
-      "command": "deno test --frozen"
+      "command": "deno test --frozen --allow-read=README.md,CHANGELOG.md"
     },
     "publish:dry-run": {
       "description": "Validate the JSR package without publishing",
       "command": "deno publish --dry-run --allow-dirty"
     },
+    "smoke:consumers": {
+      "description": "Verify clean npm and Bun installs, consumer types, and the browser bundle",
+      "command": "deno run -A scripts/consumer-smoke.ts"
+    },
     "ci": {
-      "description": "Run formatting, linting, type-checking, tests, and publish validation",
-      "command": "CI=1 deno task fmt:check && deno lint && deno task check && deno task test && deno doc --lint mod.ts && deno task publish:dry-run"
+      "description": "Run formatting, linting, type-checking, doc examples, tests, GC budgets, and publish validation",
+      "command": "deno task fmt:check && deno lint && deno task check && deno task check:docs && deno task test && deno task bench:gc && deno doc --lint mod.ts && deno task publish:dry-run"
     }
   },
   "test": {

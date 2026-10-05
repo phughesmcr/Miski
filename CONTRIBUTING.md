@@ -73,6 +73,14 @@ Layout sketch: `src/{world,component,entity,query,system,archetype,checkpoint,ro
 
 Validation: `deno task ci` before every PR (includes the GC allocation gate). For performance-sensitive changes also run `deno task bench` and ideally `deno task bench:all` (throughput + retained memory).
 
+CI and tag publishing also run `deno task smoke:consumers`: clean Node 24 and
+Bun 1.3 package installs, consumer declaration checks, and a Chromium browser
+bundle. This requires Node/npm/Bun and an external Playwright installation.
+Set `MISKI_PLAYWRIGHT_MODULE` to Playwright's `index.mjs` path and install its
+Chromium binary first. The workflow installs browser tooling under
+`$RUNNER_TEMP`; no browser tooling ships with Miski. Use Deno 2.9.7 for local
+release validation to match CI.
+
 ## Naming and comments
 
 - Prefer `.storage.partitions` in new docs and examples (`.partitions` is an alias)
@@ -83,18 +91,36 @@ Validation: `deno task ci` before every PR (includes the GC allocation gate). Fo
 
 ## Releasing
 
-JSR publishing is triggered by semver git tags, not by merging to `main`.
+JSR publishing is triggered by version tags (`v*`), not by merging to `master`.
 
-1. Bump `"version"` in `deno.json`.
-2. Merge to `main` (CI must pass).
+1. Update `"version"` in `deno.json`, `VERSION` in `src/constants.ts`,
+   `CHANGELOG.md` (add a `## <version>` section), and the install snippets in
+   `README.md`. The release integrity test checks that the runtime version,
+   `deno.json`, the README install commands, and the changelog all agree.
+2. CI, including consumer smoke checks, must pass.
+   - **Stable releases** (no `-` in the version, e.g. `1.0.0`): merge to
+     `master` first. The Publish workflow refuses to run unless the tagged
+     commit is an ancestor of `origin/master`.
+   - **Pre-releases** (version contains `-`, e.g. `1.0.0-beta.2`): may be tagged
+     from any branch, such as `1.0.0-alpha`; master ancestry is not required.
 3. Create and push a matching tag:
 
    ```sh
-   git tag v1.0.0-alpha.3
-   git push origin v1.0.0-alpha.3
+   git tag v1.0.0-beta.1
+   git push origin v1.0.0-beta.1
    ```
 
-4. The Publish workflow runs automatically on the tag push.
+4. The Publish workflow runs automatically on the tag push. A `verify` job (no
+   publishing credentials) checks the tag against `deno.json`, applies the
+   master rule above, and runs `deno task ci` plus the consumer smoke checks.
+   Only then does the `publish` job, the sole holder of `id-token: write`, run
+   `deno publish`.
 
 The tag (without the `v` prefix) must match the version in `deno.json`. Run
 `deno task publish:dry-run` locally before tagging to validate the package.
+
+Third-party GitHub Actions are pinned to full commit SHAs with a trailing
+`# vX.Y.Z` comment. When bumping one, resolve the new tag to its commit
+(`git ls-remote https://github.com/<owner>/<repo> refs/tags/<tag> 'refs/tags/<tag>^{}'`,
+preferring the dereferenced `^{}` line for annotated tags) and update the
+comment to match.

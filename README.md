@@ -12,7 +12,7 @@ sugar crash mid-frame.
 [![JSR](https://jsr.io/badges/@phughesmcr/miski)](https://jsr.io/@phughesmcr/miski)
 [![MIT](https://badgen.net/badge/license/MIT/blue)](./LICENSE)
 [![TypeScript](https://badgen.net/badge/icon/typescript?icon=typescript&label)](https://www.typescriptlang.org/)
-[![Deno](https://img.shields.io/badge/deno-^2.2.10-lightgrey?logo=deno)](https://deno.com/)
+[![Deno](https://img.shields.io/badge/deno-^2.9.7-lightgrey?logo=deno)](https://deno.com/)
 [![Bun](https://img.shields.io/badge/bun-%5E1.3.0-lightgrey?logo=bun)](https://bun.sh/)
 [![Node](https://img.shields.io/badge/node-%5E24.0.0-lightgrey?logo=node.js)](https://nodejs.org/)
 
@@ -28,7 +28,7 @@ Because ECS should be *miski* — sweet to write, sharp under the hood.
 | | |
 | --- | --- |
 | :zap: **Performant** | `ArrayBuffer`-backed SoA storage, dense `queryList` iteration, and hot paths budgeted for zero steady-state allocation. Your frames stay smooth; the collector stays bored. |
-| :dart: **Predictable** | Deterministic results for a given call sequence. Still alpha (`1.0.0-alpha.x`) — breaking changes are called out in docs and tags, no surprise ingredients. |
+| :dart: **Predictable** | Deterministic results for a given call sequence. Beta (`1.0.0-beta.x`) — compatibility changes are recorded in the [changelog](./CHANGELOG.md). |
 | :cookie: **Focused** | Runtime deps are first-party only (`bitpool`, `booleanarray`, `partitionedbuffer`). No unrelated third-party surface. Just the pantry we need. |
 
 :fork_and_knife: **On the menu:** good predictable performance · a clean
@@ -63,13 +63,13 @@ Pick your runtime. Same package, same sweetness.
 
 ```bash
 # Node
-npx jsr add @phughesmcr/miski
+npx jsr add @phughesmcr/miski@1.0.0-beta.1
 
 # Deno
-deno add jsr:@phughesmcr/miski
+deno add jsr:@phughesmcr/miski@1.0.0-beta.1
 
 # Bun
-bunx jsr add @phughesmcr/miski
+bunx jsr add @phughesmcr/miski@1.0.0-beta.1
 ```
 
 ```ts
@@ -183,8 +183,23 @@ world.refresh();           // once per frame
 world.frame(() => { /* … */ }); // refresh always runs after the callback
 ```
 
-Capacity is clamped between **8** and **65536**. Cozy studio or full stadium —
+Capacity must be between **8** and **65536**. Cozy studio or full stadium —
 your call.
+
+Await `init()` or `onReady()` before running systems. `onReady()` also waits
+for pending async init hooks of systems registered later. Lifecycle hooks may
+mutate entities and see `state === "initialized"`; that state alone is not a
+readiness signal. Callbacks reject during initialization or teardown.
+
+`destroy()` closes system registration immediately, waits for any in-flight
+`init()` and pending system init hooks, then runs the destroy hook of every
+system whose init completed. Concurrent world teardown rejects. The world ends
+`destroyed` if every hook succeeds; otherwise it stays in `error`. After a
+failed `init()`, `destroy()` still runs from `error`. Lifecycle hooks must not
+await `world.onReady()` or `world.destroy()`; doing so rejects with
+`WorldStateError`. Destroy ends the system lifecycle; it does not erase
+retained component buffers. Discard component instances and borrowed views with
+their world.
 
 ### :ice_cream: Components
 
@@ -212,6 +227,11 @@ const Facing = new Component<FacingValue, FacingStorage>({
   schema: facingSchema,
 });
 ```
+
+Data fields named `entity` or `slot` are reserved for the storage proxy cursor.
+New ownership starts every numeric field at zero, including capped components
+and omitted fields in partial payloads. Public data writes require finite
+numbers; direct partition access remains an unchecked escape hatch.
 
 **Ownership & data** — attach, detach, and bundle without crumbs on the floor:
 
@@ -274,15 +294,25 @@ counter after 32,768 allocations. Rollback retains the allocation counter, so
 handles issued during speculative work are skipped by subsequent allocations.
 
 ```ts
-const e = world.entities.create();           // Entity | undefined
-const e2 = world.entities.createOrThrow();   // throws when full
-const e3 = world.entities.createWith([[Position, { x: 1, y: 2 }]]);
+const e = world.entities.createOrThrow();          // throws CapacityError when full
+const e2 = world.entities.createOrThrow();
+const e3 = world.entities.createWithOrThrow([[Position, { x: 1, y: 2 }]]);
+const maybe = world.entities.create();             // Entity | undefined — undefined when full
+const maybe2 = world.entities.createWith([[Position, { x: 1, y: 2 }]]); // likewise
 
 world.entities.destroy(e2);
 world.entities.isActive(e);
 world.entities.getActiveCount();
 world.entities.getAvailableCount();
+
+// Optional active-iteration bounds are raw slots: inclusive start, exclusive end.
+world.entities.getActiveSnapshot(entityIndex(e3));
 ```
+
+Use `entityIndex(handle)` or `asSlotIndex(index)` for ranged iteration bounds.
+Packed handles are rejected by the TypeScript API. Spawn payload and capacity
+checks finish before entity allocation, so rejected spawns publish no entered
+or exited events and do not consume a generation.
 
 Peek under the wrapper with `entityIndex` · `entityGeneration` · `packEntity`.
 
@@ -319,6 +349,12 @@ world.entities.toArray(list);
 world.archetypes.queryEntered(q);
 world.archetypes.queryExited(q);
 ```
+
+Entered / exited are relative to the current refresh window: entered means a
+member now but not at window start, exited the reverse. Moves between matching
+archetypes, remove-then-re-add, and spawn-then-destroy within one window report
+neither. `Query.compose` throws `SpecError` if more than one input has a
+non-empty `any` group.
 
 ### :gear: Systems
 
@@ -377,6 +413,11 @@ Rollback restores dense and capped sparse storage, ownership, and the changed
 and archetype transition windows captured before the scope. Revision tokens
 continue forward after restoration.
 
+Checkpoints are reusable and bound to the capturing world; captured entities
+must still be active when applied. A world permits one active rollback scope.
+Rollback points are owner-bound and consumed by restore or commit; system hooks
+and external side effects are outside the captured ECS state.
+
 Schema hashes use deterministic code-unit ordering. Regenerate persisted hashes
 for schemas mixing uppercase and lowercase names before upgrading.
 
@@ -391,7 +432,8 @@ Sweet doesn't mean soft. Miski is tuned for Deno game-loop workloads where
 **frame time** and **GC pressure** matter more than winning a synthetic
 leaderboard.
 
-Local tasting notes — Deno 2.9.4, aarch64 macOS:
+Local tasting notes — measured on Deno 2.9.4, aarch64 macOS (the repository
+toolchain is now pinned to Deno 2.9.7; figures have not been re-measured):
 
 | Path | Result |
 | --- | ---: |
@@ -424,16 +466,24 @@ deno task bench:all
 
 ## :hammer_and_wrench: Development
 
-Miski uses **Deno 2.x** for local validation and CI. Kitchen rules and floor
+Miski uses **Deno 2.9.7** for local validation and CI. Kitchen rules and floor
 plans live in [`CONTRIBUTING.md`](./CONTRIBUTING.md).
 
 ```bash
-deno task ci      # fmt · lint · types · tests · docs · publish dry-run
+deno task ci      # fmt · lint · types · doc examples · tests · GC budgets · docs · publish dry-run
 deno task prep    # format + lint + typecheck
 deno task test
+deno task bundle  # dist/miski.mjs, including dependencies
+deno task smoke:consumers # clean Node/Bun packages + real Chromium bundle smoke
 deno task demo
 deno task demo:cli
 ```
+
+Consumer smoke checks additionally need Node, npm, Bun, and an external
+Playwright installation. Set `MISKI_PLAYWRIGHT_MODULE` to its `index.mjs` path
+after installing Chromium with Playwright's CLI. CI installs this test tooling
+in a temporary directory; it is not a library dependency. The smoke gate tests
+a local tarball of the current source and the browser bundle without publishing.
 
 House style in brief: prefer `.storage.partitions` for SoA access; `slots` for
 storage, `entities` for identity; index typed arrays by slot

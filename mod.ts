@@ -15,6 +15,9 @@
  * or `queryList` `slots` - never with a packed handle. Brands catch swaps at
  * function APIs; raw `TypedArray` indexing still accepts either number.
  *
+ * Every example below is self-contained and type-checked in CI
+ * (`deno check --doc mod.ts`).
+ *
  * ## Core
  *
  * @example Create Components
@@ -27,6 +30,8 @@
  *   name: "position",
  *   schema: vec2,
  * });
+ * const storageShape: Vec2 = vec2;
+ * console.log(positionComponent.name, storageShape);
  * ```
  *
  * @example Create a component with branded writes and exact storage partitions
@@ -38,22 +43,28 @@
  *   name: "facing",
  *   schema: { dir: Uint8Array },
  * });
+ * console.log(facingComponent.name);
  * ```
  *
  * @example Create, initialize, refresh, and destroy a World
  * ```ts
+ * const positionComponent = new Component({ name: "position", schema: { x: Float32Array, y: Float32Array } });
  * // capacity: minimum 8, maximum 65536 (MAX_WORLD_CAPACITY).
  * const world = new World({
  *   capacity: 1024,
  *   components: [positionComponent], // at least one component required
  * });
- * world.init(); // runs System init hooks
+ * await world.init(); // waits for System init hooks
  * world.refresh(); // once per frame (or use world.frame)
- * world.destroy(); // destroys entities/components; runs System destroy hooks
+ * await world.destroy(); // runs all System destroy hooks; closes the system lifecycle
  * ```
  *
  * @example Create and destroy Entities
  * ```ts
+ * const positionComponent = new Component({ name: "position", schema: { x: Float32Array, y: Float32Array } });
+ * const world = new World({ capacity: 1024, components: [positionComponent] });
+ *
+ * // create() / createWith() return undefined when the world is full.
  * const entity1: Entity | undefined = world.entities.create();
  * const entity2: Entity | undefined = world.entities.create();
  * const entity3: Entity = world.entities.createOrThrow(); // throws CapacityError when full
@@ -63,13 +74,21 @@
  * const entity5: Entity = world.entities.createWithOrThrow([
  *   [positionComponent, { x: 1, y: 2 }],
  * ]);
+ * if (entity1 === undefined || entity2 === undefined) throw new Error("world is full");
  * world.entities.destroy(entity2);
  * world.entities.isActive(entity1); // true
  * world.entities.isActive(entity2); // false (destroyed)
+ * console.log(entity3, entity4, entity5);
  * ```
  *
  * @example Add and remove Components
  * ```ts
+ * const positionComponent = new Component({ name: "position", schema: { x: Float32Array, y: Float32Array } });
+ * const facingComponent = new Component({ name: "facing", schema: { dir: Uint8Array } });
+ * const world = new World({ capacity: 1024, components: [positionComponent, facingComponent] });
+ * const entity1 = world.entities.createOrThrow();
+ * const entity2 = world.entities.createOrThrow();
+ *
  * world.components.addToEntity(positionComponent, entity1);
  * world.components.addToEntity(positionComponent, entity2, { x: 10, y: 20 });
  * // upsert: ownership unchanged; provided fields merge
@@ -83,7 +102,9 @@
  *
  * @example Read and write Component data
  * ```ts
- * import { entityIndex } from "@phughesmcr/miski";
+ * const positionComponent = new Component({ name: "position", schema: { x: Float32Array, y: Float32Array } });
+ * const world = new World({ capacity: 1024, components: [positionComponent] });
+ * const entity1 = world.entities.createWithOrThrow([[positionComponent, { x: 1, y: 2 }]]);
  *
  * // Guarded public APIs (throw on inactive / non-owner / tag / unregistered):
  * const data = world.components.getEntityData(positionComponent, entity1);
@@ -94,6 +115,7 @@
  * const soft = world.components.readEntityData(positionComponent, entity1);
  * const out = { x: 0, y: 0 };
  * world.components.readEntityDataInto(positionComponent, entity1, out);
+ * console.log(data, soft, out);
  *
  * // Proxy: type-safe writes with change tracking
  * const positionInstance = world.components.getInstance(positionComponent);
@@ -113,18 +135,25 @@
  *
  * @example Changed tracking and snapshots
  * ```ts
- * // Borrowed dense iterator - valid until next mutation / refresh:
- * for (const entity of world.components.getChanged(positionComponent)) {
+ * const positionComponent = new Component({ name: "position", schema: { x: Float32Array, y: Float32Array } });
+ * const world = new World({ capacity: 1024, components: [positionComponent] });
+ *
+ * // Borrowed dense iterator - valid until next mutation / refresh.
+ * // Both calls return undefined when the component is not registered with the world.
+ * for (const entity of world.components.getChanged(positionComponent) ?? []) {
  *   console.log(entity);
  * }
  * // Stable array for tools / tests:
- * const changedSnapshot = world.components.getChangedSnapshot(positionComponent);
+ * const changedSnapshot = world.components.getChangedSnapshot(positionComponent) ?? [];
+ * console.log(changedSnapshot.length);
  * ```
  *
  * ## Hot-path
  *
  * @example Dense queryList and frame lifecycle
  * ```ts
+ * const positionComponent = new Component({ name: "position", schema: { x: Float32Array, y: Float32Array } });
+ * const world = new World({ capacity: 1024, components: [positionComponent] });
  * const positionQuery = new Query({ all: [positionComponent] });
  * world.frame(() => {
  *   const view = world.entities.queryList(positionQuery);
@@ -139,6 +168,8 @@
  *
  * @example Convenience entity iterator (cold path)
  * ```ts
+ * const positionComponent = new Component({ name: "position", schema: { x: Float32Array, y: Float32Array } });
+ * const world = new World({ capacity: 1024, components: [positionComponent] });
  * const positionQuery = new Query({ all: [positionComponent] });
  * for (const entity of world.entities.query(positionQuery)) {
  *   console.log(entity);
@@ -147,6 +178,13 @@
  *
  * @example Query filters (all / any / none / include)
  * ```ts
+ * const tag = (name: string) => new Component({ name });
+ * const playerComponent = tag("player");
+ * const renderableComponent = tag("renderable");
+ * const renderableSFXComponent = tag("renderableSFX");
+ * const invisibilityComponent = tag("invisibility");
+ * const facingComponent = new Component({ name: "facing", schema: { dir: Uint8Array } });
+ *
  * // all = AND, any = OR, none = NOT; include exposes instances without filtering membership.
  * const renderablePlayerQuery = new Query({
  *   all: [playerComponent],
@@ -154,19 +192,25 @@
  *   none: [invisibilityComponent],
  *   include: [facingComponent],
  * });
+ * console.log(renderablePlayerQuery);
  * ```
  *
  * @example Register a typed System
  * ```ts
+ * const positionComponent = new Component({ name: "position", schema: { x: Float32Array, y: Float32Array } });
+ * const facingComponent = new Component({ name: "facing", schema: { dir: Uint8Array } });
+ * const world = new World({ capacity: 1024, components: [positionComponent, facingComponent] });
+ *
  * const positionSystem = new System({
  *   name: "positionSystem",
  *   query: new Query({ all: { position: positionComponent }, include: { facing: facingComponent } }),
- *   init: (world: World) => {
+ *   init: (_world: WorldContext) => {
  *     console.log("positionSystem initialized");
  *   },
- *   destroy: (world: World) => {
+ *   destroy: (_world: WorldContext) => {
  *     console.log("positionSystem destroyed");
  *   },
+ *   // Parameters after (components, entities) are inferred as the system's call arguments.
  *   callback: (components, entities, frametime: number, message: string): void => {
  *     const position = components.position;
  *     const facing = components.facing;
@@ -177,8 +221,9 @@
  *       position.proxy.entity = entity;
  *       if (facing.has(entity)) {
  *         const dir = facing.storage!.partitions.dir[slot];
+ *         console.log(message, dir);
  *       }
- *       positionX[slot] += 1;
+ *       positionX[slot]! += frametime;
  *     }
  *   },
  * });
@@ -226,10 +271,12 @@
  *   { Position: { x: Float32Array, y: Float32Array } },
  *   { Player: true },
  * );
+ * console.log(hash, schema);
  *
- * const point = captureWorldRollbackPoint(world);
+ * // Rollback points are captured from (and restored to) the underlying World.
+ * const point = captureWorldRollbackPoint(game.world);
  * // mutate...
- * restoreWorldRollbackPoint(world, point);
+ * restoreWorldRollbackPoint(game.world, point);
  * ```
  */
 

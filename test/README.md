@@ -13,6 +13,11 @@ Runtime tests live in `*.test.ts` files and run via `deno test` (see `deno.json`
 | `world_regressions.test.ts` | Edge cases: maxEntities, entered/exited, cache freshness, batch atomicity |
 | `learnings.test.ts` | Newer APIs: frame, revision, createEcsWorld, schema hash, checkpoint, rollback |
 | `module_graph.test.ts` | Forbidden import coupling edges |
+| `component_integrity.test.ts` | Guarded identities, numeric writes, reserved schema fields, capped defaults |
+| `world_integrity.test.ts` | Atomic spawn/checkpoints, historical exits, rollback identities, slot bounds |
+| `world_lifecycle_integrity.test.ts` | Async readiness, teardown concurrency, failure cleanup |
+| `rollback_checkpoint_integrity.test.ts` | One rollback scope, consumed/foreign rollback points, foreign checkpoints, >32-component round-trips |
+| `release_integrity.test.ts` | Runtime, `deno.json`, README install snippet, and CHANGELOG version consistency (reads `README.md` and `CHANGELOG.md`; `deno task test` grants `--allow-read` for just those files) |
 
 ## Shared fixtures
 
@@ -32,5 +37,14 @@ These files are type-checked by `deno task check` but are **not** executed by `d
 - `typed_system_inference.ts` — `new System` / `new Query` callback and query-map inference
 - `query_constructor_inference.ts` — typed `Query({ all: { … } })` constructor inference
 - `typed_ecs_world_inference.ts` — `createEcsWorld` / schema-world spawn and storage inference
+- `entity_api_inference.ts` — slot bounds reject packed entity handles
 
 They use `@ts-expect-error` to assert that invalid access is rejected at compile time.
+
+`deno task smoke:consumers` runs separately from the Deno unit suite. It builds
+the current source as a local npm tarball, installs it in separate clean npm
+and Bun projects, checks public declarations and gameplay, then exercises the
+standalone browser bundle in real Chromium. Node/npm/Bun and an external
+Playwright installation with Chromium are required; set
+`MISKI_PLAYWRIGHT_MODULE` to Playwright's `index.mjs` path. All consumer files
+are temporary and no registry publish occurs.
