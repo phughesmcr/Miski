@@ -1,4 +1,4 @@
-import type { BorrowedEntityIterator, BorrowedEntityList, Entity } from "@/entity/entity.ts";
+import type { BorrowedEntityIterator, BorrowedEntityList, Entity, SlotIndex } from "@/entity/entity.ts";
 import type { Query } from "@/query/query.ts";
 import type { ComponentBundle, ComponentBundleEntryInput } from "@/types/component-bundle.ts";
 
@@ -26,10 +26,10 @@ export type WorldEntityAPI = {
   ): Entity;
   /** Destroy an entity */
   destroy(entity: Entity): void;
-  /** Get an iterable of all active entities */
-  getActive(startEntity?: Entity, endEntity?: Entity): BorrowedEntityIterator;
-  /** Get a stable snapshot of all active entities */
-  getActiveSnapshot(startEntity?: Entity, endEntity?: Entity): Entity[];
+  /** Get active handles within raw slot bounds: inclusive start (default 0), exclusive end (default capacity). */
+  getActive(startSlot?: SlotIndex, endSlot?: SlotIndex): BorrowedEntityIterator;
+  /** Get a stable snapshot within the same raw slot bounds as {@link getActive}. */
+  getActiveSnapshot(startSlot?: SlotIndex, endSlot?: SlotIndex): Entity[];
   /** Get the number of active entities */
   getActiveCount(): number;
   /** Get the number of available entities */

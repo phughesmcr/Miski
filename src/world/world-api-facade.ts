@@ -7,7 +7,7 @@ import type { QueryManager } from "@/query/query-manager.ts";
 import type { SystemManager } from "@/system/system-manager.ts";
 import type { Query } from "@/query/query.ts";
 import type { DynamicComponent } from "@/types/component.ts";
-import type { Entity, QueryEntityList } from "@/entity/entity.ts";
+import type { Entity, QueryEntityList, SlotIndex } from "@/entity/entity.ts";
 import type { ComponentData, SchemaOrNull, SchemaValues } from "@/types/partitions.ts";
 import type {
   ComponentBundle,
@@ -259,9 +259,9 @@ function constructEntityAPI(host: WorldApiHost): WorldEntityAPI {
       host.assertInitialized();
       host.destroyEntity(entity);
     },
-    getActive: (startEntity?: Entity, endEntity?: Entity) => host.entityManager.getActive(startEntity, endEntity),
-    getActiveSnapshot: (startEntity?: Entity, endEntity?: Entity) =>
-      host.snapshotIterator(host.entityManager.getActive(startEntity, endEntity)) ?? [],
+    getActive: (startSlot?: SlotIndex, endSlot?: SlotIndex) => host.entityManager.getActive(startSlot, endSlot),
+    getActiveSnapshot: (startSlot?: SlotIndex, endSlot?: SlotIndex) =>
+      host.snapshotIterator(host.entityManager.getActive(startSlot, endSlot)) ?? [],
     getActiveCount: () => host.entityManager.getActiveCount(),
     getAvailableCount: () => host.entityManager.getAvailableCount(),
     isActive: (entity: Entity) => host.entityManager.isActive(entity),

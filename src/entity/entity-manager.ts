@@ -147,7 +147,10 @@ export class EntityManager {
    * @param startSlot - Inclusive raw slot lower bound (default 0)
    * @param endSlot - Exclusive raw slot upper bound (default capacity)
    */
-  getActive(startSlot: number = 0, endSlot: number = this.#capacity): IterableIterator<Entity> {
+  getActive(
+    startSlot: SlotIndex = asSlotIndex(0),
+    endSlot: SlotIndex = asSlotIndex(this.#capacity),
+  ): IterableIterator<Entity> {
     const count = this.pool.occupiedIndicesInto(this.#activeSlots, startSlot, endSlot);
     for (let i = 0; i < count; i++) {
       const slot = this.#activeSlots[i]!;
