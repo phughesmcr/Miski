@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add `SystemSpec.argCount` (0 to 4). A system created with it forwards exactly
+  that many arguments to its callback without allocating per call; missing
+  arguments arrive as `undefined` and extras are dropped. Systems without it
+  forward arguments exactly as before.
 - Make rollback restore observationally neutral. After
   `restoreWorldRollbackPoint`, entity allocation order, `queryList` and
   `getOwners` iteration order, and entered / exited match a world that never

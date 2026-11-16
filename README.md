@@ -388,6 +388,13 @@ const run = world.systems.create(movement);
 run(1 / 60);
 ```
 
+A system instance forwards whatever arguments its caller passes, which
+allocates an arguments array on every call. For a system called with a fixed
+number of arguments on a hot path, set `argCount` (0 to 4) in the spec — here
+`argCount: 1` for `dt` — and calls allocate nothing. The callback then always
+receives exactly `argCount` arguments: missing ones arrive as `undefined`, and
+extras are dropped.
+
 Array-based `QuerySpec` / dynamic callbacks still work for stringy, late-bound
 code — cast instances before touching concrete partitions.
 
@@ -457,7 +464,9 @@ toolchain is now pinned to Deno 2.9.7; figures have not been re-measured):
 Hot entity, ownership, direct-write, cached query, changed/owner iteration,
 bulk transition, and game-frame (move + query + refresh) paths are
 **effectively allocation-free** in steady state (`deno task bench:gc`) —
-about ~3 B/iter of measurement noise on the frame path, not a feast.
+about ~3 B/iter of measurement noise on the frame path, not a feast. The
+frame path needs systems created with `argCount`; without it, each system
+call allocates its arguments array (about 32 B plus 8 B per argument).
 
 Figures are illustrative local snapshots, not CI throughput gates. Absolute
 timings vary by machine and workload. Being the fastest ECS on the web is

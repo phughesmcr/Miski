@@ -579,8 +579,9 @@ const scenarios: Scenario[] = [
   },
   {
     name: "bulk add/remove tag component across queryList - 896 entities",
-    iterations: 10_000,
-    // Batch move paths keep tiering up past 10k calls; recompiles inside a round read as a few KiB of "allocation".
+    iterations: 40_000,
+    // Batch move paths keep tiering up past 10k calls; a recompile inside a round adds a fixed ~4-5 KiB, so long rounds
+    // keep that below the per-iteration budget.
     warmupIterations: 40_000,
     maxSteadyStateBeforeGcBytesPerIter: BATCH_COMPONENT_TRANSITION_BUDGET_BYTES_PER_ITER,
     fn: () => {
