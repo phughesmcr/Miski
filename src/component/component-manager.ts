@@ -425,10 +425,9 @@ export class ComponentManager {
   }
 
   /** Reset one entity's component storage slot to its default empty value. */
-  #clearEntityStorage(storage: Record<string, TypedArray>, slot: number): void {
-    for (const key in storage) {
-      storage[key]![slot] = 0;
-    }
+  #clearEntityStorage(state: ComponentState, slot: number): void {
+    const columns = state.storageColumns;
+    for (let i = 0; i < columns.length; i++) columns[i]![slot] = 0;
   }
 
   /**
@@ -479,7 +478,7 @@ export class ComponentManager {
         if (changed || ownershipChanged) this.#markChanged(state, slot);
       } else if (ownershipChanged) {
         // A no-payload attach zero-initializes the row and is a change, exactly like an explicit payload.
-        this.#clearEntityStorage(storage.partitions as Record<string, TypedArray>, slot);
+        this.#clearEntityStorage(state, slot);
         this.#markChanged(state, slot);
       }
     }
@@ -773,12 +772,13 @@ export class ComponentManager {
     instance: ComponentInstance<TValue, TStorage>,
     entity: Entity,
   ): ComponentData<TValue> | undefined {
-    const storage = instance.storage?.partitions as Record<string, TypedArray> | undefined;
-    if (!storage) return undefined;
+    const state = this.#states[instance.id];
+    if (instance.storage === null || state === undefined) return undefined;
+    const keys = state.storageKeys;
+    const columns = state.storageColumns;
+    const slot = entityIndex(entity);
     const result: Record<string, number> = {};
-    for (const key in storage) {
-      result[key] = storage[key]![entityIndex(entity)] ?? Number.NaN;
-    }
+    for (let i = 0; i < keys.length; i++) result[keys[i]!] = columns[i]![slot] ?? Number.NaN;
     return result as ComponentData<TValue>;
   }
 
@@ -802,13 +802,14 @@ export class ComponentManager {
     entity: Entity,
     out: Partial<ComponentData<TValue>>,
   ): boolean {
-    const storage = instance.storage?.partitions as Record<string, TypedArray> | undefined;
-    if (!storage) return false;
+    const state = this.#states[instance.id];
+    if (instance.storage === null || state === undefined) return false;
     if (!this.entityOwnsInstance(instance, entity)) return false;
     const target = out as Record<string, number>;
-    for (const key in storage) {
-      target[key] = storage[key]![entityIndex(entity)] ?? Number.NaN;
-    }
+    const keys = state.storageKeys;
+    const columns = state.storageColumns;
+    const slot = entityIndex(entity);
+    for (let i = 0; i < keys.length; i++) target[keys[i]!] = columns[i]![slot] ?? Number.NaN;
     return true;
   }
 
@@ -857,29 +858,13 @@ export class ComponentManager {
     const wasOwned = owners?.[slot] === 1;
     if (!wasOwned) return false;
 
-    const ownerList = state.ownerList!;
-    const ownerPositions = state.ownerPositions!;
-    const ownerCount = state.ownerCount;
-    state.ownerCount = this.#removeFromDenseList(ownerList, ownerPositions, ownerCount, slot);
-
-    if (owners !== undefined && slot < owners.length) {
-      owners[slot] = 0;
-    }
-    const storage = instance.storage;
-    if (storage !== null) {
-      this.#unmarkChanged(state, slot);
-    }
-    if (wasOwned) this.#bumpRevision(state);
-    if (wasOwned && storage !== null && state.usesSparseStorage) {
-      const partitions = storage.partitions as Record<string, TypedArray>;
-      for (const key in partitions) {
-        const partition = partitions[key];
-        if (partition && !ArrayBuffer.isView(partition)) {
-          Reflect.deleteProperty(partition, String(slot));
-        }
-      }
-    }
-    return wasOwned;
+    state.ownerCount = this.#removeFromDenseList(state.ownerList!, state.ownerPositions!, state.ownerCount, slot);
+    owners[slot] = 0;
+    if (instance.storage !== null) this.#unmarkChanged(state, slot);
+    this.#bumpRevision(state);
+    // Every column of a capped component shares one slot -> row index, so one delete unmaps the whole row.
+    if (state.usesSparseStorage) (state.storageColumns[0] as SparseColumn).deleteEntity(slot);
+    return true;
   }
 
   /**

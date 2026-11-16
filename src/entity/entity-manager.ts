@@ -15,7 +15,7 @@ import {
   type SlotIndex,
 } from "@/entity/entity.ts";
 import type { EntityManagerSerialized } from "@/types/component.ts";
-import { isPositiveUint32, isUint32, numberArrayFromString } from "@/utils.ts";
+import { isUint32, numberArrayFromString } from "@/utils.ts";
 
 /** An EntityManager is responsible for creating and destroying entities */
 export class EntityManager {
@@ -31,14 +31,11 @@ export class EntityManager {
   /** Unmasked allocation generation; retained across rollback (handles wrap at 15 bits). */
   readonly #nextGeneration: Uint32Array;
 
-  /** Scratch storage for active packed entity iteration */
-  #activeEntities: Uint32Array;
+  /** Scratch storage for occupied slot indices before packing (allocated by {@link getActive}, grown on demand) */
+  #activeSlots: Uint32Array | undefined;
 
-  /** Scratch storage for occupied slot indices before packing */
-  #activeSlots: Uint32Array;
-
-  /** Reusable active entity iterator */
-  #activeIterator: ReusableEntityIterator;
+  /** Reusable active entity iterator over packed handles (allocated with `#activeSlots`) */
+  #activeIterator: ReusableEntityIterator | undefined;
 
   readonly #capacity: number;
 
@@ -97,9 +94,6 @@ export class EntityManager {
     for (let slot = 0; slot < capacity; slot++) {
       if (pool.isOccupied(slot)) this.#nextGeneration[slot] = 1;
     }
-    this.#activeEntities = createEntityArray(capacity);
-    this.#activeSlots = new Uint32Array(capacity);
-    this.#activeIterator = new ReusableEntityIterator(this.#activeEntities);
   }
 
   /** @returns the maximum number of entities allowed in the pool (inclusive) */
@@ -160,12 +154,26 @@ export class EntityManager {
     if (!Number.isInteger(startSlot) || !Number.isInteger(endSlot)) {
       throw new TypeError(`Active entity bounds must be integer slot indices (got ${startSlot}, ${endSlot}).`);
     }
-    const count = this.pool.occupiedIndicesInto(this.#activeSlots, startSlot, endSlot);
-    for (let i = 0; i < count; i++) {
-      const slot = this.#activeSlots[i]!;
-      this.#activeEntities[i] = packEntity(slot, this.#generation[slot]!);
+    // Scratch is sized to the live population (an upper bound on any range), doubling up to capacity.
+    const occupied = this.pool.occupiedCount;
+    let slots = this.#activeSlots;
+    let iterator = this.#activeIterator;
+    if (slots === undefined || iterator === undefined || slots.length < occupied) {
+      const length = Math.min(this.#capacity, Math.max(occupied, (slots?.length ?? 8) * 2));
+      slots = new Uint32Array(length);
+      const entities = createEntityArray(this.#capacity, length);
+      if (iterator === undefined) iterator = new ReusableEntityIterator(entities);
+      else iterator.indices = entities;
+      this.#activeSlots = slots;
+      this.#activeIterator = iterator;
     }
-    return this.#activeIterator.reset(count);
+    const entities = iterator.indices;
+    const count = this.pool.occupiedIndicesInto(slots, startSlot, endSlot);
+    for (let i = 0; i < count; i++) {
+      const slot = slots[i]!;
+      entities[i] = packEntity(slot, this.#generation[slot]!);
+    }
+    return iterator.reset(count);
   }
 
   /** @returns the number of active entities */
@@ -198,8 +206,7 @@ export class EntityManager {
    */
   isEntity(entity: Entity): entity is Entity {
     if (!Number.isInteger(entity) || entity < 0 || entity > 0x7fffffff) return false;
-    const slot = entityIndex(entity);
-    return (slot === 0 || isPositiveUint32(slot)) && slot < this.#capacity;
+    return entityIndex(entity) < this.#capacity;
   }
 
   /** Resolve a packed handle to its slot after validating liveness. */

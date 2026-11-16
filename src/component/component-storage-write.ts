@@ -50,8 +50,9 @@ export function writeEntityStorageData(
   let changed = false;
   for (let i = 0; i < state.storageKeys.length; i++) {
     const key = state.storageKeys[i]!;
-    if (!ownershipChanged && !hasOwnProperty(data, key)) continue;
-    const value = hasOwnProperty(data, key) ? state.coercionScratchColumns[i]![0]! : 0;
+    const provided = hasOwnProperty(data, key);
+    if (!provided && !ownershipChanged) continue;
+    const value = provided ? state.coercionScratchColumns[i]![0]! : 0;
     const column = state.storageColumns[i]!;
     if (!Object.is(column[slot], value)) {
       column[slot] = value;
