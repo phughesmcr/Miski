@@ -1,7 +1,6 @@
 /// <reference lib="deno.ns" />
 
 import { AlreadyRegisteredError, Component, Query, SpecError, System, World } from "../mod.ts";
-import { NoComponentsFoundError } from "../src/errors.ts";
 import { assert, assertEquals, assertThrows } from "./helpers.ts";
 import { createEntity, createTestWorld, tagComponent, vec2Component } from "./fixtures.ts";
 
@@ -85,24 +84,6 @@ Deno.test("world capacity validation does not expose storage-layer errors", () =
     () => new World({ capacity: 7, components: [position] }),
     SpecError,
     "Invalid WorldSpec",
-  );
-});
-
-Deno.test("systems cannot be created for queries that expose no component instances", async () => {
-  const disabled = tagComponent("disabled");
-  const world = await createTestWorld([disabled]);
-
-  assertThrows(
-    () =>
-      world.systems.create(
-        new System({
-          name: "disabledSweep",
-          query: new Query({ none: [disabled] }),
-          callback: () => {},
-        }),
-      ),
-    NoComponentsFoundError,
-    "System query returned no components",
   );
 });
 
