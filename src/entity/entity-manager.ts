@@ -42,6 +42,9 @@ export class EntityManager {
 
   readonly #capacity: number;
 
+  /** Scratch bitmap (and the pool viewing it) used to rewrite {@link pool} in place on restore. */
+  #restoreScratch: { readonly bits: BooleanArray; readonly pool: BitPool } | undefined;
+
   /**
    * Create a new EntityManager from a JSON string
    * @param json - The JSON string matching {@link EntityManager.stringify} format
@@ -223,13 +226,23 @@ export class EntityManager {
     );
   }
 
-  /** Capture reversible identity state: occupancy, the pool's allocation cursor, and generations. */
+  /**
+   * Capture reversible identity state: occupancy, the pool's allocation cursor, and the generations of live slots.
+   * Free slots need no generation: restore retires them at their (monotonic) next generation.
+   */
   captureState(): EntityManagerState {
-    return {
-      occupancy: this.pool.toUint32Array(),
-      cursor: this.pool.nextAvailableIndex,
-      generation: this.#generation.slice(),
-    };
+    const occupancy = this.pool.toUint32Array();
+    const generation = new Uint32Array(this.pool.occupiedCount);
+    let count = 0;
+    for (let word = 0; word < occupancy.length; word++) {
+      let bits = occupancy[word]!;
+      while (bits !== 0) {
+        const slot = (word << 5) + (31 - Math.clz32(bits & -bits));
+        generation[count++] = this.#generation[slot]!;
+        bits &= bits - 1;
+      }
+    }
+    return { occupancy, cursor: this.pool.nextAvailableIndex, generation };
   }
 
   /**
@@ -237,15 +250,46 @@ export class EntityManager {
    * Allocation order after restore matches a manager that never left the captured state.
    */
   restoreState(state: EntityManagerState): void {
-    this.pool = restorePool(this.#capacity, state.occupancy, state.cursor);
-    this.#generation.set(state.generation);
-    for (let slot = 0; slot < this.#capacity; slot++) {
-      // Handles issued after capture stay retired: generations only move forward.
-      const capturedNext = state.generation[slot]! + (this.pool.isOccupied(slot) ? 1 : 0);
-      const next = Math.max(this.#nextGeneration[slot]!, capturedNext);
-      this.#nextGeneration[slot] = next;
-      if (!this.pool.isOccupied(slot)) this.#generation[slot] = next;
+    this.#restorePool(state.occupancy, state.cursor);
+    // Handles issued after capture stay retired: generations only move forward, so every slot that was free at
+    // capture is parked at its next generation, and only slots live at capture take their captured generation.
+    const generation = this.#generation;
+    const nextGeneration = this.#nextGeneration;
+    generation.set(nextGeneration);
+    const occupancy = state.occupancy;
+    const captured = state.generation;
+    let count = 0;
+    for (let word = 0; word < occupancy.length; word++) {
+      let bits = occupancy[word]!;
+      while (bits !== 0) {
+        const slot = (word << 5) + (31 - Math.clz32(bits & -bits));
+        const gen = captured[count++]!;
+        generation[slot] = gen;
+        if (nextGeneration[slot]! < gen + 1) nextGeneration[slot] = gen + 1;
+        bits &= bits - 1;
+      }
     }
+  }
+
+  /**
+   * Rewrite the pool in place from an occupancy bitmap and restore its allocation cursor.
+   * BitPool releases are LIFO, so occupying the cursor slot and releasing it makes it the next acquisition.
+   */
+  #restorePool(occupancy: Uint32Array, cursor: number): void {
+    let scratch = this.#restoreScratch;
+    if (scratch === undefined) {
+      const bits = new BooleanArray(this.#capacity);
+      scratch = { bits, pool: new BitPool(bits) };
+      this.#restoreScratch = scratch;
+    }
+    const words = scratch.bits.buffer;
+    words.set(occupancy);
+    const restoreCursor = cursor >= 0 && cursor < this.#capacity && (words[cursor >>> 5]! & (1 << (cursor & 31))) === 0;
+    if (restoreCursor) words[cursor >>> 5] = (words[cursor >>> 5]! | (1 << (cursor & 31))) >>> 0;
+    if (this.pool.size !== this.#capacity) this.pool = new BitPool(this.#capacity);
+    // `unionInto` copies the bits and recomputes the pool's derived counts and cursor.
+    scratch.pool.unionInto(scratch.pool, this.pool);
+    if (restoreCursor) this.pool.release(cursor);
   }
 }
 
@@ -253,6 +297,7 @@ export class EntityManager {
 export type EntityManagerState = {
   readonly occupancy: Uint32Array;
   readonly cursor: number;
+  /** Generations of slots occupied at capture, in ascending slot order. */
   readonly generation: Uint32Array;
 };
 

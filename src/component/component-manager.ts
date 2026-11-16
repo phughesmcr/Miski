@@ -18,6 +18,7 @@ import type { Component } from "./component.ts";
 import {
   captureComponentManagerSnapshot,
   type ComponentManagerSnapshot,
+  type ComponentSnapshotRestoreHooks,
   restoreComponentManagerSnapshot,
 } from "./component-snapshot.ts";
 import { prepareEntityStorageData, writeEntityStorageData } from "./component-storage-write.ts";
@@ -60,6 +61,13 @@ export type ComponentBundleCommitEntry = {
   instance: DynamicComponentInstance;
   /** Optional numeric data to merge into component storage. */
   data: Partial<Record<string, number>> | undefined;
+};
+
+/** Sparse (capped) storage column; every column of one component shares a single slot -> row index. */
+type SparseColumn = TypedArray & {
+  getEntity(entity: number): number | undefined;
+  setEntity(entity: number, value: number): void;
+  deleteEntity(entity: number): boolean;
 };
 
 type ComponentState = {
@@ -119,6 +127,13 @@ export class ComponentManager {
   #isActive: (entity: Entity) => boolean;
   /** Pack slot -> entity at owner/changed iterator edges */
   #packSlot: PackSlot;
+  /** Tracking callbacks used by rollback restore (allocated once). */
+  readonly #snapshotHooks: ComponentSnapshotRestoreHooks<ComponentState> = {
+    ensureOwnershipState: (state) => this.#ensureOwnershipState(state),
+    ensureChangedState: (state) => this.#ensureChangedState(state),
+    reserveSparseSlot: (state, owners, slot) => this.#reserveSparseSlot(state, owners, slot),
+    bumpRevision: (state) => this.#bumpRevision(state),
+  };
 
   /**
    * Create a new component manager.
@@ -379,19 +394,19 @@ export class ComponentManager {
    * `ownerCount` rows are mapped and `ownerCount < maxEntities` guarantees room.
    */
   #reserveSparseSlot(state: ComponentState, owners: Uint8Array, slot: number): void {
-    const column = state.storageColumns[0]!;
-    if (column[slot] !== undefined) return;
+    const column = state.storageColumns[0] as SparseColumn;
+    if (column.getEntity(slot) !== undefined) return;
     try {
-      column[slot] = 0;
+      column.setEntity(slot, 0);
       return;
     } catch (error) {
       if (!(error instanceof RangeError)) throw error;
     }
-    const sparse = column as TypedArray & { deleteEntity(entity: number): boolean };
+    const getEntity = column.getEntity;
     for (let other = 0; other < this.#capacity; other++) {
-      if (owners[other] !== 1 && other !== slot && column[other] !== undefined) sparse.deleteEntity(other);
+      if (owners[other] !== 1 && other !== slot && getEntity(other) !== undefined) column.deleteEntity(other);
     }
-    column[slot] = 0;
+    column.setEntity(slot, 0);
   }
 
   /** Reset one entity's component storage slot to its default empty value. */
@@ -897,17 +912,11 @@ export class ComponentManager {
 
   /** Capture a full ownership + column snapshot for rollback. */
   captureSnapshot(): ComponentManagerSnapshot {
-    return captureComponentManagerSnapshot(this.#states, this.#capacity);
+    return captureComponentManagerSnapshot(this.#states);
   }
 
   /** Restore a full ownership + column snapshot for rollback. */
   restoreSnapshot(snapshot: ComponentManagerSnapshot): void {
-    restoreComponentManagerSnapshot(
-      this.#states,
-      snapshot,
-      (state) => this.#ensureOwnershipState(state),
-      (state) => this.#ensureChangedState(state),
-      (state) => this.#bumpRevision(state),
-    );
+    restoreComponentManagerSnapshot(this.#states, snapshot, this.#snapshotHooks);
   }
 }
