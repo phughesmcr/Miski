@@ -15,7 +15,7 @@ import {
   type SlotIndex,
 } from "@/entity/entity.ts";
 import type { EntityManagerSerialized } from "@/types/component.ts";
-import { isPositiveUint32, isUint32, numberArrayFromString } from "@/utils.ts";
+import { isUint32, numberArrayFromString } from "@/utils.ts";
 
 /** An EntityManager is responsible for creating and destroying entities */
 export class EntityManager {
@@ -31,16 +31,16 @@ export class EntityManager {
   /** Unmasked allocation generation; retained across rollback (handles wrap at 15 bits). */
   readonly #nextGeneration: Uint32Array;
 
-  /** Scratch storage for active packed entity iteration */
-  #activeEntities: Uint32Array;
+  /** Scratch storage for occupied slot indices before packing (allocated by {@link getActive}, grown on demand) */
+  #activeSlots: Uint32Array | undefined;
 
-  /** Scratch storage for occupied slot indices before packing */
-  #activeSlots: Uint32Array;
-
-  /** Reusable active entity iterator */
-  #activeIterator: ReusableEntityIterator;
+  /** Reusable active entity iterator over packed handles (allocated with `#activeSlots`) */
+  #activeIterator: ReusableEntityIterator | undefined;
 
   readonly #capacity: number;
+
+  /** Scratch bitmap (and the pool viewing it) used to rewrite {@link pool} in place on restore. */
+  #restoreScratch: { readonly bits: BooleanArray; readonly pool: BitPool } | undefined;
 
   /**
    * Create a new EntityManager from a JSON string
@@ -94,9 +94,6 @@ export class EntityManager {
     for (let slot = 0; slot < capacity; slot++) {
       if (pool.isOccupied(slot)) this.#nextGeneration[slot] = 1;
     }
-    this.#activeEntities = createEntityArray(capacity);
-    this.#activeSlots = new Uint32Array(capacity);
-    this.#activeIterator = new ReusableEntityIterator(this.#activeEntities);
   }
 
   /** @returns the maximum number of entities allowed in the pool (inclusive) */
@@ -157,12 +154,26 @@ export class EntityManager {
     if (!Number.isInteger(startSlot) || !Number.isInteger(endSlot)) {
       throw new TypeError(`Active entity bounds must be integer slot indices (got ${startSlot}, ${endSlot}).`);
     }
-    const count = this.pool.occupiedIndicesInto(this.#activeSlots, startSlot, endSlot);
-    for (let i = 0; i < count; i++) {
-      const slot = this.#activeSlots[i]!;
-      this.#activeEntities[i] = packEntity(slot, this.#generation[slot]!);
+    // Scratch is sized to the live population (an upper bound on any range), doubling up to capacity.
+    const occupied = this.pool.occupiedCount;
+    let slots = this.#activeSlots;
+    let iterator = this.#activeIterator;
+    if (slots === undefined || iterator === undefined || slots.length < occupied) {
+      const length = Math.min(this.#capacity, Math.max(occupied, (slots?.length ?? 8) * 2));
+      slots = new Uint32Array(length);
+      const entities = createEntityArray(this.#capacity, length);
+      if (iterator === undefined) iterator = new ReusableEntityIterator(entities);
+      else iterator.indices = entities;
+      this.#activeSlots = slots;
+      this.#activeIterator = iterator;
     }
-    return this.#activeIterator.reset(count);
+    const entities = iterator.indices;
+    const count = this.pool.occupiedIndicesInto(slots, startSlot, endSlot);
+    for (let i = 0; i < count; i++) {
+      const slot = slots[i]!;
+      entities[i] = packEntity(slot, this.#generation[slot]!);
+    }
+    return iterator.reset(count);
   }
 
   /** @returns the number of active entities */
@@ -195,8 +206,7 @@ export class EntityManager {
    */
   isEntity(entity: Entity): entity is Entity {
     if (!Number.isInteger(entity) || entity < 0 || entity > 0x7fffffff) return false;
-    const slot = entityIndex(entity);
-    return (slot === 0 || isPositiveUint32(slot)) && slot < this.#capacity;
+    return entityIndex(entity) < this.#capacity;
   }
 
   /** Resolve a packed handle to its slot after validating liveness. */
@@ -223,13 +233,23 @@ export class EntityManager {
     );
   }
 
-  /** Capture reversible identity state: occupancy, the pool's allocation cursor, and generations. */
+  /**
+   * Capture reversible identity state: occupancy, the pool's allocation cursor, and the generations of live slots.
+   * Free slots need no generation: restore retires them at their (monotonic) next generation.
+   */
   captureState(): EntityManagerState {
-    return {
-      occupancy: this.pool.toUint32Array(),
-      cursor: this.pool.nextAvailableIndex,
-      generation: this.#generation.slice(),
-    };
+    const occupancy = this.pool.toUint32Array();
+    const generation = new Uint32Array(this.pool.occupiedCount);
+    let count = 0;
+    for (let word = 0; word < occupancy.length; word++) {
+      let bits = occupancy[word]!;
+      while (bits !== 0) {
+        const slot = (word << 5) + (31 - Math.clz32(bits & -bits));
+        generation[count++] = this.#generation[slot]!;
+        bits &= bits - 1;
+      }
+    }
+    return { occupancy, cursor: this.pool.nextAvailableIndex, generation };
   }
 
   /**
@@ -237,15 +257,46 @@ export class EntityManager {
    * Allocation order after restore matches a manager that never left the captured state.
    */
   restoreState(state: EntityManagerState): void {
-    this.pool = restorePool(this.#capacity, state.occupancy, state.cursor);
-    this.#generation.set(state.generation);
-    for (let slot = 0; slot < this.#capacity; slot++) {
-      // Handles issued after capture stay retired: generations only move forward.
-      const capturedNext = state.generation[slot]! + (this.pool.isOccupied(slot) ? 1 : 0);
-      const next = Math.max(this.#nextGeneration[slot]!, capturedNext);
-      this.#nextGeneration[slot] = next;
-      if (!this.pool.isOccupied(slot)) this.#generation[slot] = next;
+    this.#restorePool(state.occupancy, state.cursor);
+    // Handles issued after capture stay retired: generations only move forward, so every slot that was free at
+    // capture is parked at its next generation, and only slots live at capture take their captured generation.
+    const generation = this.#generation;
+    const nextGeneration = this.#nextGeneration;
+    generation.set(nextGeneration);
+    const occupancy = state.occupancy;
+    const captured = state.generation;
+    let count = 0;
+    for (let word = 0; word < occupancy.length; word++) {
+      let bits = occupancy[word]!;
+      while (bits !== 0) {
+        const slot = (word << 5) + (31 - Math.clz32(bits & -bits));
+        const gen = captured[count++]!;
+        generation[slot] = gen;
+        if (nextGeneration[slot]! < gen + 1) nextGeneration[slot] = gen + 1;
+        bits &= bits - 1;
+      }
     }
+  }
+
+  /**
+   * Rewrite the pool in place from an occupancy bitmap and restore its allocation cursor.
+   * BitPool releases are LIFO, so occupying the cursor slot and releasing it makes it the next acquisition.
+   */
+  #restorePool(occupancy: Uint32Array, cursor: number): void {
+    let scratch = this.#restoreScratch;
+    if (scratch === undefined) {
+      const bits = new BooleanArray(this.#capacity);
+      scratch = { bits, pool: new BitPool(bits) };
+      this.#restoreScratch = scratch;
+    }
+    const words = scratch.bits.buffer;
+    words.set(occupancy);
+    const restoreCursor = cursor >= 0 && cursor < this.#capacity && (words[cursor >>> 5]! & (1 << (cursor & 31))) === 0;
+    if (restoreCursor) words[cursor >>> 5] = (words[cursor >>> 5]! | (1 << (cursor & 31))) >>> 0;
+    if (this.pool.size !== this.#capacity) this.pool = new BitPool(this.#capacity);
+    // `unionInto` copies the bits and recomputes the pool's derived counts and cursor.
+    scratch.pool.unionInto(scratch.pool, this.pool);
+    if (restoreCursor) this.pool.release(cursor);
   }
 }
 
@@ -253,6 +304,7 @@ export class EntityManager {
 export type EntityManagerState = {
   readonly occupancy: Uint32Array;
   readonly cursor: number;
+  /** Generations of slots occupied at capture, in ascending slot order. */
   readonly generation: Uint32Array;
 };
 

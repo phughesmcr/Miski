@@ -1,138 +1,168 @@
-import type { BooleanArray } from "@phughesmcr/booleanarray";
-
-import type { EntityArray, ReusableSlotPackIterator } from "@/entity/entity.ts";
+import type { EntityArray } from "@/entity/entity.ts";
 import type { DynamicComponentInstance } from "@/types/component.ts";
-import type { TypedArray } from "@/types/partitions.ts";
+import type { TypedArray, TypedArrayConstructor } from "@/types/partitions.ts";
 
-/** Full component-manager snapshot used by world rollback. */
+/** One component's rollback state: owned rows only, in owner-iteration order. */
+type ComponentStateSnapshot = {
+  /** Owner slots in iteration order. */
+  readonly owners: EntityArray;
+  /** Changed slots in iteration order (always a subset of `owners`). */
+  readonly changed: EntityArray;
+  /** Owned row values per storage column (parallel to `storageColumns`), each parallel to `owners`. */
+  readonly rows: readonly TypedArray[];
+};
+
+/** Component-manager snapshot used by world rollback. */
 export type ComponentManagerSnapshot = {
-  readonly states: ReadonlyArray<{
-    owners?: Uint8Array;
-    ownerCount: number;
-    /** Owner slots in iteration order (length `ownerCount`). */
-    ownerList?: EntityArray;
-    changedSlots: EntityArray | readonly number[];
-    columns: Record<string, TypedArray>;
-    sparseColumns: Record<string, { slots: number[]; values: number[] }>;
-  }>;
+  readonly states: readonly ComponentStateSnapshot[];
 };
 
 /** Snapshottable view of one component state's ownership and storage. */
 export type SnapshottableComponentState = {
   readonly instance: DynamicComponentInstance;
+  readonly storageColumns: readonly TypedArray[];
+  readonly usesSparseStorage: boolean;
   owners?: Uint8Array;
   ownerCount: number;
   ownerList?: EntityArray;
   ownerPositions?: EntityArray;
-  ownerIterator?: ReusableSlotPackIterator;
-  changed?: BooleanArray;
   changedCount: number;
   changedList?: EntityArray;
   changedPositions?: EntityArray;
-  changedIterator?: ReusableSlotPackIterator;
 };
 
-type SparseColumn = TypedArray & { clearSparse(): void };
+/** Component-manager callbacks used to rebuild tracking state during restore. */
+export type ComponentSnapshotRestoreHooks<T extends SnapshottableComponentState> = {
+  /** Allocate ownership tracking with room for `minOwners` and return the owner flags. */
+  readonly ensureOwnershipState: (state: T, minOwners: number) => Uint8Array;
+  /** Allocate changed tracking with room for `minChanged` and return the changed positions. */
+  readonly ensureChangedState: (state: T, minChanged: number) => EntityArray | undefined;
+  /** Map a capped component's dense row for an owned slot, reclaiming non-owner rows if exhausted. */
+  readonly reserveSparseSlot: (state: T, owners: Uint8Array, slot: number) => void;
+  /** Issue fresh revision tokens. */
+  readonly bumpRevision: (state: T) => void;
+};
+
+type SparseColumn = TypedArray & {
+  readonly dense: TypedArray;
+  getEntity(entity: number): number | undefined;
+  setEntity(entity: number, value: number): void;
+  deleteEntity(entity: number): boolean;
+};
+
+const EMPTY_SLOTS: EntityArray = new Uint8Array(0);
+
+function copyPrefix(list: EntityArray | undefined, count: number): EntityArray {
+  return list === undefined || count === 0 ? EMPTY_SLOTS : list.slice(0, count);
+}
 
 /**
- * Capture dense columns and logical sparse mappings, including raw slot writes.
- * Dense data is copied as typed arrays (a memcpy), keeping capture cheap at large world capacities.
+ * Capture ownership, the changed window, and the values of owned rows.
+ *
+ * Cost scales with owner count, not world capacity. Raw writes to non-owner slots are an unguarded escape hatch and
+ * are not part of the snapshot: every acquisition re-initializes its row, so non-owner cells are never observable
+ * through ownership-checked APIs.
  */
 export function captureComponentManagerSnapshot(
   states: readonly SnapshottableComponentState[],
-  capacity: number,
 ): ComponentManagerSnapshot {
-  const snapStates: ComponentManagerSnapshot["states"][number][] = [];
-  for (const state of states) {
-    const columns: Record<string, TypedArray> = Object.create(null);
-    const sparseColumns: Record<string, { slots: number[]; values: number[] }> = Object.create(null);
-    if (state.instance.storage !== null) {
-      const partitions = state.instance.storage.partitions as Record<string, TypedArray>;
-      for (const key of Object.keys(partitions)) {
-        const partition = partitions[key]!;
-        if (ArrayBuffer.isView(partition)) {
-          columns[key] = partition.slice();
-        } else {
-          const slots: number[] = [];
-          const values: number[] = [];
-          for (let slot = 0; slot < capacity; slot++) {
-            const value = partition[slot];
-            if (value !== undefined) {
-              slots.push(slot);
-              values.push(value);
-            }
-          }
-          sparseColumns[key] = { slots, values };
-        }
+  const snapStates: ComponentStateSnapshot[] = new Array(states.length);
+  for (let i = 0; i < states.length; i++) {
+    const state = states[i]!;
+    const count = state.ownerCount;
+    const owners = copyPrefix(state.ownerList, count);
+    const columns = state.storageColumns;
+    const rows: TypedArray[] = new Array(columns.length);
+    for (let c = 0; c < columns.length; c++) {
+      const column = columns[c]!;
+      if (ArrayBuffer.isView(column)) {
+        const values = new (column.constructor as TypedArrayConstructor)(count);
+        for (let j = 0; j < count; j++) values[j] = column[owners[j]!]!;
+        rows[c] = values;
+      } else {
+        const sparse = column as SparseColumn;
+        const values = new (sparse.dense.constructor as TypedArrayConstructor)(count);
+        const getEntity = sparse.getEntity;
+        for (let j = 0; j < count; j++) values[j] = getEntity(owners[j]!)!;
+        rows[c] = values;
       }
     }
-    snapStates.push({
-      owners: state.owners?.slice(),
-      ownerCount: state.ownerCount,
-      ownerList: state.ownerList?.slice(0, state.ownerCount),
-      changedSlots: state.changedList === undefined ? [] : state.changedList.slice(0, state.changedCount),
-      columns,
-      sparseColumns,
-    });
+    snapStates[i] = { owners, changed: copyPrefix(state.changedList, state.changedCount), rows };
   }
   return { states: snapStates };
 }
 
-/** Restore ownership, values, and the prior changed window, issuing fresh revision tokens. */
+/**
+ * Restore ownership (in iteration order), owned values, and the prior changed window, issuing fresh revision tokens.
+ * Existing tracking arrays are cleared and reused; only current and captured members are touched.
+ */
 export function restoreComponentManagerSnapshot<T extends SnapshottableComponentState>(
-  states: T[],
+  states: readonly T[],
   snapshot: ComponentManagerSnapshot,
-  ensureOwnershipState: (state: T) => Uint8Array,
-  ensureChangedState: (state: T) => BooleanArray | undefined,
-  bumpRevision: (state: T) => void,
+  hooks: ComponentSnapshotRestoreHooks<T>,
 ): void {
   for (let i = 0; i < snapshot.states.length; i++) {
     const snap = snapshot.states[i]!;
     const state = states[i]!;
-    if (snap.owners === undefined) {
-      state.owners = undefined;
-      state.ownerList = undefined;
-      state.ownerPositions = undefined;
-      state.ownerIterator = undefined;
-      state.ownerCount = 0;
-    } else {
-      const owners = ensureOwnershipState(state);
-      owners.set(snap.owners);
-      state.ownerList!.fill(0);
-      state.ownerPositions!.fill(0);
-      for (let j = 0; j < snap.ownerCount; j++) {
-        const slot = snap.ownerList![j]!;
-        state.ownerList![j] = slot;
-        state.ownerPositions![slot] = j;
+    const columns = state.storageColumns;
+    const sparse = state.usesSparseStorage ? columns[0] as SparseColumn : undefined;
+
+    // Retire current membership. Unmapping current owners' sparse rows (the index is shared by every column)
+    // frees rows for the captured owners.
+    const currentOwners = state.owners;
+    if (currentOwners !== undefined) {
+      const list = state.ownerList!;
+      for (let j = 0; j < state.ownerCount; j++) {
+        const slot = list[j]!;
+        currentOwners[slot] = 0;
+        sparse?.deleteEntity(slot);
       }
-      state.ownerCount = snap.ownerCount;
     }
-    state.changed = undefined;
-    state.changedList = undefined;
-    state.changedPositions = undefined;
-    state.changedIterator = undefined;
+    state.ownerCount = 0;
+    // The changed window is a sparse set: an empty count needs no per-slot clearing.
     state.changedCount = 0;
-    if (snap.changedSlots.length > 0) {
-      const changed = ensureChangedState(state)!;
-      for (let j = 0; j < snap.changedSlots.length; j++) {
-        const slot = snap.changedSlots[j]!;
-        changed.set(slot, true);
-        state.changedList![j] = slot;
-        state.changedPositions![slot] = j;
+
+    const ownerSlots = snap.owners;
+    const ownerCount = ownerSlots.length;
+    if (ownerCount > 0) {
+      const owners = hooks.ensureOwnershipState(state, ownerCount);
+      const list = state.ownerList!;
+      const positions = state.ownerPositions!;
+      for (let j = 0; j < ownerCount; j++) {
+        const slot = ownerSlots[j]!;
+        owners[slot] = 1;
+        list[j] = slot;
+        positions[slot] = j;
       }
-      state.changedCount = snap.changedSlots.length;
-    }
-    if (state.instance.storage !== null) {
-      const partitions = state.instance.storage.partitions as Record<string, TypedArray>;
-      for (const key of Object.keys(snap.columns)) partitions[key]!.set(snap.columns[key]!);
-      // Sparse columns share their mapping; clear every column before rebuilding it.
-      for (const key of Object.keys(snap.sparseColumns)) (partitions[key] as SparseColumn).clearSparse();
-      for (const key of Object.keys(snap.sparseColumns)) {
-        const { slots, values } = snap.sparseColumns[key]!;
-        const partition = partitions[key]!;
-        for (let j = 0; j < slots.length; j++) partition[slots[j]!] = values[j]!;
+      state.ownerCount = ownerCount;
+      if (sparse !== undefined) {
+        for (let j = 0; j < ownerCount; j++) hooks.reserveSparseSlot(state, owners, ownerSlots[j]!);
       }
     }
-    bumpRevision(state);
+
+    const changedSlots = snap.changed;
+    const changedCount = changedSlots.length;
+    if (changedCount > 0) {
+      const positions = hooks.ensureChangedState(state, changedCount)!;
+      const list = state.changedList!;
+      for (let j = 0; j < changedCount; j++) {
+        const slot = changedSlots[j]!;
+        list[j] = slot;
+        positions[slot] = j;
+      }
+      state.changedCount = changedCount;
+    }
+
+    for (let c = 0; c < columns.length; c++) {
+      const column = columns[c]!;
+      const values = snap.rows[c]!;
+      if (sparse === undefined) {
+        for (let j = 0; j < ownerCount; j++) column[ownerSlots[j]!] = values[j]!;
+      } else {
+        const setEntity = (column as SparseColumn).setEntity;
+        for (let j = 0; j < ownerCount; j++) setEntity(ownerSlots[j]!, values[j]!);
+      }
+    }
+    hooks.bumpRevision(state);
   }
 }

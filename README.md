@@ -413,11 +413,13 @@ compileComponentSchema({ Position: { x: Float32Array, y: Float32Array } });
 componentSchemaHash({ Position: { x: Float32Array, y: Float32Array } });
 ```
 
-Rollback restores dense and capped sparse storage, ownership, and the changed
-and archetype transition windows captured before the scope. Restoration is
-order-neutral: the next allocated slots and the iteration order of queries and
-owners match a world that never ran the speculative work. Revision tokens
-continue forward after restoration.
+Rollback restores ownership, the component values of owned rows (dense and
+capped sparse), and the changed and archetype transition windows captured
+before the scope. Its cost scales with the owner count, not world capacity, so
+raw writes to slots that do not own the component are not captured.
+Restoration is order-neutral: the next allocated slots and the iteration order
+of queries and owners match a world that never ran the speculative work.
+Revision tokens continue forward after restoration.
 
 Checkpoints are reusable and bound to the capturing world; captured entities
 must still be active when applied. A world permits one active rollback scope.
