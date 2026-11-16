@@ -163,7 +163,7 @@ export class WorldMutations {
       this.invalidateCommittedTransition(true);
       return entity;
     } catch (error) {
-      if (entity !== undefined) this.#rollbackCreatedEntity(entity);
+      if (entity !== undefined) this.#rollbackCreatedEntity(entity, count);
       throw error;
     } finally {
       this.#clearBundleEntries();
@@ -401,15 +401,16 @@ export class WorldMutations {
     this.invalidateCommittedTransition(addedCount > 0);
   }
 
-  /** Roll back a newly-created entity after an unexpected bundle commit failure. */
-  #rollbackCreatedEntity(entity: Entity): void {
+  /**
+   * Roll back a newly-created entity after an unexpected bundle commit failure.
+   * Strips every staged bundle component rather than walking the entity's archetype, which is unassigned when
+   * the component commit itself throws partway (ownership and sparse rows may already be committed).
+   * Must run before {@link #clearBundleEntries}.
+   */
+  #rollbackCreatedEntity(entity: Entity, count: number): void {
     let changed = this.#archetypeManager.getEntityArchetype(entity) !== undefined;
-    const archetype = this.#archetypeManager.getEntityArchetype(entity);
-    if (archetype) {
-      const components = archetype.components;
-      for (let i = 0; i < components.length; i++) {
-        changed ||= this.#componentManager.removeInstanceFromEntity(components[i]!, entity);
-      }
+    for (let i = 0; i < count; i++) {
+      if (this.#componentManager.removeInstanceFromEntity(this.#bundleEntries[i]!.instance, entity)) changed = true;
     }
     this.#archetypeManager.destroyEntity(entity);
     if (this.#entityManager.isActive(entity)) {

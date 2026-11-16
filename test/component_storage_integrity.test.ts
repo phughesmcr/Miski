@@ -113,12 +113,12 @@ Deno.test("acquiring ownership with data marks changed identically in dense and 
     assertEquals(ids(world.components.getChanged(position)), [first], `${label}: equal payload marks changed`);
     world.refresh();
 
-    // Re-applying an identical payload to an existing owner stays quiet; no payload never marks.
+    // Re-applying an identical payload to an existing owner stays quiet; a no-payload add to a new owner marks.
     world.components.addToEntity(position, first, { x: 5 });
     assertEquals(ids(world.components.getChanged(position)), [], `${label}: idempotent upsert is not a change`);
     const bare = createEntity(world);
     world.components.addToEntity(position, bare);
-    assertEquals(ids(world.components.getChanged(position)), [], `${label}: payload-less add does not mark`);
+    assertEquals(ids(world.components.getChanged(position)), [bare], `${label}: payload-less add marks a new owner`);
   }
 });
 

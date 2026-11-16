@@ -448,7 +448,9 @@ export class ComponentManager {
         // A payload always marks a new owner changed, whatever the previous (zero, stale, or unmapped) cell held.
         if (changed || ownershipChanged) this.#markChanged(state, slot);
       } else if (ownershipChanged) {
+        // A no-payload attach zero-initializes the row and is a change, exactly like an explicit payload.
         this.#clearEntityStorage(storage.partitions as Record<string, TypedArray>, slot);
+        this.#markChanged(state, slot);
       }
     }
 
@@ -603,6 +605,22 @@ export class ComponentManager {
     const state = this.#states[instance.id];
     if (state === undefined) return;
     return (state.ownerIterator ?? this.#emptyOwnerIterator).reset(state.ownerCount);
+  }
+
+  /**
+   * Count the owners of a registered component without touching its shared owner iterator,
+   * so callers may count during an in-progress {@link getOwners} iteration.
+   * @param component The component to count owners for
+   * @returns The owner count, or `0` if the component is not registered
+   * @internal
+   */
+  getOwnerCount<
+    TValue extends SchemaOrNull,
+    TStorage extends SchemaOrNull = TValue,
+  >(component: Component<TValue, TStorage> | string): number {
+    const instance = this.getInstance(component);
+    if (!instance) return 0;
+    return this.#states[instance.id]?.ownerCount ?? 0;
   }
 
   /**

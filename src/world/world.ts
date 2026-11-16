@@ -410,12 +410,7 @@ export class World {
       isEntityAlive: (entity) => this.#entityManager.isActive(entity),
       entityHasComponent: (entity, component) => this.#componentManager.entityHas(component, entity),
       getComponentInstance: (component) => this.#componentManager.require(component),
-      getOwnerCount: (component) => {
-        let count = 0;
-        const owners = this.#componentManager.getOwners(component);
-        if (owners !== undefined) { for (const _entity of owners) count++; }
-        return count;
-      },
+      getOwnerCount: (component) => this.#componentManager.getOwnerCount(component),
       validateComponentData: (component, properties) =>
         this.#mutations.validateComponentData(this.#componentManager.require(component), properties),
       setComponentEntityData: (entity, component, properties) =>
