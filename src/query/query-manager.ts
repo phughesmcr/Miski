@@ -156,6 +156,9 @@ export class QueryManager {
   /**
    * Create a new QueryManager
    * @param dependencies - Component registry accessors and lifecycle hooks
+   * @param capacity - The world's entity capacity
+   * @param ensureQueryMembership - Refreshes query-to-archetype membership
+   * @param registerQueryMembership - Registers one query against existing archetypes
    */
   constructor(
     dependencies: QueryManagerDependencies,
@@ -206,7 +209,8 @@ export class QueryManager {
     for (let i = 0; i < archetypeCount; i++) total += archetypes[i]!.getPopulationCount();
     result.reserve(total);
     for (let i = 0; i < archetypeCount; i++) {
-      archetypes[i]!.writeEntitiesIntoResult(result);
+      const archetype = archetypes[i]!;
+      result.appendDense(archetype.slotList, archetype.handleList, archetype.getPopulationCount());
     }
     instance.resultStamp = archetypeClock();
     instance.resultEpoch = this.#epoch;

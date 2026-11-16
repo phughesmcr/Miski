@@ -1,6 +1,6 @@
 import { BooleanArray } from "@phughesmcr/booleanarray";
 import { ID_KEY } from "@/constants.ts";
-import { createSlotArray, type EntityArray, packEntity } from "@/entity/entity.ts";
+import { createEntityArray, createSlotArray, type EntityArray, packEntity } from "@/entity/entity.ts";
 import { asSlotIndex, type Entity, entityIndex, type PackSlot } from "@/entity/entity.ts";
 import { EntityNotFoundError, formatEntityNotActive } from "@/errors.ts";
 import type { EntityResultSink } from "@/entity/entity.ts";
@@ -58,6 +58,14 @@ export class Archetype {
 
   /** Dense currently-active storage slots in this archetype (grows on demand) */
   #entityList: EntityArray;
+
+  /**
+   * Packed handles parallel to {@link #entityList}, so query refills copy instead of re-packing.
+   * A slot's generation only changes while it is outside every archetype (create packs before the slot joins one,
+   * destroy leaves before the generation moves, rollback restores generations before populations), so a handle
+   * packed when its slot joins stays current until the slot leaves.
+   */
+  #handleList: Uint32Array;
 
   /** Dense-list position indexed by storage slot; shared with sibling archetypes of the same world */
   #positions: EntityArray;
@@ -145,6 +153,7 @@ export class Archetype {
     this.components = components;
     this.#candidateCache = new Map();
     this.#entityList = createSlotArray(capacity, Math.min(capacity, INITIAL_LIST_LENGTH));
+    this.#handleList = createEntityArray(capacity, this.#entityList.length);
     this.#positions = positions;
     this.#populationCount = 0;
     this.#transitionCapacity = Math.max(transitionCapacity, bitfield.size ?? 0, components.length);
@@ -163,9 +172,13 @@ export class Archetype {
     if (length <= this.#entityList.length) return;
     let next = this.#entityList.length * 2;
     while (next < length) next *= 2;
-    const expanded = createSlotArray(this.#entityCapacity, Math.min(next, this.#entityCapacity));
+    const grown = Math.min(next, this.#entityCapacity);
+    const expanded = createSlotArray(this.#entityCapacity, grown);
     expanded.set(this.#entityList.subarray(0, this.#populationCount));
     this.#entityList = expanded;
+    const handles = createEntityArray(this.#entityCapacity, grown);
+    handles.set(this.#handleList.subarray(0, this.#populationCount));
+    this.#handleList = handles;
   }
 
   #activateEntity(slot: number): boolean {
@@ -173,6 +186,7 @@ export class Archetype {
     const position = this.#populationCount;
     if (position === this.#entityList.length) this.#reserve(position + 1);
     this.#entityList[position] = slot;
+    this.#handleList[position] = this.#packSlot(slot);
     this.#positions[slot] = position;
     this.#populationCount = position + 1;
     this.stamp = ++clock;
@@ -186,6 +200,7 @@ export class Archetype {
     if (removeIndex !== lastIndex) {
       const lastSlot = this.#entityList[lastIndex]!;
       this.#entityList[removeIndex] = lastSlot;
+      this.#handleList[removeIndex] = this.#handleList[lastIndex]!;
       this.#positions[lastSlot] = removeIndex;
     }
     this.#populationCount = lastIndex;
@@ -231,11 +246,28 @@ export class Archetype {
   }
 
   /**
+   * The dense slot list in iteration order; only the first {@link getPopulationCount} entries are valid.
+   * Growing replaces the array, so read it again after any population change.
+   * @internal
+   */
+  get slotList(): EntityArray {
+    return this.#entityList;
+  }
+
+  /**
+   * Packed handles parallel to {@link slotList}, under the same validity and growth rules.
+   * @internal
+   */
+  get handleList(): Uint32Array {
+    return this.#handleList;
+  }
+
+  /**
    * The packed handle of the entity at a dense-list position (`index < getPopulationCount()`).
    * @internal
    */
   entityAt(index: number): Entity {
-    return this.#packSlot(this.#entityList[index]!);
+    return this.#handleList[index]! as Entity;
   }
 
   /**
@@ -318,7 +350,14 @@ export class Archetype {
     this.#populationCount = 0;
     this.#reserve(slots.length);
     this.#entityList.set(slots);
-    for (let i = 0; i < slots.length; i++) this.#positions[slots[i]!] = i;
+    // Generations are restored first, so packing now yields the restored handles.
+    const handles = this.#handleList;
+    const packSlot = this.#packSlot;
+    for (let i = 0; i < slots.length; i++) {
+      const slot = slots[i]!;
+      this.#positions[slot] = i;
+      handles[i] = packSlot(slot);
+    }
     this.#populationCount = slots.length;
     this.stamp = ++clock;
   }

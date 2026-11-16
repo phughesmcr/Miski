@@ -212,10 +212,43 @@ async function probeBatchMove(sourceArchetypes: number): Promise<void> {
   await world.destroy();
 }
 
+/**
+ * Finding 5: a change inside a query's archetypes must refill its result by copying, not by re-packing each
+ * entity (12.6 us -> about 0.6 us for [1]'s related case). Spawn, tag and destroy one entity, then read.
+ */
+async function probeRelatedRefill(matched: number, queryCount: number): Promise<void> {
+  const tag = new Component<null>({ name: "matched" });
+  const nots = tags("not", queryCount);
+  const world = new World({ capacity: 65_536, components: [tag, ...nots] });
+  await world.init();
+  for (let i = 0; i < matched; i++) world.components.addToEntity(tag, mustCreate(world));
+  const queries = nots.map((not) => new Query({ all: [tag], none: [not] }));
+  world.refresh();
+  const frame = () => {
+    const entity = mustCreate(world);
+    world.components.addToEntity(tag, entity);
+    world.entities.destroy(entity);
+    for (let q = 0; q < queryCount; q++) sink ^= world.entities.queryList(queries[q]!).count;
+    world.refresh();
+  };
+  for (let i = 0; i < 500; i++) frame();
+  const frames = 2_000;
+  const start = performance.now();
+  for (let i = 0; i < frames; i++) frame();
+  const us = ((performance.now() - start) * 1000) / frames;
+  const label = `${matched} matched, ${queryCount} ${queryCount === 1 ? "query" : "queries"}`;
+  console.log(`  ${label.padStart(44)} ${us.toFixed(2).padStart(9)} us/frame`);
+  await world.destroy();
+}
+
 await probeInvalidation();
 await probeResultBuffers();
 await probeIterators();
 console.log("\n[4] batch move grouping");
 await probeBatchMove(2);
 await probeBatchMove(512);
+console.log("\n[5] related spawn/tag/destroy + read, by matched entities and queries");
+await probeRelatedRefill(4_096, 1);
+await probeRelatedRefill(60_000, 1);
+await probeRelatedRefill(4_096, 16);
 if (sink === 0.5) console.log(sink);
