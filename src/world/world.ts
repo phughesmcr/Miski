@@ -355,7 +355,6 @@ export class World {
       (query) => {
         this.#archetypeManager.registerQuery(query, true);
       },
-      this.#entityManager.generations,
     );
     this.#archetypeQueryIterators = new ArchetypeQueryIterators({
       instanceWithMembership: (query) => this.#queryManager.instanceWithMembership(query),

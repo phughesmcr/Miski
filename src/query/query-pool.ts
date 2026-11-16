@@ -1,5 +1,5 @@
 import { createEntityArray, createSlotArray, type EntityArray } from "@/entity/entity.ts";
-import { packEntity, ReusableEntityIterator } from "@/entity/entity.ts";
+import { ReusableEntityIterator } from "@/entity/entity.ts";
 import type {
   BorrowedEntityIndices,
   BorrowedEntityListEachFn,
@@ -11,6 +11,9 @@ import type {
 
 /** Initial buffer length; buffers double on demand up to the world capacity. */
 const INITIAL_RESULT_LENGTH = 16;
+
+/** Unused list entries {@link QueryEntityResult.appendDense} will copy beyond the population to stay on memcpy. */
+const BULK_COPY_SLACK = 64;
 
 /**
  * Retained backing store for the public borrowed QueryEntityList view.
@@ -68,23 +71,34 @@ export class QueryEntityResult implements EntityResultSink {
   }
 
   /**
-   * Append a dense slot list, packing each handle from the world's generation array in the same pass.
-   * @param list - Dense slots, in iteration order
-   * @param count - Number of leading entries of `list` to append
-   * @param generations - Per-slot generations (see {@link packEntity})
+   * Append parallel dense slot and packed-handle lists (an archetype's population, in iteration order).
+   *
+   * When the backing lists are at most about twice the population, they are copied whole with `TypedArray.set`
+   * (a memcpy) rather than bounded by `count`, because bounding would allocate a `subarray` view per call. The
+   * extra tail lands past {@link count}, where entries are already documented as invalid, and the next append
+   * overwrites it; the buffers grow to hold it, so they can reach about twice the largest result.
+   * @param slots - Dense slots
+   * @param handles - Packed handles, `handles[i]` belonging to `slots[i]`; same length as `slots`
+   * @param count - Number of leading entries to append
    */
-  appendSlots(list: EntityArray, count: number, generations: Uint32Array): void {
+  appendDense(slots: EntityArray, handles: Uint32Array, count: number): void {
     const start = this.count;
-    const end = start + count;
-    if (end > this.#entityBuffer.length) this.reserve(end);
-    const entities = this.#entityBuffer;
-    const slots = this.#slotBuffer;
-    for (let i = 0; i < count; i++) {
-      const slot = list[i]!;
-      slots[start + i] = slot;
-      entities[start + i] = packEntity(slot, generations[slot]!);
+    const listLength = slots.length;
+    const bulk = listLength - count <= count + BULK_COPY_SLACK;
+    const needed = start + (bulk ? listLength : count);
+    if (needed > this.#entityBuffer.length) this.reserve(needed);
+    const entityBuffer = this.#entityBuffer;
+    const slotBuffer = this.#slotBuffer;
+    if (bulk) {
+      slotBuffer.set(slots, start);
+      entityBuffer.set(handles, start);
+    } else {
+      for (let i = 0; i < count; i++) {
+        slotBuffer[start + i] = slots[i]!;
+        entityBuffer[start + i] = handles[i]!;
+      }
     }
-    this.count = end;
+    this.count = start + count;
   }
 
   clear(): void {

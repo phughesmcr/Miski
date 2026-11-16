@@ -141,9 +141,6 @@ export class QueryManager {
   /** Capacity of each query's lazily allocated entity result. */
   readonly #capacity: number;
 
-  /** The world's per-slot generations, used to pack handles while refilling results. */
-  readonly #generations: Uint32Array;
-
   /**
    * Whole-cache invalidation epoch. Ordinary structural changes are tracked per archetype (see
    * {@link isResultCurrent}); this is only bumped by {@link invalidate}, e.g. after a rollback restore.
@@ -162,22 +159,18 @@ export class QueryManager {
    * @param capacity - The world's entity capacity
    * @param ensureQueryMembership - Refreshes query-to-archetype membership
    * @param registerQueryMembership - Registers one query against existing archetypes
-   * @param generations - The world's per-slot generations; must agree with the archetypes' `packSlot`
-   *   (defaults to all zero, matching the archetypes' default generation-0 packing)
    */
   constructor(
     dependencies: QueryManagerDependencies,
     capacity: number,
     ensureQueryMembership: (queries: QueryInstanceList) => void,
     registerQueryMembership: (query: QueryInstance) => void,
-    generations: Uint32Array = new Uint32Array(capacity),
   ) {
     this.#dependencies = dependencies;
     this.#ensureQueryMembership = ensureQueryMembership;
     this.#registerQueryMembership = registerQueryMembership;
     this.#queryList = { queries: this.#queries, count: 0 };
     this.#capacity = capacity;
-    this.#generations = generations;
     this.instancesByID = new Map();
     this.#instancesByQuery = new WeakMap();
   }
@@ -215,10 +208,9 @@ export class QueryManager {
     let total = 0;
     for (let i = 0; i < archetypeCount; i++) total += archetypes[i]!.getPopulationCount();
     result.reserve(total);
-    const generations = this.#generations;
     for (let i = 0; i < archetypeCount; i++) {
       const archetype = archetypes[i]!;
-      result.appendSlots(archetype.slotList, archetype.getPopulationCount(), generations);
+      result.appendDense(archetype.slotList, archetype.handleList, archetype.getPopulationCount());
     }
     instance.resultStamp = archetypeClock();
     instance.resultEpoch = this.#epoch;

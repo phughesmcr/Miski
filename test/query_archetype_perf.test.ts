@@ -14,6 +14,7 @@ import {
   type World,
 } from "../mod.ts";
 import { ArchetypeManager } from "../src/archetype/archetype-manager.ts";
+import { EntityManager } from "../src/entity/entity-manager.ts";
 import { QueryEntityResult } from "../src/query/query-pool.ts";
 import { createEntity, createTestWorld, tagComponent, vec2Component } from "./fixtures.ts";
 import { assert, assertEquals, assertStrictEquals, assertThrows, listIds } from "./helpers.ts";
@@ -216,6 +217,61 @@ Deno.test("an unrelated structural change keeps other query results without refi
   const refilled = world.entities.queryList(withA);
   assertStrictEquals(refilled.count, 5, "A sees the entity in the new archetype");
   assertStrictEquals(refilled.entities[0], realA as Entity, "A was refilled from its archetypes");
+  await world.destroy();
+});
+
+Deno.test("a related change refills a query result by copying stored handles, not re-packing slots", async () => {
+  const a = tagComponent("a");
+  const world = await createTestWorld([a], 4096);
+  const withA = new Query({ all: [a] });
+  for (let i = 0; i < 2000; i++) world.components.addToEntity(a, createEntity(world));
+  world.refresh();
+  assertStrictEquals(world.entities.queryList(withA).count, 2000, "Initial fill");
+
+  const spawned = createEntity(world);
+  world.components.addToEntity(a, spawned);
+  world.entities.destroy(spawned);
+  const pack = EntityManager.prototype.packSlot;
+  let packed = 0;
+  EntityManager.prototype.packSlot = function (this: EntityManager, slot: number) {
+    packed++;
+    return pack.call(this, slot);
+  };
+  try {
+    const list = world.entities.queryList(withA);
+    assertStrictEquals(list.count, 2000, "Refilled after the related change");
+  } finally {
+    EntityManager.prototype.packSlot = pack;
+  }
+  assertStrictEquals(packed, 0, "A refill copies each archetype's stored handles");
+  await world.destroy();
+});
+
+Deno.test("refills stay exact when archetype lists are much larger than their populations", async () => {
+  const a = tagComponent("a");
+  const b = tagComponent("b");
+  const world = await createTestWorld([a, b], 4096);
+  const withA = new Query({ all: [a] });
+  const entities: Entity[] = [];
+  for (let i = 0; i < 1000; i++) {
+    const entity = createEntity(world);
+    world.components.addToEntity(a, entity);
+    entities.push(entity);
+  }
+  const check = (label: string) => {
+    const list = world.entities.queryList(withA);
+    const live = [...world.archetypes.queryEntities(withA)];
+    assertEquals(listIds(list), live, `${label}: list matches the archetype view`);
+    for (let i = 0; i < list.count; i++) assertStrictEquals(list.slots[i], entityIndex(list.entities[i]!), label);
+  };
+  check("full");
+  // Shrink {a} far below its list length (copy loop path) while {a, b} fills (bulk copy path).
+  for (let i = 0; i < 990; i++) world.components.addToEntity(b, entities[i]!);
+  check("mostly moved");
+  for (let i = 0; i < 990; i += 3) world.entities.destroy(entities[i]!);
+  check("after destroys");
+  for (let i = 1; i < 990; i += 3) world.components.removeFromEntity(b, entities[i]!);
+  check("partly moved back");
   await world.destroy();
 });
 

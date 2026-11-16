@@ -106,15 +106,6 @@ export class EntityManager {
     return this.#generation[slot]! & ENTITY_GEN_MASK;
   }
 
-  /**
-   * The per-slot generation array itself, for bulk packing (`packEntity(slot, generations[slot])`).
-   * The array is never replaced, so a reference stays current; callers must not write to it.
-   * @internal
-   */
-  get generations(): Uint32Array {
-    return this.#generation;
-  }
-
   /** Pack a live slot into an {@link Entity} handle. */
   packSlot(slot: number): Entity {
     return packEntity(slot, this.#generation[slot]!);
