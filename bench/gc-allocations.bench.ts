@@ -597,7 +597,8 @@ const scenarios: Scenario[] = [
   },
   {
     name: "bulk add/remove data component across queryList - 896 entities",
-    iterations: 10_000,
+    iterations: 40_000,
+    // Same one-off recompile cost per round as the tag scenario above (~6 KiB in one round, 0 B in the next).
     maxSteadyStateBeforeGcBytesPerIter: BATCH_COMPONENT_TRANSITION_BUDGET_BYTES_PER_ITER,
     fn: () => {
       // SMALL_CAPACITY sparse lifecycle fixtures leave 896 active positioned entities.
