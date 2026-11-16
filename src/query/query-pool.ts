@@ -1,5 +1,5 @@
 import { createEntityArray, createSlotArray, type EntityArray } from "@/entity/entity.ts";
-import { ReusableEntityIterator } from "@/entity/entity.ts";
+import { packEntity, ReusableEntityIterator } from "@/entity/entity.ts";
 import type {
   BorrowedEntityIndices,
   BorrowedEntityListEachFn,
@@ -65,6 +65,26 @@ export class QueryEntityResult implements EntityResultSink {
     this.#entityBuffer[index] = entity;
     this.#slotBuffer[index] = slot;
     this.count = index + 1;
+  }
+
+  /**
+   * Append a dense slot list, packing each handle from the world's generation array in the same pass.
+   * @param list - Dense slots, in iteration order
+   * @param count - Number of leading entries of `list` to append
+   * @param generations - Per-slot generations (see {@link packEntity})
+   */
+  appendSlots(list: EntityArray, count: number, generations: Uint32Array): void {
+    const start = this.count;
+    const end = start + count;
+    if (end > this.#entityBuffer.length) this.reserve(end);
+    const entities = this.#entityBuffer;
+    const slots = this.#slotBuffer;
+    for (let i = 0; i < count; i++) {
+      const slot = list[i]!;
+      slots[start + i] = slot;
+      entities[start + i] = packEntity(slot, generations[slot]!);
+    }
+    this.count = end;
   }
 
   clear(): void {

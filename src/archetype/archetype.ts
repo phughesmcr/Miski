@@ -231,6 +231,15 @@ export class Archetype {
   }
 
   /**
+   * The dense slot list in iteration order; only the first {@link getPopulationCount} entries are valid.
+   * Growing replaces the array, so read it again after any population change.
+   * @internal
+   */
+  get slotList(): EntityArray {
+    return this.#entityList;
+  }
+
+  /**
    * The packed handle of the entity at a dense-list position (`index < getPopulationCount()`).
    * @internal
    */

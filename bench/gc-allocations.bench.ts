@@ -2,7 +2,7 @@
 /// <reference lib="dom" />
 // deno-lint-ignore-file no-console
 
-import { entityIndex, Query, World } from "../mod.ts";
+import { Component, entityIndex, Query, World } from "../mod.ts";
 import type { ComponentInstance, Entity } from "../mod.ts";
 import {
   countEntities,
@@ -133,7 +133,8 @@ function measureRound(scenario: Scenario): RoundMeasurement {
 }
 
 function warmupScenario(scenario: Scenario): void {
-  const iterations = Math.min(scenario.iterations, scenario.warmupIterations ?? DEFAULT_WARMUP_ITERATIONS);
+  // An explicit warmup may exceed the measured iterations; the default is capped by them.
+  const iterations = scenario.warmupIterations ?? Math.min(scenario.iterations, DEFAULT_WARMUP_ITERATIONS);
   for (let i = 0; i < iterations; i++) {
     scenario.fn();
   }
@@ -249,6 +250,13 @@ const batchTagPositionQuery = new Query({ all: [batchTagTransitions.components.p
 const batchDataPositionQuery = new Query({ all: [batchDataTransitions.components.position] });
 const transitionTrackingQuery = createMovementQuery(transitionTracking.components);
 const wideQuery = createWideQuery(wide.components);
+// A tag every query-refill entity carries, so each spawn/tag/destroy changes the query's only archetype.
+const refillTag = new Component<null>({ name: "refillTag" });
+const refillWorld = new World({ capacity: MEDIUM_CAPACITY, components: [refillTag] });
+await refillWorld.init();
+for (let i = 0; i < 4_096; i++) refillWorld.components.addToEntity(refillTag, mustCreateEntity(refillWorld));
+const refillQuery = new Query({ all: [refillTag] });
+refillWorld.refresh();
 mixed.world.entities.query(movementQuery);
 mixed.world.entities.query(renderableQuery);
 mixed.world.entities.query(renderIncludeQuery);
@@ -565,6 +573,8 @@ const scenarios: Scenario[] = [
   {
     name: "bulk add/remove tag component across queryList - 896 entities",
     iterations: 10_000,
+    // Batch move paths keep tiering up past 10k calls; recompiles inside a round read as a few KiB of "allocation".
+    warmupIterations: 40_000,
     maxSteadyStateBeforeGcBytesPerIter: BATCH_COMPONENT_TRANSITION_BUDGET_BYTES_PER_ITER,
     fn: () => {
       // SMALL_CAPACITY sparse lifecycle fixtures leave 896 active positioned entities.
@@ -655,6 +665,13 @@ const scenarios: Scenario[] = [
       movement.world.refresh();
     },
   },
+  budgeted("related spawn/tag/destroy + queryList refill of 4096 entities", 20_000, () => {
+    const entity = mustCreateEntity(refillWorld);
+    refillWorld.components.addToEntity(refillTag, entity);
+    refillWorld.entities.destroy(entity);
+    entitySink ^= refillWorld.entities.queryList(refillQuery).count;
+    refillWorld.refresh();
+  }),
 ];
 
 console.log("Miski ECS GC allocation pressure benchmark");

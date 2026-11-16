@@ -144,6 +144,42 @@ Deno.test("query views keep their exact iteration order through moves, batches a
   assertEquals(fnv1a(trace.join("\n")), "895a6761", "Query view order diverged from the recorded golden trace");
 });
 
+/** Every listed handle must be the live handle for its slot, and match the archetype view entry for entry. */
+function assertListsCarryLiveHandles(world: World, label: string): void {
+  for (let q = 0; q < queries.length; q++) {
+    const list = world.entities.queryList(queries[q]!);
+    const live = [...world.archetypes.queryEntities(queries[q]!)];
+    assertStrictEquals(list.count, live.length, `${label}#${q} count`);
+    for (let i = 0; i < list.count; i++) {
+      const entity = list.entities[i]!;
+      assertStrictEquals(entity, live[i], `${label}#${q}[${i}] handle`);
+      assertStrictEquals(list.slots[i], entityIndex(entity), `${label}#${q}[${i}] slot`);
+      assert(world.entities.isActive(entity), `${label}#${q}[${i}] is live`);
+    }
+  }
+}
+
+Deno.test("query results carry each recycled slot's current generation through moves and rollback", async () => {
+  // A small capacity forces slot recycling, so stale generations would show up as dead handles.
+  const world = await createTestWorld(components, 24);
+  const random = rng(0x9e7);
+  const live: Entity[] = [];
+  for (let round = 0; round < 60; round++) {
+    for (let i = 0; i < 12; i++) step(world, live, random);
+    assertListsCarryLiveHandles(world, `r${round}`);
+    if (round % 5 === 4) {
+      const point = captureWorldRollbackPoint(world);
+      const speculative = [...live];
+      for (let i = 0; i < 12; i++) step(world, speculative, random);
+      assertListsCarryLiveHandles(world, `r${round}-speculative`);
+      restoreWorldRollbackPoint(world, point);
+      assertListsCarryLiveHandles(world, `r${round}-restored`);
+    }
+    world.refresh();
+  }
+  await world.destroy();
+});
+
 Deno.test("an unrelated structural change keeps other query results without refilling them", async () => {
   const a = tagComponent("a");
   const b = tagComponent("b");
