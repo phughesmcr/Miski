@@ -1,8 +1,8 @@
 /// <reference lib="deno.ns" />
 
-import { Query, System, type World } from "../mod.ts";
+import { isValidSystemSpec, Query, SpecError, System, type World } from "../mod.ts";
 import { createEntity, createTestWorld, tagComponent } from "./fixtures.ts";
-import { assert, assertEquals, assertStrictEquals, listIds } from "./helpers.ts";
+import { assert, assertEquals, assertStrictEquals, assertThrows, listIds } from "./helpers.ts";
 
 // A registered system instance forwards its call arguments to the callback after the components record and the
 // entity list. The callback must see exactly the arguments the caller passed: same count, same values, nothing
@@ -155,4 +155,60 @@ Deno.test("a system callback is called without a this value", async () => {
   instance.call({ not: "forwarded" }, 1);
   assertStrictEquals(self, undefined, "The callback's this is undefined");
   await world.destroy();
+});
+
+// --- argCount: fixed-arity forwarding ---
+
+Deno.test("a system with argCount forwards exactly that many arguments", async () => {
+  const { world, query } = await setup();
+  for (const argCount of [0, 1, 2, 3, 4] as const) {
+    let seen: unknown[] = [];
+    const instance = world.systems.create(
+      new System<Record<string, never>, unknown[], void>({
+        name: `fixed${argCount}`,
+        query,
+        argCount,
+        callback: function () {
+          seen = Array.from(arguments).slice(2);
+        },
+      }),
+    );
+    const padded = [1, 2, 3, 4].slice(0, argCount);
+    instance(1, 2, 3, 4, 5, 6);
+    assertEquals(seen, padded, `argCount ${argCount} drops extra call args`);
+    instance();
+    assertEquals(seen, padded.map(() => undefined), `argCount ${argCount} passes missing call args as undefined`);
+    instance(...padded);
+    assertEquals(seen, padded, `argCount ${argCount} forwards a matching call unchanged`);
+  }
+  await world.destroy();
+});
+
+Deno.test("a system with argCount still applies default parameters and returns the callback's value", async () => {
+  const { world, query, entity } = await setup();
+  const instance = world.systems.create(
+    new System({
+      name: "fixedDefaults",
+      query,
+      argCount: 2,
+      callback: (_components, entities, dt: number = 7, scale: number = 3) => [listIds(entities), dt, scale],
+    }),
+  );
+
+  assertEquals(instance(), [[entity], 7, 3], "Missing args take their defaults");
+  assertEquals(instance(1), [[entity], 1, 3], "One missing arg takes its default");
+  assertEquals(instance(1, 2), [[entity], 1, 2], "Both args forwarded");
+  await world.destroy();
+});
+
+Deno.test("an argCount outside 0 to 4 is an invalid system specification", () => {
+  const query = new Query({ all: [tagComponent("tag")] });
+  for (const argCount of [-1, 5, 1.5, Number.NaN, "1", null]) {
+    const spec = { name: "badArgCount", query, callback: () => {}, argCount };
+    assertEquals(isValidSystemSpec(spec), false, `argCount ${String(argCount)} is rejected`);
+    assertThrows(() => new System(spec as never), SpecError, "Invalid system specification");
+  }
+  for (const argCount of [undefined, 0, 4]) {
+    assert(isValidSystemSpec({ name: "okArgCount", query, callback: () => {}, argCount }), `${argCount} is valid`);
+  }
 });

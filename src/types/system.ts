@@ -68,6 +68,18 @@ export type SystemSpec<
   /** The core function of the system. Invoked when the registered SystemInstance is called. */
   callback: TypedSystemCallback<TComponents, TArgs, TReturn>;
   /**
+   * How many arguments the system instance forwards to the callback after the components and entities (0 to 4).
+   *
+   * Leave it unset to forward exactly what the caller passes. That form allocates an arguments array on every call
+   * until V8 optimises the call site, which can take tens of thousands of calls.
+   *
+   * Set it when a system is called with a fixed number of arguments on a hot path, such as once per frame with
+   * `dt`. The instance then forwards exactly `argCount` arguments without allocating: missing arguments arrive as
+   * `undefined` (so default parameters still apply), extra arguments are dropped, and the callback's
+   * `arguments.length` and rest parameters always see `argCount` arguments.
+   */
+  argCount?: TArgs["length"] & (0 | 1 | 2 | 3 | 4);
+  /**
    * The function to call when the system is initialized.
    * The world waits for it (and `onReady()` includes it), so it must not await `world.onReady()`,
    * `world.destroy()`, or anything else that waits for this hook to finish. Such calls are rejected with a

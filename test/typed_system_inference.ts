@@ -14,6 +14,7 @@ import type {
   SchemaOrNull,
   SystemCallback,
   SystemInstance,
+  UntypedQueryComponents,
 } from "../mod.ts";
 import { tagComponent, type Vec2, vec2Component, vec2Schema } from "./fixtures.ts";
 // @ts-expect-error AnySystemCallback is not exported from the public mod.ts surface.
@@ -285,3 +286,43 @@ const plainAnnotatedSystem = new System({
   },
 });
 void plainAnnotatedSystem;
+
+// argCount: optional, and must fit the callback's extra parameter count.
+const argCountQuery = new Query({ all: { position } });
+const fixedArgSystem = new System({
+  name: "fixedArg",
+  query: argCountQuery,
+  argCount: 1,
+  callback: (_components, _entities, dt: number): number => dt,
+});
+expectType<(dt: number) => number>(world.systems.create(fixedArgSystem));
+const optionalArgSystem = new System({
+  name: "optionalArg",
+  query: argCountQuery,
+  argCount: 2,
+  callback: (_components, _entities, dt: number, scale?: number): void => void [dt, scale],
+});
+void optionalArgSystem;
+const noArgSystem = new System({
+  name: "noArg",
+  query: argCountQuery,
+  argCount: 0,
+  callback: (): void => {},
+});
+void noArgSystem;
+const tooManyArgSystem = new System({
+  name: "tooManyArg",
+  query: argCountQuery,
+  // @ts-expect-error argCount must match the callback's extra parameter count.
+  argCount: 2,
+  callback: (_components, _entities, dt: number): void => void dt,
+});
+void tooManyArgSystem;
+const untypedArgSystem = new System<UntypedQueryComponents, unknown[], void>({
+  name: "untypedArg",
+  query: new Query({ all: [position] }),
+  // @ts-expect-error argCount is limited to 0..4.
+  argCount: 5,
+  callback: (): void => {},
+});
+void untypedArgSystem;
