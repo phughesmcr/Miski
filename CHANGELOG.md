@@ -1,5 +1,40 @@
 # Changelog
 
+## Unreleased
+
+- Make rollback restore observationally neutral. After
+  `restoreWorldRollbackPoint`, entity allocation order, `queryList` and
+  `getOwners` iteration order, and entered / exited match a world that never
+  speculated. Archetypes first registered during the speculative scope are
+  dropped on restore.
+- Report `queryEntered` / `queryExited` in first-touch order within the
+  refresh window instead of archetype order. Code that depended on the old
+  ordering should sort explicitly.
+- Size archetype entity lists by population instead of world capacity. Many
+  archetypes in a large world no longer cost about 1 MB each.
+- Capture and restore rollback state with typed-array copies. At capacity
+  65536, capture plus commit drops from about 15 ms to under 1 ms.
+- Throw `TypeError` from `getActive` / `getActiveSnapshot` for non-integer
+  bounds (including `NaN`) instead of a storage-layer error.
+- Let `Query.compose` merge an `include` entry with an `all` or `any`
+  entry for the same component under the same key; the `include` entry is
+  dropped. The same component under different keys still throws `SpecError`.
+- Mark data components changed when attached without a payload, matching the
+  explicit-payload path (single, batch, bundle, and `createWith`).
+- Keep an in-progress `getOwners` iteration intact across
+  `applyCheckpoint`.
+- Remove every staged component when a bundle spawn fails partway, so no
+  ownership or sparse row outlives the rolled-back entity.
+- Reject, rather than deadlock, a system hook that destroys a system whose
+  destruction waits on that hook (including its own system). It rejects with
+  `WorldStateError`; non-cyclic destroys from hooks still work. Detection needs
+  `AsyncLocalStorage` (Deno, Node, Bun); in browsers, do not await a destroy that
+  waits on the calling hook.
+- Make `world.systems.destroy` always return a promise. World-state failures
+  now reject instead of throwing synchronously.
+- Allow systems whose query has only `none` terms. The callback receives an
+  empty components record and the matching entities.
+
 ## 1.0.0-beta.1 — 2026-10-05
 
 Beta hardens the existing ECS surface. It introduces no new ECS features.

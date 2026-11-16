@@ -7,11 +7,12 @@ import type { TypedArray } from "@/types/partitions.ts";
 /** Full component-manager snapshot used by world rollback. */
 export type ComponentManagerSnapshot = {
   readonly states: ReadonlyArray<{
-    owners?: number[];
+    owners?: Uint8Array;
     ownerCount: number;
-    ownerList?: number[];
-    changedSlots: number[];
-    columns: Record<string, number[]>;
+    /** Owner slots in iteration order (length `ownerCount`). */
+    ownerList?: EntityArray;
+    changedSlots: EntityArray | readonly number[];
+    columns: Record<string, TypedArray>;
     sparseColumns: Record<string, { slots: number[]; values: number[] }>;
   }>;
 };
@@ -33,21 +34,24 @@ export type SnapshottableComponentState = {
 
 type SparseColumn = TypedArray & { clearSparse(): void };
 
-/** Capture dense columns and logical sparse mappings, including raw slot writes. */
+/**
+ * Capture dense columns and logical sparse mappings, including raw slot writes.
+ * Dense data is copied as typed arrays (a memcpy), keeping capture cheap at large world capacities.
+ */
 export function captureComponentManagerSnapshot(
   states: readonly SnapshottableComponentState[],
   capacity: number,
 ): ComponentManagerSnapshot {
   const snapStates: ComponentManagerSnapshot["states"][number][] = [];
   for (const state of states) {
-    const columns: Record<string, number[]> = Object.create(null);
+    const columns: Record<string, TypedArray> = Object.create(null);
     const sparseColumns: Record<string, { slots: number[]; values: number[] }> = Object.create(null);
     if (state.instance.storage !== null) {
       const partitions = state.instance.storage.partitions as Record<string, TypedArray>;
       for (const key of Object.keys(partitions)) {
         const partition = partitions[key]!;
         if (ArrayBuffer.isView(partition)) {
-          columns[key] = Array.from(partition);
+          columns[key] = partition.slice();
         } else {
           const slots: number[] = [];
           const values: number[] = [];
@@ -63,12 +67,10 @@ export function captureComponentManagerSnapshot(
       }
     }
     snapStates.push({
-      owners: state.owners === undefined ? undefined : Array.from(state.owners),
+      owners: state.owners?.slice(),
       ownerCount: state.ownerCount,
-      ownerList: state.ownerList === undefined ? undefined : Array.from(state.ownerList),
-      changedSlots: state.changedList === undefined ?
-        [] :
-        Array.from(state.changedList.subarray(0, state.changedCount)),
+      ownerList: state.ownerList?.slice(0, state.ownerCount),
+      changedSlots: state.changedList === undefined ? [] : state.changedList.slice(0, state.changedCount),
       columns,
       sparseColumns,
     });

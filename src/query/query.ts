@@ -193,7 +193,8 @@ class QueryRuntime<TComponents extends ComponentMap = UntypedQueryComponents> im
   /**
    * Compose a new Query that matches entities matching every input query (their logical `AND`).
    *
-   * `all`, `none` and `include` components are unioned. A query holds a single `any` group, so
+   * `all`, `none` and `include` components are unioned; an `include` entry is dropped when another input
+   * lists the same component under the same key in `all` or `any`. A query holds a single `any` group, so
    * at most one input may have a non-empty `any`: it passes through unchanged and stays an `AND`
    * with the other inputs' requirements. Unioning several `any` groups would turn
    * `(A | B) AND (C | D)` into `A | B | C | D`, so that case is rejected instead.
@@ -218,7 +219,12 @@ class QueryRuntime<TComponents extends ComponentMap = UntypedQueryComponents> im
     const allEntries = queries.flatMap((query) => query.allEntries);
     const anyEntries = queries.flatMap((query) => query.anyEntries);
     const noneEntries = queries.flatMap((query) => query.noneEntries);
-    const includeEntries = queries.flatMap((query) => query.includeEntries);
+    // `include` is non-filtering, so an input's include entry adds nothing when another input already
+    // requires or offers the same component under the same key; keep the filtering role instead of rejecting.
+    const includeEntries = queries.flatMap((query) => query.includeEntries).filter((entry) =>
+      !allEntries.some((other) => other.component === entry.component && other.key === entry.key) &&
+      !anyEntries.some((other) => other.component === entry.component && other.key === entry.key)
+    );
     const spec: TypedQuerySpec<ComponentMap, ComponentMap, ComponentMap, ComponentMap> = {
       all: entriesToComponentMap(allEntries),
       any: entriesToComponentMap(anyEntries),

@@ -16,6 +16,8 @@ export type EntityManagerSerialized = {
   entities: string;
   /** Optional per-slot generation counters */
   generations?: string;
+  /** Optional pool allocation cursor (next slot to acquire) */
+  cursor?: number;
 };
 
 /** A component definition whose value/storage shape is only known dynamically. */

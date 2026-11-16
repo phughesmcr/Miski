@@ -82,7 +82,6 @@ const movementArchetype = new Archetype(SMALL_CAPACITY, [positionInstance, veloc
 for (let entity = 0; entity < SMALL_CAPACITY; entity++) {
   movementArchetype.addEntity(asEntity(entity));
 }
-movementArchetype.refresh();
 
 const archetypeResult = new QueryEntityResult(SMALL_CAPACITY);
 const visitedEntities = new BooleanArray(SMALL_CAPACITY);
@@ -350,7 +349,6 @@ Deno.bench({
   fn: () => {
     transitionArchetype.addEntity(asEntity(17));
     transitionArchetype.removeEntity(asEntity(17));
-    transitionArchetype.refresh();
   },
 });
 

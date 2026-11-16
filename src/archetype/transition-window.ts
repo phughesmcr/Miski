@@ -65,6 +65,26 @@ export class TransitionWindow {
     return this.#origins[slot];
   }
 
+  /** Number of slots touched in the current window. */
+  get touchedCount(): number {
+    return this.#count;
+  }
+
+  /** The `index`-th touched slot, in first-touch order. */
+  touchedSlot(index: number): number {
+    return this.#slots[index]!;
+  }
+
+  /** Archetype a touched slot occupied at window start (`undefined` = no entity then). */
+  originAt(slot: number): Archetype | undefined {
+    return this.#origins[slot];
+  }
+
+  /** Handle that occupied a touched slot at window start; meaningful only when {@link originAt} is defined. */
+  handleAt(slot: number): Entity {
+    return this.#handles[slot]! as Entity;
+  }
+
   /** Forget every recorded origin; the next move of any slot starts a new window. */
   clear(): void {
     for (let i = 0; i < this.#count; i++) {

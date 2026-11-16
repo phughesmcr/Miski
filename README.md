@@ -283,7 +283,8 @@ world.components.readEntityDataInto(Position, entity, out);
 ```
 
 `getChanged(...)` resets each `world.refresh()` — a fresh tray every frame.
-Tags skip changed tracking. Need retained IDs outside the hot path? Reach for
+Attaching a data component marks it changed, with or without a payload. Tags
+skip changed tracking. Need retained IDs outside the hot path? Reach for
 the `*Snapshot` helpers.
 
 ### :ghost: Entities
@@ -353,8 +354,11 @@ world.archetypes.queryExited(q);
 Entered / exited are relative to the current refresh window: entered means a
 member now but not at window start, exited the reverse. Moves between matching
 archetypes, remove-then-re-add, and spawn-then-destroy within one window report
-neither. `Query.compose` throws `SpecError` if more than one input has a
-non-empty `any` group.
+neither. Both list entities in the order they were first touched in the window.
+`Query.compose` throws `SpecError` if more than one input has a non-empty `any`
+group, or if one component appears under different keys. An `include` entry
+whose component another input lists under `all` or `any` with the same key is
+dropped.
 
 ### :gear: Systems
 
@@ -410,7 +414,9 @@ componentSchemaHash({ Position: { x: Float32Array, y: Float32Array } });
 ```
 
 Rollback restores dense and capped sparse storage, ownership, and the changed
-and archetype transition windows captured before the scope. Revision tokens
+and archetype transition windows captured before the scope. Restoration is
+order-neutral: the next allocated slots and the iteration order of queries and
+owners match a world that never ran the speculative work. Revision tokens
 continue forward after restoration.
 
 Checkpoints are reusable and bound to the capturing world; captured entities

@@ -1,7 +1,7 @@
 import { VERSION } from "@/constants.ts";
-import { ArchetypeManager } from "@/archetype/archetype-manager.ts";
+import { ArchetypeManager, type ArchetypeManagerSnapshot } from "@/archetype/archetype-manager.ts";
 import { ComponentManager, type ComponentManagerSnapshot } from "@/component/component-manager.ts";
-import { EntityManager } from "@/entity/entity-manager.ts";
+import { EntityManager, type EntityManagerState } from "@/entity/entity-manager.ts";
 import { asEntity, type Entity, type QueryEntityList } from "@/entity/entity.ts";
 import {
   ComponentDataError,
@@ -47,9 +47,9 @@ import { assertWorldState, isValidWorldSpec } from "./utils.ts";
 import { WorldMutations } from "./world-mutations.ts";
 
 type WorldRollbackState = {
-  readonly entityJson: string;
+  readonly entities: EntityManagerState;
   readonly componentSnapshot: ComponentManagerSnapshot;
-  readonly transitions: ReturnType<ArchetypeManager["captureTransitions"]>;
+  readonly archetypes: ArchetypeManagerSnapshot;
 };
 
 type ComponentReference<
@@ -182,35 +182,37 @@ export class World {
 
   /**
    * Entities that match the query now but did not match it when the refresh window began.
-   * An entity currently inhabits one archetype, so it can be listed by at most one matching archetype.
+   * Only slots that moved this window can qualify, so this walks the window's touched slots in first-touch order.
    */
   *#queryArchetypeEntered(query: Query): IterableIterator<Entity> {
     const queryInstance = this.#queryManager.instanceWithMembership(query);
-    const matching = queryInstance.archetypes;
-    const matchingCount = queryInstance.archetypeCount;
-    for (let i = 0; i < matchingCount; i++) {
-      for (const entity of matching[i]!.getEntered()) {
-        if (this.#archetypeManager.getWindowOrigin(entity)?.isCandidate(queryInstance)) continue;
-        yield entity;
-      }
+    const archetypes = this.#archetypeManager;
+    const window = archetypes.transitionWindow;
+    for (let i = 0; i < window.touchedCount; i++) {
+      const slot = window.touchedSlot(i);
+      const current = archetypes.archetypeAtSlot(slot);
+      if (current === undefined || !current.isCandidate(queryInstance)) continue;
+      const entity = this.#entityManager.packSlot(slot);
+      if (window.originOf(entity)?.isCandidate(queryInstance)) continue;
+      yield entity;
     }
   }
 
   /**
    * Entities that matched the query when the refresh window began but do not match it now.
-   * Each is reported by the archetype it started the window in, which is unique per entity.
+   * Reports the window-start handle, which may since have been destroyed.
    */
   *#queryArchetypeExited(query: Query): IterableIterator<Entity> {
     const queryInstance = this.#queryManager.instanceWithMembership(query);
-    const matching = queryInstance.archetypes;
-    const matchingCount = queryInstance.archetypeCount;
-    for (let i = 0; i < matchingCount; i++) {
-      const archetype = matching[i]!;
-      for (const entity of archetype.getExited()) {
-        if (this.#archetypeManager.getWindowOrigin(entity) !== archetype) continue;
-        if (this.#archetypeManager.getEntityArchetype(entity)?.isCandidate(queryInstance)) continue;
-        yield entity;
-      }
+    const archetypes = this.#archetypeManager;
+    const window = archetypes.transitionWindow;
+    for (let i = 0; i < window.touchedCount; i++) {
+      const slot = window.touchedSlot(i);
+      const origin = window.originAt(slot);
+      if (origin === undefined || !origin.isCandidate(queryInstance)) continue;
+      const entity = window.handleAt(slot);
+      if (archetypes.getEntityArchetype(entity)?.isCandidate(queryInstance)) continue;
+      yield entity;
     }
   }
 
@@ -636,9 +638,9 @@ export class World {
     this.#assertInitialized();
     if (this.#rollbackState !== undefined) throw new Error("A world rollback scope is already active.");
     const state: WorldRollbackState = {
-      entityJson: this.#entityManager.stringify(),
+      entities: this.#entityManager.captureState(),
       componentSnapshot: this.#componentManager.captureSnapshot(),
-      transitions: this.#archetypeManager.captureTransitions(),
+      archetypes: this.#archetypeManager.captureState(),
     };
     this.#rollbackState = state;
     return state;
@@ -660,13 +662,9 @@ export class World {
   [restoreRollbackState](state: WorldRollbackState): void {
     this[validateRollbackState](state);
     this.#rollbackState = undefined;
-    this.#entityManager.restoreJSON(state.entityJson);
+    this.#entityManager.restoreState(state.entities);
     this.#componentManager.restoreSnapshot(state.componentSnapshot);
-    this.#archetypeManager.rebuildFromOwnership(
-      this.#entityManager.getActive(),
-      (entity) => this.#componentManager.getEntityComponents(entity),
-    );
-    this.#archetypeManager.restoreTransitions(state.transitions);
+    this.#archetypeManager.restoreState(state.archetypes);
     this.#queryManager.invalidate();
     this.#entityRevision = ++this.#revision;
   }

@@ -49,7 +49,7 @@ export class EntityManager {
    * @throws {RangeError} - If the `MAX_CAPACITY` does not match {@link EntityManager.MAX_CAPACITY}
    */
   static fromJSON(json: string): EntityManager {
-    const parsed = JSON.parse(json) as EntityManagerSerialized & { generations?: string };
+    const parsed = JSON.parse(json) as EntityManagerSerialized;
     const { MAX_CAPACITY, capacity, entities } = parsed;
     if (MAX_CAPACITY !== EntityManager.MAX_CAPACITY) {
       throw new RangeError(
@@ -57,7 +57,9 @@ export class EntityManager {
       );
     }
     const arr = numberArrayFromString(entities);
-    const pool = new BitPool(BooleanArray.fromUint32Array(capacity, arr));
+    const pool = typeof parsed.cursor === "number" ?
+      restorePool(capacity, arr, parsed.cursor) :
+      new BitPool(BooleanArray.fromUint32Array(capacity, arr));
     const manager = new EntityManager(capacity, pool);
     if (parsed.generations) {
       const gens = numberArrayFromString(parsed.generations);
@@ -146,11 +148,15 @@ export class EntityManager {
    * @returns an iterable of all active packed entities
    * @param startSlot - Inclusive raw slot lower bound (default 0)
    * @param endSlot - Exclusive raw slot upper bound (default capacity)
+   * @throws {TypeError} - If either bound is not an integer
    */
   getActive(
     startSlot: SlotIndex = asSlotIndex(0),
     endSlot: SlotIndex = asSlotIndex(this.#capacity),
   ): IterableIterator<Entity> {
+    if (!Number.isInteger(startSlot) || !Number.isInteger(endSlot)) {
+      throw new TypeError(`Active entity bounds must be integer slot indices (got ${startSlot}, ${endSlot}).`);
+    }
     const count = this.pool.occupiedIndicesInto(this.#activeSlots, startSlot, endSlot);
     for (let i = 0; i < count; i++) {
       const slot = this.#activeSlots[i]!;
@@ -211,20 +217,54 @@ export class EntityManager {
         MAX_CAPACITY: EntityManager.MAX_CAPACITY,
         capacity: this.#capacity,
         entities: this.pool.toUint32Array().toString(),
+        cursor: this.pool.nextAvailableIndex,
         generations: Array.from(this.#generation).toString(),
       },
     );
   }
 
-  /** Restore reversible identity state without reissuing speculative handles. */
-  restoreJSON(json: string): void {
-    const restored = EntityManager.fromJSON(json);
-    if (restored.capacity !== this.#capacity) throw new RangeError("Entity capacity mismatch.");
-    this.pool = restored.pool;
-    this.#generation.set(restored.#generation);
+  /** Capture reversible identity state: occupancy, the pool's allocation cursor, and generations. */
+  captureState(): EntityManagerState {
+    return {
+      occupancy: this.pool.toUint32Array(),
+      cursor: this.pool.nextAvailableIndex,
+      generation: this.#generation.slice(),
+    };
+  }
+
+  /**
+   * Restore state from {@link captureState} without reissuing speculative handles.
+   * Allocation order after restore matches a manager that never left the captured state.
+   */
+  restoreState(state: EntityManagerState): void {
+    this.pool = restorePool(this.#capacity, state.occupancy, state.cursor);
+    this.#generation.set(state.generation);
     for (let slot = 0; slot < this.#capacity; slot++) {
-      if (!this.pool.isOccupied(slot)) this.#generation[slot] = this.#nextGeneration[slot]!;
-      this.#nextGeneration[slot] = Math.max(this.#nextGeneration[slot]!, restored.#nextGeneration[slot]!);
+      // Handles issued after capture stay retired: generations only move forward.
+      const capturedNext = state.generation[slot]! + (this.pool.isOccupied(slot) ? 1 : 0);
+      const next = Math.max(this.#nextGeneration[slot]!, capturedNext);
+      this.#nextGeneration[slot] = next;
+      if (!this.pool.isOccupied(slot)) this.#generation[slot] = next;
     }
   }
+}
+
+/** Reversible {@link EntityManager} state captured for rollback. */
+export type EntityManagerState = {
+  readonly occupancy: Uint32Array;
+  readonly cursor: number;
+  readonly generation: Uint32Array;
+};
+
+/**
+ * Rebuild a pool from its occupancy bitmap and restore its allocation cursor.
+ * BitPool releases are LIFO, so occupying the cursor slot and releasing it makes it the next acquisition.
+ */
+function restorePool(capacity: number, occupancy: ArrayLike<number>, cursor: number): BitPool {
+  const words = Uint32Array.from(occupancy);
+  const restoreCursor = cursor >= 0 && cursor < capacity && (words[cursor >>> 5]! & (1 << (cursor & 31))) === 0;
+  if (restoreCursor) words[cursor >>> 5] = (words[cursor >>> 5]! | (1 << (cursor & 31))) >>> 0;
+  const pool = new BitPool(BooleanArray.fromUint32Array(capacity, words));
+  if (restoreCursor) pool.release(cursor);
+  return pool;
 }
