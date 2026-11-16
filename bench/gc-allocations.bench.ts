@@ -50,8 +50,12 @@ const ZERO_ALLOC_BUDGET_BYTES_PER_ITER = 0.5;
 const QUERY_ITERATION_BUDGET_BYTES_PER_ITER = 180;
 const WIDE_QUERY_ITERATION_BUDGET_BYTES_PER_ITER = 260;
 const CHANGED_ITERATION_BUDGET_BYTES_PER_ITER = ZERO_ALLOC_BUDGET_BYTES_PER_ITER;
-const SYSTEM_UPDATE_BUDGET_BYTES_PER_ITER = 220;
-const FRAME_BUDGET_BYTES_PER_ITER = 1_028;
+// Systems without argCount forward call args through rest/spread, which allocates ~56-58 B per call until V8
+// optimises the call site. Systems with argCount forward through fixed parameters and allocate nothing.
+const SYSTEM_UPDATE_BUDGET_BYTES_PER_ITER = 64;
+const FIXED_ARITY_SYSTEM_UPDATE_BUDGET_BYTES_PER_ITER = ZERO_ALLOC_BUDGET_BYTES_PER_ITER;
+const FRAME_BUDGET_BYTES_PER_ITER = 128;
+const FIXED_ARITY_FRAME_BUDGET_BYTES_PER_ITER = 8;
 const WORLD_CONSTRUCTOR_BUDGET_BYTES_PER_ITER = 12_000;
 const PROJECTILE_SPAWN_DESPAWN_BUDGET_BYTES_PER_ITER = 3_200;
 const GET_ENTITY_DATA_BUDGET_BYTES_PER_ITER = 80;
@@ -230,6 +234,7 @@ function budgeted(name: string, iterations: number, fn: () => void): Scenario {
 
 const mixed = await populateMixedWorld(MEDIUM_CAPACITY);
 const movement = await populateMovementWorld(MEDIUM_CAPACITY);
+const fixedArityMovement = await populateMovementWorld(MEDIUM_CAPACITY, undefined, 1);
 const lifecycle = await populateSparseLifecycleWorld(MEDIUM_CAPACITY);
 const repeatedSpawnLifecycle = await populateSparseLifecycleWorld(MEDIUM_CAPACITY);
 const bundledSpawnLifecycle = await populateSparseLifecycleWorld(MEDIUM_CAPACITY);
@@ -245,6 +250,7 @@ const renderIncludeQuery = new Query({
 });
 const movementFrameQuery = createMovementQuery(movement.components);
 const renderableFrameQuery = createRenderableQuery(movement.components);
+const fixedArityRenderableFrameQuery = createRenderableQuery(fixedArityMovement.components);
 const batchTagPositionQuery = new Query({ all: [batchTagTransitions.components.position] });
 const batchDataPositionQuery = new Query({ all: [batchDataTransitions.components.position] });
 const transitionTrackingQuery = createMovementQuery(transitionTracking.components);
@@ -255,6 +261,7 @@ mixed.world.entities.query(renderIncludeQuery);
 mixed.world.components.query(renderIncludeQuery);
 movement.world.entities.query(movementFrameQuery);
 movement.world.entities.query(renderableFrameQuery);
+fixedArityMovement.world.entities.query(fixedArityRenderableFrameQuery);
 batchTagTransitions.world.entities.query(batchTagPositionQuery);
 batchDataTransitions.world.entities.query(batchDataPositionQuery);
 transitionTracking.world.entities.query(transitionTrackingQuery);
@@ -638,6 +645,14 @@ const scenarios: Scenario[] = [
     },
   },
   {
+    name: "system movement update cached query, argCount",
+    iterations: 10_000,
+    maxSteadyStateBeforeGcBytesPerIter: FIXED_ARITY_SYSTEM_UPDATE_BUDGET_BYTES_PER_ITER,
+    fn: () => {
+      fixedArityMovement.movement(1 / 60);
+    },
+  },
+  {
     name: "world refresh standalone with cached queries",
     iterations: 25_000,
     maxSteadyStateBeforeGcBytesPerIter: REFRESH_BUDGET_BYTES_PER_ITER,
@@ -653,6 +668,16 @@ const scenarios: Scenario[] = [
       movement.movement(1 / 60);
       entitySink ^= countEntities(movement.world.entities.query(renderableFrameQuery));
       movement.world.refresh();
+    },
+  },
+  {
+    name: "game frame argCount system + cached render query + refresh",
+    iterations: 5_000,
+    maxSteadyStateBeforeGcBytesPerIter: FIXED_ARITY_FRAME_BUDGET_BYTES_PER_ITER,
+    fn: () => {
+      fixedArityMovement.movement(1 / 60);
+      entitySink ^= countEntities(fixedArityMovement.world.entities.query(fixedArityRenderableFrameQuery));
+      fixedArityMovement.world.refresh();
     },
   },
 ];

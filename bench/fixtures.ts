@@ -162,6 +162,7 @@ export async function populateMixedWorld(
 export async function populateMovementWorld(
   capacity: number,
   components: BenchmarkComponents = createBenchmarkComponents(),
+  argCount?: 1,
 ): Promise<{ world: World; components: BenchmarkComponents; entities: Entity[]; movement: MovementSystem }> {
   const world = await createWorld(capacity, components);
   const entities = new Array<Entity>(capacity);
@@ -179,6 +180,7 @@ export async function populateMovementWorld(
   const movementSystem = new System({
     name: "movement",
     query: createMovementQuery(components),
+    argCount,
     callback: (componentRecord, entities, dt: number): void => {
       const position = componentRecord["position"] as ComponentInstance<Vec2>;
       const velocity = componentRecord["velocity"] as ComponentInstance<Vec2>;
