@@ -5,12 +5,21 @@ import {
   commitWorldRollbackPoint,
   type DynamicComponent,
   type Entity,
+  entityIndex,
+  NotRegisteredError,
   Query,
   restoreWorldRollbackPoint,
+  type SlotIndex,
   type World,
 } from "../mod.ts";
-import { createTestWorld, tagComponent, vec2Component } from "./fixtures.ts";
-import { assertEquals } from "./helpers.ts";
+import { ArchetypeManager } from "../src/archetype/archetype-manager.ts";
+import { QueryEntityResult } from "../src/query/query-pool.ts";
+import { createEntity, createTestWorld, tagComponent, vec2Component } from "./fixtures.ts";
+import { assert, assertEquals, assertStrictEquals, assertThrows, listIds } from "./helpers.ts";
+
+function sorted(iterable: Iterable<number>): number[] {
+  return [...iterable].toSorted((a, b) => a - b);
+}
 
 type Rng = () => number;
 
@@ -132,4 +141,150 @@ Deno.test("query views keep their exact iteration order through moves, batches a
   assertEquals(trace.length, (24 + 4 + 2) * queries.length, "Trace length");
   // Golden captured before the per-archetype stamp, growable result and reusable iterator changes.
   assertEquals(fnv1a(trace.join("\n")), "895a6761", "Query view order diverged from the recorded golden trace");
+});
+
+Deno.test("an unrelated structural change keeps other query results without refilling them", async () => {
+  const a = tagComponent("a");
+  const b = tagComponent("b");
+  const unrelated = tagComponent("unrelated");
+  const world = await createTestWorld([a, b, unrelated], 64);
+  const withA = new Query({ all: [a] });
+  const withB = new Query({ all: [b] });
+  for (let i = 0; i < 4; i++) {
+    world.components.addToEntity(a, createEntity(world));
+    world.components.addToEntity(b, createEntity(world));
+  }
+  const listA = world.entities.queryList(withA);
+  const listB = world.entities.queryList(withB);
+  // A sentinel survives only if the retained result is not refilled.
+  const entitiesA = listA.entities as unknown as Uint32Array;
+  const realA = entitiesA[0]!;
+  entitiesA[0] = 0xffff_ffff;
+
+  const churn = createEntity(world);
+  world.components.addToEntity(unrelated, churn);
+  world.entities.destroy(churn);
+  assertStrictEquals(world.entities.queryList(withA).entities[0], 0xffff_ffff as Entity, "Unrelated churn refilled A");
+
+  // A change to a listed archetype refills only that query.
+  world.components.addToEntity(b, createEntity(world));
+  assertStrictEquals(world.entities.queryList(withA).entities[0], 0xffff_ffff as Entity, "B churn refilled A");
+  assertStrictEquals(world.entities.queryList(withB).count, 5, "B sees the new member");
+  assertStrictEquals(world.entities.queryList(withB), listB, "B keeps its retained result object");
+
+  // A new archetype joining the query's list refills it.
+  const both = createEntity(world);
+  world.components.addToEntity(a, both);
+  world.components.addToEntity(unrelated, both);
+  const refilled = world.entities.queryList(withA);
+  assertStrictEquals(refilled.count, 5, "A sees the entity in the new archetype");
+  assertStrictEquals(refilled.entities[0], realA as Entity, "A was refilled from its archetypes");
+  await world.destroy();
+});
+
+Deno.test("rollback restore refills every query result", async () => {
+  const a = tagComponent("a");
+  const world = await createTestWorld([a], 32);
+  const withA = new Query({ all: [a] });
+  const kept = createEntity(world);
+  world.components.addToEntity(a, kept);
+  world.refresh();
+  assertEquals(listIds(world.entities.queryList(withA)), [kept], "Before speculation");
+
+  const point = captureWorldRollbackPoint(world);
+  world.components.addToEntity(a, createEntity(world));
+  world.components.removeFromEntity(a, kept);
+  assertStrictEquals(world.entities.queryList(withA).count, 1, "Speculative membership");
+  restoreWorldRollbackPoint(world, point);
+  assertEquals(listIds(world.entities.queryList(withA)), [kept], "Restored membership");
+  await world.destroy();
+});
+
+Deno.test("query result buffers grow from a small start and stay coherent", async () => {
+  const a = tagComponent("a");
+  const world = await createTestWorld([a], 4096);
+  const withA = new Query({ all: [a] });
+  const first = createEntity(world);
+  world.components.addToEntity(a, first);
+  const small = world.entities.queryList(withA);
+  assert((small.entities as unknown as Uint32Array).length < 4096, "Result is not sized by world capacity");
+
+  const expected: Entity[] = [first];
+  for (let i = 0; i < 1000; i++) {
+    const entity = createEntity(world);
+    world.components.addToEntity(a, entity);
+    expected.push(entity);
+  }
+  const grown = world.entities.queryList(withA);
+  assertStrictEquals(grown, small, "The retained result object is reused");
+  assertStrictEquals(grown.count, 1001, "Count after growth");
+  assertEquals(listIds(grown), expected, "Entities after growth");
+  assertEquals([...world.entities.query(withA)], expected, "Borrowed iterator follows the grown buffer");
+  const slots: number[] = [];
+  grown.each((slot, entity) => {
+    assertStrictEquals(slot, entityIndex(entity), "Slot matches its entity");
+    slots.push(slot);
+  });
+  assertStrictEquals(slots.length, 1001, "each() walks every entry");
+
+  const direct = new QueryEntityResult(8);
+  for (let i = 0; i < 8; i++) direct.add(i as Entity, i as SlotIndex);
+  assertStrictEquals(direct.count, 8, "A direct result grows up to its capacity");
+  assertEquals([...direct], [0, 1, 2, 3, 4, 5, 6, 7], "Direct result keeps its entries across growth");
+  await world.destroy();
+});
+
+Deno.test("archetype query iterators are reused without sharing state", async () => {
+  const a = tagComponent("a");
+  const b = tagComponent("b");
+  const world = await createTestWorld([a, b], 32);
+  const withA = new Query({ all: [a] });
+  const entities: Entity[] = [];
+  for (let i = 0; i < 4; i++) {
+    const entity = createEntity(world);
+    world.components.addToEntity(a, entity);
+    if (i % 2 === 0) world.components.addToEntity(b, entity);
+    entities.push(entity);
+  }
+
+  const first = world.archetypes.queryEntities(withA);
+  const live = [...first];
+  assertEquals(sorted(live), sorted(entities), "Full pass");
+  assertStrictEquals(first.next().done, true, "Exhausted iterator stays done until reused");
+  const second = world.archetypes.queryEntities(withA);
+  assertStrictEquals(second, first, "An exhausted iterator is reused");
+  assertEquals([...second], live, "A reused iterator restarts in the same order");
+
+  // Early exit returns the iterator to the pool.
+  let seen = 0;
+  for (const _entity of world.archetypes.queryEntered(withA)) {
+    if (++seen === 2) break;
+  }
+  assertEquals(sorted([...world.archetypes.queryEntered(withA)]), sorted(entities), "Entered after a break");
+
+  // Iterators opened together are independent.
+  const x = world.archetypes.queryEntities(withA);
+  const y = world.archetypes.queryEntities(withA);
+  assert(x !== y, "Concurrent iterators are distinct");
+  assertStrictEquals(x.next().value, live[0], "x starts at the first entity");
+  assertStrictEquals(y.next().value, live[0], "y starts independently");
+  assertStrictEquals(x.next().value, live[1], "x advances on its own");
+  x.return?.();
+  y.return?.();
+
+  // Like the generators, the query resolves lazily and sees state at first next().
+  const lazy = world.archetypes.queryExited(withA);
+  world.refresh();
+  world.components.removeFromEntity(a, entities[0]!);
+  assertEquals([...lazy], [entities[0]], "Exited reads the window when iteration starts");
+  await world.destroy();
+});
+
+Deno.test("archetype manager rejects archetypes it does not hold", () => {
+  const capacity = 8;
+  const first = new ArchetypeManager(capacity, 2);
+  const second = new ArchetypeManager(capacity, 2);
+  const entity = 0 as Entity;
+  assertThrows(() => first.set(second.root, entity), NotRegisteredError, "Invalid archetype.");
+  assertStrictEquals(first.set(first.root, entity), first.root, "Own root is accepted");
 });
