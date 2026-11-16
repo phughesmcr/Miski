@@ -22,8 +22,8 @@ type ForwardedCallback = (components: unknown, entities: BorrowedEntityList, ...
  * alongside the matching entities.
  *
  * Without `argCount` the instance forwards the caller's arguments exactly through rest/spread, which allocates
- * an arguments array per call until V8 optimises the call. With `argCount` it has that many fixed parameters and
- * forwards exactly that many, which does not allocate.
+ * an arguments array per call; V8 may or may not optimise that away. With `argCount` it has that many fixed
+ * parameters and forwards exactly that many, which does not allocate.
  * @param bindings The world bindings used to resolve query data
  * @param system The system to create the instance of
  * @returns The created system instance

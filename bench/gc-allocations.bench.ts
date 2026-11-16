@@ -50,8 +50,8 @@ const ZERO_ALLOC_BUDGET_BYTES_PER_ITER = 0.5;
 const QUERY_ITERATION_BUDGET_BYTES_PER_ITER = 180;
 const WIDE_QUERY_ITERATION_BUDGET_BYTES_PER_ITER = 260;
 const CHANGED_ITERATION_BUDGET_BYTES_PER_ITER = ZERO_ALLOC_BUDGET_BYTES_PER_ITER;
-// Systems without argCount forward call args through rest/spread, which allocates ~56-58 B per call until V8
-// optimises the call site. Systems with argCount forward through fixed parameters and allocate nothing.
+// Systems without argCount forward call args through rest/spread, which allocates ~56-58 B per one-arg call
+// unless V8 optimises the call site (not guaranteed). Systems with argCount use fixed parameters and allocate nothing.
 const SYSTEM_UPDATE_BUDGET_BYTES_PER_ITER = 64;
 const FIXED_ARITY_SYSTEM_UPDATE_BUDGET_BYTES_PER_ITER = ZERO_ALLOC_BUDGET_BYTES_PER_ITER;
 const FRAME_BUDGET_BYTES_PER_ITER = 128;
