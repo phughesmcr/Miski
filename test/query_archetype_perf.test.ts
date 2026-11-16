@@ -10,6 +10,7 @@ import {
   Query,
   restoreWorldRollbackPoint,
   type SlotIndex,
+  System,
   type World,
 } from "../mod.ts";
 import { ArchetypeManager } from "../src/archetype/archetype-manager.ts";
@@ -287,4 +288,34 @@ Deno.test("archetype manager rejects archetypes it does not hold", () => {
   const entity = 0 as Entity;
   assertThrows(() => first.set(second.root, entity), NotRegisteredError, "Invalid archetype.");
   assertStrictEquals(first.set(first.root, entity), first.root, "Own root is accepted");
+});
+
+Deno.test("systems see every match after their query result grows", async () => {
+  const a = tagComponent("a");
+  const seen: number[][] = [];
+  const system = new System({
+    name: "collect",
+    query: new Query({ all: [a] }),
+    callback: (_components, entities) => {
+      const run: number[] = [];
+      for (let i = 0; i < entities.count; i++) {
+        assertStrictEquals(entities.slots[i], entityIndex(entities.entities[i]!), "Slot matches entity");
+        run.push(entities.entities[i]!);
+      }
+      seen.push(run);
+    },
+  });
+  const world = await createTestWorld([a], 1024);
+  const update = world.systems.create(system);
+  const expected: Entity[] = [createEntity(world)];
+  world.components.addToEntity(a, expected[0]!);
+  update();
+  for (let i = 0; i < 100; i++) {
+    const entity = createEntity(world);
+    world.components.addToEntity(a, entity);
+    expected.push(entity);
+  }
+  update();
+  assertEquals(seen, [[expected[0]!], expected], "The second run sees the grown result");
+  await world.destroy();
 });
