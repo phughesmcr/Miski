@@ -8,6 +8,7 @@ Runtime tests live in `*.test.ts` files and run via `deno test` (see `deno.json`
 | --- | --- |
 | `ecs_gameplay_contracts.test.ts` | Happy-path gameplay: capacity, systems, queries, batch transitions, multi-world |
 | `ecs_validation_contracts.test.ts` | Spec rejection and registry consistency |
+| `system_call_forwarding.test.ts` | System call args: exact arity, rest params, defaults, return values, `argCount` fixed-arity forwarding and validation |
 | `game_oriented_api_evidence.test.ts` | `include`, bundles/spawn preflight, changed marking |
 | `world_api_conveniences.test.ts` | Soft reads, upserts, `createOrThrow`, iterable `queryList` |
 | `world_regressions.test.ts` | Edge cases: maxEntities, entered/exited, cache freshness, batch atomicity |
@@ -34,7 +35,7 @@ Assertion helpers live in `helpers.ts`.
 
 These files are type-checked by `deno task check` but are **not** executed by `deno test`:
 
-- `typed_system_inference.ts` — `new System` / `new Query` callback and query-map inference
+- `typed_system_inference.ts` — `new System` / `new Query` callback, query-map and `argCount` inference
 - `query_constructor_inference.ts` — typed `Query({ all: { … } })` constructor inference
 - `typed_ecs_world_inference.ts` — `createEcsWorld` / schema-world spawn and storage inference
 - `entity_api_inference.ts` — slot bounds reject packed entity handles

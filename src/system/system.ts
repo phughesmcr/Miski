@@ -6,13 +6,24 @@ import type { SystemInstance, SystemPrivateMethods, SystemSpec, TypedSystemCallb
 import type { SystemBindings } from "@/types/system.ts";
 import type { UntypedQueryComponents } from "@/types/query.ts";
 import type { WorldContext } from "@/types/world-api.ts";
+import type { BorrowedEntityList } from "@/entity/entity.ts";
 import { isObject, isValidName, noop } from "@/utils.ts";
+
+/** The largest `argCount` a system spec may declare. */
+const MAX_SYSTEM_ARG_COUNT = 4;
+
+/** Untyped view of a system callback, used only to forward calls. */
+type ForwardedCallback = (components: unknown, entities: BorrowedEntityList, ...args: unknown[]) => unknown;
 
 /**
  * Create a system instance
  *
  * A query with only `none` terms exposes no components, so its callback receives an empty components record
  * alongside the matching entities.
+ *
+ * Without `argCount` the instance forwards the caller's arguments exactly through rest/spread, which allocates
+ * an arguments array per call; V8 may or may not optimise that away. With `argCount` it has that many fixed
+ * parameters and forwards exactly that many, which does not allocate.
  * @param bindings The world bindings used to resolve query data
  * @param system The system to create the instance of
  * @returns The created system instance
@@ -27,13 +38,44 @@ export function createSystemInstance<
   system: System<TComponents, TArgs, TReturn>,
 ): SystemInstance<TypedSystemCallback<TComponents, TArgs, TReturn>> {
   const components = bindings.queryComponents(system.query) as ComponentInstances<TComponents>;
-  const callback = system.callback;
+  const callback = system.callback as unknown as ForwardedCallback;
   const query = system.query;
 
-  return ((...args: TArgs) =>
-    callback(components, bindings.queryEntityList(query), ...args)) as unknown as SystemInstance<
-      TypedSystemCallback<TComponents, TArgs, TReturn>
-    >;
+  // One function literal per arity, so each wrapper keeps its own monomorphic call feedback.
+  let instance: (...args: never[]) => unknown;
+  switch (system.argCount) {
+    case undefined:
+      instance = (...args: unknown[]) => callback(components, bindings.queryEntityList(query), ...args);
+      break;
+    case 0:
+      instance = () => callback(components, bindings.queryEntityList(query));
+      break;
+    case 1:
+      instance = (a: unknown) => callback(components, bindings.queryEntityList(query), a);
+      break;
+    case 2:
+      instance = (a: unknown, b: unknown) => callback(components, bindings.queryEntityList(query), a, b);
+      break;
+    case 3:
+      instance = (a: unknown, b: unknown, c: unknown) => callback(components, bindings.queryEntityList(query), a, b, c);
+      break;
+    case 4:
+      instance = (a: unknown, b: unknown, c: unknown, d: unknown) =>
+        callback(components, bindings.queryEntityList(query), a, b, c, d);
+      break;
+    default:
+      throw new SpecError(`Invalid system argCount: ${String(system.argCount)}`);
+  }
+  return instance as unknown as SystemInstance<TypedSystemCallback<TComponents, TArgs, TReturn>>;
+}
+
+/**
+ * Test if a value is a valid system `argCount`
+ * @param argCount The value to test
+ * @returns `true` if `argCount` is an integer from 0 to {@link MAX_SYSTEM_ARG_COUNT}
+ */
+function isValidArgCount(argCount: unknown): argCount is number {
+  return Number.isInteger(argCount) && (argCount as number) >= 0 && (argCount as number) <= MAX_SYSTEM_ARG_COUNT;
 }
 
 /**
@@ -43,12 +85,13 @@ export function createSystemInstance<
  */
 export function isValidSystemSpec(spec: unknown): spec is SystemSpec {
   if (isObject(spec) === false) return false;
-  const { name, query, callback, destroy, init } = spec;
+  const { argCount, name, query, callback, destroy, init } = spec;
   if (typeof name !== "string" || !isValidName(name)) return false;
   if ((query instanceof Query) === false) return false;
   if (typeof callback !== "function") return false;
   if (typeof destroy !== "undefined" && typeof destroy !== "function") return false;
   if (typeof init !== "undefined" && typeof init !== "function") return false;
+  if (typeof argCount !== "undefined" && !isValidArgCount(argCount)) return false;
   return true;
 }
 
@@ -63,6 +106,12 @@ export class System<
 
   /** The function to call when the system is initialized. */
   readonly [$_SYSTEM_INIT_KEY]: (world: WorldContext) => void | Promise<void>;
+
+  /**
+   * The number of arguments the system instance forwards to the callback after the components and entities, or
+   * `undefined` to forward exactly what the caller passes. See {@link SystemSpec.argCount}.
+   */
+  readonly argCount: number | undefined;
 
   /** The name of the system */
   readonly name: string;
@@ -85,7 +134,8 @@ export class System<
     if (isValidSystemSpec(spec) === false) {
       throw new SpecError("Invalid system specification");
     }
-    const { name, query, callback, destroy = noop, init = noop } = spec;
+    const { argCount, name, query, callback, destroy = noop, init = noop } = spec;
+    this.argCount = argCount;
     this.name = name;
     this.query = query;
     this.callback = callback;
