@@ -52,8 +52,12 @@ export type QueryInstance = {
   id: string;
   /** Retained borrowed entity buffer, allocated on the first entity query. */
   result?: QueryEntityResult;
-  /** Entity cache version last written into the retained buffer. */
-  resultVersion: number;
+  /** Archetype structural clock tick when the retained buffer was last filled (`-1` = never). */
+  resultStamp: number;
+  /** Query-manager invalidation epoch when the retained buffer was last filled. */
+  resultEpoch: number;
+  /** Archetype structural clock tick of the last change to {@link archetypes}. */
+  listStamp: number;
   /** A BooleanArray for the OR match criteria */
   or: BooleanArray;
   /** A BooleanArray for the NOT match criteria */

@@ -17,6 +17,29 @@ function isQueryMatch(target: BooleanArray, query: QueryInstance): boolean {
 const INITIAL_LIST_LENGTH = 16;
 
 /**
+ * Process-wide structural change clock. Every population change of any archetype takes the next tick, so a
+ * value read from {@link archetypeClock} orders before every later change of every archetype. It is never
+ * rewound, including by rollback, so a stamp can never be mistaken for an older one.
+ */
+let clock = 0;
+
+/**
+ * The latest structural change tick handed to any archetype.
+ * @internal
+ */
+export function archetypeClock(): number {
+  return clock;
+}
+
+/**
+ * Take a new structural change tick (also used for query archetype-list changes).
+ * @internal
+ */
+export function nextArchetypeStamp(): number {
+  return ++clock;
+}
+
+/**
  * An Archetype is a collection of ComponentInstances which define the schema of an Entity.
  *
  * Storage is proportional to population, not world capacity: the dense slot list grows on demand, and
@@ -74,6 +97,19 @@ export class Archetype {
    * @internal
    */
   emptiedPending: boolean = false;
+
+  /**
+   * {@link archetypeClock} tick of the last change to this archetype's population or its order.
+   * Query results built after this tick still hold this archetype's entities in the right order.
+   * @internal
+   */
+  stamp: number = 0;
+
+  /**
+   * Scratch group index used by batch moves; only meaningful while a batch move is grouping.
+   * @internal
+   */
+  batchGroup: number = -1;
 
   /** Cached remove-component transition edges by component instance id */
   readonly removeTransitions: Archetype[];
@@ -139,6 +175,7 @@ export class Archetype {
     this.#entityList[position] = slot;
     this.#positions[slot] = position;
     this.#populationCount = position + 1;
+    this.stamp = ++clock;
     return true;
   }
 
@@ -152,6 +189,7 @@ export class Archetype {
       this.#positions[lastSlot] = removeIndex;
     }
     this.#populationCount = lastIndex;
+    this.stamp = ++clock;
     return true;
   }
 
@@ -174,6 +212,30 @@ export class Archetype {
     this.#requireEntitySlot(entity, slot);
     this.#activateEntity(slot);
     return this;
+  }
+
+  /**
+   * Add a storage slot the caller has already validated as a live entity's slot.
+   * @internal
+   */
+  addSlot(slot: number): void {
+    this.#activateEntity(slot);
+  }
+
+  /**
+   * Remove a storage slot the caller has already validated as a live entity's slot.
+   * @internal
+   */
+  removeSlot(slot: number): void {
+    this.#deactivateEntity(slot);
+  }
+
+  /**
+   * The packed handle of the entity at a dense-list position (`index < getPopulationCount()`).
+   * @internal
+   */
+  entityAt(index: number): Entity {
+    return this.#packSlot(this.#entityList[index]!);
   }
 
   /**
@@ -268,6 +330,7 @@ export class Archetype {
     this.#entityList.set(slots);
     for (let i = 0; i < slots.length; i++) this.#positions[slots[i]!] = i;
     this.#populationCount = slots.length;
+    this.stamp = ++clock;
   }
 
   /**
@@ -276,6 +339,7 @@ export class Archetype {
    */
   clearPopulation(): void {
     this.#populationCount = 0;
+    this.stamp = ++clock;
   }
 
   /**

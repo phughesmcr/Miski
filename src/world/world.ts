@@ -11,6 +11,7 @@ import {
   SpecError,
   WorldStateError,
 } from "@/errors.ts";
+import { ArchetypeQueryIterators } from "@/query/query-iterators.ts";
 import { QueryManager } from "@/query/query-manager.ts";
 import { isInHookScope } from "@/system/hook-scope.ts";
 import { SystemManager } from "@/system/system-manager.ts";
@@ -73,6 +74,9 @@ export class World {
   readonly #mutations: WorldMutations;
 
   readonly #queryManager: QueryManager;
+
+  /** Pooled iterators behind the archetype query views */
+  readonly #archetypeQueryIterators: ArchetypeQueryIterators;
 
   readonly #systemManager: SystemManager;
 
@@ -170,50 +174,28 @@ export class World {
     return result;
   }
 
-  /** Live entities of every archetype matching the query; each entity inhabits exactly one archetype. */
-  *#queryArchetypeEntities(query: Query): IterableIterator<Entity> {
-    const queryInstance = this.#queryManager.instanceWithMembership(query);
-    const matching = queryInstance.archetypes;
-    const matchingCount = queryInstance.archetypeCount;
-    for (let i = 0; i < matchingCount; i++) {
-      yield* matching[i]!.getEntities();
-    }
+  /**
+   * Live entities of every archetype matching the query; each entity inhabits exactly one archetype.
+   * Returns a pooled iterator, so warm passes allocate nothing.
+   */
+  #queryArchetypeEntities(query: Query): IterableIterator<Entity> {
+    return this.#archetypeQueryIterators.entities(query);
   }
 
   /**
    * Entities that match the query now but did not match it when the refresh window began.
    * Only slots that moved this window can qualify, so this walks the window's touched slots in first-touch order.
    */
-  *#queryArchetypeEntered(query: Query): IterableIterator<Entity> {
-    const queryInstance = this.#queryManager.instanceWithMembership(query);
-    const archetypes = this.#archetypeManager;
-    const window = archetypes.transitionWindow;
-    for (let i = 0; i < window.touchedCount; i++) {
-      const slot = window.touchedSlot(i);
-      const current = archetypes.archetypeAtSlot(slot);
-      if (current === undefined || !current.isCandidate(queryInstance)) continue;
-      const entity = this.#entityManager.packSlot(slot);
-      if (window.originOf(entity)?.isCandidate(queryInstance)) continue;
-      yield entity;
-    }
+  #queryArchetypeEntered(query: Query): IterableIterator<Entity> {
+    return this.#archetypeQueryIterators.entered(query);
   }
 
   /**
    * Entities that matched the query when the refresh window began but do not match it now.
    * Reports the window-start handle, which may since have been destroyed.
    */
-  *#queryArchetypeExited(query: Query): IterableIterator<Entity> {
-    const queryInstance = this.#queryManager.instanceWithMembership(query);
-    const archetypes = this.#archetypeManager;
-    const window = archetypes.transitionWindow;
-    for (let i = 0; i < window.touchedCount; i++) {
-      const slot = window.touchedSlot(i);
-      const origin = window.originAt(slot);
-      if (origin === undefined || !origin.isCandidate(queryInstance)) continue;
-      const entity = window.handleAt(slot);
-      if (archetypes.getEntityArchetype(entity)?.isCandidate(queryInstance)) continue;
-      yield entity;
-    }
+  #queryArchetypeExited(query: Query): IterableIterator<Entity> {
+    return this.#archetypeQueryIterators.exited(query);
   }
 
   /** Resolve a registered data component instance for guarded public data access. */
@@ -374,6 +356,13 @@ export class World {
         this.#archetypeManager.registerQuery(query, true);
       },
     );
+    this.#archetypeQueryIterators = new ArchetypeQueryIterators({
+      instanceWithMembership: (query) => this.#queryManager.instanceWithMembership(query),
+      transitionWindow: this.#archetypeManager.transitionWindow,
+      archetypeAtSlot: (slot) => this.#archetypeManager.archetypeAtSlot(slot),
+      getEntityArchetype: (entity) => this.#archetypeManager.getEntityArchetype(entity),
+      packSlot,
+    });
     this.#mutations = new WorldMutations({
       entityManager: this.#entityManager,
       componentManager: this.#componentManager,
@@ -384,11 +373,8 @@ export class World {
       notifyEntityLifecycle: () => {
         this.#entityRevision = ++this.#revision;
       },
-      invalidateQueries: () => {
-        if (!this.#queryManager.cacheInvalidated) {
-          this.#queryManager.invalidate();
-        }
-      },
+      // Query results track structural changes through per-archetype stamps (see QueryManager.entityList).
+      invalidateQueries: () => {},
     });
     this.#systemManager = new SystemManager(
       this,
