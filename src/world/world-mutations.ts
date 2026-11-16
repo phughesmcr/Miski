@@ -5,7 +5,6 @@ import type { ComponentBundleCommitEntry, ComponentManager } from "@/component/c
 import {
   asEntity,
   asSlotIndex,
-  createEntityArray,
   createSlotArray,
   type Entity,
   type EntityArray,
@@ -56,9 +55,6 @@ export class WorldMutations {
   readonly #invalidateQueries: () => void;
   readonly #notifyEntityLifecycle: () => void;
 
-  /** Dense scratch storage for preflighted batch component transitions (packed handles) */
-  readonly #batchEntities: EntityArray;
-
   /** Dense scratch storage for preflighted batch component transitions (slots) */
   readonly #batchSlots: EntityArray;
 
@@ -84,7 +80,6 @@ export class WorldMutations {
     this.#isInitialized = deps.isInitialized;
     this.#invalidateQueries = deps.invalidateQueries;
     this.#notifyEntityLifecycle = deps.notifyEntityLifecycle;
-    this.#batchEntities = createEntityArray(deps.capacity);
     this.#batchSlots = createSlotArray(deps.capacity);
     this.#batchSeen = new Uint8Array(deps.capacity);
     this.#bundleEntries = [];
@@ -217,13 +212,14 @@ export class WorldMutations {
     const count = this.#preflightBatchEntities(entities);
 
     try {
-      this.#componentManager.preflightAddInstanceToEntities(instance, this.#batchEntities, count);
+      // Batch slots double as entity indices for the owner-count preflight (entityIndex(slot) === slot).
+      this.#componentManager.preflightAddInstanceToEntities(instance, this.#batchSlots, count);
       let changedCount = 0;
       for (let i = 0; i < count; i++) {
         if (
           this.#componentManager.addInstanceToEntity(
             instance,
-            asEntity(this.#batchEntities[i]!),
+            this.#entityManager.packSlot(this.#batchSlots[i]!),
             data,
             asSlotIndex(this.#batchSlots[i]!),
             true,
@@ -271,7 +267,8 @@ export class WorldMutations {
     try {
       let changedCount = 0;
       for (let i = 0; i < count; i++) {
-        if (this.#componentManager.removeInstanceFromEntity(instance, asEntity(this.#batchEntities[i]!))) {
+        const slot = this.#batchSlots[i]!;
+        if (this.#componentManager.removeInstanceFromEntity(instance, this.#entityManager.packSlot(slot), slot)) {
           changedCount++;
         }
       }
@@ -291,7 +288,7 @@ export class WorldMutations {
       throw new TypeError("Batch entity list must include entity and slot buffers.");
     }
     const count = entities.count;
-    if (!Number.isInteger(count) || count < 0 || count > this.#batchEntities.length) {
+    if (!Number.isInteger(count) || count < 0 || count > this.#batchSlots.length) {
       throw new RangeError(`Batch entity list count ${count} is outside world capacity.`);
     }
 
@@ -311,19 +308,16 @@ export class WorldMutations {
         throw new RangeError(`Duplicate entity ${entity} in batch entity list.`);
       }
       this.#batchSeen[slot] = 1;
-      this.#batchEntities[i] = entity;
       this.#batchSlots[i] = slot;
     }
 
     return count;
   }
 
-  /** Clear duplicate-detection scratch flags after batch preflight/commit. */
+  /** Clear duplicate-detection scratch flags after batch preflight/commit (slots past `count` are never read). */
   #clearBatchEntities(count: number): void {
     for (let i = 0; i < count; i++) {
       this.#batchSeen[this.#batchSlots[i]!] = 0;
-      this.#batchEntities[i] = 0;
-      this.#batchSlots[i] = 0;
     }
   }
 

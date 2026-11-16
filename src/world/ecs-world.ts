@@ -11,7 +11,6 @@ import {
 } from "@/schema/schema.ts";
 import type { DynamicComponent } from "@/types/component.ts";
 import type { ComponentValue } from "@/types/partitions.ts";
-import type { ComponentBundleEntryInput } from "@/types/world-api.ts";
 import { World } from "@/world/world.ts";
 
 /** Storage handles for data components keyed by name. */
@@ -48,6 +47,9 @@ export type EcsWorldConfig<
   readonly tags?: T;
 };
 
+/** Mutable spawn bundle entry: `[component]` for tags, `[component, data]` for data components. */
+type SpawnTuple = [DynamicComponent] | [DynamicComponent, unknown];
+
 function keysOf<T extends object>(value: T): (keyof T)[] {
   return Object.keys(value) as (keyof T)[];
 }
@@ -73,6 +75,12 @@ export class EcsWorld<
   readonly capacity: number;
   /** Tag names registered on this world (for spawn dispatch). */
   readonly #tagNames: ReadonlySet<string>;
+  /** Reusable bundle passed to the world by {@link EcsWorld.spawn}. */
+  readonly #spawnBundle: SpawnTuple[] = [];
+  /** Reusable bundle tuples keyed by component/tag name. */
+  readonly #spawnTuples: Record<string, SpawnTuple> = Object.create(null);
+  /** Whether a {@link EcsWorld.spawn} call is in progress (the shared scratch is in use). */
+  #spawning = false;
 
   /** Create a typed world, optionally reusing precompiled component definitions. */
   constructor(
@@ -117,28 +125,48 @@ export class EcsWorld<
 
   /** Create an entity with the named components/tags and initial values in `spec`. */
   spawn(spec: SpawnSpec<M, T>): Entity {
-    const bundle: ComponentBundleEntryInput[] = [];
-    for (const name of keysOf(spec)) {
-      const key = String(name);
-      const component = this.components[name];
-      if (component === undefined) {
-        throw new Error(`Unknown component "${key}" in spawn spec.`);
-      }
-      if (this.#tagNames.has(key)) {
-        // `undefined` means absent, matching data keys and the optional `?: true` SpawnSpec shape.
-        const flag = spec[name];
-        if (flag === undefined) continue;
-        if (flag !== true) {
-          throw new TypeError(`Tag "${key}" must be spawned with true.`);
+    // Reused bundle and per-component tuples: the world only reads them during the call. A nested spawn
+    // (from a getter on the spec or its data) gets fresh ones so it cannot clobber the outer call's.
+    const nested = this.#spawning;
+    const bundle: SpawnTuple[] = nested ? [] : this.#spawnBundle;
+    const tuples: Record<string, SpawnTuple> = nested ? Object.create(null) : this.#spawnTuples;
+    this.#spawning = true;
+    let count = 0;
+    try {
+      for (const key in spec) {
+        if (!Object.hasOwn(spec, key)) continue;
+        const component = (this.components as Record<string, DynamicComponent | undefined>)[key];
+        if (component === undefined) {
+          throw new Error(`Unknown component "${key}" in spawn spec.`);
         }
-        bundle.push([component]);
-        continue;
+        const value = (spec as Record<string, unknown>)[key];
+        // `undefined` means absent, matching data keys and the optional `?: true` SpawnSpec shape.
+        if (value === undefined) continue;
+        let tuple = tuples[key];
+        if (this.#tagNames.has(key)) {
+          if (value !== true) {
+            throw new TypeError(`Tag "${key}" must be spawned with true.`);
+          }
+          tuple ??= tuples[key] = [component];
+        } else {
+          tuple ??= tuples[key] = [component, undefined];
+          tuple[1] = value;
+        }
+        bundle[count++] = tuple;
       }
-      const data = spec[name];
-      if (data !== undefined) bundle.push([component, data as never]);
+      if (bundle.length !== count) bundle.length = count;
+      // The mapped SpawnSpec already proved each runtime tuple against its named component.
+      return this.world.entities.createWithOrThrow(bundle as never);
+    } finally {
+      if (!nested) {
+        this.#spawning = false;
+        // Drop references to caller-owned data so the scratch never retains it.
+        for (let i = 0; i < count; i++) {
+          const tuple = bundle[i]!;
+          if (tuple.length === 2) tuple[1] = undefined;
+        }
+      }
     }
-    // The mapped SpawnSpec already proved each runtime tuple against its named component.
-    return this.world.entities.createWithOrThrow(bundle as never);
   }
 
   /** Run one tick, then clear enter/exit transition sets. */
