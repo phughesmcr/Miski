@@ -1,5 +1,6 @@
 import { BooleanArray } from "@phughesmcr/booleanarray";
 
+import { archetypeClock } from "@/archetype/archetype.ts";
 import { ID_KEY } from "@/constants.ts";
 import { componentDisplayName, formatComponentNotRegistered, NotRegisteredError } from "@/errors.ts";
 import type { DynamicComponentInstance } from "@/types/component.ts";
@@ -97,9 +98,27 @@ function createQueryInstance(getInstances: ComponentInstanceGetter, size: number
     archetypes: [],
     archetypeCount: 0,
     components,
-    resultVersion: -1,
+    resultStamp: -1,
+    resultEpoch: -1,
+    listStamp: 0,
     id,
   };
+}
+
+/**
+ * Whether a query's retained result still lists exactly the entities of its archetypes, in order.
+ * The result is current when neither the archetype list nor any listed archetype changed after it was filled.
+ */
+function isResultCurrent(instance: QueryInstance): boolean {
+  const filled = instance.resultStamp;
+  if (filled === archetypeClock()) return true;
+  if (instance.listStamp > filled) return false;
+  const archetypes = instance.archetypes;
+  const archetypeCount = instance.archetypeCount;
+  for (let i = 0; i < archetypeCount; i++) {
+    if (archetypes[i]!.stamp > filled) return false;
+  }
+  return true;
 }
 
 /** The QueryManager is responsible for creating, registering, and destroying queries. */
@@ -122,17 +141,17 @@ export class QueryManager {
   /** Capacity of each query's lazily allocated entity result. */
   readonly #capacity: number;
 
-  /** Current entity-result invalidation version. */
-  #version = 0;
+  /**
+   * Whole-cache invalidation epoch. Ordinary structural changes are tracked per archetype (see
+   * {@link isResultCurrent}); this is only bumped by {@link invalidate}, e.g. after a rollback restore.
+   */
+  #epoch = 0;
 
   /** Map of query IDs to their instances */
   readonly instancesByID: Map<string, QueryInstance>;
 
-  /** Map of Query objects to their IDs */
-  readonly idsByQuery: WeakMap<Query, string>;
-
-  /** Whether global query cache invalidation has already been recorded. */
-  cacheInvalidated: boolean;
+  /** Map of Query objects straight to their instances (one lookup on the hot path) */
+  readonly #instancesByQuery: WeakMap<Query, QueryInstance>;
 
   /**
    * Create a new QueryManager
@@ -150,8 +169,7 @@ export class QueryManager {
     this.#queryList = { queries: this.#queries, count: 0 };
     this.#capacity = capacity;
     this.instancesByID = new Map();
-    this.idsByQuery = new WeakMap();
-    this.cacheInvalidated = false;
+    this.#instancesByQuery = new WeakMap();
   }
 
   /** Dense registered queries for archetype membership rebuilds. */
@@ -175,32 +193,30 @@ export class QueryManager {
     const instance = this.register(query);
     this.ensureQueryMembership();
 
-    if (instance.resultVersion === this.#version) {
-      this.cacheInvalidated = false;
-      return instance.result!;
+    const retained = instance.result;
+    if (retained !== undefined && instance.resultEpoch === this.#epoch && isResultCurrent(instance)) {
+      return retained;
     }
 
-    const result = instance.result ??= new QueryEntityResult(this.#capacity);
+    const result = retained ?? (instance.result = new QueryEntityResult(this.#capacity));
     result.clear();
     const archetypes = instance.archetypes;
     const archetypeCount = instance.archetypeCount;
+    let total = 0;
+    for (let i = 0; i < archetypeCount; i++) total += archetypes[i]!.getPopulationCount();
+    result.reserve(total);
     for (let i = 0; i < archetypeCount; i++) {
       archetypes[i]!.writeEntitiesIntoResult(result);
     }
-    instance.resultVersion = this.#version;
-    this.cacheInvalidated = false;
+    instance.resultStamp = archetypeClock();
+    instance.resultEpoch = this.#epoch;
     return result;
   }
 
   /** Register a query */
   register(query: Query): QueryInstance {
-    // Check if we already have an ID for this query
-    let queryId = this.idsByQuery.get(query);
-
-    // Return existing instance if we have one
-    if (queryId && this.instancesByID.has(queryId)) {
-      return this.instancesByID.get(queryId)!;
-    }
+    const known = this.#instancesByQuery.get(query);
+    if (known !== undefined) return known;
 
     // Create new instance
     const instance: QueryInstance = createQueryInstance(
@@ -208,15 +224,15 @@ export class QueryManager {
       this.#dependencies.componentCount,
       query,
     );
-    queryId = instance.id;
+    const queryId = instance.id;
     const existing = this.instancesByID.get(queryId);
     if (existing) {
-      this.idsByQuery.set(query, queryId);
+      this.#instancesByQuery.set(query, existing);
       return existing;
     }
 
     // Store mappings
-    this.idsByQuery.set(query, queryId);
+    this.#instancesByQuery.set(query, instance);
     this.instancesByID.set(queryId, instance);
     this.#queries[this.#queryList.count++] = instance;
 
@@ -240,11 +256,11 @@ export class QueryManager {
     this.#ensureQueryMembership(this.registeredQueries);
   }
 
-  /** Invalidate entity query caches after a committed entity/component transition. */
+  /**
+   * Invalidate every retained entity result, whatever the archetype stamps say.
+   * Ordinary entity/component transitions do not need this; rollback restores do.
+   */
   invalidate(): void {
-    if (!this.cacheInvalidated) {
-      this.#version++;
-      this.cacheInvalidated = true;
-    }
+    this.#epoch++;
   }
 }

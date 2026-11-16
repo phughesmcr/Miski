@@ -82,52 +82,48 @@ export class ArchetypeBatchMove {
     const offsets = this.#bulkGroupOffsets;
     const writes = this.#bulkGroupWrites;
     let groupCount = 0;
-
-    for (let i = 0; i < count; i++) {
-      const slot = slots[i]!;
-      const source = entityArchetypes[slot] ?? root;
-      let group = -1;
-      for (let j = 0; j < groupCount; j++) {
-        if (sources[j] === source) {
-          group = j;
-          break;
-        }
-      }
-      if (group === -1) {
-        const target = getTransitionArchetype(source, instance, add);
-        if (source === target) continue;
-        group = groupCount++;
-        sources[group] = source;
-        targets[group] = target;
-        counts[group] = 0;
-      }
-      counts[group] = (counts[group] ?? 0) + 1;
-    }
-
     let moved = 0;
-    for (let group = 0; group < groupCount; group++) {
-      offsets[group] = moved;
-      writes[group] = moved;
-      moved += counts[group] ?? 0;
-    }
-    if (moved === 0) {
-      return 0;
-    }
 
-    for (let i = 0; i < count; i++) {
-      const slot = slots[i]!;
-      const source = entityArchetypes[slot] ?? root;
-      let group = -1;
-      for (let j = 0; j < groupCount; j++) {
-        if (sources[j] === source) {
-          group = j;
-          break;
+    // Group by source archetype in first-seen order. Each source remembers its group in `batchGroup`; the
+    // index only counts when `sources` points back at it, so a stale value (e.g. after a throw) is ignored.
+    // Sources the transition leaves in place get no group and are re-resolved through their cached edge.
+    try {
+      for (let i = 0; i < count; i++) {
+        const slot = slots[i]!;
+        const source = entityArchetypes[slot] ?? root;
+        let group = source.batchGroup;
+        if (group < 0 || group >= groupCount || sources[group] !== source) {
+          const target = getTransitionArchetype(source, instance, add);
+          if (source === target) continue;
+          group = groupCount++;
+          source.batchGroup = group;
+          sources[group] = source;
+          targets[group] = target;
+          counts[group] = 0;
         }
+        counts[group]!++;
       }
-      if (group === -1) continue;
-      const write = writes[group]!;
-      this.#bulkSlots[write] = slot;
-      writes[group] = write + 1;
+
+      for (let group = 0; group < groupCount; group++) {
+        offsets[group] = moved;
+        writes[group] = moved;
+        moved += counts[group]!;
+      }
+      if (moved === 0) {
+        return 0;
+      }
+
+      for (let i = 0; i < count; i++) {
+        const slot = slots[i]!;
+        const source = entityArchetypes[slot] ?? root;
+        const group = source.batchGroup;
+        if (group < 0 || group >= groupCount || sources[group] !== source) continue;
+        const write = writes[group]!;
+        this.#bulkSlots[write] = slot;
+        writes[group] = write + 1;
+      }
+    } finally {
+      for (let group = 0; group < groupCount; group++) sources[group]!.batchGroup = -1;
     }
 
     for (let group = 0; group < groupCount; group++) {
@@ -146,7 +142,6 @@ export class ArchetypeBatchMove {
       if (targetWasEmpty) this.#tracker.markPopulated(target);
       for (let i = offset; i < end; i++) {
         entityArchetypes[this.#bulkSlots[i]!] = target;
-        this.#bulkSlots[i] = 0;
       }
       counts[group] = 0;
       offsets[group] = 0;

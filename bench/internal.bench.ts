@@ -170,7 +170,9 @@ function createQueryInstance(
     archetypeCount: 0,
     components: Object.freeze(componentsByName),
     id: `${and.toString()}:${or.toString()}:${not.toString()}:${include.toString()}`,
-    resultVersion: -1,
+    resultStamp: -1,
+    resultEpoch: -1,
+    listStamp: 0,
   };
 }
 

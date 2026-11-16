@@ -4,9 +4,12 @@ import type { Archetype } from "./archetype.ts";
 
 /** Rollback copy of a {@link TransitionWindow}. */
 export type TransitionWindowSnapshot = {
-  readonly slots: readonly number[];
+  /** Touched slots in first-touch order. */
+  readonly slots: ArrayLike<number>;
+  /** Window-start archetype of each touched slot, parallel to {@link slots}. */
   readonly origins: readonly (Archetype | undefined)[];
-  readonly handles: readonly number[];
+  /** Window-start handle of each touched slot, parallel to {@link slots}. */
+  readonly handles: ArrayLike<number>;
 };
 
 /**
@@ -97,14 +100,14 @@ export class TransitionWindow {
 
   /** Copy the recorded origins for rollback. */
   capture(): TransitionWindowSnapshot {
-    const slots: number[] = [];
-    const origins: (Archetype | undefined)[] = [];
-    const handles: number[] = [];
-    for (let i = 0; i < this.#count; i++) {
-      const slot = this.#slots[i]!;
-      slots.push(slot);
-      origins.push(this.#origins[slot]);
-      handles.push(this.#handles[slot]!);
+    const count = this.#count;
+    const slots = this.#slots.slice(0, count);
+    const origins = new Array<Archetype | undefined>(count);
+    const handles = new Uint32Array(count);
+    for (let i = 0; i < count; i++) {
+      const slot = slots[i]!;
+      origins[i] = this.#origins[slot];
+      handles[i] = this.#handles[slot]!;
     }
     return { slots, origins, handles };
   }

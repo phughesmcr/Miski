@@ -11,7 +11,7 @@ import {
 import { EntityNotFoundError, formatEntityNotActive, NotRegisteredError } from "@/errors.ts";
 import type { DynamicComponentInstance } from "@/types/component.ts";
 import type { QueryInstance, QueryInstanceList } from "@/types/query.ts";
-import { Archetype } from "./archetype.ts";
+import { Archetype, nextArchetypeStamp } from "./archetype.ts";
 import { ArchetypeBatchMove, type TransitionArchetypeGetter } from "./archetype-batch-move.ts";
 import { MembershipTracker } from "./membership-tracker.ts";
 import { TransitionWindow, type TransitionWindowSnapshot } from "./transition-window.ts";
@@ -50,6 +50,7 @@ function listArchetype(query: QueryInstance, archetype: Archetype): void {
   for (let i = count; i > position; i--) list[i] = list[i - 1]!;
   list[position] = archetype;
   query.archetypeCount = count + 1;
+  query.listStamp = nextArchetypeStamp();
 }
 
 /** Remove an archetype from a query's sorted archetype list if it is listed. */
@@ -60,6 +61,7 @@ function unlistArchetype(query: QueryInstance, archetype: Archetype): void {
   if (position >= count || list[position] !== archetype) return;
   for (let i = position; i < count - 1; i++) list[i] = list[i + 1]!;
   query.archetypeCount = count - 1;
+  query.listStamp = nextArchetypeStamp();
 }
 
 /** ArchetypeManager handles creation and allocation of Archetypes */
@@ -146,10 +148,10 @@ export class ArchetypeManager {
 
     this.#window.touch(slot, oldArchetype);
     if (oldArchetype !== undefined) {
-      oldArchetype.removeEntity(entity, slot);
+      oldArchetype.removeSlot(slot);
       if (oldArchetype.getPopulationCount() === 0) this.#tracker.markEmptied(oldArchetype);
     }
-    archetype.addEntity(entity, slot);
+    archetype.addSlot(slot);
     if (archetype.getPopulationCount() === 1) this.#tracker.markPopulated(archetype);
     this.entityArchetypes[slot] = archetype;
 
@@ -296,8 +298,11 @@ export class ArchetypeManager {
   #rebuildQueryMembership(queries: QueryInstanceList): void {
     const queryArray = queries.queries;
     const queryCount = queries.count;
+    const stamp = nextArchetypeStamp();
     for (let q = 0; q < queryCount; q++) {
-      queryArray[q]!.archetypeCount = 0;
+      const query = queryArray[q]!;
+      query.archetypeCount = 0;
+      query.listStamp = stamp;
     }
 
     const archetypes = this.#archetypes;
@@ -453,7 +458,7 @@ export class ArchetypeManager {
     const archetype = this.entityArchetypes[slot];
     if (archetype !== undefined) {
       this.#window.touch(slot, archetype);
-      archetype.removeEntity(entity, slot);
+      archetype.removeSlot(slot);
       if (archetype.getPopulationCount() === 0) this.#tracker.markEmptied(archetype);
       this.entityArchetypes[slot] = undefined;
     }
@@ -576,7 +581,8 @@ export class ArchetypeManager {
    * @throws {NotRegisteredError} If the Archetype is not registered
    */
   set(archetype: Archetype, entity: Entity): Archetype {
-    if (!this.registry.has(archetype.id)) {
+    const index = archetype.registryIndex;
+    if (index < 0 || index >= this.#archetypeCount || this.#archetypes[index] !== archetype) {
       throw new NotRegisteredError("Invalid archetype.");
     }
     const slot = entityIndex(entity);
@@ -590,11 +596,11 @@ export class ArchetypeManager {
 
     this.#window.touch(slot, currentArchetype);
     if (currentArchetype !== undefined) {
-      currentArchetype.removeEntity(entity, slot);
+      currentArchetype.removeSlot(slot);
       if (currentArchetype.getPopulationCount() === 0) this.#tracker.markEmptied(currentArchetype);
     }
     this.entityArchetypes[slot] = archetype;
-    archetype.addEntity(entity, slot);
+    archetype.addSlot(slot);
     if (archetype.getPopulationCount() === 1) this.#tracker.markPopulated(archetype);
     return archetype;
   }
@@ -616,6 +622,9 @@ export class ArchetypeManager {
   restoreState(snapshot: ArchetypeManagerSnapshot): void {
     this.#tracker.clearPopulated();
     this.#tracker.clearEmptied();
+    // Every mapped slot sits in exactly one archetype's population, so clearing populations clears the table
+    // in O(live entities) rather than O(capacity).
+    for (let i = 0; i < this.#archetypeCount; i++) this.#archetypes[i]!.forgetSlots(this.entityArchetypes);
     const keep = snapshot.archetypeCount;
     for (let i = keep; i < this.#archetypeCount; i++) {
       const archetype = this.#archetypes[i]!;
@@ -631,7 +640,6 @@ export class ArchetypeManager {
       this.#archetypeCount = keep;
     }
 
-    this.entityArchetypes.fill(undefined);
     for (let i = 0; i < keep; i++) {
       const archetype = this.#archetypes[i]!;
       const population = snapshot.populations.get(i);
