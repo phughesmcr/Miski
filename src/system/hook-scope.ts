@@ -7,7 +7,7 @@
  * fall back to the teardown signal in the world, which rejects waiting `onReady` calls once teardown starts.
  */
 
-type HookScope = { active: boolean };
+type HookScope = { active: boolean; owner: object | undefined };
 
 type AsyncLocalStorageLike = {
   run<R>(store: HookScope, fn: () => R): R;
@@ -35,10 +35,12 @@ function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
 /**
  * Run a lifecycle hook, marking it and its asynchronous continuations as hook code until it settles.
  * Where scope tracking is unavailable the hook simply runs.
+ * @param fn The hook to run
+ * @param owner Optional token identifying this hook run, reported by `currentHookOwner()` while it is pending
  */
-export function runInHookScope<T>(fn: () => T): T {
+export function runInHookScope<T>(fn: () => T, owner?: object): T {
   if (storage === undefined) return fn();
-  const scope: HookScope = { active: true };
+  const scope: HookScope = { active: true, owner };
   const end = () => {
     scope.active = false;
   };
@@ -60,4 +62,13 @@ export function runInHookScope<T>(fn: () => T): T {
 /** Whether the caller is inside a system lifecycle hook that has not yet settled. */
 export function isInHookScope(): boolean {
   return storage?.getStore()?.active === true;
+}
+
+/**
+ * The owner token of the pending lifecycle hook the caller is running inside, if any.
+ * Always `undefined` where scope tracking is unavailable.
+ */
+export function currentHookOwner(): object | undefined {
+  const scope = storage?.getStore();
+  return scope?.active === true ? scope.owner : undefined;
 }

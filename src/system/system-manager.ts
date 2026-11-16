@@ -6,7 +6,7 @@ import type { SystemBindings } from "@/types/system.ts";
 import type { UntypedQueryComponents } from "@/types/query.ts";
 import type { WorldContext } from "@/types/world-api.ts";
 import { noop } from "@/utils.ts";
-import { runInHookScope } from "./hook-scope.ts";
+import { currentHookOwner, runInHookScope } from "./hook-scope.ts";
 import { createSystemInstance, type System } from "./system.ts";
 
 type SystemRegistration = {
@@ -18,6 +18,8 @@ type SystemRegistration = {
   initPromise?: Promise<void>;
   /** Whether the init hook has completed successfully. */
   ready: boolean;
+  /** The init or destroy hook run that is currently pending for this system, if any. */
+  hook?: HookRun;
   init: (world: WorldContext) => void | Promise<void>;
   instance: SystemInstance<TypedSystemCallback<UntypedQueryComponents, unknown[], unknown>>;
   name: string;
@@ -25,6 +27,29 @@ type SystemRegistration = {
 };
 
 type LifecycleErrorHandler = (error: unknown) => void;
+
+/** One pending run of a system's init or destroy hook, and the systems whose destruction it is awaiting. */
+class HookRun {
+  readonly awaiting: Set<SystemRegistration> = new Set();
+}
+
+/**
+ * Whether destroying `target` would wait for the `caller` hook run to settle.
+ * Destroying a system waits for its pending hook, and that hook may itself be awaiting other destructions.
+ */
+function destructionWaitsOn(target: SystemRegistration, caller: HookRun): boolean {
+  const seen = new Set<SystemRegistration>();
+  const stack = [target];
+  while (stack.length > 0) {
+    const record = stack.pop()!;
+    const run = record.hook;
+    if (run === undefined || seen.has(record)) continue;
+    if (run === caller) return true;
+    seen.add(record);
+    for (const next of run.awaiting) stack.push(next);
+  }
+  return false;
+}
 
 function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
   return !!value && typeof (value as PromiseLike<unknown>).then === "function";
@@ -83,10 +108,32 @@ export class SystemManager {
     return true;
   }
 
+  /** Run one of a system's lifecycle hooks, tracking it as the system's pending hook until it settles. */
+  #runHook(record: SystemRegistration, hook: () => void | Promise<void>): void | Promise<void> {
+    const run = new HookRun();
+    record.hook = run;
+    const end = () => {
+      if (record.hook === run) record.hook = undefined;
+    };
+    let result: void | Promise<void>;
+    try {
+      result = runInHookScope(hook, run);
+    } catch (error) {
+      end();
+      throw error;
+    }
+    if (isPromiseLike(result)) {
+      result.then(end, end);
+    } else {
+      end();
+    }
+    return result;
+  }
+
   /** Run init for a system registered after world initialization. */
   #initLateRecord(record: SystemRegistration): void {
     try {
-      const initResult = runInHookScope(() => record.init(this.#world));
+      const initResult = this.#runHook(record, () => record.init(this.#world));
       if (isPromiseLike(initResult)) {
         record.initPromise = Promise.resolve(initResult).then(
           () => {
@@ -111,7 +158,7 @@ export class SystemManager {
   async #initInitialRecord(record: SystemRegistration): Promise<void> {
     const run = (async () => {
       try {
-        await runInHookScope(() => record.init(this.#world));
+        await this.#runHook(record, () => record.init(this.#world));
         record.ready = true;
       } catch (error) {
         this.#unregisterRecord(record);
@@ -126,7 +173,8 @@ export class SystemManager {
    * Create a system instance
    * @param system The system to create the instance of
    * @returns The created system instance
-   * @throws {NoComponentsFoundError} If the system query returns no components
+   * @throws {AlreadyRegisteredError} If a system with the same name is already registered
+   * @throws {NotRegisteredError} If a component in the system query is not registered in the world
    */
   create<
     TComponents extends ComponentMap,
@@ -168,7 +216,13 @@ export class SystemManager {
 
   /**
    * Destroy a system instance
+   *
+   * Destroying a system waits for its pending init or destroy hook. A hook therefore cannot destroy a system whose
+   * destruction would wait for that same hook (itself, or a system whose pending hook is awaiting its destruction).
    * @param system The system to destroy
+   * @param throwOnNotFound Whether to reject when the system is not registered
+   * @throws {NotRegisteredError} If the system is not registered and `throwOnNotFound` is `true`
+   * @throws {WorldStateError} If called from a system hook whose own completion the destruction would wait on
    */
   async destroy<
     TComponents extends ComponentMap,
@@ -184,8 +238,25 @@ export class SystemManager {
       const name = typeof system === "string" ? system : system.name;
       throw new NotRegisteredError(formatSystemNotRegistered(name));
     }
+    const caller = currentHookOwner();
+    if (!(caller instanceof HookRun)) {
+      record.discarded = true;
+      await this.#requestDestroy(record);
+      return;
+    }
+    if (destructionWaitsOn(record, caller)) {
+      throw new WorldStateError(
+        `System "${record.name}" cannot be destroyed from this system hook: ` +
+          "its destruction waits for the hook to finish, so the hook would wait on itself",
+      );
+    }
     record.discarded = true;
-    await this.#requestDestroy(record);
+    caller.awaiting.add(record);
+    try {
+      await this.#requestDestroy(record);
+    } finally {
+      caller.awaiting.delete(record);
+    }
   }
 
   /** Share one destroy run per record between concurrent requests. */
@@ -201,7 +272,7 @@ export class SystemManager {
   async #destroyRecord(record: SystemRegistration): Promise<void> {
     try {
       await record.initPromise;
-      if (record.ready) await runInHookScope(() => record.destroy(this.#world));
+      if (record.ready) await this.#runHook(record, () => record.destroy(this.#world));
     } finally {
       this.#unregisterRecord(record);
     }

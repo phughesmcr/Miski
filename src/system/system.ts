@@ -1,5 +1,5 @@
 import { $_SYSTEM_DESTROY_KEY, $_SYSTEM_INIT_KEY } from "@/constants.ts";
-import { NoComponentsFoundError, SpecError } from "@/errors.ts";
+import { SpecError } from "@/errors.ts";
 import { Query } from "@/query/query.ts";
 import type { ComponentInstances, ComponentMap } from "@/types/component.ts";
 import type { SystemInstance, SystemPrivateMethods, SystemSpec, TypedSystemCallback } from "@/types/system.ts";
@@ -10,10 +10,13 @@ import { isObject, isValidName, noop } from "@/utils.ts";
 
 /**
  * Create a system instance
+ *
+ * A query with only `none` terms exposes no components, so its callback receives an empty components record
+ * alongside the matching entities.
  * @param bindings The world bindings used to resolve query data
  * @param system The system to create the instance of
  * @returns The created system instance
- * @throws {NoComponentsFoundError} If the system query returned no components
+ * @throws {NotRegisteredError} If a component in the system query is not registered in the world
  */
 export function createSystemInstance<
   TComponents extends ComponentMap,
@@ -26,10 +29,6 @@ export function createSystemInstance<
   const components = bindings.queryComponents(system.query) as ComponentInstances<TComponents>;
   const callback = system.callback;
   const query = system.query;
-
-  if (Object.keys(components).length === 0) {
-    throw new NoComponentsFoundError("System query returned no components");
-  }
 
   return ((...args: TArgs) =>
     callback(components, bindings.queryEntityList(query), ...args)) as unknown as SystemInstance<
