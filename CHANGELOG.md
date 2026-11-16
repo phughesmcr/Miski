@@ -6,6 +6,12 @@
   that many arguments to its callback without allocating per call; missing
   arguments arrive as `undefined` and extras are dropped. Systems without it
   forward arguments exactly as before.
+- Capture rollback state from owned rows only. Rollback no longer captures or
+  reverts raw storage writes to slots that do not own the component; reads
+  through ownership-checked APIs are unaffected.
+- Entries in a `BorrowedEntityList`'s `slots` / `entities` past `count` may now
+  hold stale values. They were already documented as invalid; read only the
+  first `count` entries.
 - Make rollback restore observationally neutral. After
   `restoreWorldRollbackPoint`, entity allocation order, `queryList` and
   `getOwners` iteration order, and entered / exited match a world that never
