@@ -4,6 +4,7 @@
   "license": "MIT",
   "exports": "./mod.ts",
   "lock": true,
+  "exclude": [".claude/**"],
   "bench": {
     "include": ["bench/miski.bench.ts", "bench/internal.bench.ts"]
   },
