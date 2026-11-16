@@ -264,16 +264,6 @@ export class Archetype {
   }
 
   /**
-   * Get an iterator of Entities which inhabit this Archetype
-   * @returns An iterator of Entities which inhabit the Archetype
-   */
-  *getEntities(): IterableIterator<Entity> {
-    for (let i = 0; i < this.#populationCount; i++) {
-      yield this.#packSlot(this.#entityList[i]!);
-    }
-  }
-
-  /**
    * Add this archetype's entities to a dense query result, optionally skipping entities already seen.
    * @param out - The destination dense result to update
    * @param visited - Optional bitfield used to deduplicate entities across archetypes
@@ -331,6 +321,15 @@ export class Archetype {
     for (let i = 0; i < slots.length; i++) this.#positions[slots[i]!] = i;
     this.#populationCount = slots.length;
     this.stamp = ++clock;
+  }
+
+  /**
+   * Set `table[slot]` to `undefined` for every slot in this archetype's population.
+   * @internal
+   */
+  forgetSlots(table: Array<Archetype | undefined>): void {
+    const list = this.#entityList;
+    for (let i = 0; i < this.#populationCount; i++) table[list[i]!] = undefined;
   }
 
   /**

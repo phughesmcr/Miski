@@ -622,6 +622,9 @@ export class ArchetypeManager {
   restoreState(snapshot: ArchetypeManagerSnapshot): void {
     this.#tracker.clearPopulated();
     this.#tracker.clearEmptied();
+    // Every mapped slot sits in exactly one archetype's population, so clearing populations clears the table
+    // in O(live entities) rather than O(capacity).
+    for (let i = 0; i < this.#archetypeCount; i++) this.#archetypes[i]!.forgetSlots(this.entityArchetypes);
     const keep = snapshot.archetypeCount;
     for (let i = keep; i < this.#archetypeCount; i++) {
       const archetype = this.#archetypes[i]!;
@@ -637,7 +640,6 @@ export class ArchetypeManager {
       this.#archetypeCount = keep;
     }
 
-    this.entityArchetypes.fill(undefined);
     for (let i = 0; i < keep; i++) {
       const archetype = this.#archetypes[i]!;
       const population = snapshot.populations.get(i);
