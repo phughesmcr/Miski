@@ -1,4 +1,3 @@
-import { BooleanArray } from "@phughesmcr/booleanarray";
 import { getPartitionByteSize, Partition, PartitionedBuffer } from "@phughesmcr/partitionedbuffer";
 
 import { $_COMPONENT_ID_KEY, $_PARTITION_KEY } from "@/constants.ts";
@@ -25,6 +24,9 @@ import { prepareEntityStorageData, writeEntityStorageData } from "./component-st
 import { StorageProxy } from "./storage-proxy.ts";
 
 export type { ComponentManagerSnapshot };
+
+/** Initial length of a component's owner/changed lists; they double on demand up to the list capacity. */
+const INITIAL_LIST_LENGTH = 16;
 
 function roundUpToMultiple(value: number, multiple: number): number {
   const remainder = value % multiple;
@@ -72,7 +74,6 @@ type SparseColumn = TypedArray & {
 
 type ComponentState = {
   readonly instance: DynamicComponentInstance;
-  changed?: BooleanArray;
   changedCount: number;
   changedList?: EntityArray;
   changedIterator?: ReusableSlotPackIterator;
@@ -129,8 +130,8 @@ export class ComponentManager {
   #packSlot: PackSlot;
   /** Tracking callbacks used by rollback restore (allocated once). */
   readonly #snapshotHooks: ComponentSnapshotRestoreHooks<ComponentState> = {
-    ensureOwnershipState: (state) => this.#ensureOwnershipState(state),
-    ensureChangedState: (state) => this.#ensureChangedState(state),
+    ensureOwnershipState: (state, minOwners) => this.#ensureOwnershipState(state, minOwners),
+    ensureChangedState: (state, minChanged) => this.#ensureChangedState(state, minChanged),
     reserveSparseSlot: (state, owners, slot) => this.#reserveSparseSlot(state, owners, slot),
     bumpRevision: (state) => this.#bumpRevision(state),
   };
@@ -268,41 +269,56 @@ export class ComponentManager {
     return Math.min(maxEntities === 0 ? this.#capacity : maxEntities, this.#capacity);
   }
 
-  /** Allocate ownership tracking for a component only when it first gains an owner. */
-  #ensureOwnershipState(state: ComponentState): Uint8Array {
-    let owners = state.owners;
-    if (owners !== undefined) return owners;
+  /** Allocate a list for at least `minLength` entries: doubling growth, capped at the component's list capacity. */
+  #allocateList(state: ComponentState, current: EntityArray | undefined, minLength: number): EntityArray {
+    const length = current === undefined ? INITIAL_LIST_LENGTH : current.length * 2;
+    const list = createSlotArray(
+      this.#capacity,
+      Math.min(Math.max(length, minLength), this.#getListCapacity(state)),
+    );
+    if (current !== undefined) list.set(current);
+    return list;
+  }
 
-    const ownerList = createSlotArray(this.#capacity, this.#getListCapacity(state));
-    owners = new Uint8Array(this.#capacity);
-    state.owners = owners;
-    state.ownerList = ownerList;
-    state.ownerPositions = createSlotArray(this.#capacity);
-    state.ownerIterator = new ReusableSlotPackIterator(ownerList, this.#packSlot);
+  /**
+   * Allocate ownership tracking for a component only when it first gains an owner, and make room for `minOwners`.
+   * The owner list grows on demand; `owners` and `ownerPositions` are capacity-sized slot indexes.
+   */
+  #ensureOwnershipState(state: ComponentState, minOwners: number = 0): Uint8Array {
+    let owners = state.owners;
+    if (owners === undefined) {
+      owners = new Uint8Array(this.#capacity);
+      state.owners = owners;
+      state.ownerPositions = createSlotArray(this.#capacity);
+    }
+    const ownerList = state.ownerList;
+    if (ownerList === undefined || ownerList.length < minOwners) {
+      const grown = this.#allocateList(state, ownerList, minOwners);
+      state.ownerList = grown;
+      if (state.ownerIterator === undefined) state.ownerIterator = new ReusableSlotPackIterator(grown, this.#packSlot);
+      else state.ownerIterator.slots = grown;
+    }
     return owners;
   }
 
   /** Append a storage slot to a component's dense owner list. */
   #appendOwner(state: ComponentState, slot: number): void {
     const ownerCount = state.ownerCount;
-    const ownerList = state.ownerList!;
-    const ownerPositions = state.ownerPositions!;
-    ownerList[ownerCount] = slot;
-    ownerPositions[slot] = ownerCount;
+    if (ownerCount === state.ownerList!.length) this.#ensureOwnershipState(state, ownerCount + 1);
+    state.ownerList![ownerCount] = slot;
+    state.ownerPositions![slot] = ownerCount;
     state.ownerCount = ownerCount + 1;
   }
 
-  /** Remove a slot from a dense list whose membership was already checked. */
+  /** Remove a slot from a dense list whose membership was already checked. Stale tail entries are never read. */
   #removeFromDenseList(list: EntityArray, positions: EntityArray, count: number, slot: number): number {
     const removeIndex = positions[slot]!;
     const lastIndex = count - 1;
-    const lastSlot = list[lastIndex]!;
     if (removeIndex !== lastIndex) {
+      const lastSlot = list[lastIndex]!;
       list[removeIndex] = lastSlot;
       positions[lastSlot] = removeIndex;
     }
-    list[lastIndex] = 0;
-    positions[slot] = 0;
     return lastIndex;
   }
 
@@ -318,39 +334,48 @@ export class ComponentManager {
     return true;
   }
 
-  /** Allocate changed tracking for data components only when a write marks them changed. */
-  #ensureChangedState(state: ComponentState): BooleanArray | undefined {
-    let changed = state.changed;
-    if (changed !== undefined) return changed;
+  /**
+   * Allocate changed tracking for data components only when a write marks them changed, and make room for
+   * `minChanged` entries. Membership is a sparse-set check against `changedPositions`/`changedList`.
+   * @returns the changed positions, or `undefined` for tag components
+   */
+  #ensureChangedState(state: ComponentState, minChanged: number = 0): EntityArray | undefined {
+    if (state.instance.storage === null) return undefined;
+    let positions = state.changedPositions;
+    if (positions === undefined) {
+      positions = createSlotArray(this.#capacity);
+      state.changedPositions = positions;
+    }
+    const changedList = state.changedList;
+    if (changedList === undefined || changedList.length < minChanged) {
+      const grown = this.#allocateList(state, changedList, minChanged);
+      state.changedList = grown;
+      if (state.changedIterator === undefined) {
+        state.changedIterator = new ReusableSlotPackIterator(grown, this.#packSlot);
+      } else {
+        state.changedIterator.slots = grown;
+      }
+    }
+    return positions;
+  }
 
-    const instance = state.instance;
-    if (instance === undefined || instance.storage === null) return undefined;
-
-    const changedList = createSlotArray(this.#capacity, this.#getListCapacity(state));
-    changed = new BooleanArray(this.#capacity);
-    state.changed = changed;
-    state.changedList = changedList;
-    state.changedPositions = createSlotArray(this.#capacity);
-    state.changedIterator = new ReusableSlotPackIterator(changedList, this.#packSlot);
-    return changed;
+  /** Whether `slot` is in a component's current changed window. */
+  #isChanged(state: ComponentState, slot: number): boolean {
+    const positions = state.changedPositions;
+    if (positions === undefined) return false;
+    const position = positions[slot]!;
+    return position < state.changedCount && state.changedList![position] === slot;
   }
 
   /** Mark a data component changed once per entity per refresh window. */
   #markChanged(state: ComponentState, slot: number): void {
     this.#bumpRevision(state);
-    const changed = this.#ensureChangedState(state);
-    if (changed === undefined || changed.get(slot)) return;
-
-    const changedList = state.changedList;
-    const changedPositions = state.changedPositions;
-    if (changedList === undefined || changedPositions === undefined) {
-      throw new Error(`Failed to find dense changed state for component id ${state.instance.id}.`);
-    }
-
+    if (this.#isChanged(state, slot)) return;
     const changedCount = state.changedCount;
-    changed.set(slot, true);
-    changedList[changedCount] = slot;
-    changedPositions[slot] = changedCount;
+    const positions = this.#ensureChangedState(state, changedCount + 1);
+    if (positions === undefined) return;
+    state.changedList![changedCount] = slot;
+    positions[slot] = changedCount;
     state.changedCount = changedCount + 1;
   }
 
@@ -368,23 +393,13 @@ export class ComponentManager {
 
   /** Remove a data component from changed iteration if present. */
   #unmarkChanged(state: ComponentState, slot: number): void {
-    const changed = state.changed;
-    if (changed === undefined || !changed.get(slot)) return;
-
-    const changedList = state.changedList;
-    const changedPositions = state.changedPositions;
-    if (changedList === undefined || changedPositions === undefined) {
-      throw new Error(`Failed to find dense changed state for component id ${state.instance.id}.`);
-    }
-
-    const changedCount = state.changedCount;
+    if (!this.#isChanged(state, slot)) return;
     state.changedCount = this.#removeFromDenseList(
-      changedList,
-      changedPositions,
-      changedCount,
+      state.changedList!,
+      state.changedPositions!,
+      state.changedCount,
       slot,
     );
-    changed.set(slot, false);
   }
 
   /**
@@ -811,22 +826,8 @@ export class ComponentManager {
    * @returns The component manager
    */
   refresh(): ComponentManager {
-    for (let i = 0; i < this.#states.length; i++) {
-      const state = this.#states[i]!;
-      const changed = state.changed;
-      const changedList = state.changedList;
-      const changedPositions = state.changedPositions;
-      const changedCount = state.changedCount;
-      if (changed !== undefined && changedList !== undefined && changedPositions !== undefined) {
-        for (let j = 0; j < changedCount; j++) {
-          const slot = changedList[j]!;
-          changed.set(slot, false);
-          changedList[j] = 0;
-          changedPositions[slot] = 0;
-        }
-      }
-      state.changedCount = 0;
-    }
+    // The changed window is a sparse set: resetting the count empties it without touching the lists.
+    for (let i = 0; i < this.#states.length; i++) this.#states[i]!.changedCount = 0;
     return this;
   }
 

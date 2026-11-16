@@ -1,5 +1,3 @@
-import type { BooleanArray } from "@phughesmcr/booleanarray";
-
 import type { EntityArray } from "@/entity/entity.ts";
 import type { DynamicComponentInstance } from "@/types/component.ts";
 import type { TypedArray, TypedArrayConstructor } from "@/types/partitions.ts";
@@ -28,7 +26,6 @@ export type SnapshottableComponentState = {
   ownerCount: number;
   ownerList?: EntityArray;
   ownerPositions?: EntityArray;
-  changed?: BooleanArray;
   changedCount: number;
   changedList?: EntityArray;
   changedPositions?: EntityArray;
@@ -36,10 +33,10 @@ export type SnapshottableComponentState = {
 
 /** Component-manager callbacks used to rebuild tracking state during restore. */
 export type ComponentSnapshotRestoreHooks<T extends SnapshottableComponentState> = {
-  /** Allocate ownership tracking (if needed) and return the owner flags. */
-  readonly ensureOwnershipState: (state: T) => Uint8Array;
-  /** Allocate changed tracking (if needed) and return the changed flags. */
-  readonly ensureChangedState: (state: T) => BooleanArray | undefined;
+  /** Allocate ownership tracking with room for `minOwners` and return the owner flags. */
+  readonly ensureOwnershipState: (state: T, minOwners: number) => Uint8Array;
+  /** Allocate changed tracking with room for `minChanged` and return the changed positions. */
+  readonly ensureChangedState: (state: T, minChanged: number) => EntityArray | undefined;
   /** Map a capped component's dense row for an owned slot, reclaiming non-owner rows if exhausted. */
   readonly reserveSparseSlot: (state: T, owners: Uint8Array, slot: number) => void;
   /** Issue fresh revision tokens. */
@@ -122,17 +119,13 @@ export function restoreComponentManagerSnapshot<T extends SnapshottableComponent
       }
     }
     state.ownerCount = 0;
-    const currentChanged = state.changed;
-    if (currentChanged !== undefined) {
-      const list = state.changedList!;
-      for (let j = 0; j < state.changedCount; j++) currentChanged.set(list[j]!, false);
-    }
+    // The changed window is a sparse set: an empty count needs no per-slot clearing.
     state.changedCount = 0;
 
     const ownerSlots = snap.owners;
     const ownerCount = ownerSlots.length;
     if (ownerCount > 0) {
-      const owners = hooks.ensureOwnershipState(state);
+      const owners = hooks.ensureOwnershipState(state, ownerCount);
       const list = state.ownerList!;
       const positions = state.ownerPositions!;
       for (let j = 0; j < ownerCount; j++) {
@@ -150,12 +143,10 @@ export function restoreComponentManagerSnapshot<T extends SnapshottableComponent
     const changedSlots = snap.changed;
     const changedCount = changedSlots.length;
     if (changedCount > 0) {
-      const changed = hooks.ensureChangedState(state)!;
+      const positions = hooks.ensureChangedState(state, changedCount)!;
       const list = state.changedList!;
-      const positions = state.changedPositions!;
       for (let j = 0; j < changedCount; j++) {
         const slot = changedSlots[j]!;
-        changed.set(slot, true);
         list[j] = slot;
         positions[slot] = j;
       }
