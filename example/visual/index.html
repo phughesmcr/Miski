@@ -8,31 +8,85 @@
   </head>
   <body>
     <main class="app">
-      <canvas id="stage" aria-label="Live Miski ECS particle simulation"></canvas>
+      <canvas id="stage" aria-label="Live Miski ECS swarm simulation"></canvas>
+      <p id="fallback" class="fallback" hidden>This demo needs WebGL2.</p>
       <section class="chrome" aria-label="Miski ECS demo controls">
-        <header class="hud">
-          <div class="metrics" aria-live="polite">
-            <div class="metric"><span>Entities</span><strong id="entities">0</strong></div>
-            <div class="metric"><span>Tick</span><strong id="tick">0ms</strong></div>
-            <div class="metric"><span>Draw</span><strong id="draw">0ms</strong></div>
-            <div class="metric"><span>Drones</span><strong id="drones">0</strong></div>
-            <div class="metric"><span>Heap</span><strong id="heap">0mb</strong></div>
-            <div class="metric"><span>Rendered</span><strong id="rendered">0</strong></div>
-            <div class="metric"><span>Exited</span><strong id="exited">0</strong></div>
-            <div class="metric"><span>Capacity</span><strong id="capacity">0</strong></div>
-            <div class="metric"><span>Spawned</span><strong id="spawned">0</strong></div>
-            <div class="metric"><span>Destroyed</span><strong id="destroyed">0</strong></div>
-          </div>
-        </header>
+        <aside class="panel" aria-label="Simulation metrics">
+          <header class="title">
+            <h1>miski</h1>
+            <span id="link" class="link" data-state="offline">offline</span>
+          </header>
+          <p class="lede">
+            Drones gain a <code>charge</code> component when they ignite and lose it as they burn out, so every
+            flash is an archetype move. Dotted paths are a rollback forecast: Miski simulates up to a second ahead,
+            then restores.
+          </p>
+          <dl class="metrics">
+            <div class="wide">
+              <dt>Entities</dt>
+              <dd id="entities">0</dd>
+            </div>
+            <div>
+              <dt>Drones</dt>
+              <dd id="drones">0</dd>
+            </div>
+            <div>
+              <dt>Sparks</dt>
+              <dd id="sparks">0</dd>
+            </div>
+            <div class="wide charge">
+              <dt>Charged</dt>
+              <dd id="charged">0</dd>
+              <span id="chargedBar" class="bar" aria-hidden="true"></span>
+            </div>
+            <div>
+              <dt>Ignited/s <small>entered</small></dt>
+              <dd id="ignited">0</dd>
+            </div>
+            <div>
+              <dt>Spent/s <small>exited</small></dt>
+              <dd id="spent">0</dd>
+            </div>
+            <div>
+              <dt>Sim step</dt>
+              <dd id="tick">0 ms</dd>
+            </div>
+            <div>
+              <dt>Render fps</dt>
+              <dd id="fps">0</dd>
+            </div>
+            <div>
+              <dt>Forecast</dt>
+              <dd id="forecastCost">off</dd>
+            </div>
+            <div>
+              <dt>Drift</dt>
+              <dd id="drift" data-state="off">off</dd>
+            </div>
+            <div>
+              <dt>Stream</dt>
+              <dd id="bandwidth">0 MB/s</dd>
+            </div>
+            <div>
+              <dt>Heap</dt>
+              <dd id="heap">0 MB</dd>
+            </div>
+          </dl>
+        </aside>
         <div class="controlbar">
           <div class="segmented" role="group" aria-label="Simulation mode">
-            <button data-mode="orbit" aria-pressed="true">Orbit</button>
-            <button data-mode="storm" aria-pressed="false">Storm</button>
-            <button data-mode="lattice" aria-pressed="false">Lattice</button>
+            <button data-mode="orbit" aria-pressed="true" title="1">Orbit</button>
+            <button data-mode="storm" aria-pressed="false" title="2">Storm</button>
+            <button data-mode="lattice" aria-pressed="false" title="3">Lattice</button>
+            <button data-mode="flock" aria-pressed="false" title="4">Flock</button>
           </div>
           <label class="slider">
             <span>Intensity</span>
             <input id="intensity" type="range" min="0.2" max="2.4" value="1" step="0.05">
+          </label>
+          <label class="slider">
+            <span>Contagion</span>
+            <input id="contagion" type="range" min="0" max="3" value="1" step="0.05">
           </label>
           <label class="slider">
             <span>Drones <output id="droneTarget">${desiredDroneCount}</output></span>
@@ -42,25 +96,20 @@
               min="${MIN_DRONES}"
               max="${MAX_DRONES}"
               value="${desiredDroneCount}"
-              step="64"
-            >
-          </label>
-          <label class="slider">
-            <span>Render <output id="renderTarget">${renderedEntityLimit}</output></span>
-            <input
-              id="renderControl"
-              type="range"
-              min="${MIN_DRONES}"
-              max="${MAX_RENDERED_ENTITIES}"
-              value="${renderedEntityLimit}"
-              step="64"
+              step="${DRONE_STEP}"
             >
           </label>
           <div class="actions">
-            <button class="accent" id="burst">Pulse</button>
-            <button id="toggle">Pause</button>
-            <button class="danger" id="reset">Reset</button>
+            <button id="forecastToggle" aria-pressed="true" title="F">Forecast</button>
+            <button id="trailsToggle" aria-pressed="true" title="T">Trails</button>
+            <button class="accent" id="burst" title="P">Pulse</button>
+            <button id="toggle" title="Space">Pause</button>
+            <button class="danger" id="reset" title="R">Reset</button>
           </div>
+          <p class="hint">
+            <kbd>click</kbd> pulse · <kbd>hold</kbd> gravity well · <kbd>shift</kbd>/<kbd>right</kbd>-hold repel ·
+            <kbd>1</kbd>–<kbd>4</kbd> modes · <kbd>H</kbd> hide UI
+          </p>
         </div>
       </section>
     </main>
