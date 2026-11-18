@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+- Add `WorldRollbackScope`: a rollback point for `using` blocks. Leaving the
+  block without `commit()` restores the world, so a throw can't leave the
+  world's one rollback scope open (which blocked every later capture and world
+  load). It also has `restore()` and `isOpen`. On a world that is no longer
+  initialized, disposal just drops the point.
+- `World` implements `Symbol.asyncDispose`: `await using world = new World(spec)`
+  destroys it when the scope exits, even on a throw. A never-initialized or
+  already destroyed world is left alone; overlapping disposals share one
+  teardown, and a failed teardown can be retried.
+- Command-buffer flush errors are annotated with the failing command for any
+  real `Error`, including ones from another realm (`Error.isError`).
+- README: a recipe for yielding to the browser between `Schedule.run()` calls.
+- Support `Float16Array` component columns (requires
+  `@phughesmcr/partitionedbuffer` ^0.5.0, now the minimum). Schemas hash it as
+  `f16`; hashes of existing schemas are unchanged. World saves use the new field
+  type code 12 (`"f16"`), so saves without f16 columns are byte-identical and
+  older versions reject f16 saves as an unknown field type.
+- `World.destroy()` is idempotent: on a destroyed world it now resolves without
+  doing anything instead of throwing. A call while teardown is still running
+  still rejects ("World is being destroyed").
 - Add non-numeric component fields with `field.bool()`, `field.enum([...])`,
   `field.entity()`, `field.string()` and `field.object<T>({ create?, clone? })`.
   Bool, enum and entity fields use typed columns in the world buffer (`0 / 1`,

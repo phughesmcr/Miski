@@ -198,9 +198,12 @@ readiness signal. Callbacks reject during initialization or teardown.
 
 `destroy()` closes system registration immediately, waits for any in-flight
 `init()` and pending system init hooks, then runs the destroy hook of every
-system whose init completed. Concurrent world teardown rejects. The world ends
+system whose init completed. Concurrent world teardown rejects; calling
+`destroy()` on a destroyed world does nothing. The world ends
 `destroyed` if every hook succeeds; otherwise it stays in `error`. After a
-failed `init()`, `destroy()` still runs from `error`. Lifecycle hooks must not
+failed `init()`, `destroy()` still runs from `error`. `await using world = new World(spec)`
+destroys the world when the scope exits, even on a throw (a never-initialized
+world is left alone). Lifecycle hooks must not
 await `world.onReady()` or `world.destroy()`; doing so rejects with
 `WorldStateError`. Destroy ends the system lifecycle; it does not erase
 retained component buffers. Discard component instances and borrowed views with
@@ -237,6 +240,11 @@ Data fields named `entity` or `slot` are reserved for the storage proxy cursor.
 New ownership starts every numeric field at zero, including capped components
 and omitted fields in partial payloads. Public data writes require finite
 numbers; direct partition access remains an unchecked escape hatch.
+
+Numeric fields may use any number-valued typed array, including
+`Float16Array`: half the memory of `Float32Array` for values that tolerate
+about 3 significant digits (range ±65504; guarded writes outside it throw).
+`BigInt64Array` and `BigUint64Array` are not supported.
 
 **Non-numeric fields** — mix `field.*` descriptors with typed arrays:
 
@@ -635,6 +643,24 @@ function loop(dt: number) {
   `schedule.setClock(clock)`. The schedule flushes its commands every phase,
   so its buffer is empty between runs; call `commands.clear()` on any buffer
   you fill outside a run to drop commands from the abandoned timeline.
+- **Yielding to the browser.** `run()` is synchronous. To keep input
+  responsive, yield between runs, never inside one. Run background work
+  (analytics, saving to IndexedDB) on data copied out of the world, not as
+  systems with lower priority, which would reorder the simulation:
+
+  ```ts
+  const yieldToMain = globalThis.scheduler?.yield?.bind(globalThis.scheduler) ??
+    (() => new Promise<void>((resolve) => setTimeout(resolve, 0)));
+
+  async function loop() {
+    for (;;) {
+      schedule.run(dt);
+      await yieldToMain(); // `scheduler.yield()` in Chrome 129+; a timer elsewhere
+    }
+  }
+  ```
+
+  For rendering, drive `run()` from `requestAnimationFrame` instead.
 
 **Command buffers** queue structural changes so you can mutate while
 iterating a borrowed view. A `Schedule` flushes its buffer (`ctx.commands`)
@@ -681,6 +707,15 @@ import {
 
 const point = captureWorldRollbackPoint(world);
 restoreWorldRollbackPoint(world, point);
+
+// Or let a `using` block close it: leaving without commit() restores the
+// world, even on a throw, so a failed turn can't leave the scope open.
+import { WorldRollbackScope } from "@phughesmcr/miski";
+{
+  using scope = new WorldRollbackScope(world);
+  simulateTurn();
+  if (turnIsValid()) scope.commit();
+}
 
 import { compileComponentSchema, componentSchemaHash } from "@phughesmcr/miski";
 

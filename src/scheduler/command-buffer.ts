@@ -24,6 +24,11 @@ import { isEntityField } from "@/schema/field.ts";
 import { growTypedArray, hasOwnProperty } from "@/utils.ts";
 import { World } from "@/world/world.ts";
 
+/** Realm-safe error test; `Error.isError` needs Chrome 134 / Node 24.3 / Deno 2.2 / Bun 1.1.39. */
+const isError: (value: unknown) => value is Error = typeof Error.isError === "function" ?
+  Error.isError :
+  (value): value is Error => value instanceof Error;
+
 const OP_SPAWN = 1;
 const OP_ENTRY = 2;
 const OP_DESTROY = 3;
@@ -684,7 +689,7 @@ export class CommandBuffer {
 
   /** Prefix a flush error with the command that raised it. */
   #annotate(error: unknown, record: number): void {
-    if (!(error instanceof Error) || record >= this.#recordCount) return;
+    if (!isError(error) || record >= this.#recordCount) return;
     const op = this.#ops[record]!;
     const target = this.#targets[record]!;
     const name = op === OP_SPAWN || op === OP_DESTROY ? "" : ` ${this.#infos[this.#components[record]!]!.name}`;

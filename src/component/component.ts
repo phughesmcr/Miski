@@ -18,8 +18,7 @@ type ComponentSpecRuntime<TStorage extends SchemaOrNull> = {
 
 /**
  * Typed-array constructors a component column may use: numeric, number-addressed storage only.
- * BigInt64Array / BigUint64Array (bigint-valued) and Float16Array (absent from the public
- * `TypedArrayConstructor` type) are rejected at validation instead of failing later at world construction.
+ * BigInt64Array / BigUint64Array (bigint-valued) are rejected at validation instead of failing later at world construction.
  */
 const SUPPORTED_COLUMN_CONSTRUCTORS: ReadonlySet<unknown> = new Set<unknown>([
   Int8Array,
@@ -31,6 +30,7 @@ const SUPPORTED_COLUMN_CONSTRUCTORS: ReadonlySet<unknown> = new Set<unknown>([
   Uint32Array,
   Float32Array,
   Float64Array,
+  Float16Array,
 ]);
 
 /** The typed-array constructor of a numeric schema property (`Ctor` or `[Ctor, initial]`). */
@@ -189,7 +189,7 @@ class ComponentRuntime<
           throw new TypeError(
             `Invalid component specification: column "${key}" must use a number-valued typed array ` +
               "(Int8Array, Uint8Array, Uint8ClampedArray, Int16Array, Uint16Array, Int32Array, Uint32Array, " +
-              "Float32Array, Float64Array).",
+              "Float16Array, Float32Array, Float64Array).",
           );
         }
       }

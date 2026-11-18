@@ -44,7 +44,7 @@ export function sectionCount(relations: number): number {
 }
 
 /** Storage type of one saved numeric component field. */
-export type WorldSaveNumericFieldType = "i8" | "i16" | "i32" | "u8" | "u16" | "u32" | "f32" | "f64" | "u8c";
+export type WorldSaveNumericFieldType = "i8" | "i16" | "i32" | "u8" | "u16" | "u32" | "f32" | "f64" | "u8c" | "f16";
 
 /**
  * Type of one saved component field: a numeric storage type, or the hash tag of a `field.*` field: `"bool"`,
@@ -72,6 +72,9 @@ export const FIELD_TYPE_NAMES: readonly (WorldSaveNumericFieldType | "")[] = Obj
   "f32",
   "f64",
   "u8c",
+  "", // 10: CODE_STRING
+  "", // 11: CODE_OBJECT
+  "f16",
 ]);
 
 /** Type code of a `field.string()` column: u32 offsets plus a UTF-8 heap. Append-only, like every code. */
@@ -85,7 +88,7 @@ export function isSideCode(code: number): boolean {
 }
 
 /** Element byte size by type code (0 for variable-length codes). */
-export const FIELD_TYPE_BYTES: readonly number[] = Object.freeze([0, 1, 2, 4, 1, 2, 4, 4, 8, 1, 0, 0]);
+export const FIELD_TYPE_BYTES: readonly number[] = Object.freeze([0, 1, 2, 4, 1, 2, 4, 4, 8, 1, 0, 0, 2]);
 
 /** Typed-array constructor by type code. */
 export const FIELD_TYPE_CONSTRUCTORS: readonly (TypedArrayConstructor | undefined)[] = Object.freeze([
@@ -99,6 +102,9 @@ export const FIELD_TYPE_CONSTRUCTORS: readonly (TypedArrayConstructor | undefine
   Float32Array,
   Float64Array,
   Uint8ClampedArray,
+  undefined, // 10: CODE_STRING
+  undefined, // 11: CODE_OBJECT
+  Float16Array,
 ]);
 
 /** @returns the type code of a typed-array constructor, or 0 when it has none */
@@ -197,6 +203,7 @@ export class Views {
   readonly i32: Int32Array;
   readonly f32: Float32Array;
   readonly f64: Float64Array;
+  readonly f16: Float16Array;
 
   constructor(buffer: ArrayBufferLike) {
     const length = buffer.byteLength;
@@ -209,6 +216,7 @@ export class Views {
     this.i32 = new Int32Array(buffer, 0, length >>> 2);
     this.f32 = new Float32Array(buffer, 0, length >>> 2);
     this.f64 = new Float64Array(buffer, 0, length >>> 3);
+    this.f16 = new Float16Array(buffer, 0, length >>> 1);
   }
 
   /** The view a type code is written through (`u8c` shares the `u8` view). */
@@ -228,6 +236,8 @@ export class Views {
         return this.f32;
       case 8:
         return this.f64;
+      case 12:
+        return this.f16;
       default:
         return this.u8;
     }

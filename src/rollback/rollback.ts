@@ -62,4 +62,74 @@ function requireRollbackData(world: World, point: WorldRollbackPoint): RollbackD
   return data;
 }
 
+/**
+ * A world rollback point that closes itself. Leaving a `using` block without calling `commit()` restores the
+ * world, so a throw between capture and commit can't leave the world's one rollback scope open (which would block
+ * every later capture and every world load).
+ *
+ * @example
+ * ```ts
+ * {
+ *   using scope = new WorldRollbackScope(world);
+ *   simulateTurn(world);
+ *   if (turnIsValid(world)) scope.commit(); // otherwise the world is restored on exit
+ * }
+ * ```
+ */
+export class WorldRollbackScope implements Disposable {
+  readonly #world: World;
+  #point: WorldRollbackPoint | undefined;
+
+  /**
+   * Capture a rollback point for `world` and open the scope.
+   * @throws {WorldStateError} - If the world is not initialized
+   * @throws {Error} - If another rollback scope is already active on the world
+   */
+  constructor(world: World) {
+    this.#world = world;
+    this.#point = captureWorldRollbackPoint(world);
+  }
+
+  /** Whether the scope is still open: neither committed, restored nor disposed. */
+  get isOpen(): boolean {
+    return this.#point !== undefined;
+  }
+
+  /**
+   * Keep every write made since the scope opened, and close it.
+   * @throws {TypeError} - If the scope is already closed
+   */
+  commit(): void {
+    commitWorldRollbackPoint(this.#world, this.#take());
+  }
+
+  /**
+   * Undo every write made since the scope opened, and close it.
+   * @throws {TypeError} - If the scope is already closed
+   */
+  restore(): void {
+    restoreWorldRollbackPoint(this.#world, this.#take());
+  }
+
+  /**
+   * Close the scope at the end of a `using` block: restores the world if the scope is still open. A world
+   * that is no longer initialized (errored or destroyed) can't be restored, so the point is just dropped.
+   */
+  [Symbol.dispose](): void {
+    if (this.#point === undefined) return;
+    if (this.#world.state !== "initialized") {
+      this.#point = undefined;
+      return;
+    }
+    this.restore();
+  }
+
+  #take(): WorldRollbackPoint {
+    const point = this.#point;
+    if (point === undefined) throw new TypeError("World rollback scope is already closed.");
+    this.#point = undefined;
+    return point;
+  }
+}
+
 export { captureRollbackState, commitRollbackState, restoreRollbackState, validateRollbackState };
