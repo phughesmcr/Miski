@@ -394,6 +394,7 @@ export type {
   SchemaValues,
   SlotIndex,
   SpawnSpec,
+  StorageCell,
   StorageFromMap,
   StorageProxyWithProperties,
   SystemCallback,

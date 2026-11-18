@@ -44,6 +44,7 @@ export type {
   SchemaProperty,
   SchemaPropertyArray,
   SchemaValues,
+  StorageCell,
   StorageProxySpec,
   StorageProxyWithProperties,
   TypedArray,

@@ -157,7 +157,7 @@ function createSideOnlyStorage(partitions: Record<string, unknown[]>): Component
     byteOffset: 0,
     byteLength: 0,
     partitions: partitions as never,
-    get: (partition, index) => partitions[partition as string]?.[index],
+    get: (partition, index) => partitions[partition as string]?.[index] as never,
     set: (partition, index, value) => {
       const column = partitions[partition as string];
       if (column === undefined) throw new Error(`Partition ${String(partition)} not found`);

@@ -23,6 +23,8 @@
 - `ComponentCheckpoint` payloads and `ComponentData` / `ComponentValue` for
   field columns are no longer numbers. `ComponentInstance.get` / `getAt` keep a
   `string`-key overload typed `number`, so cast results from untyped instances.
+  `instance.storage.get` / `set` are now typed per column (`StorageCell`), and
+  `StorageProxySpec<T>` requires `T extends SchemaOrNull`.
 - Reuse entity slots next-fit instead of last-freed-first. A destroyed entity's
   slot is reissued only after the allocator has swept past every other free
   slot, so a held stale handle no longer comes back to life after 32,768

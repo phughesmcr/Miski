@@ -88,10 +88,13 @@ export type ComponentStorage<T extends SchemaOrNull> = {
   /** Raw columns keyed by field name, indexed by storage slot. */
   readonly partitions: ComponentPartitions<T>;
   /** Raw unchecked read of one cell. */
-  get(partition: keyof T, index: number): unknown;
+  get<K extends keyof T>(partition: K, index: number): StorageCell<T[K]> | undefined;
   /** Raw unchecked write of one cell. */
-  set(partition: keyof T, index: number, value: unknown): void;
+  set<K extends keyof T>(partition: K, index: number, value: StorageCell<T[K]>): void;
 };
+
+/** Raw cell type of one column: `number` for typed columns, the element type for string / object columns. */
+export type StorageCell<P> = P extends FieldDescriptor ? FieldRaw<P>[number] : number;
 
 /** Compatibility alias for component write/proxy values. */
 export type SchemaValues<T> = ComponentValue<T>;

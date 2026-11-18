@@ -95,3 +95,11 @@ const gameMeshes: (Mesh | null)[] = game.storage.Unit.partitions.mesh;
 
 void [hpColumn, aliveColumn, stateColumn, targetColumn, labelColumn, meshColumn];
 void [alive, state, target, mesh, proxyState, viaGet, viaGetHp, gameMeshes];
+
+// Raw storage get / set stay keyed per column.
+const rawHp: number | undefined = instance.storage.get("hp", 0);
+const rawLabel: string | undefined = instance.storage.get("label", 0);
+instance.storage.set("mesh", 0, new Mesh());
+// @ts-expect-error numeric columns take numbers.
+instance.storage.set("hp", 0, "x");
+void [rawHp, rawLabel];
