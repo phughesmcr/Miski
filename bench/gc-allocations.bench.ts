@@ -1084,7 +1084,9 @@ const scenarios: Scenario[] = [
   {
     name: "saveWorldInto 8K world with strings + objects - reused buffer",
     iterations: 2_000,
-    warmupIterations: 5_000,
+    // With 5_000, the full run measured ~25 B/iter while writeStringCells was still deopting and reoptimizing.
+    // Run alone, this scenario allocates whatever the warmup; it relies on the scenarios before it.
+    warmupIterations: 20_000,
     maxSteadyStateBeforeGcBytesPerIter: OBJECT_SAVE_BUDGET_BYTES_PER_ITER,
     fn: () => {
       numericSink ^= saveWorldInto(meshed.world, meshedSaveTarget);

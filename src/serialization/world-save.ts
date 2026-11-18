@@ -8,7 +8,6 @@ import type { World } from "@/world/world.ts";
 import type { WorldSaveDocument } from "./document.ts";
 import { docToImage, imageToDoc } from "./document.ts";
 import {
-  align8,
   assertLittleEndian,
   CODE_OBJECT,
   CODE_STRING,
@@ -17,14 +16,6 @@ import {
   hashBytes64,
   hashHex,
   objectColumnBytes,
-  SECTION_ARCHETYPES,
-  SECTION_COMPONENTS,
-  SECTION_ENTITIES,
-  SECTION_HEADER_BYTES,
-  SECTION_RELATIONS,
-  SECTION_WINDOW,
-  sectionCount,
-  slotWidth,
   stringColumnBytes,
   ViewCache,
   type Views,
@@ -33,24 +24,19 @@ import {
 } from "./format.ts";
 import { type WorldSaveHost, worldSaveHost } from "./host.ts";
 import {
-  archetypesPayloadBytes,
   type ComponentImage,
-  componentPayloadBytes,
-  entitiesPayloadBytes,
   heapBytes,
   type KnownLayout,
   parseSave,
-  relationPayloadBytes,
   relationTargetOrder,
+  saveBytes,
   type SaveImage,
+  SaveSource,
   validateImage,
   ValidationScratch,
-  windowPayloadBytes,
-  writeHeader,
   writeObjectCells,
-  writeSectionHeader,
+  writeSave,
   writeStringCells,
-  zeroPad,
 } from "./image.ts";
 import { compareLayouts, encodeLayout, layoutInfo, layoutOfStates, type WorldSaveLayout } from "./layout.ts";
 
@@ -101,15 +87,13 @@ type SaveContext = KnownLayout & {
   readonly writeViews: ViewCache;
   /** String / object columns per component, in layout order (empty for most components). */
   readonly side: readonly (readonly SideColumn[])[];
-  /** Bytes of each component's string / object columns, set by `measure`. */
-  readonly sideBytes: Float64Array;
   /** Number of encoded cells currently held in the object columns' `encoded` arrays. */
   encodedCount: number;
   scratch: ValidationScratch | undefined;
   /** Relation stores in layout order. */
   readonly relations: readonly RelationStore[];
-  /** Pair and target counts per relation, set by `measure`. */
-  readonly relationCounts: Int32Array;
+  /** The world as a save source, staged by `measure`. */
+  readonly source: WorldSource;
 };
 
 const contexts = new WeakMap<World, SaveContext>();
@@ -136,23 +120,20 @@ function createContext(world: World): SaveContext {
   );
   const layoutBlock = encodeLayout(layout);
   const [low, high] = hashBytes64(layoutBlock);
+  const known: KnownLayout = { layout, layoutBlock, info, layoutHashLow: low, layoutHashHigh: high };
+  const relations = info.relations.map((relation) => host.relations!.store(states[relation.component]!.instance.type));
   const context: SaveContext = {
+    ...known,
     host,
     capacity: host.capacity,
-    layout,
-    layoutBlock,
-    info,
-    layoutHashLow: low,
-    layoutHashHigh: high,
     wordsPerSet: wordCount(states.length),
     instances: states.map((state) => state.instance),
     writeViews: new ViewCache(),
     side,
-    sideBytes: new Float64Array(states.length),
     encodedCount: 0,
     scratch: undefined,
-    relations: info.relations.map((relation) => host.relations!.store(states[relation.component]!.instance.type)),
-    relationCounts: new Int32Array(info.relations.length * 2),
+    relations,
+    source: new WorldSource(known, host, wordCount(states.length), side, relations),
   };
   contexts.set(world, context);
   return context;
@@ -232,269 +213,200 @@ function releaseEncoded(context: SaveContext): void {
   context.encodedCount = 0;
 }
 
-/** Measure the save and stage encoded object cells for `writeWorld`; call `releaseEncoded` afterwards. */
+/** Stage the source's counts and encoded object cells, and return the save's length; call `releaseEncoded` after. */
 function measure(context: SaveContext): number {
-  const { host, capacity, info } = context;
-  const width = slotWidth(capacity);
+  const { host, source } = context;
+  const archetypes = host.archetypes;
   const live = liveCount(context);
-  const relations = context.relations;
-  let bytes = 40 + context.layoutBlock.length + sectionCount(relations.length) * SECTION_HEADER_BYTES;
-  bytes += entitiesPayloadBytes(capacity, live);
-  bytes += archetypesPayloadBytes(host.archetypes.archetypeCount, context.wordsPerSet, live, width);
+  source.live = live;
+  source.population = live;
+  source.archetypeCount = archetypes.archetypeCount;
   const states = host.components.saveStates;
-  const sideBytes = context.sideBytes;
+  const counts = source.componentCounts;
   for (let c = 0; c < states.length; c++) {
     const state = states[c]!;
-    const side = context.side[c]!.length === 0 ? 0 : measureSide(context, c, state.ownerList, state.ownerCount);
-    sideBytes[c] = side;
-    bytes += componentPayloadBytes(state.ownerCount, state.changedCount, info.codes[c]!, width, side);
+    counts[c * 2] = state.ownerCount;
+    counts[c * 2 + 1] = state.changedCount;
+    source.sideBytes[c] = context.side[c]!.length === 0 ?
+      0 :
+      measureSide(context, c, state.ownerList, state.ownerCount);
   }
-  bytes += windowPayloadBytes(host.archetypes.transitionWindow.touchedCount, width);
-  for (let r = 0; r < relations.length; r++) bytes += measureRelation(context, r);
-  return bytes;
-}
-
-/** Count a relation's pairs and targets into `relationCounts`; returns its payload bytes. */
-function measureRelation(context: SaveContext, r: number): number {
-  const store = context.relations[r]!;
-  let pairs = 0;
-  for (let i = 0; i < store.liveSourceCount; i++) pairs += store.sourceCount[store.liveSourceAt(i)]!;
-  let targets = 0;
-  for (let slot = store.firstTargetSlot; slot !== NONE; slot = store.nextTargetSlot(slot)) targets++;
-  context.relationCounts[r * 2] = pairs;
-  context.relationCounts[r * 2 + 1] = targets;
-  return relationPayloadBytes(
-    store.freeRowCount,
-    store.liveSourceCount,
-    pairs,
-    targets,
-    store.changedCount,
-    context.info.relations[r]!.codes,
-  );
-}
-
-/** Write one relation at `offset` (8-aligned), right after `measure`. Allocates nothing. @returns the end offset */
-function writeRelation(context: SaveContext, views: Views, r: number, offset: number): number {
-  const store = context.relations[r]!;
-  const pairs = context.relationCounts[r * 2]!;
-  const u32 = views.u32;
-  const sources = store.liveSourceCount;
-  let w = offset >>> 2;
-  u32[w++] = store.savedHighWater;
-  u32[w++] = store.freeRowCount;
-  u32[w++] = sources;
-  u32[w++] = pairs;
-  u32[w++] = context.relationCounts[r * 2 + 1]!;
-  u32[w++] = store.changedCount;
-  for (let i = 0; i < store.freeRowCount; i++) u32[w++] = store.freeRowAt(i);
-  for (let i = 0; i < sources; i++) u32[w++] = store.liveSourceAt(i);
-  for (let i = 0; i < sources; i++) u32[w++] = store.sourceCount[store.liveSourceAt(i)]!;
-  for (let i = 0; i < sources; i++) {
-    for (let row = store.sourceHead[store.liveSourceAt(i)]!; row !== NONE; row = store.nextRowBySource(row)) {
-      u32[w] = row;
-      u32[w + pairs] = store.rowTarget[row]!;
-      w++;
-    }
+  source.touched = archetypes.transitionWindow.touchedCount;
+  const relations = context.relations;
+  const rc = source.relationCounts;
+  for (let r = 0; r < relations.length; r++) {
+    const store = relations[r]!;
+    let pairs = 0;
+    for (let i = 0; i < store.liveSourceCount; i++) pairs += store.sourceCount[store.liveSourceAt(i)]!;
+    let targets = 0;
+    for (let slot = store.firstTargetSlot; slot !== NONE; slot = store.nextTargetSlot(slot)) targets++;
+    const k = r * 6;
+    rc[k] = store.savedHighWater;
+    rc[k + 1] = store.freeRowCount;
+    rc[k + 2] = store.liveSourceCount;
+    rc[k + 3] = pairs;
+    rc[k + 4] = targets;
+    rc[k + 5] = store.changedCount;
   }
-  w += pairs;
-  for (let slot = store.firstTargetSlot; slot !== NONE; slot = store.nextTargetSlot(slot)) u32[w++] = slot;
-  for (let slot = store.firstTargetSlot; slot !== NONE; slot = store.nextTargetSlot(slot)) {
-    for (let row = store.targetHead[slot]!; row !== NONE; row = store.nextByTarget[row]!) {
-      u32[w++] = store.rowSource[row]!;
-    }
-  }
-  for (let i = 0; i < store.changedCount; i++) u32[w++] = store.changedAt(i);
-  let p = align8(w << 2);
-  zeroPad(views, w << 2, p);
-  const codes = context.info.relations[r]!.codes;
-  for (let c = 0; c < codes.length; c++) {
-    const code = codes[c]!;
-    const bytes = FIELD_TYPE_BYTES[code]!;
-    const view = views.column(code);
-    const column = store.dataColumn(c);
-    let j = p / bytes;
-    for (let i = 0; i < sources; i++) {
-      for (let row = store.sourceHead[store.liveSourceAt(i)]!; row !== NONE; row = store.nextRowBySource(row)) {
-        view[j++] = column[row]!;
-      }
-    }
-    const end = p + pairs * bytes;
-    zeroPad(views, end, p = align8(end));
-  }
-  return p;
+  return saveBytes(source);
 }
 
 /** Write a slot list; returns the end offset. */
-function writeSlots(
-  slots: Uint8Array | Uint16Array,
-  offset: number,
-  width: number,
-  list: ArrayLike<number>,
-  count: number,
-): number {
+function writeSlots(views: Views, offset: number, width: number, list: ArrayLike<number>, count: number): number {
+  const slots = views.slots(width);
   const start = width === 1 ? offset : offset >>> 1;
   for (let i = 0; i < count; i++) slots[start + i] = list[i]!;
   return offset + count * width;
 }
 
-/**
- * Serialize live world state at `base` (8-byte aligned, `total` bytes available), right after `measure`.
- * Allocates nothing.
- */
-function writeWorld(context: SaveContext, views: Views, base: number, total: number): void {
-  const { host, capacity, info, wordsPerSet } = context;
-  const width = slotWidth(capacity);
-  const u32 = views.u32;
-  const slots = views.slots(width);
-  const entities = host.entities;
-  const archetypes = host.archetypes;
-  const live = liveCount(context);
+/** A world's live state as a {@link SaveSource}, staged by `measure`. Its writers allocate nothing. */
+class WorldSource extends SaveSource {
+  readonly host: WorldSaveHost;
+  readonly side: readonly (readonly SideColumn[])[];
+  readonly stores: readonly RelationStore[];
 
-  let offset = writeHeader(views, base, total, context, capacity);
+  constructor(
+    known: KnownLayout,
+    host: WorldSaveHost,
+    wordsPerSet: number,
+    side: readonly (readonly SideColumn[])[],
+    stores: readonly RelationStore[],
+  ) {
+    super(known, host.capacity, wordsPerSet);
+    this.host = host;
+    this.side = side;
+    this.stores = stores;
+  }
 
-  // Entities: cursor, live count, occupancy, next generations, live generations in slot order.
-  const entityBytes = entitiesPayloadBytes(capacity, live);
-  let p = writeSectionHeader(views, offset, SECTION_ENTITIES, entityBytes);
-  let w = p >>> 2;
-  const occupancy = entities.occupancyWords;
-  u32[w] = entities.allocationCursor;
-  u32[w + 1] = live;
-  w += 2;
-  u32.set(occupancy, w);
-  w += occupancy.length;
-  u32.set(entities.nextGenerations, w);
-  w += capacity;
-  const generation = entities.generations;
-  for (let word = 0; word < occupancy.length; word++) {
-    let bits = occupancy[word]!;
-    while (bits !== 0) {
-      u32[w++] = generation[(word << 5) + (31 - Math.clz32(bits & -bits))]!;
-      bits &= bits - 1;
+  cursor(): number {
+    return this.host.entities.allocationCursor;
+  }
+
+  writeEntityWords(u32: Uint32Array, w: number): number {
+    const entities = this.host.entities;
+    const occupancy = entities.occupancyWords;
+    u32.set(occupancy, w);
+    w += occupancy.length;
+    u32.set(entities.nextGenerations, w);
+    w += this.capacity;
+    const generation = entities.generations;
+    for (let word = 0; word < occupancy.length; word++) {
+      let bits = occupancy[word]!;
+      while (bits !== 0) {
+        u32[w++] = generation[(word << 5) + (31 - Math.clz32(bits & -bits))]!;
+        bits &= bits - 1;
+      }
+    }
+    return w;
+  }
+
+  writeArchetypeBits(u32: Uint32Array, w: number): void {
+    const archetypes = this.host.archetypes;
+    const wordsPerSet = this.wordsPerSet;
+    for (let i = 0; i < this.archetypeCount; i++) {
+      const words = archetypes.archetypeAt(i).bitfield.buffer;
+      for (let k = 0; k < wordsPerSet; k++) u32[w + k] = k < words.length ? words[k]! : 0;
+      w += wordsPerSet;
     }
   }
-  offset = p + entityBytes;
-  zeroPad(views, w << 2, offset);
 
-  // Archetypes: count, bitset width, bitsets, population counts, populations.
-  const count = archetypes.archetypeCount;
-  const archetypeBytes = archetypesPayloadBytes(count, wordsPerSet, live, width);
-  p = writeSectionHeader(views, offset, SECTION_ARCHETYPES, archetypeBytes);
-  w = p >>> 2;
-  u32[w] = count;
-  u32[w + 1] = wordsPerSet;
-  w += 2;
-  for (let i = 0; i < count; i++) {
-    const words = archetypes.archetypeAt(i).bitfield.buffer;
-    for (let k = 0; k < wordsPerSet; k++) u32[w + k] = k < words.length ? words[k]! : 0;
-    w += wordsPerSet;
+  populationCount(i: number): number {
+    return this.host.archetypes.archetypeAt(i).getPopulationCount();
   }
-  for (let i = 0; i < count; i++) u32[w + i] = archetypes.archetypeAt(i).getPopulationCount();
-  let q = (w + count) << 2;
-  for (let i = 0; i < count; i++) {
-    const archetype = archetypes.archetypeAt(i);
-    q = writeSlots(slots, q, width, archetype.populationSlots, archetype.getPopulationCount());
-  }
-  offset = p + archetypeBytes;
-  zeroPad(views, q, offset);
 
-  // Components: owner and changed lists, then owned rows per column in owner order.
-  const states = host.components.saveStates;
-  let componentBytes = 0;
-  for (let c = 0; c < states.length; c++) {
-    const state = states[c]!;
-    componentBytes += componentPayloadBytes(
-      state.ownerCount,
-      state.changedCount,
-      info.codes[c]!,
-      width,
-      context.sideBytes[c]!,
-    );
+  writePopulation(views: Views, offset: number, width: number, i: number): number {
+    const archetype = this.host.archetypes.archetypeAt(i);
+    return writeSlots(views, offset, width, archetype.populationSlots, archetype.getPopulationCount());
   }
-  p = writeSectionHeader(views, offset, SECTION_COMPONENTS, componentBytes);
-  for (let c = 0; c < states.length; c++) {
-    const state = states[c]!;
+
+  writeOwners(views: Views, offset: number, width: number, c: number): number {
+    const state = this.host.components.saveStates[c]!;
+    return writeSlots(views, offset, width, state.ownerList!, state.ownerCount);
+  }
+
+  writeChanged(views: Views, offset: number, width: number, c: number): number {
+    const state = this.host.components.saveStates[c]!;
+    return writeSlots(views, offset, width, state.changedList!, state.changedCount);
+  }
+
+  writeNumeric(views: Views, offset: number, c: number, t: number, code: number): void {
+    const state = this.host.components.saveStates[c]!;
     const owners = state.ownerCount;
-    const ownerList = state.ownerList;
-    u32[p >>> 2] = owners;
-    u32[(p >>> 2) + 1] = state.changedCount;
-    p += 8;
-    let end = owners === 0 ? p : writeSlots(slots, p, width, ownerList!, owners);
-    zeroPad(views, end, p = align8(end));
-    end = state.changedCount === 0 ? p : writeSlots(slots, p, width, state.changedList!, state.changedCount);
-    zeroPad(views, end, p = align8(end));
-    const codes = info.codes[c]!;
-    if (codes === null) continue;
-    const columns = state.storageColumns;
-    const side = context.side[c]!;
-    let t = 0;
-    let s = 0;
-    for (let k = 0; k < codes.length; k++) {
-      const code = codes[k]!;
-      if (code === CODE_STRING) {
-        p = writeStringCells(views, p, side[s++]!.column, ownerList!, owners);
-        continue;
-      }
-      if (code === CODE_OBJECT) {
-        p = writeObjectCells(views, p, side[s++]!.encoded!, owners);
-        continue;
-      }
-      const bytes = FIELD_TYPE_BYTES[code]!;
-      const view = views.column(code);
-      const start = p / bytes;
-      const column = columns[t++]!;
-      if (ArrayBuffer.isView(column)) {
-        for (let j = 0; j < owners; j++) view[start + j] = (column as TypedArray)[ownerList![j]!]!;
-      } else {
-        const getEntity = (column as unknown as SparseColumn).getEntity;
-        for (let j = 0; j < owners; j++) view[start + j] = getEntity(ownerList![j]!)!;
-      }
-      end = p + owners * bytes;
-      zeroPad(views, end, p = align8(end));
+    const ownerList = state.ownerList!;
+    const view = views.column(code);
+    const start = offset / FIELD_TYPE_BYTES[code]!;
+    const column = state.storageColumns[t]!;
+    if (ArrayBuffer.isView(column)) {
+      for (let j = 0; j < owners; j++) view[start + j] = (column as TypedArray)[ownerList[j]!]!;
+    } else {
+      const getEntity = (column as unknown as SparseColumn).getEntity;
+      for (let j = 0; j < owners; j++) view[start + j] = getEntity(ownerList[j]!)!;
     }
   }
-  offset = p;
 
-  // Window: touched slots, origins as registry index + 1, window-start handles.
-  const window = archetypes.transitionWindow;
-  const touched = window.touchedCount;
-  p = writeSectionHeader(views, offset, SECTION_WINDOW, windowPayloadBytes(touched, width));
-  u32[p >>> 2] = touched;
-  u32[(p >>> 2) + 1] = 0;
-  q = p + 8;
-  const slotStart = width === 1 ? q : q >>> 1;
-  for (let i = 0; i < touched; i++) slots[slotStart + i] = window.touchedSlot(i);
-  const slotEnd = q + touched * width;
-  q = (slotEnd + 3) & ~3;
-  zeroPad(views, slotEnd, q);
-  w = q >>> 2;
-  for (let i = 0; i < touched; i++) {
-    const slot = window.touchedSlot(i);
-    const origin: Archetype | undefined = window.originAt(slot);
-    u32[w + i] = origin === undefined ? 0 : origin.registryIndex + 1;
-    u32[w + touched + i] = origin === undefined ? 0 : window.handleAt(slot);
+  writeStrings(views: Views, offset: number, c: number, s: number): number {
+    const state = this.host.components.saveStates[c]!;
+    return writeStringCells(views, offset, this.side[c]![s]!.column, state.ownerList!, state.ownerCount);
   }
-  w += touched * 2;
-  offset = p + windowPayloadBytes(touched, width);
-  zeroPad(views, w << 2, offset);
 
-  // Relations: pools, sources and pairs in store order, target lists, changed sources, pair data.
-  const relations = context.relations;
-  if (relations.length === 0) return;
-  let relationBytes = 0;
-  for (let r = 0; r < relations.length; r++) {
-    const store = relations[r]!;
-    relationBytes += relationPayloadBytes(
-      store.freeRowCount,
-      store.liveSourceCount,
-      context.relationCounts[r * 2]!,
-      context.relationCounts[r * 2 + 1]!,
-      store.changedCount,
-      info.relations[r]!.codes,
-    );
+  writeObjects(views: Views, offset: number, c: number, s: number): number {
+    const state = this.host.components.saveStates[c]!;
+    return writeObjectCells(views, offset, this.side[c]![s]!.encoded!, state.ownerCount);
   }
-  p = writeSectionHeader(views, offset, SECTION_RELATIONS, relationBytes);
-  for (let r = 0; r < relations.length; r++) p = writeRelation(context, views, r, p);
-  zeroPad(views, p, base + total);
+
+  writeWindowSlots(views: Views, offset: number, width: number): void {
+    const window = this.host.archetypes.transitionWindow;
+    const slots = views.slots(width);
+    const start = width === 1 ? offset : offset >>> 1;
+    for (let i = 0; i < this.touched; i++) slots[start + i] = window.touchedSlot(i);
+  }
+
+  writeWindowWords(u32: Uint32Array, w: number): void {
+    const window = this.host.archetypes.transitionWindow;
+    const touched = this.touched;
+    for (let i = 0; i < touched; i++) {
+      const slot = window.touchedSlot(i);
+      const origin: Archetype | undefined = window.originAt(slot);
+      u32[w + i] = origin === undefined ? 0 : origin.registryIndex + 1;
+      u32[w + touched + i] = origin === undefined ? 0 : window.handleAt(slot);
+    }
+  }
+
+  writeRelationWords(u32: Uint32Array, w: number, r: number): void {
+    const store = this.stores[r]!;
+    const pairs = this.relationCounts[r * 6 + 3]!;
+    const sources = store.liveSourceCount;
+    for (let i = 0; i < store.freeRowCount; i++) u32[w++] = store.freeRowAt(i);
+    for (let i = 0; i < sources; i++) u32[w++] = store.liveSourceAt(i);
+    for (let i = 0; i < sources; i++) u32[w++] = store.sourceCount[store.liveSourceAt(i)]!;
+    for (let i = 0; i < sources; i++) {
+      for (let row = store.sourceHead[store.liveSourceAt(i)]!; row !== NONE; row = store.nextRowBySource(row)) {
+        u32[w] = row;
+        u32[w + pairs] = store.rowTarget[row]!;
+        w++;
+      }
+    }
+    w += pairs;
+    for (let slot = store.firstTargetSlot; slot !== NONE; slot = store.nextTargetSlot(slot)) u32[w++] = slot;
+    for (let slot = store.firstTargetSlot; slot !== NONE; slot = store.nextTargetSlot(slot)) {
+      for (let row = store.targetHead[slot]!; row !== NONE; row = store.nextByTarget[row]!) {
+        u32[w++] = store.rowSource[row]!;
+      }
+    }
+    for (let i = 0; i < store.changedCount; i++) u32[w++] = store.changedAt(i);
+  }
+
+  writeRelationData(views: Views, offset: number, r: number, c: number, code: number): void {
+    const store = this.stores[r]!;
+    const view = views.column(code);
+    const column = store.dataColumn(c);
+    let j = offset / FIELD_TYPE_BYTES[code]!;
+    for (let i = 0; i < store.liveSourceCount; i++) {
+      for (let row = store.sourceHead[store.liveSourceAt(i)]!; row !== NONE; row = store.nextRowBySource(row)) {
+        view[j++] = column[row]!;
+      }
+    }
+  }
 }
 
 /**
@@ -530,7 +442,7 @@ export function saveWorldInto(world: World, target: Uint8Array): number {
     if (target.byteLength < total) {
       throw new RangeError(`World save needs ${total} bytes; target has ${target.byteLength} bytes.`);
     }
-    writeWorld(context, context.writeViews.get(target.buffer), target.byteOffset, total);
+    writeSave(context.source, context.writeViews.get(target.buffer), target.byteOffset, total);
     return total;
   } finally {
     releaseEncoded(context);
@@ -549,7 +461,7 @@ export function saveWorld(world: World): Uint8Array {
   context.host.assertSaveReady();
   try {
     const out = new Uint8Array(measure(context));
-    writeWorld(context, new ViewCache().get(out.buffer), 0, out.byteLength);
+    writeSave(context.source, new ViewCache().get(out.buffer), 0, out.byteLength);
     return out;
   } finally {
     releaseEncoded(context);
