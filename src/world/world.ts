@@ -544,13 +544,16 @@ export class World {
    *
    * Do not await this from a system init or destroy hook: teardown waits for the hook, so it would wait
    * on itself. Such calls are rejected where the runtime supports async context tracking.
-   * @throws {WorldStateError} - If the World has not yet been initialized, or has already been destroyed,
-   * or teardown is already in progress
+   *
+   * Destroying is idempotent: on a destroyed world this resolves without doing anything. After a failed
+   * teardown (the world is in the error state) a further call runs teardown again. A call made while
+   * teardown is in progress still rejects rather than waiting on it: without async context tracking it
+   * cannot be told apart from a destroy hook calling `destroy()`, which would wait on itself.
+   * @throws {WorldStateError} - If the World has not yet been initialized, or teardown is already in progress
    */
   async destroy(): Promise<void> {
-    if (this.#state === "uninitialized" || this.#state === "destroyed") {
-      assertWorldState("initialized", this.#state);
-    }
+    if (this.#state === "destroyed") return;
+    if (this.#state === "uninitialized") assertWorldState("initialized", this.#state);
     this.#assertNotInHook("world.destroy()");
     if (this.#destroying) throw new WorldStateError("World is being destroyed");
     this.#destroying = true;

@@ -672,3 +672,21 @@ Deno.test("calls made after a hook settles are not mistaken for hook code", asyn
   await afterHook;
   await world.destroy();
 });
+
+Deno.test("world destroy is idempotent once the world is destroyed", async () => {
+  const tag = lifecycleTag();
+  const world = new World({ capacity: 8, components: [tag] });
+  let destroyed = 0;
+  world.systems.create(makeSystem(tag, "countDestroy", {
+    destroy: () => {
+      destroyed++;
+    },
+  }));
+  await assertRejects(() => world.destroy(), WorldStateError, "not been initialized");
+  await world.init();
+  await world.destroy();
+  await world.destroy();
+  await world.destroy();
+  assertEquals(destroyed, 1, "Destroy hooks run once");
+  assertEquals(world.state, "destroyed", "World stays destroyed");
+});

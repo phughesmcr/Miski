@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- `World.destroy()` is idempotent: on a destroyed world it now resolves without
+  doing anything instead of throwing. A call while teardown is still running
+  still rejects ("World is being destroyed").
 - Add non-numeric component fields with `field.bool()`, `field.enum([...])`,
   `field.entity()`, `field.string()` and `field.object<T>({ create?, clone? })`.
   Bool, enum and entity fields use typed columns in the world buffer (`0 / 1`,
