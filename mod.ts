@@ -8,6 +8,7 @@
  * - **Core** - World, Component, Query, System, entity handles, errors
  * - **Hot-path** - dense `queryList`, direct `.storage.partitions` writes, `frame`
  * - **Tooling** - `createEcsWorld`, schema hash, checkpoints, rollback, canonicalize
+ * - **Scheduling** - `Schedule` (phases, ordering, fixed timestep), `CommandBuffer`
  *
  * Prefer `.storage.partitions` for SoA access (`.partitions` is an alias).
  * House rule: `slots` for storage / partitions; `entities` for identity
@@ -238,6 +239,48 @@
  * requestAnimationFrame(update);
  * ```
  *
+ * ## Scheduling
+ *
+ * @example Phases, ordering, a fixed timestep, and deferred commands
+ * ```ts
+ * const position = new Component({ name: "position", schema: { x: Float32Array, y: Float32Array } });
+ * const expired = new Component({ name: "expired" });
+ * const world = new World({ capacity: 1024, components: [position, expired] });
+ * await world.init();
+ *
+ * const schedule = new Schedule(world, {
+ *   phases: ["input", { name: "physics", fixed: true }, "render"],
+ *   fixedStep: 1 / 60,
+ * });
+ *
+ * const move = new System({
+ *   name: "move",
+ *   query: new Query({ all: { position } }),
+ *   argCount: 1, // receives the reused ScheduleContext without allocating
+ *   callback: (components, entities, ctx: ScheduleContext): void => {
+ *     const x = components.position.storage.partitions.x;
+ *     for (let i = 0; i < entities.count; i++) {
+ *       x[entities.slots[i]!]! += ctx.dt; // ctx.dt is the fixed step here
+ *       if (x[entities.slots[i]!]! > 100) ctx.commands.destroy(entities.entities[i]!);
+ *     }
+ *   },
+ * });
+ * const cull = new System({
+ *   name: "cull",
+ *   query: new Query({ all: [expired] }),
+ *   argCount: 1,
+ *   callback: (_components, entities, ctx: ScheduleContext): void => {
+ *     for (let i = 0; i < entities.count; i++) ctx.commands.destroy(entities.entities[i]!);
+ *   },
+ * });
+ *
+ * schedule.add(move, { phase: "physics" });
+ * schedule.add(cull, { phase: "physics", before: [move] });
+ *
+ * // Commands queued in a phase apply when it finishes; refresh runs once at the end.
+ * schedule.run(1 / 60);
+ * ```
+ *
  * ## Tooling
  *
  * @example Typed world bootstrap, schema hash, and rollback
@@ -442,3 +485,16 @@ export type {
   WorldState,
   WorldSystemAPI,
 } from "@/types.ts";
+
+// --- Scheduling ---
+export { CommandBuffer } from "@/scheduler/command-buffer.ts";
+export { Schedule } from "@/scheduler/schedule.ts";
+export type {
+  PendingEntity,
+  ScheduleClock,
+  ScheduleContext,
+  SchedulePhaseSpec,
+  ScheduleSpec,
+  ScheduleSystemOptions,
+  ScheduleSystemReference,
+} from "@/types/scheduler.ts";

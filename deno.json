@@ -6,7 +6,7 @@
   "lock": true,
   "exclude": [".claude/**"],
   "bench": {
-    "include": ["bench/miski.bench.ts", "bench/internal.bench.ts"]
+    "include": ["bench/miski.bench.ts", "bench/internal.bench.ts", "bench/scheduler.bench.ts"]
   },
   "compilerOptions": {
     "allowUnreachableCode": false,

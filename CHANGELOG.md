@@ -33,6 +33,9 @@
   over the defaults and may add components. An instance is indistinguishable from `createWith` with the
   equivalent bundle, and steady-state instantiation allocates nothing. `EcsWorld` gains `prefab`,
   `instantiate` and `instantiateMany` for named specs.
+- Command buffers carry `field.*` values through their side column. A queued entity-ref value whose target died
+  before the flush is written as `null` instead of failing the command; direct guarded writes still reject dead
+  handles.
 - Prefabs reject relations, in definitions and in instantiate overrides (a pair needs a target in a specific
   world); attach pairs with `world.relations` after instantiating. Relation pair data stays numeric: `field.*`
   descriptors in a relation schema throw `SpecError`.
@@ -54,6 +57,22 @@
   `createEcsWorld` accepts `relations`. The generic component add and remove
   APIs throw a `TypeError` for relation tags. `WorldContext` gains
   `relations`.
+- Add `Schedule`, a system scheduler. Systems run in user-defined phases, in
+  insertion order adjusted by `before` / `after` constraints (deterministic;
+  cycles throw `SpecError` naming the path). Contiguous fixed phases run once
+  per fixed step from an accumulator (`fixedStep`, `maxFixedSteps`, `alpha`).
+  Systems get one reused `ScheduleContext` and must declare `argCount` 1 or 0.
+  `runIf` and `setEnabled` skip systems. `run(dt)` refreshes the world once at
+  the end, like `world.frame`, and is allocation-free in steady state.
+  `getClock()` / `setClock()` save and restore its clock as plain data
+  alongside a world save or rollback point (between runs only).
+- Add `CommandBuffer` for deferred `spawn` (with a bundle, returning a
+  `PendingEntity`), `destroy`, `add`, `set` and `remove`. Queuing validates
+  and copies data; `flush()` applies commands in order like the direct calls
+  and skips commands for inactive entities. A failing command does not stop
+  the flush: the rest still apply and the first error is rethrown. Non-numeric
+  schema fields are queued by reference and validated at flush. A `Schedule`
+  flushes its buffer at the end of each phase.
 - Reuse entity slots next-fit instead of last-freed-first. A destroyed entity's
   slot is reissued only after the allocator has swept past every other free
   slot, so a held stale handle no longer comes back to life after 32,768

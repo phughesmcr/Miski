@@ -2,11 +2,12 @@
 /// <reference lib="dom" />
 // deno-lint-ignore-file no-console
 
-import { Component, entityIndex, field, Prefab, Query, World } from "../mod.ts";
+import { CommandBuffer, Component, entityIndex, field, Prefab, Query, World } from "../mod.ts";
 import type { ComponentInstance, Entity } from "../mod.ts";
 import {
   countEntities,
   createBenchmarkComponents,
+  createDispatchSchedule,
   createMovementQuery,
   createRenderableQuery,
   createWideQuery,
@@ -16,6 +17,7 @@ import {
   populateMixedWorld,
   populateMovementWorld,
   populateRelationWorld,
+  populateScheduledMovementWorld,
   populateSparseLifecycleWorld,
   populateWideWorld,
   type RenderState,
@@ -68,6 +70,8 @@ const BATCH_COMPONENT_TRANSITION_BUDGET_BYTES_PER_ITER = ZERO_ALLOC_BUDGET_BYTES
 const REFRESH_BUDGET_BYTES_PER_ITER = 800;
 const QUERY_TRANSITION_TRACKING_BUDGET_BYTES_PER_ITER = 1_800;
 const WIDE_ARCHETYPE_TRANSITION_BUDGET_BYTES_PER_ITER = 1_100;
+// A scheduled frame runs the same work as the manual argCount frame, so it shares that budget.
+const SCHEDULED_FRAME_BUDGET_BYTES_PER_ITER = FIXED_ARITY_FRAME_BUDGET_BYTES_PER_ITER;
 const checkMode = Deno.args.includes("--check");
 
 const gc = (globalThis as { gc?: GcFn }).gc;
@@ -504,6 +508,85 @@ const fieldWriteData = {
   mesh: fieldMeshes[0]! as GcMesh | null,
 };
 const fieldReadOut = { ...fieldWriteData };
+const dispatch = await createDispatchSchedule(16);
+const scheduledMovement = await populateScheduledMovementWorld(MEDIUM_CAPACITY);
+const commandTransitions = await populateSparseLifecycleWorld(SMALL_CAPACITY);
+const commandTransitionBuffer = new CommandBuffer(commandTransitions.world);
+const commandTransitionEntities = commandTransitions.world.entities
+  .querySnapshot(new Query({ all: [commandTransitions.components.position] }))
+  .slice(0, 128);
+const commandAccelerationData = { x: 0, y: 1 };
+const commandPositionData = { x: 0 };
+const commandSpawnLifecycle = await populateSparseLifecycleWorld(MEDIUM_CAPACITY);
+const commandSpawnBuffer = new CommandBuffer(commandSpawnLifecycle.world);
+const commandSpawnQuery = new Query({ all: [commandSpawnLifecycle.components.lifetime] });
+const commandProjectilePositionData = { x: 0, y: 0 };
+const commandProjectileVelocityData = { x: 10, y: -2 };
+const commandProjectileLifetimeData = { ttl: 2 };
+const commandProjectileRenderData = { sprite: 0, layer: 2 };
+const commandProjectileBundle = [
+  [commandSpawnLifecycle.components.position, commandProjectilePositionData],
+  [commandSpawnLifecycle.components.velocity, commandProjectileVelocityData],
+  [commandSpawnLifecycle.components.lifetime, commandProjectileLifetimeData],
+  [commandSpawnLifecycle.components.renderState, commandProjectileRenderData],
+  [commandSpawnLifecycle.components.renderable],
+] as const;
+
+function commandSpawnDespawnBatch(): void {
+  for (let i = 0; i < 128; i++) {
+    commandProjectilePositionData.x = i;
+    commandProjectileRenderData.sprite = i & 15;
+    commandSpawnBuffer.spawn(commandProjectileBundle);
+  }
+  commandSpawnBuffer.flush();
+  const list = commandSpawnLifecycle.world.entities.queryList(commandSpawnQuery);
+  entitySink ^= list.count;
+  for (let i = 0; i < list.count; i++) {
+    commandSpawnBuffer.destroy(list.entities[i]!);
+  }
+  commandSpawnBuffer.flush();
+  commandSpawnLifecycle.world.refresh();
+}
+
+function commandTransitionBatch(round: number): void {
+  commandAccelerationData.x = round & 7;
+  commandPositionData.x = round & 15;
+  for (let i = 0; i < commandTransitionEntities.length; i++) {
+    const entity = commandTransitionEntities[i]!;
+    commandTransitionBuffer.add(commandTransitions.components.acceleration, entity, commandAccelerationData);
+    commandTransitionBuffer.set(commandTransitions.components.position, entity, commandPositionData);
+  }
+  commandTransitionBuffer.flush();
+  for (let i = 0; i < commandTransitionEntities.length; i++) {
+    commandTransitionBuffer.remove(commandTransitions.components.acceleration, commandTransitionEntities[i]!);
+  }
+  commandTransitionBuffer.flush();
+}
+
+let commandRound = 0;
+
+// Side-column payloads: field.* values (here an enum label) go through the buffer's side column.
+const sideLabels = ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p"] as const;
+const sidePoint = new Component({ name: "sidePoint", schema: { x: field.enum(sideLabels), y: Float32Array } });
+const sideWorld = new World({ capacity: SMALL_CAPACITY, components: [sidePoint] });
+await sideWorld.init();
+const sideEntities: Entity[] = [];
+for (let i = 0; i < 128; i++) {
+  const entity = mustCreateEntity(sideWorld);
+  sideWorld.components.addToEntity(sidePoint, entity, { x: "a", y: 0 });
+  sideEntities.push(entity);
+}
+sideWorld.refresh();
+const sideBuffer = new CommandBuffer(sideWorld);
+const sideData: { x: (typeof sideLabels)[number]; y: number } = { x: "a", y: 0 };
+
+function commandSideColumnBatch(round: number): void {
+  sideData.x = sideLabels[round & 15]!;
+  sideData.y = round & 7;
+  for (let i = 0; i < sideEntities.length; i++) sideBuffer.set(sidePoint, sideEntities[i]!, sideData);
+  sideBuffer.flush();
+  sideWorld.refresh();
+}
 
 const scenarios: Scenario[] = [
   {
@@ -866,6 +949,26 @@ const scenarios: Scenario[] = [
     fieldWorld.components.addToEntity(fieldUnit, fieldTransitionEntity);
     fieldWorld.components.removeFromEntity(fieldUnit, fieldTransitionEntity);
     fieldWorld.refresh();
+  }),
+  budgeted("schedule run dispatch 16 systems (fixed + variable, runIf, disabled) + refresh", 100_000, () => {
+    dispatch.schedule.run(1 / 60);
+  }),
+  {
+    name: "scheduled game frame movement + render system + refresh",
+    iterations: 5_000,
+    maxSteadyStateBeforeGcBytesPerIter: SCHEDULED_FRAME_BUDGET_BYTES_PER_ITER,
+    fn: () => {
+      scheduledMovement.schedule.run(1 / 60);
+    },
+  },
+  budgeted("command buffer add/set/remove data on 128 live entities + flush", 10_000, () => {
+    commandTransitionBatch(commandRound++);
+  }),
+  budgeted("command buffer spawn/despawn 128 projectile bundles + flush + refresh", 10_000, () => {
+    commandSpawnDespawnBatch();
+  }),
+  budgeted("command buffer set side-column + numeric field on 128 entities + flush", 10_000, () => {
+    commandSideColumnBatch(commandRound++);
   }),
   budgeted("related spawn/tag/destroy + queryList refill of 4096 entities", 20_000, () => {
     const entity = mustCreateEntity(refillWorld);
