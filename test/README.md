@@ -18,6 +18,8 @@ Runtime tests live in `*.test.ts` files and run via `deno test` (see `deno.json`
 | `world_integrity.test.ts` | Atomic spawn/checkpoints, historical exits, rollback identities, slot bounds |
 | `world_lifecycle_integrity.test.ts` | Async readiness, teardown concurrency, failure cleanup |
 | `rollback_checkpoint_integrity.test.ts` | One rollback scope, consumed/foreign rollback points, foreign checkpoints, >32-component round-trips |
+| `relations.test.ts` | Relations: pairs, order, data, exclusive/acyclic, cleanup and cascades, traversal, guards, checkpoints, rollback, `createEcsWorld` |
+| `relations_model.test.ts` | Seeded random relation operations (including cascades and rollback) checked against a plain-array model |
 | `release_integrity.test.ts` | Runtime, `deno.json`, README install snippet, and CHANGELOG version consistency (reads `README.md` and `CHANGELOG.md`; `deno task test` grants `--allow-read` for just those files) |
 
 ## Shared fixtures

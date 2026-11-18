@@ -247,6 +247,12 @@ export class ComponentManager {
     return latest;
   }
 
+  /** Issue fresh revision tokens for a change tracked outside component storage (relation pairs). @internal */
+  bumpInstanceRevision(instance: DynamicComponentInstance): void {
+    const state = this.#states[instance.id];
+    if (state !== undefined) this.#bumpRevision(state);
+  }
+
   /** Bump a component state's revision tokens. */
   #bumpRevision(state: ComponentState): void {
     state.revision++;

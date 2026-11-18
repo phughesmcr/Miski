@@ -7,9 +7,19 @@ export type CheckpointEntitySet =
   | Iterable<Entity>
   | { forEach(fn: (entity: Entity) => void): void };
 
+/** Ordered targets and pair data of one relation source. */
+export type CheckpointRelationPairs = {
+  readonly targets: readonly Entity[];
+  readonly data: readonly Readonly<Record<string, number>>[];
+};
+
 type CapturedComponent =
-  | { readonly present: false }
-  | { readonly present: true; readonly properties?: Readonly<Record<string, number>> };
+  | { readonly present: false; readonly pairs?: CheckpointRelationPairs }
+  | {
+    readonly present: true;
+    readonly properties?: Readonly<Record<string, number>>;
+    readonly pairs?: CheckpointRelationPairs;
+  };
 
 type CapturedEntity = {
   readonly entity: Entity;
@@ -39,6 +49,15 @@ export interface CheckpointWorld {
     properties?: Record<string, number>,
   ): void;
   removeComponentFromEntity(entity: Entity, component: DynamicComponent): void;
+  /** @returns `true` if `component` is a relation, whose pairs are captured instead of its presence tag */
+  isRelation?(component: DynamicComponent): boolean;
+  captureRelationPairs?(entity: Entity, component: DynamicComponent): CheckpointRelationPairs;
+  /** Throw, without mutating, if restoring these pairs would fail. */
+  preflightRelationPairs?(
+    component: DynamicComponent,
+    entries: readonly { readonly entity: Entity; readonly pairs: CheckpointRelationPairs }[],
+  ): void;
+  restoreRelationPairs?(entity: Entity, component: DynamicComponent, pairs: CheckpointRelationPairs): void;
 }
 
 const checkpointData = new WeakMap<ComponentCheckpoint, CheckpointData>();
@@ -75,6 +94,7 @@ export function captureComponentCheckpoint(
   requestedComponents: readonly DynamicComponent[],
 ): ComponentCheckpoint {
   const components = Object.freeze([...new Set(requestedComponents)]);
+  const relations = components.map((component) => world.isRelation?.(component) === true);
   const keys = components.map((component) => {
     const instance = world.getComponentInstance(component);
     const schema = instance.type.schema;
@@ -89,6 +109,10 @@ export function captureComponentCheckpoint(
     seen.add(entity);
 
     const captured = components.map((component, index): CapturedComponent => {
+      if (relations[index]) {
+        const pairs = world.captureRelationPairs!(entity, component);
+        return pairs.targets.length === 0 ? { present: false, pairs } : { present: true, pairs };
+      }
       if (!world.entityHasComponent(entity, component)) return { present: false };
       const storage = world.getComponentInstance(component);
       if (storage.type.schema === null) return { present: true };
@@ -121,6 +145,13 @@ export function applyComponentCheckpoint(world: CheckpointWorld, checkpoint: Com
   // Validate the final ownership counts before any part of the checkpoint changes.
   for (let index = 0; index < data.components.length; index++) {
     const component = data.components[index]!;
+    if (world.isRelation?.(component) === true) {
+      world.preflightRelationPairs!(
+        component,
+        data.entities.map(({ entity, components }) => ({ entity, pairs: components[index]!.pairs! })),
+      );
+      continue;
+    }
     let finalOwners = world.getOwnerCount(component);
     for (const { entity, components } of data.entities) {
       const captured = components[index]!;
@@ -138,6 +169,7 @@ export function applyComponentCheckpoint(world: CheckpointWorld, checkpoint: Com
   for (const { entity, components } of data.entities) {
     for (let index = 0; index < data.components.length; index++) {
       const component = data.components[index]!;
+      if (components[index]!.pairs !== undefined) continue;
       if (!components[index]!.present && world.entityHasComponent(entity, component)) {
         world.removeComponentFromEntity(entity, component);
       }
@@ -147,6 +179,10 @@ export function applyComponentCheckpoint(world: CheckpointWorld, checkpoint: Com
     for (let index = 0; index < data.components.length; index++) {
       const component = data.components[index]!;
       const captured = components[index]!;
+      if (captured.pairs !== undefined) {
+        world.restoreRelationPairs!(entity, component, captured.pairs);
+        continue;
+      }
       if (!captured.present) continue;
       if (!world.entityHasComponent(entity, component)) {
         world.addComponentToEntity(entity, component, captured.properties);

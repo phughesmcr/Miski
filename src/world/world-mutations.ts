@@ -73,6 +73,9 @@ export class WorldMutations {
   /** Duplicate-detection scratch flags for bundle component instances */
   readonly #bundleSeenComponents: Uint8Array;
 
+  /** 1 for component instances that are relation presence tags (managed only through world.relations) */
+  readonly #relationInstances: Uint8Array;
+
   constructor(deps: WorldMutationsDeps) {
     this.#entityManager = deps.entityManager;
     this.#componentManager = deps.componentManager;
@@ -86,6 +89,29 @@ export class WorldMutations {
     this.#bundleEntryCount = 0;
     this.#bundleAdded = [];
     this.#bundleSeenComponents = new Uint8Array(deps.componentCount);
+    this.#relationInstances = new Uint8Array(deps.componentCount);
+  }
+
+  /** Mark a component instance as a relation presence tag, closing the generic add/remove paths to it. */
+  markRelationInstance(instanceId: number): void {
+    this.#relationInstances[instanceId] = 1;
+  }
+
+  /** Throw if a generic component path targets a relation presence tag. */
+  #assertNotRelation(instance: DynamicComponentInstance): void {
+    if (this.#relationInstances[instance.id] === 1) {
+      throw new TypeError(
+        `Component "${instance.type.name}" is a relation; add and remove its pairs with world.relations.`,
+      );
+    }
+  }
+
+  /** Add or remove a relation presence tag through the archetype path (used by world.relations only). */
+  setRelationPresence(instance: DynamicComponentInstance, entity: Entity, present: boolean): void {
+    const changed = present ?
+      this.#commitAddComponent(instance, entity) :
+      this.#commitRemoveComponent(instance, entity);
+    this.invalidateCommittedTransition(changed);
   }
 
   /** Resolve a registered component instance for mutation paths. */
@@ -193,6 +219,7 @@ export class WorldMutations {
       throw new EntityNotFoundError(formatEntityNotActive(entity));
     }
     const instance = this.getRegisteredComponentInstance(component);
+    this.#assertNotRelation(instance);
     this.validateComponentData(instance, data);
     const changed = this.#commitAddComponent(instance, entity, data, true);
     this.invalidateCommittedTransition(changed);
@@ -208,6 +235,7 @@ export class WorldMutations {
     data?: ComponentDataInput<TValue> | undefined,
   ): number {
     const instance = this.getRegisteredComponentInstance(component);
+    this.#assertNotRelation(instance);
     this.validateComponentData(instance, data);
     const count = this.#preflightBatchEntities(entities);
 
@@ -249,7 +277,9 @@ export class WorldMutations {
     if (!this.#entityManager.isActive(entity)) {
       throw new EntityNotFoundError(formatEntityNotActive(entity));
     }
-    const changed = this.#commitRemoveComponent(this.getRegisteredComponentInstance(component), entity);
+    const instance = this.getRegisteredComponentInstance(component);
+    this.#assertNotRelation(instance);
+    const changed = this.#commitRemoveComponent(instance, entity);
     this.invalidateCommittedTransition(changed);
   }
 
@@ -262,6 +292,7 @@ export class WorldMutations {
     entities: QueryEntityList,
   ): number {
     const instance = this.getRegisteredComponentInstance(component);
+    this.#assertNotRelation(instance);
     const count = this.#preflightBatchEntities(entities);
 
     try {
@@ -350,6 +381,11 @@ export class WorldMutations {
       if (instance === undefined) {
         this.#clearBundleEntries();
         throw new NotRegisteredError(formatComponentNotRegistered(componentDisplayName(entry[0])));
+      }
+
+      if (this.#relationInstances[instance.id] === 1) {
+        this.#clearBundleEntries();
+        this.#assertNotRelation(instance);
       }
 
       if (this.#bundleSeenComponents[instance.id] === 1) {

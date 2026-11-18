@@ -741,14 +741,29 @@ const scenarios: Scenario[] = [
       relAimsOut,
     );
   }),
-  budgeted("hierarchy traverse 1,024 nodes (cached)", 50_000, () => {
-    entitySink ^= rel.world.relations.traverse(rel.childOf).count;
-  }),
-  budgeted("hierarchy reparent + traverse 1,024 nodes", 5_000, () => {
-    relToggle = !relToggle;
-    rel.world.relations.add(rel.childOf, relLeafA, relToggle ? relParentA : relParentB);
-    entitySink ^= rel.world.relations.traverse(rel.childOf).count;
-  }),
+  {
+    name: "hierarchy traverse 1,024 nodes (cached)",
+    iterations: 200_000,
+    // A cache hit is a revision compare; long rounds keep a one-off recompile (~20 KiB) below the budget.
+    warmupIterations: 50_000,
+    maxSteadyStateBeforeGcBytesPerIter: ZERO_ALLOC_BUDGET_BYTES_PER_ITER,
+    fn: () => {
+      entitySink ^= rel.world.relations.traverse(rel.childOf).count;
+    },
+  },
+  {
+    name: "hierarchy reparent + traverse 1,024 nodes",
+    iterations: 20_000,
+    // The traversal loop keeps tiering up past 10k calls; a recompile inside a round adds a fixed ~7 KiB, so long
+    // rounds after a long warmup keep that below the per-iteration budget (same remedy as the batch scenarios).
+    warmupIterations: 20_000,
+    maxSteadyStateBeforeGcBytesPerIter: ZERO_ALLOC_BUDGET_BYTES_PER_ITER,
+    fn: () => {
+      relToggle = !relToggle;
+      rel.world.relations.add(rel.childOf, relLeafA, relToggle ? relParentA : relParentB);
+      entitySink ^= rel.world.relations.traverse(rel.childOf).count;
+    },
+  },
   budgeted("cascade destroy 5-node subtree + rebuild + refresh", 20_000, () => {
     const parent = mustCreateEntity(rel.world);
     rel.world.relations.add(rel.childOf, parent, relHub);

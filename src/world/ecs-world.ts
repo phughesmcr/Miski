@@ -9,8 +9,9 @@ import {
   type SchemaComponentMap,
   type TagMap,
 } from "@/schema/schema.ts";
+import { Relation, type RelationDeletePolicy } from "@/relation/relation.ts";
 import type { DynamicComponent } from "@/types/component.ts";
-import type { ComponentValue } from "@/types/partitions.ts";
+import type { ComponentValue, SchemaProperty } from "@/types/partitions.ts";
 import { World } from "@/world/world.ts";
 
 /** Storage handles for data components keyed by name. */
@@ -37,14 +38,35 @@ export type SpawnSpec<
   & { [K in keyof M]?: Partial<ComponentValue<M[K]>> }
   & { [K in keyof T]?: true };
 
+/** Options for one relation declared by name in {@link EcsWorldConfig.relations}. */
+export type RelationOptions = {
+  readonly exclusive?: boolean;
+  readonly acyclic?: boolean;
+  readonly onDeleteTarget?: RelationDeletePolicy;
+  readonly schema?: Readonly<Record<string, SchemaProperty>> | null;
+};
+
+/** Relations declared by name. */
+export type RelationMap = Readonly<Record<string, RelationOptions>>;
+
+/** Typed relation definitions for a {@link RelationMap}. */
+export type RelationsFromMap<R extends RelationMap> = {
+  readonly [K in keyof R]: R[K] extends { readonly schema: infer S extends Record<string, SchemaProperty> } ?
+    Relation<S> :
+    Relation<null>;
+};
+
 /** Configuration for a typed named-map ECS world. */
 export type EcsWorldConfig<
   M extends SchemaComponentMap,
   T extends TagMap = Record<never, never>,
+  R extends RelationMap = Record<never, never>,
 > = {
   readonly capacity: number;
   readonly components: M;
   readonly tags?: T;
+  /** Relations by name; each becomes a {@link Relation} on {@link EcsWorld.relations}. */
+  readonly relations?: R;
 };
 
 /** Mutable spawn bundle entry: `[component]` for tags, `[component, data]` for data components. */
@@ -64,6 +86,7 @@ function keysOf<T extends object>(value: T): (keyof T)[] {
 export class EcsWorld<
   M extends SchemaComponentMap,
   T extends TagMap = Record<never, never>,
+  R extends RelationMap = Record<never, never>,
 > {
   /** Entity lifecycle, attach/detach, and other low-level ECS operations. */
   readonly world: World;
@@ -71,6 +94,8 @@ export class EcsWorld<
   readonly components: RegistryFromMaps<M, T>;
   /** Flat storage handles keyed by component/tag name. */
   readonly storage: StorageFromMap<M, T>;
+  /** Relation definitions keyed by name, for `world.relations` and queries. */
+  readonly relations: RelationsFromMap<R>;
   /** Maximum number of simultaneously active entities. */
   readonly capacity: number;
   /** Tag names registered on this world (for spawn dispatch). */
@@ -84,7 +109,7 @@ export class EcsWorld<
 
   /** Create a typed world, optionally reusing precompiled component definitions. */
   constructor(
-    config: EcsWorldConfig<M, T>,
+    config: EcsWorldConfig<M, T, R>,
     definitions: RegistryFromMaps<M, T> = createComponentRegistry(config.components, config.tags),
   ) {
     this.components = Object.create(null) as RegistryFromMaps<M, T>;
@@ -103,6 +128,15 @@ export class EcsWorld<
     }
 
     Object.freeze(this.components);
+    this.relations = Object.create(null) as RelationsFromMap<R>;
+    if (config.relations !== undefined) {
+      for (const name of Object.keys(config.relations)) {
+        const relation = new Relation({ name, ...config.relations[name] } as ConstructorParameters<typeof Relation>[0]);
+        (this.relations as Record<string, Relation<never>>)[name] = relation as Relation<never>;
+        componentList.push(relation);
+      }
+    }
+    Object.freeze(this.relations);
     this.world = new World({ capacity: config.capacity, components: componentList });
     for (const name of keysOf(this.components)) {
       const key = String(name);
@@ -175,11 +209,12 @@ export class EcsWorld<
   }
 }
 
-/** Bootstrap a typed ECS world from a component map (and optional tags). */
+/** Bootstrap a typed ECS world from a component map (and optional tags and relations). */
 export function createEcsWorld<
   M extends SchemaComponentMap,
   T extends TagMap = Record<never, never>,
->(config: EcsWorldConfig<M, T>): EcsWorld<M, T> {
+  R extends RelationMap = Record<never, never>,
+>(config: EcsWorldConfig<M, T, R>): EcsWorld<M, T, R> {
   return new EcsWorld(config);
 }
 

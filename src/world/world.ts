@@ -13,6 +13,7 @@ import {
 } from "@/errors.ts";
 import { ArchetypeQueryIterators } from "@/query/query-iterators.ts";
 import { QueryManager } from "@/query/query-manager.ts";
+import { RelationManager, type RelationManagerSnapshot } from "@/relation/relation-manager.ts";
 import { isInHookScope } from "@/system/hook-scope.ts";
 import { SystemManager } from "@/system/system-manager.ts";
 import type { Component } from "@/component/component.ts";
@@ -29,6 +30,7 @@ import type {
   WorldState,
   WorldSystemAPI,
 } from "@/types/world-api.ts";
+import type { WorldRelationAPI } from "@/types/world-relation-api.ts";
 import {
   applyComponentCheckpoint,
   captureComponentCheckpoint,
@@ -51,6 +53,7 @@ type WorldRollbackState = {
   readonly entities: EntityManagerState;
   readonly componentSnapshot: ComponentManagerSnapshot;
   readonly archetypes: ArchetypeManagerSnapshot;
+  readonly relations: RelationManagerSnapshot | undefined;
 };
 
 type ComponentReference<
@@ -79,6 +82,12 @@ export class World {
   readonly #archetypeQueryIterators: ArchetypeQueryIterators;
 
   readonly #systemManager: SystemManager;
+
+  /** Relation pair index; `undefined` when the world registers no relations. */
+  readonly #relationManager: RelationManager | undefined;
+
+  /** Bound once so cascading destroys allocate nothing. */
+  readonly #destroyEntityCore = (entity: Entity): void => this.#destroyEntityStorage(entity);
 
   /** Monotonic world revision for query/component change tokens */
   #revision = 0;
@@ -123,6 +132,9 @@ export class World {
 
   /** System Management API */
   readonly systems: WorldSystemAPI;
+
+  /** Relation API: pairs, reverse lookups, pair data and hierarchy traversal */
+  readonly relations: WorldRelationAPI;
 
   #assertInitialized(): void {
     if (this.#state === "error") throw this.#stateError("World has encountered an error");
@@ -299,6 +311,15 @@ export class World {
     if (!this.#entityManager.isActive(entity)) {
       throw new EntityNotFoundError(formatEntityNotActive(entity));
     }
+    if (this.#relationManager !== undefined) {
+      this.#relationManager.destroyEntity(entity, this.#destroyEntityCore);
+      return;
+    }
+    this.#destroyEntityStorage(entity);
+  }
+
+  /** Remove an active entity's components and archetype, then release its slot. */
+  #destroyEntityStorage(entity: Entity): void {
     const archetype = this.#archetypeManager.getEntityArchetype(entity);
     if (archetype) {
       const components = archetype.components;
@@ -392,6 +413,20 @@ export class World {
       },
     );
 
+    const relationManager = new RelationManager({
+      capacity,
+      isActive: (entity) => this.#entityManager.isActive(entity),
+      packSlot,
+      setPresence: (instance, entity, present) => this.#mutations.setRelationPresence(instance, entity, present),
+      bumpRevision: (instance) => this.#componentManager.bumpInstanceRevision(instance),
+      archetypeAtSlot: (slot) => this.#archetypeManager.archetypeAtSlot(slot),
+      getInstance: (component) => this.#componentManager.getInstance(component),
+      registerQuery: (query) => this.#queryManager.register(query),
+    }, components);
+    this.#relationManager = RelationManager.hasRelations(components) ? relationManager : undefined;
+    for (const instance of relationManager.instances) this.#mutations.markRelationInstance(instance.id);
+    this.relations = relationManager.createAPI(() => this.#assertInitialized());
+
     this.#checkpointHost = {
       isEntityAlive: (entity) => this.#entityManager.isActive(entity),
       entityHasComponent: (entity, component) => this.#componentManager.entityHas(component, entity),
@@ -404,6 +439,10 @@ export class World {
       addComponentToEntity: (entity, component, properties) =>
         this.#mutations.addComponentToEntity(component, entity, properties),
       removeComponentFromEntity: (entity, component) => this.#mutations.removeComponentFromEntity(component, entity),
+      isRelation: (component) => relationManager.isRegisteredRelation(component),
+      captureRelationPairs: (entity, component) => relationManager.capturePairs(entity, component),
+      preflightRelationPairs: (component, entries) => relationManager.preflightPairs(component, entries),
+      restoreRelationPairs: (entity, component, pairs) => relationManager.restorePairs(entity, component, pairs),
     };
 
     // Public APIs
@@ -560,7 +599,10 @@ export class World {
     this.#assertInitialized();
     try {
       this.#archetypeManager.refresh(this.#queryManager.registeredQueries, retainTransitions);
-      if (!retainChanged) this.#componentManager.refresh();
+      if (!retainChanged) {
+        this.#componentManager.refresh();
+        this.#relationManager?.refresh();
+      }
     } catch (error) {
       this.#enterErrorState(error);
       throw error;
@@ -622,6 +664,7 @@ export class World {
       entities: this.#entityManager.captureState(),
       componentSnapshot: this.#componentManager.captureSnapshot(),
       archetypes: this.#archetypeManager.captureState(),
+      relations: this.#relationManager?.captureState(),
     };
     this.#rollbackState = state;
     return state;
@@ -646,6 +689,7 @@ export class World {
     this.#entityManager.restoreState(state.entities);
     this.#componentManager.restoreSnapshot(state.componentSnapshot);
     this.#archetypeManager.restoreState(state.archetypes);
+    if (state.relations !== undefined) this.#relationManager?.restoreState(state.relations);
     this.#queryManager.invalidate();
     this.#entityRevision = ++this.#revision;
   }

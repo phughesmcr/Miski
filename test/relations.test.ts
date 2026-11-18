@@ -35,10 +35,13 @@ async function relationWorld(capacity = 64): Promise<{ world: World } & ReturnTy
   return { world, ...defs };
 }
 
-function spawn(world: World, count: number): Entity[] {
+/** Spawned entities; the first eight are typed as present so tests can destructure them. */
+type Spawned = [Entity, Entity, Entity, Entity, Entity, Entity, Entity, Entity, ...Entity[]];
+
+function spawn(world: World, count: number): Spawned {
   const result: Entity[] = [];
   for (let i = 0; i < count; i++) result.push(createEntity(world));
-  return result;
+  return result as Spawned;
 }
 
 Deno.test("relation spec validation", () => {
@@ -412,21 +415,38 @@ Deno.test("checkpoints capture and restore relation pairs and data", async () =>
   assertEquals(listIds(world.relations.getTargets(targets, a!)), [], "failed apply mutated nothing");
 });
 
+Deno.test("checkpoints refuse to restore a pair that would now close a cycle", async () => {
+  const { world, childOf } = await relationWorld();
+  const [a, b] = spawn(world, 2);
+  world.relations.add(childOf, a, b);
+  const checkpoint = world.captureCheckpoint([a], childOf);
+  world.relations.remove(childOf, a);
+  world.relations.add(childOf, b, a); // b is outside the checkpoint; restoring a -> b would close a cycle
+  assertThrows(() => world.applyCheckpoint(checkpoint), RangeError, "cycle");
+  assertStrictEquals(world.relations.has(childOf, a), false, "failed apply mutated nothing");
+  assertStrictEquals(world.relations.getTarget(childOf, b), a, "the outside pair is untouched");
+});
+
 type Observation = Record<string, unknown>;
 
+/**
+ * Observable relation state, by storage slot: rollback retires speculative generations, so a control world
+ * that never rolled back allocates the same slots with different handles (see rollback_neutrality.test.ts).
+ */
 function observe(world: World, defs: ReturnType<typeof relations>, live: readonly Entity[]): Observation {
+  const slots = (list: readonly number[]): number[] => list.map(entityIndex);
   const pairs: unknown[] = [];
   for (const relation of [defs.childOf, defs.likes, defs.targets]) {
     const perEntity = live.map((e) => ({
-      targets: listIds(world.relations.getTargets(relation, e)),
-      sources: listIds(world.relations.getSources(relation, e)),
+      targets: slots(listIds(world.relations.getTargets(relation, e))),
+      sources: slots(listIds(world.relations.getSources(relation, e))),
     }));
     pairs.push({
       perEntity,
-      all: listIds(world.relations.getAllTargets(relation)),
-      changed: ids(world.relations.getChanged(relation)),
-      query: listIds(world.entities.queryList(new Query({ all: [relation] }))),
-      entered: ids(world.archetypes.queryEntered(new Query({ all: [relation] }))),
+      all: slots(listIds(world.relations.getAllTargets(relation))),
+      changed: slots(ids(world.relations.getChanged(relation))),
+      query: slots(listIds(world.entities.queryList(new Query({ all: [relation] })))),
+      entered: slots(ids(world.archetypes.queryEntered(new Query({ all: [relation] })))),
     });
   }
   const data = live.flatMap((s) => live.map((t) => world.relations.getData(defs.targets, s, t)));
@@ -434,7 +454,7 @@ function observe(world: World, defs: ReturnType<typeof relations>, live: readonl
   return {
     pairs,
     data,
-    forest: listIds(forest),
+    forest: slots(listIds(forest)),
     depths: Array.from({ length: forest.count }, (_, i) => forest.depths[i]),
   };
 }

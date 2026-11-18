@@ -51,6 +51,7 @@ for modern JavaScript — no leftovers.
 - `world.frame(fn)` tick helper with entered / exited / changed tracking
 - Typed `createEcsWorld` named-map bootstrap
 - Atomic bundles and bulk add/remove for spawn, load, and query-wide transitions
+- Entity relations and hierarchies: pair data, reverse lookups, cascades, traversal
 - Component-subset checkpoints and speculative world rollback
 - Schema compile + stable FNV hash for tooling and saves
 - :page_with_curl: MIT licensed — share freely, keep the wrappers on
@@ -400,6 +401,63 @@ extras are dropped.
 
 Array-based `QuerySpec` / dynamic callbacks still work for stringy, late-bound
 code — cast instances before touching concrete partitions.
+
+### :link: Relations
+
+Relate entities: `ChildOf(parent)`, `Targets(enemy)`. A `Relation` is
+registered like a component, and its presence is a tag. A source owns the tag
+while it has at least one target, so a plain query on the relation matches
+every entity with any target. Retargeting does not move an archetype.
+
+```ts
+import { Query, Relation, World } from "@phughesmcr/miski";
+
+const ChildOf = new Relation({
+  name: "childOf",
+  exclusive: true, // one parent; adding another replaces it
+  acyclic: true, // reject pairs that would close a cycle
+  onDeleteTarget: "cascade", // destroying a parent destroys its subtree
+});
+const Targets = new Relation({ name: "targets", schema: { weight: Float32Array } });
+
+const world = new World({ capacity: 1024, components: [Position, ChildOf, Targets] });
+await world.init();
+
+world.relations.add(ChildOf, child, parent);
+world.relations.add(Targets, archer, orc, { weight: 0.5 });
+
+world.relations.getTarget(ChildOf, child); // parent
+world.relations.getSources(ChildOf, parent); // children, borrowed list
+world.relations.getTargets(Targets, archer); // borrowed list with data rows
+world.relations.queryList(new Query({ all: [Position] }), Targets, orc); // filtered sources
+world.entities.queryList(new Query({ all: [Position], none: [ChildOf] })); // roots
+
+const tree = world.relations.traverse(ChildOf); // parents first, cached
+for (let i = 0; i < tree.count; i++) visit(tree.entities[i]!, tree.depths[i]!);
+```
+
+- **Storage.** Pairs live in an index beside the archetypes, not as one
+  component per target, so many targets never fragment archetypes. Every list
+  is in insertion order. Pair data is SoA columns indexed by pair row
+  (`getInstance(R).partitions.weight[list.rows[i]]`).
+- **Exclusive vs multi.** An exclusive relation keeps one target per source and
+  stores its data row at the source slot. A multi-target relation draws rows
+  from a pool that doubles when full. Adding a pair that already exists keeps
+  its position and merges the data you pass.
+- **Destroying a target** removes the pairs that point at it by default. With
+  `onDeleteTarget: "cascade"` it destroys their sources as well, iteratively
+  and safely through cycles. A source that loses its last target loses the tag
+  and exits the relation's queries.
+- **Changes.** `relations.getChanged(R)` lists sources whose pairs or pair data
+  changed in this refresh window. `queryRevision` bumps on any pair change.
+- **Handles.** Targets are generational handles. A stale target never matches,
+  and a reused slot never inherits pairs.
+- **Rollback and checkpoints** restore pairs, list order and data exactly.
+  Checkpoints preflight target liveness and cycles before they mutate anything.
+- The generic component APIs (`addToEntity`, bundles, `createWith`, ...) refuse
+  relation tags; use `world.relations`. `createEcsWorld` takes
+  `relations: { ChildOf: { exclusive: true }, ... }` and exposes
+  `ecs.relations.ChildOf`.
 
 ### :rewind: Checkpoints, rollback, schema
 
