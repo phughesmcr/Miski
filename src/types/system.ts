@@ -1,5 +1,6 @@
 import type { $_SYSTEM_DESTROY_KEY, $_SYSTEM_INIT_KEY } from "@/constants.ts";
 import type { Query } from "@/query/query.ts";
+import type { System } from "@/system/system.ts";
 import type { ComponentInstances, ComponentMap, ComponentRecord, DynamicComponentInstance } from "@/types/component.ts";
 import type { SchemaOrNull } from "@/types/partitions.ts";
 import type { BorrowedEntityList } from "@/entity/entity.ts";
@@ -52,6 +53,32 @@ export type SystemBindings = {
 };
 
 /**
+ * The second argument of a system's `init` and `destroy` hooks: lifecycle calls attributed to that hook run.
+ *
+ * The world waits for a pending hook, so a hook that waits on world readiness, world teardown, or a destruction
+ * that waits for the hook itself would wait forever. Calls made through this context are known to come from the
+ * hook, so while the hook is pending they reject with `WorldStateError` instead, even after an `await`.
+ * After the hook settles they behave like the matching world calls.
+ */
+export type SystemHookContext = {
+  /** Whether this hook run is still pending. */
+  readonly pending: boolean;
+  /** `world.onReady()`, rejecting while this hook is pending. */
+  onReady(): Promise<void>;
+  /** `world.destroy()`, rejecting while this hook is pending. */
+  destroyWorld(): Promise<void>;
+  /** `world.systems.destroy()`, rejecting if the destruction would wait for this pending hook. */
+  destroySystem<
+    TComponents extends ComponentMap,
+    TArgs extends unknown[],
+    TReturn,
+  >(system: System<TComponents, TArgs, TReturn> | string): Promise<void>;
+};
+
+/** A system `init` or `destroy` hook. */
+export type SystemHook = (world: WorldContext, hook: SystemHookContext) => void | Promise<void>;
+
+/**
  * The specification for a System.
  * @param TComponents The query's typed component map
  * @param TArgs The parameters of the callback excluding the first two
@@ -83,16 +110,18 @@ export type SystemSpec<
   /**
    * The function to call when the system is initialized.
    * The world waits for it (and `onReady()` includes it), so it must not await `world.onReady()`,
-   * `world.destroy()`, or anything else that waits for this hook to finish. Such calls are rejected with a
-   * `WorldStateError` where the runtime supports async context tracking.
+   * `world.destroy()`, or anything else that waits for this hook to finish. Such calls made synchronously in
+   * the hook body reject with `WorldStateError`. After an `await` the world cannot tell who is calling, so make
+   * them through the second argument ({@link SystemHookContext}), which rejects them for as long as the hook
+   * is pending; the same calls on `world` would wait for the hook and never settle.
    */
-  init?: (world: WorldContext) => void | Promise<void>;
+  init?: SystemHook;
   /**
    * The function to call when the system is destroyed. It only runs for a system whose `init` completed
    * successfully. If the failure of another system's init put the world in the error state, it still runs
-   * during `world.destroy()`, with the world in that state.
+   * during `world.destroy()`, with the world in that state. The same restrictions as `init` apply.
    */
-  destroy?: (world: WorldContext) => void | Promise<void>;
+  destroy?: SystemHook;
 };
 
 /**
@@ -100,8 +129,8 @@ export type SystemSpec<
  * The private methods of a System
  */
 export interface SystemPrivateMethods {
-  [$_SYSTEM_INIT_KEY]: (world: WorldContext) => void | Promise<void>;
-  [$_SYSTEM_DESTROY_KEY]: (world: WorldContext) => void | Promise<void>;
+  [$_SYSTEM_INIT_KEY]: SystemHook;
+  [$_SYSTEM_DESTROY_KEY]: SystemHook;
 }
 
 /**

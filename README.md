@@ -201,8 +201,12 @@ readiness signal. Callbacks reject during initialization or teardown.
 system whose init completed. Concurrent world teardown rejects. The world ends
 `destroyed` if every hook succeeds; otherwise it stays in `error`. After a
 failed `init()`, `destroy()` still runs from `error`. Lifecycle hooks must not
-await `world.onReady()` or `world.destroy()`; doing so rejects with
-`WorldStateError`. Destroy ends the system lifecycle; it does not erase
+await `world.onReady()`, `world.destroy()` or their own system's destruction:
+each waits for the hook. Such calls reject with `WorldStateError` in the
+synchronous part of a hook. After an `await`, make them through the hook's
+second argument (`init: async (world, hook) => { await hook.onReady(); }`),
+which rejects while the hook is pending; the same call on `world` would wait
+forever. Destroy ends the system lifecycle; it does not erase
 retained component buffers. Discard component instances and borrowed views with
 their world.
 

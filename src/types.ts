@@ -62,6 +62,8 @@ export type {
   SystemBindings,
   SystemCallback,
   SystemFunction,
+  SystemHook,
+  SystemHookContext,
   SystemInstance,
   SystemPrivateMethods,
   SystemRecord,

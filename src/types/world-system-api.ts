@@ -31,8 +31,9 @@ export type WorldSystemAPI = {
    * Destroy a system, waiting for its pending init or destroy hook first.
    * Every failure is reported as a rejection, never a synchronous throw.
    * @throws {NotRegisteredError} If the system is not registered
-   * @throws {WorldStateError} If the world is being or has been destroyed, or if called from a system hook whose
-   * own completion the destruction would wait on (for example, a hook destroying its own system)
+   * @throws {WorldStateError} If the world is being or has been destroyed, or if called from a pending system hook
+   * whose own completion the destruction would wait on (for example, a hook destroying its own system). This is
+   * detected in the synchronous part of a hook, or after an `await` through `SystemHookContext.destroySystem()`.
    */
   destroy<
     TComponents extends ComponentMap,

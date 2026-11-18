@@ -1,16 +1,21 @@
 import { $_SYSTEM_DESTROY_KEY, $_SYSTEM_INIT_KEY } from "@/constants.ts";
 import { AlreadyRegisteredError, formatSystemNotRegistered, NotRegisteredError, WorldStateError } from "@/errors.ts";
 import type { ComponentMap } from "@/types/component.ts";
-import type { SystemCallback, SystemInstance, TypedSystemCallback } from "@/types/system.ts";
+import type {
+  SystemCallback,
+  SystemHook,
+  SystemHookContext,
+  SystemInstance,
+  TypedSystemCallback,
+} from "@/types/system.ts";
 import type { SystemBindings } from "@/types/system.ts";
 import type { UntypedQueryComponents } from "@/types/query.ts";
 import type { WorldContext } from "@/types/world-api.ts";
 import { isPromiseLike, noop } from "@/utils.ts";
-import { currentHookOwner, runInHookScope } from "./hook-scope.ts";
 import { createSystemInstance, type System } from "./system.ts";
 
 type SystemRegistration = {
-  destroy: (world: WorldContext) => void | Promise<void>;
+  destroy: SystemHook;
   destroyPromise?: Promise<void>;
   /** Set when the system was individually destroyed, so a failure of its pending init no longer matters. */
   discarded?: boolean;
@@ -20,7 +25,7 @@ type SystemRegistration = {
   ready: boolean;
   /** The init or destroy hook run that is currently pending for this system, if any. */
   hook?: HookRun;
-  init: (world: WorldContext) => void | Promise<void>;
+  init: SystemHook;
   instance: SystemInstance<TypedSystemCallback<UntypedQueryComponents, unknown[], unknown>>;
   name: string;
   system: System<UntypedQueryComponents, unknown[], unknown>;
@@ -68,6 +73,12 @@ export class SystemManager {
   /** Frozen public registry view keyed by system name. */
   #publicRegistry: Readonly<Record<string, SystemInstance<SystemCallback>>>;
 
+  /**
+   * The hook run whose code is executing synchronously right now, or that a hook's scoped world context is
+   * calling on behalf of. Calls made while it is set know which pending hook they come from.
+   */
+  #caller: HookRun | undefined;
+
   /** Notifies the owning world about asynchronous lifecycle failures. */
   #onLifecycleError: LifecycleErrorHandler;
 
@@ -104,8 +115,44 @@ export class SystemManager {
     return true;
   }
 
+  /**
+   * Whether the caller is a pending system lifecycle hook: either the synchronous part of a hook is running,
+   * or a hook's own world context is making the call while that hook is pending.
+   */
+  get inHook(): boolean {
+    return this.#caller !== undefined;
+  }
+
+  /** Run `fn` attributed to `run`, restoring the previous caller afterwards (hooks can nest synchronously). */
+  #callAs<T>(run: HookRun | undefined, fn: () => T): T {
+    const previous = this.#caller;
+    this.#caller = run;
+    try {
+      return fn();
+    } finally {
+      this.#caller = previous;
+    }
+  }
+
+  /** The hook context passed to one hook run: lifecycle calls attributed to that run while it is pending. */
+  #hookContext(record: SystemRegistration, run: HookRun): SystemHookContext {
+    const world = this.#world as WorldContext & { onReady(): Promise<void> };
+    const as = <T>(fn: () => T): T => record.hook === run ? this.#callAs(run, fn) : fn();
+    return {
+      get pending() {
+        return record.hook === run;
+      },
+      onReady: () => as(() => world.onReady()),
+      destroyWorld: () => as(() => world.destroy()),
+      destroySystem: (system) => as(() => world.systems.destroy(system)),
+    };
+  }
+
   /** Run one of a system's lifecycle hooks, tracking it as the system's pending hook until it settles. */
-  #runHook(record: SystemRegistration, hook: () => void | Promise<void>): void | Promise<void> {
+  #runHook(
+    record: SystemRegistration,
+    hook: SystemHook,
+  ): void | Promise<void> {
     const run = new HookRun();
     record.hook = run;
     const end = () => {
@@ -113,7 +160,8 @@ export class SystemManager {
     };
     let result: void | Promise<void>;
     try {
-      result = runInHookScope(hook, run);
+      const context = this.#hookContext(record, run);
+      result = this.#callAs(run, () => hook(this.#world, context));
     } catch (error) {
       end();
       throw error;
@@ -129,7 +177,7 @@ export class SystemManager {
   /** Run init for a system registered after world initialization. */
   #initLateRecord(record: SystemRegistration): void {
     try {
-      const initResult = this.#runHook(record, () => record.init(this.#world));
+      const initResult = this.#runHook(record, record.init);
       if (isPromiseLike(initResult)) {
         record.initPromise = Promise.resolve(initResult).then(
           () => {
@@ -154,7 +202,7 @@ export class SystemManager {
   async #initInitialRecord(record: SystemRegistration): Promise<void> {
     const run = (async () => {
       try {
-        await this.#runHook(record, () => record.init(this.#world));
+        await this.#runHook(record, record.init);
         record.ready = true;
       } catch (error) {
         this.#unregisterRecord(record);
@@ -234,8 +282,8 @@ export class SystemManager {
       const name = typeof system === "string" ? system : system.name;
       throw new NotRegisteredError(formatSystemNotRegistered(name));
     }
-    const caller = currentHookOwner();
-    if (!(caller instanceof HookRun)) {
+    const caller = this.#caller;
+    if (caller === undefined) {
       record.discarded = true;
       await this.#requestDestroy(record);
       return;
@@ -268,7 +316,7 @@ export class SystemManager {
   async #destroyRecord(record: SystemRegistration): Promise<void> {
     try {
       await record.initPromise;
-      if (record.ready) await this.#runHook(record, () => record.destroy(this.#world));
+      if (record.ready) await this.#runHook(record, record.destroy);
     } finally {
       this.#unregisterRecord(record);
     }

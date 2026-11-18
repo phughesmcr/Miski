@@ -14,7 +14,6 @@ import {
 import { ArchetypeQueryIterators } from "@/query/query-iterators.ts";
 import { QueryManager } from "@/query/query-manager.ts";
 import { RelationManager, type RelationManagerSnapshot } from "@/relation/relation-manager.ts";
-import { isInHookScope } from "@/system/hook-scope.ts";
 import { SystemManager } from "@/system/system-manager.ts";
 import type { Component } from "@/component/component.ts";
 import type { ComponentInstance } from "@/component/component-instance.ts";
@@ -166,9 +165,9 @@ export class World {
   }
 
   #assertNotInHook(operation: string): void {
-    if (isInHookScope()) {
+    if (this.#systemManager.inHook) {
       throw new WorldStateError(
-        `${operation} cannot be awaited from a system init or destroy hook: ` +
+        `${operation} cannot be called from a pending system init or destroy hook: ` +
           "the world waits for the hook to finish, so the hook would wait on itself",
       );
     }
@@ -543,7 +542,8 @@ export class World {
    * the world in the error state. Destroy hooks of an errored world see the world in the error state.
    *
    * Do not await this from a system init or destroy hook: teardown waits for the hook, so it would wait
-   * on itself. Such calls are rejected where the runtime supports async context tracking.
+   * on itself. A call in the synchronous part of a hook rejects; after an `await`, use the hook's
+   * `SystemHookContext.destroyWorld()`, which rejects while the hook is pending.
    * @throws {WorldStateError} - If the World has not yet been initialized, or has already been destroyed,
    * or teardown is already in progress
    */
@@ -581,8 +581,9 @@ export class World {
    * Wait for initial setup and all currently pending late system init hooks.
    *
    * Do not await this from a system init or destroy hook: readiness waits for the hook, so it would wait on
-   * itself. Such calls are rejected where the runtime supports async context tracking, and any waiting call
-   * is rejected as soon as teardown starts.
+   * itself. A call in the synchronous part of a hook rejects; after an `await`, use the hook's
+   * `SystemHookContext.onReady()`, which rejects while the hook is pending. Any waiting call is rejected as
+   * soon as teardown starts.
    * @throws {WorldStateError} - If the World has already been destroyed or has encountered an error;
    * the root cause of an error is available as `cause`
    */
