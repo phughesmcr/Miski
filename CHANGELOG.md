@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- Reuse entity slots next-fit instead of last-freed-first. A destroyed entity's
+  slot is reissued only after the allocator has swept past every other free
+  slot, so a held stale handle no longer comes back to life after 32,768
+  create-then-destroy cycles. A handle can now repeat only after about
+  32,768 x (free slots) creations, or 32,768 when a single slot is free. Code
+  that expected `create()` to return the most recently freed slot must not
+  rely on slot order.
+- Drop the `@phughesmcr/bitpool` dependency; entity occupancy now lives in a
+  small internal allocator over `@phughesmcr/booleanarray`.
+
 ## 1.0.0-beta.2 — 2026-11-18
 
 - Add `SystemSpec.argCount` (0 to 4). A system created with it forwards exactly

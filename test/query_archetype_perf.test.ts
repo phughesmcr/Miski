@@ -141,8 +141,8 @@ async function orderTrace(): Promise<string[]> {
 Deno.test("query views keep their exact iteration order through moves, batches and rollback", async () => {
   const trace = await orderTrace();
   assertEquals(trace.length, (24 + 4 + 2) * queries.length, "Trace length");
-  // Golden captured before the per-archetype stamp, growable result and reusable iterator changes.
-  assertEquals(fnv1a(trace.join("\n")), "895a6761", "Query view order diverged from the recorded golden trace");
+  // Golden re-recorded when entity slots moved from LIFO to next-fit reuse (handles changed, view logic did not).
+  assertEquals(fnv1a(trace.join("\n")), "17364936", "Query view order diverged from the recorded golden trace");
 });
 
 /** Every listed handle must be the live handle for its slot, and match the archetype view entry for entry. */

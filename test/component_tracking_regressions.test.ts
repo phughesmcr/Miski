@@ -104,8 +104,12 @@ Deno.test("a bundle spawn that fails mid-commit strips already-committed compone
   assertEquals(ids(world.components.getChanged(capped)), [], "No changed mark leaks from the committed entry");
   assertStrictEquals(cappedColumn[0], undefined, "The capped sparse row is released");
 
+  // Next-fit reuse: fill slots 1..7 so the allocator wraps back to the rolled-back slot.
+  const fillers: Entity[] = [];
+  for (let i = 1; i < 8; i++) fillers.push(createEntity(world));
   const reused = createEntity(world);
-  assertStrictEquals(entityIndex(reused), 0, "The next entity reuses the rolled-back slot");
+  assertStrictEquals(entityIndex(reused), 0, "The allocator reuses the rolled-back slot");
+  for (const filler of fillers) world.entities.destroy(filler);
   assert(!world.components.entityHas(capped, reused), "The reused slot does not inherit ownership");
   assert(!world.components.entityHas(position, reused), "The failing entry did not commit");
   world.components.addToEntity(capped, reused, { x: 3 });

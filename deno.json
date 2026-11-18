@@ -43,7 +43,6 @@
   },
   "imports": {
     "@/": "./src/",
-    "@phughesmcr/bitpool": "jsr:@phughesmcr/bitpool@^0.9.1",
     "@phughesmcr/booleanarray": "jsr:@phughesmcr/booleanarray@^0.13.0",
     "@phughesmcr/partitionedbuffer": "jsr:@phughesmcr/partitionedbuffer@^0.4.1"
   },

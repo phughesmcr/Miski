@@ -1,6 +1,3 @@
-import { BitPool } from "@phughesmcr/bitpool";
-import { BooleanArray } from "@phughesmcr/booleanarray";
-
 import { EntityNotFoundError, formatEntityNotActive } from "@/errors.ts";
 import {
   asSlotIndex,
@@ -14,6 +11,7 @@ import {
   ReusableEntityIterator,
   type SlotIndex,
 } from "@/entity/entity.ts";
+import { SlotAllocator } from "@/entity/slot-allocator.ts";
 import type { EntityManagerSerialized } from "@/types/component.ts";
 import { isUint32, numberArrayFromString } from "@/utils.ts";
 
@@ -22,8 +20,8 @@ export class EntityManager {
   /** The maximum capacity of any EntityManager */
   static readonly MAX_CAPACITY = MAX_WORLD_CAPACITY;
 
-  /** The entity ID pool (raw slot occupancy) */
-  pool: BitPool;
+  /** Raw slot occupancy and next-fit allocation cursor */
+  readonly #slots: SlotAllocator;
 
   /** Per-slot generation counters */
   readonly #generation: Uint32Array;
@@ -39,9 +37,6 @@ export class EntityManager {
 
   readonly #capacity: number;
 
-  /** Scratch bitmap (and the pool viewing it) used to rewrite {@link pool} in place on restore. */
-  #restoreScratch: { readonly bits: BooleanArray; readonly pool: BitPool } | undefined;
-
   /**
    * Create a new EntityManager from a JSON string
    * @param json - The JSON string matching {@link EntityManager.stringify} format
@@ -56,16 +51,18 @@ export class EntityManager {
         `EntityManager.MAX_CAPACITY mismatch: ${MAX_CAPACITY} !== ${EntityManager.MAX_CAPACITY}`,
       );
     }
-    const arr = numberArrayFromString(entities);
-    const pool = typeof parsed.cursor === "number" ?
-      restorePool(capacity, arr, parsed.cursor) :
-      new BitPool(BooleanArray.fromUint32Array(capacity, arr));
-    const manager = new EntityManager(capacity, pool);
+    const manager = new EntityManager(capacity);
+    const slots = manager.#slots;
+    // A missing cursor (older format) meant "lowest free slot", which a search from slot 0 reproduces.
+    slots.restore(numberArrayFromString(entities), typeof parsed.cursor === "number" ? parsed.cursor : 0);
+    for (let slot = 0; slot < capacity; slot++) {
+      if (slots.isOccupied(slot)) manager.#nextGeneration[slot] = 1;
+    }
     if (parsed.generations) {
       const gens = numberArrayFromString(parsed.generations);
       for (let i = 0; i < gens.length && i < capacity; i++) {
         manager.#generation[i] = gens[i]!;
-        manager.#nextGeneration[i] = gens[i]! + (pool.isOccupied(i) ? 1 : 0);
+        manager.#nextGeneration[i] = gens[i]! + (slots.isOccupied(i) ? 1 : 0);
       }
     }
     return manager;
@@ -74,11 +71,10 @@ export class EntityManager {
   /**
    * Create a new EntityManager
    * @param capacity - The maximum number of entities allowed in the pool (inclusive)
-   * @param pool - The pool to use for entity management
    * @throws {TypeError} - If the capacity is not a Uint32 number
    * @throws {RangeError} - If the capacity is not a positive integer or above 0 and below {@link EntityManager.MAX_CAPACITY}
    */
-  constructor(capacity: number, pool: BitPool = new BitPool(capacity)) {
+  constructor(capacity: number) {
     if (isUint32(capacity) === false) {
       throw new TypeError("EntityManager capacity must be a number (uint32)");
     }
@@ -88,12 +84,9 @@ export class EntityManager {
       );
     }
     this.#capacity = capacity;
-    this.pool = pool;
+    this.#slots = new SlotAllocator(capacity);
     this.#generation = new Uint32Array(capacity);
     this.#nextGeneration = new Uint32Array(capacity);
-    for (let slot = 0; slot < capacity; slot++) {
-      if (pool.isOccupied(slot)) this.#nextGeneration[slot] = 1;
-    }
   }
 
   /** @returns the maximum number of entities allowed in the pool (inclusive) */
@@ -112,11 +105,13 @@ export class EntityManager {
   }
 
   /**
-   * Create a new entity
+   * Create a new entity.
+   * Slots are reused next-fit (see {@link SlotAllocator}): a freed slot is reissued only after the allocator has swept
+   * past every other free slot, so handle generations wrap only after about 32,768 x (free slots) creations.
    * @returns The new packed {@link Entity}, or `undefined` if the pool is full
    */
   create(): Entity | undefined {
-    const slot = this.pool.acquire();
+    const slot = this.#slots.acquire();
     if (slot === -1) {
       return undefined;
     }
@@ -136,7 +131,7 @@ export class EntityManager {
       throw new EntityNotFoundError(formatEntityNotActive(entity));
     }
     const slot = entityIndex(entity);
-    this.pool.release(slot);
+    this.#slots.release(slot);
     // Generation is stored unmasked but compared via ENTITY_GEN_MASK on pack/isActive.
     this.#generation[slot] = this.#nextGeneration[slot]!;
   }
@@ -155,7 +150,7 @@ export class EntityManager {
       throw new TypeError(`Active entity bounds must be integer slot indices (got ${startSlot}, ${endSlot}).`);
     }
     // Scratch is sized to the live population (an upper bound on any range), doubling up to capacity.
-    const occupied = this.pool.occupiedCount;
+    const occupied = this.#slots.occupiedCount;
     let slots = this.#activeSlots;
     let iterator = this.#activeIterator;
     if (slots === undefined || iterator === undefined || slots.length < occupied) {
@@ -168,7 +163,7 @@ export class EntityManager {
       this.#activeIterator = iterator;
     }
     const entities = iterator.indices;
-    const count = this.pool.occupiedIndicesInto(slots, startSlot, endSlot);
+    const count = this.#slots.occupiedIndicesInto(slots, startSlot, endSlot);
     for (let i = 0; i < count; i++) {
       const slot = slots[i]!;
       entities[i] = packEntity(slot, this.#generation[slot]!);
@@ -178,12 +173,12 @@ export class EntityManager {
 
   /** @returns the number of active entities */
   getActiveCount(): number {
-    return this.pool.occupiedCount;
+    return this.#slots.occupiedCount;
   }
 
   /** @returns the number of available entities */
   getAvailableCount(): number {
-    return this.#capacity - this.pool.occupiedCount;
+    return this.#capacity - this.#slots.occupiedCount;
   }
 
   /**
@@ -195,7 +190,7 @@ export class EntityManager {
     if (!this.isEntity(entity)) return false;
     const slot = entityIndex(entity);
     if (slot >= this.#capacity) return false;
-    if (!this.pool.isOccupied(slot)) return false;
+    if (!this.#slots.isOccupied(slot)) return false;
     return this.generationAt(slot) === entityGeneration(entity);
   }
 
@@ -226,8 +221,8 @@ export class EntityManager {
       {
         MAX_CAPACITY: EntityManager.MAX_CAPACITY,
         capacity: this.#capacity,
-        entities: this.pool.toUint32Array().toString(),
-        cursor: this.pool.nextAvailableIndex,
+        entities: this.#slots.toUint32Array().toString(),
+        cursor: this.#slots.cursor,
         generations: Array.from(this.#generation).toString(),
       },
     );
@@ -238,8 +233,8 @@ export class EntityManager {
    * Free slots need no generation: restore retires them at their (monotonic) next generation.
    */
   captureState(): EntityManagerState {
-    const occupancy = this.pool.toUint32Array();
-    const generation = new Uint32Array(this.pool.occupiedCount);
+    const occupancy = this.#slots.toUint32Array();
+    const generation = new Uint32Array(this.#slots.occupiedCount);
     let count = 0;
     for (let word = 0; word < occupancy.length; word++) {
       let bits = occupancy[word]!;
@@ -249,7 +244,7 @@ export class EntityManager {
         bits &= bits - 1;
       }
     }
-    return { occupancy, cursor: this.pool.nextAvailableIndex, generation };
+    return { occupancy, cursor: this.#slots.cursor, generation };
   }
 
   /**
@@ -257,7 +252,7 @@ export class EntityManager {
    * Allocation order after restore matches a manager that never left the captured state.
    */
   restoreState(state: EntityManagerState): void {
-    this.#restorePool(state.occupancy, state.cursor);
+    this.#slots.restore(state.occupancy, state.cursor);
     // Handles issued after capture stay retired: generations only move forward, so every slot that was free at
     // capture is parked at its next generation, and only slots live at capture take their captured generation.
     const generation = this.#generation;
@@ -277,27 +272,6 @@ export class EntityManager {
       }
     }
   }
-
-  /**
-   * Rewrite the pool in place from an occupancy bitmap and restore its allocation cursor.
-   * BitPool releases are LIFO, so occupying the cursor slot and releasing it makes it the next acquisition.
-   */
-  #restorePool(occupancy: Uint32Array, cursor: number): void {
-    let scratch = this.#restoreScratch;
-    if (scratch === undefined) {
-      const bits = new BooleanArray(this.#capacity);
-      scratch = { bits, pool: new BitPool(bits) };
-      this.#restoreScratch = scratch;
-    }
-    const words = scratch.bits.buffer;
-    words.set(occupancy);
-    const restoreCursor = cursor >= 0 && cursor < this.#capacity && (words[cursor >>> 5]! & (1 << (cursor & 31))) === 0;
-    if (restoreCursor) words[cursor >>> 5] = (words[cursor >>> 5]! | (1 << (cursor & 31))) >>> 0;
-    if (this.pool.size !== this.#capacity) this.pool = new BitPool(this.#capacity);
-    // `unionInto` copies the bits and recomputes the pool's derived counts and cursor.
-    scratch.pool.unionInto(scratch.pool, this.pool);
-    if (restoreCursor) this.pool.release(cursor);
-  }
 }
 
 /** Reversible {@link EntityManager} state captured for rollback. */
@@ -307,16 +281,3 @@ export type EntityManagerState = {
   /** Generations of slots occupied at capture, in ascending slot order. */
   readonly generation: Uint32Array;
 };
-
-/**
- * Rebuild a pool from its occupancy bitmap and restore its allocation cursor.
- * BitPool releases are LIFO, so occupying the cursor slot and releasing it makes it the next acquisition.
- */
-function restorePool(capacity: number, occupancy: ArrayLike<number>, cursor: number): BitPool {
-  const words = Uint32Array.from(occupancy);
-  const restoreCursor = cursor >= 0 && cursor < capacity && (words[cursor >>> 5]! & (1 << (cursor & 31))) === 0;
-  if (restoreCursor) words[cursor >>> 5] = (words[cursor >>> 5]! | (1 << (cursor & 31))) >>> 0;
-  const pool = new BitPool(BooleanArray.fromUint32Array(capacity, words));
-  if (restoreCursor) pool.release(cursor);
-  return pool;
-}

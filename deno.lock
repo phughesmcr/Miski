@@ -1,11 +1,8 @@
 {
   "version": "5",
   "specifiers": {
-    "jsr:@phughesmcr/bitpool@0.9.1": "0.9.1",
     "jsr:@phughesmcr/bitpool@~0.9.1": "0.9.1",
-    "jsr:@phughesmcr/booleanarray@*": "0.13.0",
     "jsr:@phughesmcr/booleanarray@0.13": "0.13.0",
-    "jsr:@phughesmcr/partitionedbuffer@*": "0.4.1",
     "jsr:@phughesmcr/partitionedbuffer@~0.4.1": "0.4.1",
     "jsr:@std/semver@1": "1.0.8"
   },
@@ -13,7 +10,7 @@
     "@phughesmcr/bitpool@0.9.1": {
       "integrity": "07519ef3646f6c7e6cc91171471b9db8bee20b52d69c41685a78ef9f2f256d96",
       "dependencies": [
-        "jsr:@phughesmcr/booleanarray@0.13"
+        "jsr:@phughesmcr/booleanarray"
       ]
     },
     "@phughesmcr/booleanarray@0.13.0": {
@@ -22,7 +19,7 @@
     "@phughesmcr/partitionedbuffer@0.4.1": {
       "integrity": "d055c3f99df9f5b7fc470567a349ae113b33dba4c7f1ec38298739e9affcb66e",
       "dependencies": [
-        "jsr:@phughesmcr/bitpool@~0.9.1"
+        "jsr:@phughesmcr/bitpool"
       ]
     },
     "@std/semver@1.0.8": {
@@ -31,7 +28,6 @@
   },
   "workspace": {
     "dependencies": [
-      "jsr:@phughesmcr/bitpool@~0.9.1",
       "jsr:@phughesmcr/booleanarray@0.13",
       "jsr:@phughesmcr/partitionedbuffer@~0.4.1"
     ]

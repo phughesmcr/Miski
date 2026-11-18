@@ -15,7 +15,7 @@ import {
 } from "../mod.ts";
 import { EntityManager } from "../src/entity/entity-manager.ts";
 import { createEntity, createTestWorld, tagComponent, vec2Component } from "./fixtures.ts";
-import { assert, assertEquals, assertThrows, ids } from "./helpers.ts";
+import { assert, assertEquals, assertStrictEquals, assertThrows, ids } from "./helpers.ts";
 
 Deno.test("rollback restores the stable entity authority without reissuing speculative handles", async () => {
   const position = vec2Component();
@@ -246,7 +246,11 @@ Deno.test("active iteration bounds select raw slots across recycled entity gener
   const first = world.entities.createOrThrow();
   const second = world.entities.createOrThrow();
   world.entities.destroy(first);
+  // Next-fit reuse: occupy every other free slot so the allocator wraps back to slot 0.
+  const capacity = world.entities.capacity;
+  for (let slot = 2; slot < capacity; slot++) world.entities.createOrThrow();
   const recycled = world.entities.createOrThrow();
+  assertStrictEquals(entityIndex(recycled), 0, "The allocator wraps back to the freed slot");
   assert(recycled !== first, "The slot must carry a recycled generation");
   assertEquals(
     ids(world.entities.getActive(entityIndex(recycled), asSlotIndex(1))),
@@ -254,8 +258,13 @@ Deno.test("active iteration bounds select raw slots across recycled entity gener
     "Raw bounds must include the recycled handle and exclude the upper slot",
   );
   assertEquals(
-    world.entities.getActiveSnapshot(entityIndex(second), asSlotIndex(world.entities.capacity)),
+    world.entities.getActiveSnapshot(entityIndex(second), asSlotIndex(2)),
     [second],
+    "Raw bounds select only the requested slot range",
+  );
+  assertStrictEquals(
+    world.entities.getActiveSnapshot(entityIndex(second), asSlotIndex(capacity)).length,
+    capacity - 1,
     "Capacity is a valid exclusive upper bound",
   );
   await world.destroy();

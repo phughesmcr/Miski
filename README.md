@@ -29,7 +29,7 @@ Because ECS should be *miski* — sweet to write, sharp under the hood.
 | --- | --- |
 | :zap: **Performant** | `ArrayBuffer`-backed SoA storage, dense `queryList` iteration, and hot paths budgeted for zero steady-state allocation. Your frames stay smooth; the collector stays bored. |
 | :dart: **Predictable** | Deterministic results for a given call sequence. Beta (`1.0.0-beta.x`) — compatibility changes are recorded in the [changelog](./CHANGELOG.md). |
-| :cookie: **Focused** | Runtime deps are first-party only (`bitpool`, `booleanarray`, `partitionedbuffer`). No unrelated third-party surface. Just the pantry we need. |
+| :cookie: **Focused** | Runtime deps are first-party only (`booleanarray`, `partitionedbuffer`). No unrelated third-party surface. Just the pantry we need. |
 
 :fork_and_knife: **On the menu:** good predictable performance · a clean
 developer-friendly API · a readable open-source codebase.
@@ -290,9 +290,12 @@ the `*Snapshot` helpers.
 ### :ghost: Entities
 
 Packed generational handles (slot + generation). Destroying an entity recycles
-the slot; old handles fail `isActive` until the slot wraps its 15-bit generation
-counter after 32,768 allocations. Rollback retains the allocation counter, so
-handles issued during speculative work are skipped by subsequent allocations.
+the slot next-fit: it is reissued only after the allocator has swept past every
+other free slot. Old handles fail `isActive` until their slot wraps its 15-bit
+generation counter, which takes about 32,768 x (free slots) creations, so keep
+some capacity headroom if you hold handles for long. Rollback retains the
+allocation counter, so handles issued during speculative work are skipped by
+subsequent allocations.
 
 ```ts
 const e = world.entities.createOrThrow();          // throws CapacityError when full

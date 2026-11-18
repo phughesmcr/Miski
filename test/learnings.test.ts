@@ -24,8 +24,11 @@ Deno.test("generational handles invalidate after destroy and reuse", async () =>
   assertStrictEquals(entityGeneration(first), 0, "first entity starts at generation 0");
 
   world.entities.destroy(first);
+  for (let slot = 1; slot < 8; slot++) {
+    assertStrictEquals(entityIndex(world.entities.createOrThrow()), slot, "next-fit issues untouched slots first");
+  }
   const recycled = world.entities.createOrThrow();
-  assertStrictEquals(entityIndex(recycled), 0, "slot 0 is reused");
+  assertStrictEquals(entityIndex(recycled), 0, "slot 0 is reused once the allocator wraps");
   assertStrictEquals(entityGeneration(recycled), 1, "generation bumps on reuse");
   assert(!world.entities.isActive(first), "stale handle must not be active");
   assert(world.entities.isActive(recycled), "new generation handle must be active");
