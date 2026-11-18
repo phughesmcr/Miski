@@ -52,6 +52,8 @@ for modern JavaScript — no leftovers.
 - Typed `createEcsWorld` named-map bootstrap
 - Atomic bundles and bulk add/remove for spawn, load, and query-wide transitions
 - Component-subset checkpoints and speculative world rollback
+- `Schedule`: phases, `before` / `after` ordering, fixed timestep, run conditions
+- `CommandBuffer`: deferred spawn / destroy / add / set / remove, applied per phase
 - Schema compile + stable FNV hash for tooling and saves
 - :page_with_curl: MIT licensed — share freely, keep the wrappers on
 
@@ -401,6 +403,100 @@ extras are dropped.
 Array-based `QuerySpec` / dynamic callbacks still work for stringy, late-bound
 code — cast instances before touching concrete partitions.
 
+### :calendar: Scheduling
+
+Prefer not to call systems by hand? A `Schedule` runs them in phases, in a
+deterministic order, with an optional fixed timestep — and refreshes the world
+once at the end, like `world.frame`.
+
+```ts
+import { Schedule } from "@phughesmcr/miski";
+import type { ScheduleContext } from "@phughesmcr/miski";
+
+const schedule = new Schedule(world, {
+  phases: ["input", { name: "physics", fixed: true }, "update", "render"],
+  fixedStep: 1 / 60,  // seconds per fixed step (default 1/60)
+  maxFixedSteps: 8,   // per run; whole steps beyond this are dropped (default 8)
+});
+
+const physics = new System({
+  name: "physics",
+  query: new Query({ all: { position: Position, velocity: Velocity } }),
+  argCount: 1, // scheduled systems get one argument: the context
+  callback: (components, entities, ctx: ScheduleContext) => {
+    const pos = components.position.storage.partitions;
+    const vel = components.velocity.storage.partitions;
+    for (let i = 0; i < entities.count; i++) {
+      const slot = entities.slots[i]!;
+      pos.x[slot]! += vel.x[slot]! * ctx.dt; // the fixed step in fixed phases
+      if (pos.x[slot]! > 1000) ctx.commands.destroy(entities.entities[i]!);
+    }
+  },
+});
+
+schedule
+  .add(physics, { phase: "physics" })
+  .add(collide, { phase: "physics", after: [physics] })
+  .add(draw, { phase: "render", runIf: () => !paused });
+
+function loop(dt: number) {
+  schedule.run(dt); // phases, command flushes, then world.refresh()
+}
+```
+
+- **Order.** Phases run in the order given. Within a phase, systems run in
+  the order added, adjusted by `before` / `after` (names or `System`s). Ties
+  keep insertion order, so the order is deterministic. A cycle, an unknown
+  name, or a constraint against phase order throws `SpecError` (cycles name
+  the path, e.g. `a -> b -> a`). `getOrder(phase)` shows the result.
+- **Fixed timestep.** Fixed phases must be contiguous. `run(dt)` adds `dt` to
+  an accumulator and runs every fixed phase, in order, once per whole step due
+  (up to `maxFixedSteps`; whole steps beyond that are dropped). Other phases
+  run once per `run()`.
+- **Context.** Every system receives the same reused `ScheduleContext`:
+  `dt`, `time`, `tick`, `fixedTick`, `alpha` (leftover fraction of a step, for
+  interpolation), `phase`, `fixed`, `world`, and `commands`. Declare
+  `argCount: 1` (or `0` to ignore it); `add()` rejects anything else, which
+  keeps every call allocation-free.
+- **Run conditions.** `runIf` is checked before each call and the system
+  runs only when it returns `true`;
+  `setEnabled(system, false)` skips a system until re-enabled. Both apply
+  immediately; `add` / `remove` during a run apply from the next run.
+- **Registration.** `add()` registers the system with the world if needed,
+  or reuses its existing registration. `remove()` does not destroy it. A
+  system whose async `init` is still pending, or that was destroyed, makes
+  `run()` throw `WorldStateError`: `await world.onReady()` after adding.
+- **Errors.** If a system throws, pending commands are discarded, the world
+  is refreshed, and the error is rethrown. Callbacks run synchronously.
+- **Rollback.** The schedule's clock and pending commands are outside
+  rollback points. Restore them yourself if you resimulate.
+
+**Command buffers** queue structural changes so you can mutate while
+iterating a borrowed view. A `Schedule` flushes its buffer (`ctx.commands`)
+at the end of each phase and each fixed step, so later phases see the
+changes. You can also use one directly:
+
+```ts
+import { CommandBuffer } from "@phughesmcr/miski";
+
+const commands = new CommandBuffer(world);
+const bullet = commands.spawn([[Position, { x: 0, y: 0 }], [Velocity, { x: 9, y: 0 }]]);
+commands.add(Active, bullet);          // pending handles work until the flush
+commands.set(Position, entity, { x: 1 }); // omitted fields keep their values
+commands.remove(Velocity, entity);
+commands.destroy(other);
+commands.flush();                      // applies in queue order
+```
+
+Queuing validates components and copies data at once, so data objects can be
+reused straight away and bad data throws at the call site. Flushing applies
+each command as the direct call would (`createWith`, `destroy`,
+`addToEntity`, `setEntityData`, `removeFromEntity`), except that commands for
+entities no longer active are skipped. `set` on an active entity that has lost
+the component still throws, as the direct call does. If a command throws, the
+ones before it stay applied, the rest are dropped, and the error names the
+failing command. Steady-state queuing and flushing does not allocate.
+
 ### :rewind: Checkpoints, rollback, schema
 
 Save a slice. Speculate. Undo. Hash a recipe for later.
@@ -470,6 +566,8 @@ bulk transition, and game-frame (move + query + refresh) paths are
 about ~3 B/iter of measurement noise on the frame path, not a feast. The
 frame path needs systems created with `argCount`; without it, each system
 call allocates its arguments array (about 32 B plus 8 B per argument).
+`Schedule.run` and `CommandBuffer` queue + flush are budgeted
+allocation-free too.
 
 Figures are illustrative local snapshots, not CI throughput gates. Absolute
 timings vary by machine and workload. Being the fastest ECS on the web is

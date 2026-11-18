@@ -1,7 +1,7 @@
 /// <reference lib="deno.ns" />
 
-import { Component, Query, System, World } from "../mod.ts";
-import type { ComponentInstance, Entity } from "../mod.ts";
+import { Component, Query, Schedule, System, World } from "../mod.ts";
+import type { ComponentInstance, Entity, ScheduleContext } from "../mod.ts";
 
 export type Vec2 = { x: Float32ArrayConstructor; y: Float32ArrayConstructor };
 export type Health = { current: Uint16ArrayConstructor; max: Uint16ArrayConstructor };
@@ -252,4 +252,94 @@ export async function populateWideWorld(
 
   world.refresh();
   return { world, components, entities };
+}
+
+/** Sink the scheduled render system writes to, so its work is observable. */
+export const scheduledSink = { value: 0 };
+
+/**
+ * A movement world driven by a Schedule: movement in "update", a renderable count in "render", one refresh per run.
+ * Mirrors the manual argCount game frame (move + query renderables + refresh).
+ */
+export async function populateScheduledMovementWorld(
+  capacity: number,
+  components: BenchmarkComponents = createBenchmarkComponents(),
+): Promise<{ world: World; components: BenchmarkComponents; schedule: Schedule }> {
+  const { world } = await populateMovementWorld(capacity, components, 1);
+  for (const entity of world.entities.querySnapshot(createMovementQuery(components))) {
+    if ((entity & 1) === 0) world.components.addToEntity(components.renderable, entity);
+  }
+  world.refresh();
+  const schedule = new Schedule(world, { phases: ["update", "render"] });
+  schedule.add(
+    new System({
+      name: "scheduledMovement",
+      query: createMovementQuery(components),
+      argCount: 1,
+      callback: (componentRecord, entities, ctx: ScheduleContext): void => {
+        const position = (componentRecord["position"] as ComponentInstance<Vec2>).storage!.partitions;
+        const velocity = (componentRecord["velocity"] as ComponentInstance<Vec2>).storage!.partitions;
+        const dt = ctx.dt;
+        for (let i = 0; i < entities.count; i++) {
+          const slot = entities.slots[i]!;
+          position.x[slot] = position.x[slot]! + velocity.x[slot]! * dt;
+          position.y[slot] = position.y[slot]! + velocity.y[slot]! * dt;
+        }
+      },
+    }),
+    { phase: "update" },
+  );
+  schedule.add(
+    new System({
+      name: "scheduledRender",
+      query: createRenderableQuery(components),
+      argCount: 0,
+      callback: (_componentRecord, entities): void => {
+        scheduledSink.value ^= entities.count;
+      },
+    }),
+    { phase: "render" },
+  );
+  schedule.run(1 / 60);
+  return { world, components, schedule };
+}
+
+/**
+ * A schedule of `systemCount` no-op systems over four phases (one fixed), with a run condition and a disabled
+ * system, on a small world with no structural churn. Isolates scheduler dispatch cost.
+ */
+export async function createDispatchSchedule(
+  systemCount: number = 16,
+): Promise<{ world: World; schedule: Schedule }> {
+  const marker = new Component<null>({ name: "marker" });
+  const world = new World({ capacity: 64, components: [marker] });
+  await world.init();
+  for (let i = 0; i < 32; i++) world.components.addToEntity(marker, mustCreateEntity(world));
+  world.refresh();
+  const phases = ["input", "physics", "update", "render"] as const;
+  const schedule = new Schedule(world, {
+    phases: ["input", { name: "physics", fixed: true }, "update", "render"],
+    fixedStep: 1 / 60,
+  });
+  const query = new Query({ all: [marker] });
+  for (let i = 0; i < systemCount; i++) {
+    schedule.add(
+      new System({
+        name: `noop${i}`,
+        query,
+        argCount: 1,
+        callback: (_components, entities, ctx: ScheduleContext): void => {
+          scheduledSink.value ^= entities.count + ctx.tick;
+        },
+      }),
+      {
+        phase: phases[i % phases.length]!,
+        after: i >= phases.length ? [`noop${i - phases.length}`] : [],
+        runIf: i === 1 ? (ctx) => ctx.tick > 0 : undefined,
+        enabled: i !== 2,
+      },
+    );
+  }
+  schedule.run(1 / 60);
+  return { world, schedule };
 }

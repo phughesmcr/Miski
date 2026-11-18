@@ -18,6 +18,8 @@ Runtime tests live in `*.test.ts` files and run via `deno test` (see `deno.json`
 | `world_integrity.test.ts` | Atomic spawn/checkpoints, historical exits, rollback identities, slot bounds |
 | `world_lifecycle_integrity.test.ts` | Async readiness, teardown concurrency, failure cleanup |
 | `rollback_checkpoint_integrity.test.ts` | One rollback scope, consumed/foreign rollback points, foreign checkpoints, >32-component round-trips |
+| `schedule.test.ts` | `Schedule`: phase and constraint order, cycles, fixed timestep, context, run conditions, refresh and error semantics, per-phase command flushes |
+| `command_buffer.test.ts` | `CommandBuffer`: deferred spawn/destroy/add/set/remove, pending handles, partial payloads, inactive targets, flush failures, growth |
 | `release_integrity.test.ts` | Runtime, `deno.json`, README install snippet, and CHANGELOG version consistency (reads `README.md` and `CHANGELOG.md`; `deno task test` grants `--allow-read` for just those files) |
 
 ## Shared fixtures
@@ -39,6 +41,7 @@ These files are type-checked by `deno task check` but are **not** executed by `d
 - `query_constructor_inference.ts` — typed `Query({ all: { … } })` constructor inference
 - `typed_ecs_world_inference.ts` — `createEcsWorld` / schema-world spawn and storage inference
 - `entity_api_inference.ts` — slot bounds reject packed entity handles
+- `typed_schedule_inference.ts` — `Schedule.add` context typing and `CommandBuffer` payload / pending-handle typing
 
 They use `@ts-expect-error` to assert that invalid access is rejected at compile time.
 
