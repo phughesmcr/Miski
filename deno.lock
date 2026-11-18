@@ -3,7 +3,7 @@
   "specifiers": {
     "jsr:@phughesmcr/bitpool@~0.9.1": "0.9.1",
     "jsr:@phughesmcr/booleanarray@0.13": "0.13.0",
-    "jsr:@phughesmcr/partitionedbuffer@~0.4.1": "0.4.1",
+    "jsr:@phughesmcr/partitionedbuffer@0.5": "0.5.0",
     "jsr:@std/semver@1": "1.0.8"
   },
   "jsr": {
@@ -16,8 +16,8 @@
     "@phughesmcr/booleanarray@0.13.0": {
       "integrity": "43ecfacfc0ec1044a60a3d2fe7163b5d2a3ed7b750c590336c650f124978b98d"
     },
-    "@phughesmcr/partitionedbuffer@0.4.1": {
-      "integrity": "d055c3f99df9f5b7fc470567a349ae113b33dba4c7f1ec38298739e9affcb66e",
+    "@phughesmcr/partitionedbuffer@0.5.0": {
+      "integrity": "4d098c933d3f0ef9d0572d0c4244e2d8ab046d1939d3e6cb6bd99153d7b9de9a",
       "dependencies": [
         "jsr:@phughesmcr/bitpool"
       ]
@@ -29,7 +29,7 @@
   "workspace": {
     "dependencies": [
       "jsr:@phughesmcr/booleanarray@0.13",
-      "jsr:@phughesmcr/partitionedbuffer@~0.4.1"
+      "jsr:@phughesmcr/partitionedbuffer@0.5"
     ]
   }
 }
