@@ -95,6 +95,7 @@ export type {
 } from "@/schema/schema.ts";
 export type {
   DataStorageFromMap,
+  EcsPrefabOptions,
   EcsWorldConfig,
   SpawnSpec,
   StorageFromMap,

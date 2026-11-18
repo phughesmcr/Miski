@@ -46,6 +46,7 @@ import { constructWorldAPIs } from "./world-api-facade.ts";
 import { noop } from "@/utils.ts";
 import { assertWorldState, isValidWorldSpec } from "./utils.ts";
 import { WorldMutations } from "./world-mutations.ts";
+import { PrefabSpawner } from "@/prefab/prefab-spawner.ts";
 
 type WorldRollbackState = {
   readonly entities: EntityManagerState;
@@ -416,6 +417,16 @@ export class World {
       queryManager: this.#queryManager,
       systemManager: this.#systemManager,
       mutations: this.#mutations,
+      prefabs: new PrefabSpawner({
+        entityManager: this.#entityManager,
+        componentManager: this.#componentManager,
+        archetypeManager: this.#archetypeManager,
+        componentCount: components.length,
+        notifyEntityLifecycle: () => {
+          this.#entityRevision = ++this.#revision;
+        },
+        invalidateCommittedTransition: (changed) => this.#mutations.invalidateCommittedTransition(changed),
+      }),
       getComponentEntityData: (component, entity) => this.#getComponentEntityData(component, entity),
       readComponentEntityData: (component, entity) => this.#readComponentEntityData(component, entity),
       readComponentEntityDataInto: (component, entity, out) =>

@@ -20,7 +20,7 @@ import {
   type ComponentSnapshotRestoreHooks,
   restoreComponentManagerSnapshot,
 } from "./component-snapshot.ts";
-import { prepareEntityStorageData, writeEntityStorageData } from "./component-storage-write.ts";
+import { prepareEntityStorageData, writeEntityStorageData, writeEntityStorageRow } from "./component-storage-write.ts";
 import { StorageProxy } from "./storage-proxy.ts";
 
 export type { ComponentManagerSnapshot };
@@ -484,6 +484,52 @@ export class ComponentManager {
     }
 
     return ownershipChanged;
+  }
+
+  /**
+   * Add a registered component instance to a newly created entity, filling its row from template defaults.
+   *
+   * Ownership, capped-row reservation, revision and changed tracking follow {@link addInstanceToEntity}; only the
+   * value source differs. Fields that `data` provides take the canonical values staged by
+   * {@link validateInstanceData}; every other field takes its `row` default.
+   *
+   * @param instance - The registered component instance
+   * @param slot - The new entity's storage slot (must not own the instance yet)
+   * @param row - Canonical defaults parallel to {@link storageKeysOf}, or `null` for tags
+   * @param data - Optional validated override payload
+   * @returns `true` if the component ownership changed
+   * @internal
+   */
+  addInstanceWithRow(
+    instance: DynamicComponentInstance,
+    slot: number,
+    row: ArrayLike<unknown> | null,
+    data: Record<string, unknown> | undefined,
+  ): boolean {
+    const state = this.#states[instance.id];
+    if (state === undefined) return false;
+    const owners = this.#ensureOwnershipState(state);
+    if (owners[slot] === 1) return false;
+    const maxEntities = state.maxEntities;
+    if (maxEntities !== 0 && state.ownerCount >= maxEntities) {
+      throw new RangeError(`Component "${instance.type.name}" can only be added to ${maxEntities} entities.`);
+    }
+    if (state.usesSparseStorage) this.#reserveSparseSlot(state, owners, slot);
+    this.#acquireOwnership(state, owners, slot);
+    this.#bumpRevision(state);
+    if (instance.storage !== null && row !== null) {
+      writeEntityStorageRow(state, row, data, slot);
+      this.#markChanged(state, slot);
+    }
+    return true;
+  }
+
+  /**
+   * Storage field keys of a registered data component, in column order (empty for tags).
+   * @internal
+   */
+  storageKeysOf(instance: DynamicComponentInstance): readonly string[] {
+    return this.#states[instance.id]?.storageKeys ?? [];
   }
 
   /**

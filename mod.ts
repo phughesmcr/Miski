@@ -295,6 +295,7 @@ export {
   SpecError,
   WorldStateError,
 } from "@/errors.ts";
+export { Prefab } from "@/prefab/prefab.ts";
 export { isValidQuerySpec, Query } from "@/query/query.ts";
 export { isValidSystemSpec, System } from "@/system/system.ts";
 export {
@@ -331,6 +332,7 @@ export type {
   QueryConstructor,
   QueryInputSpec,
 } from "@/query/query.ts";
+export type { PrefabDefaults, PrefabSpec } from "@/prefab/prefab.ts";
 export type { SchemaPropertyArray } from "@/types.ts";
 export type { ComponentInstance } from "@/component/component-instance.ts";
 export type { StorageProxy } from "@/component/storage-proxy.ts";
@@ -361,6 +363,7 @@ export type {
   DataStorageFromMap,
   DynamicComponent,
   DynamicComponentInstance,
+  EcsPrefabOptions,
   EcsWorldConfig,
   Entity,
   InferredDataComponentSpec,

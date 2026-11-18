@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add prefabs: immutable entity templates defined with `new Prefab({ name, extends?, components })`.
+  `extends` flattens a parent prefab at definition time, and child fields override the parent's field by
+  field. Prefabs live outside every world, so they use no entity slot and never appear in queries. Create
+  instances with `world.entities.instantiate` / `instantiateOrThrow`, or all-or-nothing in bulk with
+  `instantiateMany` / `instantiateManyOrThrow`, which return a borrowed list. Override tuples merge per field
+  over the defaults and may add components. An instance is indistinguishable from `createWith` with the
+  equivalent bundle, and steady-state instantiation allocates nothing. `EcsWorld` gains `prefab`,
+  `instantiate` and `instantiateMany` for named specs.
 - Reuse entity slots next-fit instead of last-freed-first. A destroyed entity's
   slot is reissued only after the allocator has swept past every other free
   slot, so a held stale handle no longer comes back to life after 32,768

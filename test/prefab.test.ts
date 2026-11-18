@@ -60,8 +60,11 @@ const goblinBundle = [
   [enemy],
 ] as const;
 
-/** Everything observable about a world, in iteration order. */
-function observe(world: World): unknown {
+/**
+ * Everything observable about a world, in iteration order. Revision tokens are excluded on request: rollback
+ * restore moves them forward by design.
+ */
+function observe(world: World, revisions = true): unknown {
   const owners: Record<string, number[]> = {};
   const changed: Record<string, number[]> = {};
   const data: Record<string, Record<string, unknown>> = {};
@@ -84,7 +87,7 @@ function observe(world: World): unknown {
       list: world.entities.querySnapshot(query),
       entered: [...world.archetypes.queryEntered(query)],
       exited: [...world.archetypes.queryExited(query)],
-      revision: world.queryRevision(query),
+      revision: revisions ? world.queryRevision(query) : 0,
     })),
   };
 }
@@ -298,8 +301,9 @@ Deno.test("instantiateMany matches N createWith calls and returns a borrowed lis
   churn(b);
   const list = a.entities.instantiateMany(goblin, 10, [[velocity, { x: 4 }]])!;
   const expected: Entity[] = [];
+  const twinBundle = [...goblinBundle, [velocity, { x: 4 }]] as const;
   for (let i = 0; i < 10; i++) {
-    expected.push(b.entities.createWithOrThrow([...goblinBundle, [velocity, { x: 4 }]]));
+    expected.push(b.entities.createWithOrThrow(twinBundle));
   }
   assertStrictEquals(list.count, 10, "count");
   const handles: Entity[] = [];
@@ -332,8 +336,8 @@ Deno.test("instantiateMany is all-or-nothing", async () => {
   churn(a);
   churn(b);
   const before = observe(a);
-  assertStrictEquals(a.entities.instantiateMany(goblin, 7), undefined, "not enough room for 7");
-  assertThrows(() => a.entities.instantiateManyOrThrow(goblin, 7), CapacityError, "capacity");
+  assertStrictEquals(a.entities.instantiateMany(goblin, 8), undefined, "not enough room for 8");
+  assertThrows(() => a.entities.instantiateManyOrThrow(goblin, 8), CapacityError, "capacity");
   const twoBosses = new Prefab({ components: [[boss, { level: 1 }]] });
   assertThrows(() => a.entities.instantiateMany(twoBosses, 3), RangeError, "bossStats");
   assertThrows(() => a.entities.instantiateMany(goblin, 3, [[leader]]), RangeError, "leader");
@@ -345,8 +349,8 @@ Deno.test("instantiateMany is all-or-nothing", async () => {
 
   const empty = a.entities.instantiateMany(goblin, 0)!;
   assertStrictEquals(empty.count, 0, "zero count is an empty list");
-  const exact = a.entities.instantiateManyOrThrow(goblin, 6);
-  assertStrictEquals(exact.count, 6, "fills remaining capacity exactly");
+  const exact = a.entities.instantiateManyOrThrow(goblin, 7);
+  assertStrictEquals(exact.count, 7, "fills remaining capacity exactly");
   assertStrictEquals(a.entities.getAvailableCount(), 0, "world full");
 });
 
@@ -358,18 +362,30 @@ Deno.test("instantiate inside a rollback scope is undone; instantiate after rest
   churn(b);
   a.refresh();
   b.refresh();
-  const point = captureWorldRollbackPoint(a);
+  const untouched = observe(a, false);
   // A prefab whose archetype is first created inside the scope, so restore drops that archetype.
-  const scout = new Prefab({ components: [[velocity, { x: 1 }], [flying], [stats, { speed: 3 }]] });
+  const scoutBundle = [[velocity, { x: 1 }], [flying], [stats, { speed: 3 }]] as const;
+  const scout = new Prefab({ components: scoutBundle });
+
+  const pointA = captureWorldRollbackPoint(a);
   a.entities.instantiateOrThrow(scout);
   a.entities.instantiateMany(goblin, 5);
-  restoreWorldRollbackPoint(a, point);
-  assertEquals(observe(a), observe(b), "restore is neutral");
+  restoreWorldRollbackPoint(a, pointA);
+  // The twin speculates the same way through createWith, so retired generations match too.
+  const pointB = captureWorldRollbackPoint(b);
+  b.entities.createWithOrThrow(scoutBundle);
+  for (let i = 0; i < 5; i++) b.entities.createWithOrThrow(goblinBundle);
+  restoreWorldRollbackPoint(b, pointB);
 
+  assertEquals(observe(a, false), untouched, "restore removes every speculative instance");
+  assertEquals(observe(a, false), observe(b, false), "restore is neutral");
   const viaPrefab = a.entities.instantiateOrThrow(scout);
-  const viaBundle = b.entities.createWithOrThrow([[velocity, { x: 1 }], [flying], [stats, { speed: 3 }]]);
+  const viaBundle = b.entities.createWithOrThrow(scoutBundle);
   assertStrictEquals(viaPrefab, viaBundle, "same handle after restore");
-  assertEquals(observe(a), observe(b), "instantiate after restore matches createWith");
+  const manyA = a.entities.toArray(a.entities.instantiateManyOrThrow(goblin, 3));
+  const manyB = [0, 1, 2].map(() => b.entities.createWithOrThrow(goblinBundle));
+  assertEquals(manyA, manyB, "bulk handles after restore");
+  assertEquals(observe(a, false), observe(b, false), "instantiate after restore matches createWith");
 });
 
 // --- Typed named-map world ---

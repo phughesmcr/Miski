@@ -51,6 +51,7 @@ for modern JavaScript — no leftovers.
 - `world.frame(fn)` tick helper with entered / exited / changed tracking
 - Typed `createEcsWorld` named-map bootstrap
 - Atomic bundles and bulk add/remove for spawn, load, and query-wide transitions
+- Immutable prefabs (entity templates) with static `extends` and bulk instantiate
 - Component-subset checkpoints and speculative world rollback
 - Schema compile + stable FNV hash for tooling and saves
 - :page_with_curl: MIT licensed — share freely, keep the wrappers on
@@ -319,6 +320,55 @@ checks finish before entity allocation, so rejected spawns publish no entered
 or exited events and do not consume a generation.
 
 Peek under the wrapper with `entityIndex` · `entityGeneration` · `packEntity`.
+
+### :cookie: Prefabs
+
+Bake once, stamp out many. A prefab is an immutable entity template: a set of
+components with default values. Like components and queries, prefabs are
+definitions — they live outside every world, use no entity slot or capacity,
+never show up in queries, and work in any world that registers their
+components.
+
+```ts
+import { Prefab } from "@phughesmcr/miski";
+
+const goblin = new Prefab({
+  name: "goblin",
+  components: [[Position, { x: 0, y: 0 }], [Health, { hp: 10, maxHp: 10 }], [Enemy]],
+});
+
+// Static inheritance: parent components first, child fields override field by field.
+const boss = new Prefab({ name: "boss", extends: goblin, components: [[Health, { hp: 500 }]] });
+boss.get(Health); // → { hp: 500, maxHp: 10 }
+
+// Overrides merge per field and may add components the prefab lacks.
+const e = world.entities.instantiateOrThrow(goblin, [[Position, { x: 5 }], [Flying]]);
+world.entities.instantiate(boss); // Entity | undefined when full
+
+// Bulk, all or nothing: a borrowed list, valid until the next mutation.
+const pack = world.entities.instantiateManyOrThrow(goblin, 128);
+const { x } = world.components.require(Position).storage.partitions;
+for (let i = 0; i < pack.count; i++) x[pack.slots[i]!] = i * 2; // per-instance tweaks
+```
+
+Instantiating is the same as `createWith` with the prefab's flattened bundle
+followed by any extra override components: same handles, values, changed
+marks, archetype, entered order, and allocation-free steady state. Defaults
+are validated and canonicalized through each field's typed array when the
+prefab is defined, and omitted fields are zero. Every check (payloads, owner
+caps, capacity) finishes before allocation, so a rejected call — including a
+bulk call that does not fit in full — allocates nothing and consumes no
+generation. Instances hold plain copies: nothing reads through to the prefab,
+and since prefabs are frozen, nothing can change under them. Rollback and
+checkpoints treat instances like any other entity.
+
+`createEcsWorld` has named-map helpers:
+
+```ts
+const orc = game.prefab({ Position: { x: 0 }, Enemy: true }, { name: "orc" });
+game.instantiate(orc, { Position: { y: 3 } });
+game.instantiateMany(orc, 16);
+```
 
 ### :mag: Queries
 
