@@ -24,7 +24,10 @@ import { createEntity, createTestWorld } from "./fixtures.ts";
 import { assert, assertEquals, assertStrictEquals, assertThrows, ids } from "./helpers.ts";
 
 class Mesh {
-  constructor(public vertices: number[] = []) {}
+  vertices: number[];
+  constructor(vertices: number[] = []) {
+    this.vertices = vertices;
+  }
 }
 
 function unitComponent(maxEntities?: number, create?: () => Mesh, clone?: (mesh: Mesh) => Mesh) {
@@ -45,7 +48,14 @@ function unitComponent(maxEntities?: number, create?: () => Mesh, clone?: (mesh:
   });
 }
 
-const DEFAULTS = { hp: 0, alive: false, state: "idle", target: null, label: "", mesh: null };
+const DEFAULTS = {
+  hp: 0,
+  alive: false,
+  state: "idle" as "idle" | "run" | "dead",
+  target: null as Entity | null,
+  label: "",
+  mesh: null as Mesh | null,
+};
 
 // ---------------------------------------------------------------------------
 // Schema, descriptors and hashes
@@ -117,6 +127,9 @@ Deno.test("field descriptors are frozen, branded and carry stable hash tags", ()
   ]);
   assertStrictEquals(tags.size, 8, "Every field kind and enum label list hashes distinctly");
   assertStrictEquals(hashOf(field.enum(["a", "b"])), hashOf(field.enum(["a", "b"])), "Enum hash is deterministic");
+  const codec = field.object<Mesh>({ encode: (m) => m.vertices.join(","), decode: (e) => new Mesh([Number(e)]) });
+  assert(typeof codec.encode === "function" && typeof codec.decode === "function", "Codec hooks are reachable");
+  assertStrictEquals(hashOf(codec), hashOf(field.object()), "Codec hooks are not part of the hash");
   assertStrictEquals(
     hashOf(field.object({ create: () => 1 })),
     hashOf(field.object()),
@@ -131,6 +144,8 @@ Deno.test("invalid field declarations are rejected", () => {
   assertThrows(() => field.enum(Array.from({ length: 65_537 }, (_, i) => `l${i}`)), RangeError, "65536");
   assertThrows(() => field.object({ create: 1 as never }), TypeError, "create");
   assertThrows(() => field.object({ clone: "x" as never }), TypeError, "clone");
+  assertThrows(() => field.object({ encode: 1 as never, decode: () => 1 }), TypeError, "encode");
+  assertThrows(() => field.object({ encode: () => 1 }), TypeError, "both encode and decode");
   for (const key of ["entity", "slot"]) {
     assertThrows(
       () => new Component({ name: "c", schema: { [key]: field.bool() } }),
@@ -558,27 +573,27 @@ Deno.test("createEcsWorld and systems work with field types", async () => {
       Unit: {
         hp: Uint16Array,
         state: field.enum(["idle", "run"]),
-        name: field.string(),
+        title: field.string(),
         target: field.entity(),
       },
     },
     tags: { Player: true },
   });
   await game.init();
-  const a = game.spawn({ Unit: { hp: 3, name: "a" }, Player: true });
+  const a = game.spawn({ Unit: { hp: 3, title: "a" }, Player: true });
   const b = game.spawn({ Unit: { state: "run", target: a } });
   assertStrictEquals(game.storage.Unit.get(b, "target"), a, "Typed storage reads refs");
-  assertStrictEquals(game.storage.Unit.get(a, "name"), "a", "Typed storage reads strings");
+  assertStrictEquals(game.storage.Unit.get(a, "title"), "a", "Typed storage reads strings");
 
   const seen: string[] = [];
   const naming = new System({
     name: "naming",
     query: new Query({ all: { unit: game.components.Unit } }),
     callback: (components, entities) => {
-      const { name, state } = components.unit.storage.partitions;
+      const { title, state } = components.unit.storage.partitions;
       for (let i = 0; i < entities.count; i++) {
         const slot = entities.slots[i]!;
-        seen.push(`${name[slot]}:${state[slot]}`);
+        seen.push(`${title[slot]}:${state[slot]}`);
       }
     },
   });

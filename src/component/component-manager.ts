@@ -11,7 +11,16 @@ import {
 } from "@/errors.ts";
 import type { DynamicComponent, DynamicComponentInstance } from "@/types/component.ts";
 import { type Entity, entityIndex } from "@/entity/entity.ts";
-import type { ComponentData, SchemaOrNull, SchemaProperty, TypedArray } from "@/types/partitions.ts";
+import { cloneFieldValue, isFieldDescriptor } from "@/schema/field.ts";
+import { hasOwnProperty } from "@/utils.ts";
+import type {
+  ComponentData,
+  ComponentStorage,
+  SchemaOrNull,
+  SchemaProperty,
+  TypedArray,
+  TypedArrayConstructor,
+} from "@/types/partitions.ts";
 import { ComponentInstance } from "./component-instance.ts";
 import type { Component } from "./component.ts";
 import {
@@ -20,7 +29,20 @@ import {
   type ComponentSnapshotRestoreHooks,
   restoreComponentManagerSnapshot,
 } from "./component-snapshot.ts";
-import { prepareEntityStorageData, writeEntityStorageData } from "./component-storage-write.ts";
+import {
+  type ComponentStorageWriteState,
+  prepareEntityStorageData,
+  writeEntityStorageData,
+} from "./component-storage-write.ts";
+import {
+  codecDefault,
+  createFieldCodec,
+  decodeFieldValue,
+  type FieldCodec,
+  isSideField,
+  sideDefault,
+  type SideField,
+} from "./field-codec.ts";
 import { StorageProxy } from "./storage-proxy.ts";
 
 export type { ComponentManagerSnapshot };
@@ -61,8 +83,8 @@ function getWorldPartition(component: DynamicComponent, capacity: number): Dynam
 export type ComponentBundleCommitEntry = {
   /** The registered component instance to add or update. */
   instance: DynamicComponentInstance;
-  /** Optional numeric data to merge into component storage. */
-  data: Partial<Record<string, number>> | undefined;
+  /** Optional data to merge into component storage. */
+  data: Partial<Record<string, unknown>> | undefined;
 };
 
 /** Sparse (capped) storage column; every column of one component shares a single slot -> row index. */
@@ -72,7 +94,7 @@ type SparseColumn = TypedArray & {
   deleteEntity(entity: number): boolean;
 };
 
-type ComponentState = {
+type ComponentState = ComponentStorageWriteState & {
   readonly instance: DynamicComponentInstance;
   changedCount: number;
   changedList?: EntityArray;
@@ -97,7 +119,52 @@ type ComponentState = {
   readonly coercionScratch: Record<string, TypedArray>;
   /** Parallel scratch columns for `storageKeys` (avoids string-key lookup on write). */
   readonly coercionScratchColumns: readonly TypedArray[];
+  /** `true` when any column is a `field.*` field (reads decode, removal releases side cells). */
+  readonly hasFieldColumns: boolean;
 };
+
+/** Slot-indexed string / object columns for one component, plus the lookups its state needs. */
+type SideColumns = {
+  readonly keys: string[];
+  readonly columns: unknown[][];
+  readonly fields: SideField[];
+  readonly index: Record<string, number>;
+};
+
+/** Build capacity-length side columns for a component's string / object fields. */
+function createSideColumns(component: DynamicComponent, capacity: number): SideColumns {
+  const keys: string[] = [];
+  const columns: unknown[][] = [];
+  const fields: SideField[] = [];
+  const index: Record<string, number> = Object.create(null);
+  const schema = component.schema as Record<string, unknown> | null;
+  if (schema !== null) {
+    for (const key of Object.keys(schema)) {
+      const property = schema[key];
+      if (!isFieldDescriptor(property) || !isSideField(property)) continue;
+      index[key] = keys.length;
+      keys.push(key);
+      fields.push(property);
+      columns.push(new Array<unknown>(capacity).fill(sideDefault(property)));
+    }
+  }
+  return { keys, columns, fields, index };
+}
+
+/** Storage for a component whose only fields are string / object columns (its buffer partition is empty). */
+function createSideOnlyStorage(partitions: Record<string, unknown[]>): ComponentStorage<SchemaOrNull> {
+  return {
+    byteOffset: 0,
+    byteLength: 0,
+    partitions: partitions as never,
+    get: (partition, index) => partitions[partition as string]?.[index],
+    set: (partition, index, value) => {
+      const column = partitions[partition as string];
+      if (column === undefined) throw new Error(`Partition ${String(partition)} not found`);
+      column[index] = value;
+    },
+  };
+}
 
 /**
  * A component manager owns component registration, storage, ownership flags, owner iteration, and changed tracking.
@@ -122,6 +189,8 @@ export class ComponentManager {
   #registryByComponentId: DynamicComponentInstance[];
   /** Component ownership and changed state indexed by component instance id */
   #states: ComponentState[];
+  /** States with string / object fields, whose staged side values refresh releases */
+  #sideStates: ComponentState[];
   /** World revision bump callback */
   #nextWorldRevision: () => number;
   /** Canonical entity liveness check supplied by the owning world. */
@@ -166,34 +235,69 @@ export class ComponentManager {
     this.#publicRegistry = {};
     this.#registryByComponentId = [];
     this.#states = [];
+    this.#sideStates = [];
     // register each component
     for (const component of components) {
       const maxEntities = component.maxEntities;
       // instance storage
-      const storage = this.#buffer.addPartition(getWorldPartition(component, capacity));
+      const partition = getWorldPartition(component, capacity);
+      const bufferStorage = this.#buffer.addPartition(partition);
       const instanceId = this.#states.length;
       const coercionScratch: Record<string, TypedArray> = Object.create(null);
       const storageKeys: string[] = [];
       const storageColumns: TypedArray[] = [];
       const coercionScratchColumns: TypedArray[] = [];
+      const storageCodecs: (FieldCodec | null)[] = [];
+      const storageDefaults: number[] = [];
+      const codecsByKey: Record<string, FieldCodec> = Object.create(null);
+      const logicalSchema = component.schema as Record<string, unknown> | null;
       let usesSparseStorage = false;
-      if (storage !== null) {
-        const partitions = storage.partitions as Record<string, TypedArray>;
+      if (bufferStorage !== null) {
+        const partitions = bufferStorage.partitions as Record<string, TypedArray>;
+        const physicalSchema = partition.schema as Record<string, SchemaProperty>;
         for (const key of Object.keys(partitions)) {
-          const partition = partitions[key]!;
-          const property = (component.schema as Record<string, SchemaProperty>)[key]!;
-          const Ctor = Array.isArray(property) ? property[0] : property;
+          const column = partitions[key]!;
+          const property = physicalSchema[key]!;
+          const Ctor: TypedArrayConstructor = Array.isArray(property) ? property[0] : property;
           const scratchColumn = new Ctor(1);
+          const codec = createFieldCodec(logicalSchema?.[key]);
           coercionScratch[key] = scratchColumn;
           storageKeys.push(key);
-          storageColumns.push(partition);
+          storageColumns.push(column);
           coercionScratchColumns.push(scratchColumn);
-          if (!ArrayBuffer.isView(partition)) usesSparseStorage = true;
+          storageCodecs.push(codec);
+          storageDefaults.push(codecDefault(codec));
+          if (codec !== null) codecsByKey[key] = codec;
+          if (!ArrayBuffer.isView(column)) usesSparseStorage = true;
         }
       }
+      const side = createSideColumns(component, capacity);
+      let storage = bufferStorage as ComponentStorage<SchemaOrNull> | null;
+      if (side.keys.length > 0) {
+        // Side columns join the typed columns in `partitions`, so `storage.partitions[key]` reaches every field.
+        const partitions: Record<string, unknown[]> = storage === null ?
+          {} :
+          storage.partitions as unknown as Record<string, unknown[]>;
+        for (let i = 0; i < side.keys.length; i++) partitions[side.keys[i]!] = side.columns[i]!;
+        if (storage === null) storage = createSideOnlyStorage(partitions);
+      }
+      const hasCodecs = storageCodecs.some((codec) => codec !== null);
+      const hasFieldColumns = hasCodecs || side.keys.length > 0;
+      const sideFieldsByKey: Record<string, SideField> = Object.create(null);
+      for (let i = 0; i < side.keys.length; i++) sideFieldsByKey[side.keys[i]!] = side.fields[i]!;
+      const isEntityActive = (entity: Entity): boolean => this.#isActive(entity);
+      const decode = hasCodecs ?
+        (key: string, raw: unknown): unknown => {
+          const codec = codecsByKey[key];
+          return codec === undefined ? raw : decodeFieldValue(codec, raw as number, isEntityActive);
+        } :
+        undefined;
       const proxy = storage ?
         new StorageProxy({
           storage,
+          codecs: codecsByKey,
+          sideFields: sideFieldsByKey,
+          isEntityActive,
           markChanged: (slot: number) => {
             // Only owners are tracked: raw writes to non-owner slots are an unguarded escape hatch.
             const state = this.#states[instanceId];
@@ -215,7 +319,8 @@ export class ComponentManager {
         storage,
         type: component,
         getRevision: () => this.#states[instanceId]?.revision ?? 0,
-      });
+        decode,
+      } as never);
       this.#states[instance.id] = {
         changedCount: 0,
         instance,
@@ -228,7 +333,18 @@ export class ComponentManager {
         revision: 0,
         lastChangedRevision: 0,
         coercionScratch,
+        storageCodecs,
+        storageDefaults,
+        sideKeys: side.keys,
+        sideColumns: side.columns,
+        sideFields: side.fields,
+        sideIndex: side.index,
+        sideScratch: new Array<unknown>(side.keys.length).fill(undefined),
+        sideInitial: new Array<unknown>(side.keys.length).fill(undefined),
+        isEntityActive,
+        hasFieldColumns,
       };
+      if (side.keys.length > 0) this.#sideStates.push(this.#states[instance.id]!);
       this.#registryByName[component.name] = instance;
       this.#registryByComponentId[component[$_COMPONENT_ID_KEY]] = instance;
     }
@@ -427,7 +543,36 @@ export class ComponentManager {
   /** Reset one entity's component storage slot to its default empty value. */
   #clearEntityStorage(state: ComponentState, slot: number): void {
     const columns = state.storageColumns;
-    for (let i = 0; i < columns.length; i++) columns[i]![slot] = 0;
+    const defaults = state.storageDefaults;
+    for (let i = 0; i < columns.length; i++) columns[i]![slot] = defaults[i]!;
+    const sideColumns = state.sideColumns;
+    for (let i = 0; i < sideColumns.length; i++) sideColumns[i]![slot] = state.sideInitial[i];
+  }
+
+  /**
+   * Stage the values a new owner's absent side fields start at: `create()` for object fields that define it, else
+   * `""` / `null`. Runs before ownership changes, so a throwing `create()` leaves the component untouched.
+   */
+  #stageSideInitial(state: ComponentState, data: Record<string, unknown> | undefined): void {
+    const fields = state.sideFields;
+    for (let i = 0; i < fields.length; i++) {
+      const property = fields[i]!;
+      if (data !== undefined && hasOwnProperty(data, state.sideKeys[i]!)) continue;
+      const create = property.kind === "object" ? property.create : undefined;
+      state.sideInitial[i] = create === undefined ? sideDefault(property) : create();
+    }
+  }
+
+  /** Drop staged initial values so they do not keep objects alive. */
+  #clearSideInitial(state: ComponentState): void {
+    const initial = state.sideInitial;
+    for (let i = 0; i < initial.length; i++) initial[i] = undefined;
+  }
+
+  /** Reset an unowned slot's side cells so the component no longer holds its strings / objects. */
+  #releaseSideCells(state: ComponentState, slot: number): void {
+    const columns = state.sideColumns;
+    for (let i = 0; i < columns.length; i++) columns[i]![slot] = sideDefault(state.sideFields[i]!);
   }
 
   /**
@@ -450,7 +595,7 @@ export class ComponentManager {
   >(
     instance: ComponentInstance<TValue, TStorage>,
     entity: Entity,
-    data?: Partial<Record<keyof TValue, number>>,
+    data?: Partial<Record<keyof TValue, unknown>>,
     slot: number = entityIndex(entity),
     dataValidated: boolean = false,
   ): boolean {
@@ -468,20 +613,23 @@ export class ComponentManager {
     if (!alreadyOwned && maxEntities !== 0 && state.ownerCount >= maxEntities) {
       throw new RangeError(`Component "${instance.type.name}" can only be added to ${maxEntities} entities.`);
     }
+    const stagesSide = !alreadyOwned && state.sideKeys.length > 0;
+    if (stagesSide) this.#stageSideInitial(state, data as Record<string, unknown> | undefined);
     if (!alreadyOwned && state.usesSparseStorage) this.#reserveSparseSlot(state, owners, slot);
     const ownershipChanged = this.#acquireOwnership(state, owners, slot);
     if (ownershipChanged) this.#bumpRevision(state);
     if (storage !== null) {
       if (data !== undefined) {
-        const changed = writeEntityStorageData(state, data as Record<string, number>, slot, ownershipChanged);
-        // A payload always marks a new owner changed, whatever the previous (zero, stale, or unmapped) cell held.
+        const changed = writeEntityStorageData(state, data as Record<string, unknown>, slot, ownershipChanged);
+        // A payload always marks a new owner changed, whatever the previous (default, stale, or unmapped) cell held.
         if (changed || ownershipChanged) this.#markChanged(state, slot);
       } else if (ownershipChanged) {
-        // A no-payload attach zero-initializes the row and is a change, exactly like an explicit payload.
+        // A no-payload attach resets the row to its defaults and is a change, exactly like an explicit payload.
         this.#clearEntityStorage(state, slot);
         this.#markChanged(state, slot);
       }
     }
+    if (stagesSide) this.#clearSideInitial(state);
 
     return ownershipChanged;
   }
@@ -725,7 +873,7 @@ export class ComponentManager {
         this.addInstanceToEntity(
           instance,
           entity,
-          data as Partial<Record<PropertyKey, number>> | undefined,
+          data as Partial<Record<PropertyKey, unknown>> | undefined,
           entityIndex(entity),
           true,
         )
@@ -777,6 +925,11 @@ export class ComponentManager {
     const keys = state.storageKeys;
     const columns = state.storageColumns;
     const slot = entityIndex(entity);
+    if (state.hasFieldColumns) {
+      const decoded: Record<string, unknown> = {};
+      this.#readFieldRow(state, slot, decoded);
+      return decoded as ComponentData<TValue>;
+    }
     const result: Record<string, number> = {};
     for (let i = 0; i < keys.length; i++) result[keys[i]!] = columns[i]![slot] ?? Number.NaN;
     return result as ComponentData<TValue>;
@@ -805,12 +958,74 @@ export class ComponentManager {
     const state = this.#states[instance.id];
     if (instance.storage === null || state === undefined) return false;
     if (!this.entityOwnsInstance(instance, entity)) return false;
+    const slot = entityIndex(entity);
+    if (state.hasFieldColumns) {
+      this.#readFieldRow(state, slot, out as Record<string, unknown>);
+      return true;
+    }
     const target = out as Record<string, number>;
     const keys = state.storageKeys;
     const columns = state.storageColumns;
-    const slot = entityIndex(entity);
     for (let i = 0; i < keys.length; i++) target[keys[i]!] = columns[i]![slot] ?? Number.NaN;
     return true;
+  }
+
+  /** Decode one row of a component with `field.*` columns: typed columns first, then side columns. */
+  #readFieldRow(state: ComponentState, slot: number, target: Record<string, unknown>): void {
+    const keys = state.storageKeys;
+    const columns = state.storageColumns;
+    const codecs = state.storageCodecs;
+    const isActive = state.isEntityActive;
+    for (let i = 0; i < keys.length; i++) {
+      const raw = columns[i]![slot] ?? Number.NaN;
+      const codec = codecs[i]!;
+      target[keys[i]!] = codec === null ? raw : decodeFieldValue(codec, raw, isActive);
+    }
+    const sideKeys = state.sideKeys;
+    const sideColumns = state.sideColumns;
+    for (let i = 0; i < sideKeys.length; i++) target[sideKeys[i]!] = sideColumns[i]![slot];
+  }
+
+  /**
+   * Copy one storage slot's values for a component into another slot: typed columns raw (entity refs keep their
+   * handle), string values as is, object values through the field's `clone` hook. Marks the target changed when it
+   * owns the component and a value changed. Ownership is not checked or changed.
+   *
+   * @param instance - The registered component instance
+   * @param fromSlot - Source storage slot
+   * @param toSlot - Target storage slot
+   * @returns `true` if any target cell changed
+   */
+  copyInstanceEntityData<
+    TValue extends SchemaOrNull,
+    TStorage extends SchemaOrNull = TValue,
+  >(instance: ComponentInstance<TValue, TStorage>, fromSlot: number, toSlot: number): boolean {
+    const state = this.#states[instance.id];
+    if (state === undefined || instance.storage === null || fromSlot === toSlot) return false;
+    if (fromSlot >= this.#capacity || toSlot >= this.#capacity) {
+      throw new RangeError(`Slot ${Math.max(fromSlot, toSlot)} is outside component capacity.`);
+    }
+    let changed = false;
+    const columns = state.storageColumns;
+    for (let i = 0; i < columns.length; i++) {
+      const column = columns[i]!;
+      const value = column[fromSlot]!;
+      if (!Object.is(column[toSlot], value)) {
+        column[toSlot] = value;
+        changed = true;
+      }
+    }
+    const sideColumns = state.sideColumns;
+    for (let i = 0; i < sideColumns.length; i++) {
+      const column = sideColumns[i]!;
+      const value = cloneFieldValue(state.sideFields[i]!, column[fromSlot]);
+      if (!Object.is(column[toSlot], value)) {
+        column[toSlot] = value;
+        changed = true;
+      }
+    }
+    if (changed && state.owners?.[toSlot] === 1) this.#markChanged(state, toSlot);
+    return changed;
   }
 
   /**
@@ -829,6 +1044,12 @@ export class ComponentManager {
   refresh(): ComponentManager {
     // The changed window is a sparse set: resetting the count empties it without touching the lists.
     for (let i = 0; i < this.#states.length; i++) this.#states[i]!.changedCount = 0;
+    // Staged side values must survive a whole batch write; drop them here so they do not keep objects alive.
+    const sideStates = this.#sideStates;
+    for (let i = 0; i < sideStates.length; i++) {
+      const scratch = sideStates[i]!.sideScratch;
+      for (let j = 0; j < scratch.length; j++) scratch[j] = undefined;
+    }
     return this;
   }
 
@@ -864,6 +1085,7 @@ export class ComponentManager {
     this.#bumpRevision(state);
     // Every column of a capped component shares one slot -> row index, so one delete unmaps the whole row.
     if (state.usesSparseStorage) (state.storageColumns[0] as SparseColumn).deleteEntity(slot);
+    if (state.sideKeys.length > 0) this.#releaseSideCells(state, slot);
     return true;
   }
 
@@ -885,13 +1107,13 @@ export class ComponentManager {
   >(
     instance: ComponentInstance<TValue, TStorage>,
     entity: Entity,
-    value: Partial<Record<keyof TValue, number>>,
+    value: Partial<Record<keyof TValue, unknown>>,
   ): this {
     if (instance.storage === null) return this;
     this.validateInstanceData(instance, value);
     const state = this.#states[instance.id]!;
     const slot = entityIndex(entity);
-    const changed = writeEntityStorageData(state, value as Record<string, number>, slot, false);
+    const changed = writeEntityStorageData(state, value as Record<string, unknown>, slot, false);
     if (changed && state.owners?.[slot] === 1) this.#markChanged(state, slot);
     return this;
   }

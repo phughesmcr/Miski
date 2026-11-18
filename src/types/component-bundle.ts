@@ -5,7 +5,7 @@ import type { SchemaValues } from "@/types/partitions.ts";
 /** Runtime-compatible component bundle tuple. */
 export type ComponentBundleEntryInput =
   | readonly [DynamicComponent]
-  | readonly [DynamicComponent, Partial<Record<string, number>>];
+  | readonly [DynamicComponent, Partial<Record<string, unknown>>];
 
 /** A bundle tuple checked against one concrete component definition. */
 export type ComponentBundleEntryFor<TComponent extends DynamicComponent> = TComponent extends

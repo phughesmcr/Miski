@@ -1,6 +1,8 @@
 import type { EntityArray } from "@/entity/entity.ts";
+import { cloneFieldValue } from "@/schema/field.ts";
 import type { DynamicComponentInstance } from "@/types/component.ts";
 import type { TypedArray, TypedArrayConstructor } from "@/types/partitions.ts";
+import { sideDefault, type SideField } from "./field-codec.ts";
 
 /** One component's rollback state: owned rows only, in owner-iteration order. */
 type ComponentStateSnapshot = {
@@ -10,6 +12,8 @@ type ComponentStateSnapshot = {
   readonly changed: EntityArray;
   /** Owned row values per storage column (parallel to `storageColumns`), each parallel to `owners`. */
   readonly rows: readonly TypedArray[];
+  /** Owned string / object values per side column (parallel to `sideColumns`), each parallel to `owners`. */
+  readonly sideRows: readonly (readonly unknown[])[];
 };
 
 /** Component-manager snapshot used by world rollback. */
@@ -21,6 +25,10 @@ export type ComponentManagerSnapshot = {
 export type SnapshottableComponentState = {
   readonly instance: DynamicComponentInstance;
   readonly storageColumns: readonly TypedArray[];
+  /** Slot-indexed string / object columns. */
+  readonly sideColumns: readonly unknown[][];
+  /** Descriptors parallel to `sideColumns`. */
+  readonly sideFields: readonly SideField[];
   readonly usesSparseStorage: boolean;
   owners?: Uint8Array;
   ownerCount: number;
@@ -51,6 +59,9 @@ type SparseColumn = TypedArray & {
 };
 
 const EMPTY_SLOTS: EntityArray = new Uint8Array(0);
+
+/** Shared side rows for components without string / object fields. */
+const EMPTY_SIDE_ROWS: readonly (readonly unknown[])[] = Object.freeze([]);
 
 function copyPrefix(list: EntityArray | undefined, count: number): EntityArray {
   return list === undefined || count === 0 ? EMPTY_SLOTS : list.slice(0, count);
@@ -87,7 +98,21 @@ export function captureComponentManagerSnapshot(
         rows[c] = values;
       }
     }
-    snapStates[i] = { owners, changed: copyPrefix(state.changedList, state.changedCount), rows };
+    const sideColumns = state.sideColumns;
+    let sideRows = EMPTY_SIDE_ROWS;
+    if (sideColumns.length > 0) {
+      const captured: unknown[][] = new Array(sideColumns.length);
+      for (let c = 0; c < sideColumns.length; c++) {
+        const column = sideColumns[c]!;
+        const property = state.sideFields[c]!;
+        const values = new Array<unknown>(count);
+        // Objects with a clone hook are copied once here; restore installs the copies, since a point restores once.
+        for (let j = 0; j < count; j++) values[j] = cloneFieldValue(property, column[owners[j]!]);
+        captured[c] = values;
+      }
+      sideRows = captured;
+    }
+    snapStates[i] = { owners, changed: copyPrefix(state.changedList, state.changedCount), rows, sideRows };
   }
   return { states: snapStates };
 }
@@ -110,12 +135,19 @@ export function restoreComponentManagerSnapshot<T extends SnapshottableComponent
     // Retire current membership. Unmapping current owners' sparse rows (the index is shared by every column)
     // frees rows for the captured owners.
     const currentOwners = state.owners;
+    const sideColumns = state.sideColumns;
     if (currentOwners !== undefined) {
       const list = state.ownerList!;
       for (let j = 0; j < state.ownerCount; j++) {
         const slot = list[j]!;
         currentOwners[slot] = 0;
         sparse?.deleteEntity(slot);
+      }
+      // Release current owners' string / object references; captured owners are rewritten below.
+      for (let c = 0; c < sideColumns.length; c++) {
+        const column = sideColumns[c]!;
+        const empty = sideDefault(state.sideFields[c]!);
+        for (let j = 0; j < state.ownerCount; j++) column[list[j]!] = empty;
       }
     }
     state.ownerCount = 0;
@@ -162,6 +194,11 @@ export function restoreComponentManagerSnapshot<T extends SnapshottableComponent
         const setEntity = (column as SparseColumn).setEntity;
         for (let j = 0; j < ownerCount; j++) setEntity(ownerSlots[j]!, values[j]!);
       }
+    }
+    for (let c = 0; c < sideColumns.length; c++) {
+      const column = sideColumns[c]!;
+      const values = snap.sideRows[c]!;
+      for (let j = 0; j < ownerCount; j++) column[ownerSlots[j]!] = values[j];
     }
     hooks.bumpRevision(state);
   }

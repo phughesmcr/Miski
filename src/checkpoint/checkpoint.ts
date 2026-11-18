@@ -1,5 +1,6 @@
 import type { Entity } from "@/entity/entity.ts";
 import { CapacityError, EntityNotFoundError } from "@/errors.ts";
+import { cloneFieldValue, isFieldDescriptor } from "@/schema/field.ts";
 import type { DynamicComponent } from "@/types/component.ts";
 
 /** Entity collection accepted by {@link World.captureCheckpoint}. */
@@ -9,7 +10,7 @@ export type CheckpointEntitySet =
 
 type CapturedComponent =
   | { readonly present: false }
-  | { readonly present: true; readonly properties?: Readonly<Record<string, number>> };
+  | { readonly present: true; readonly properties?: Readonly<Record<string, unknown>> };
 
 type CapturedEntity = {
   readonly entity: Entity;
@@ -27,21 +28,60 @@ export interface CheckpointWorld {
   isEntityAlive(entity: Entity): boolean;
   entityHasComponent(entity: Entity, component: DynamicComponent): boolean;
   getComponentInstance(component: DynamicComponent): {
-    get(entity: Entity, key: string): number;
+    get(entity: Entity, key: string): unknown;
     type: { schema: Record<string, unknown> | null };
   };
   getOwnerCount(component: DynamicComponent): number;
-  validateComponentData(component: DynamicComponent, properties: Record<string, number> | undefined): void;
-  setComponentEntityData(entity: Entity, component: DynamicComponent, properties: Record<string, number>): void;
+  validateComponentData(component: DynamicComponent, properties: Record<string, unknown> | undefined): void;
+  setComponentEntityData(entity: Entity, component: DynamicComponent, properties: Record<string, unknown>): void;
   addComponentToEntity(
     entity: Entity,
     component: DynamicComponent,
-    properties?: Record<string, number>,
+    properties?: Record<string, unknown>,
   ): void;
   removeComponentFromEntity(entity: Entity, component: DynamicComponent): void;
 }
 
 const checkpointData = new WeakMap<ComponentCheckpoint, CheckpointData>();
+
+/** Fields a checkpoint must rework on every apply: entity refs (may have died) and objects with a clone hook. */
+type ApplyFixups = {
+  readonly entityKeys: readonly string[];
+  readonly cloneKeys: readonly string[];
+};
+
+/** @returns the apply-time fixups for a component, or `null` when its captured values apply as is */
+function getApplyFixups(schema: Record<string, unknown> | null): ApplyFixups | null {
+  if (schema === null) return null;
+  const entityKeys: string[] = [];
+  const cloneKeys: string[] = [];
+  for (const key of Object.keys(schema)) {
+    const property = schema[key];
+    if (!isFieldDescriptor(property)) continue;
+    if (property.kind === "entity") entityKeys.push(key);
+    else if (property.kind === "object" && property.clone !== undefined) cloneKeys.push(key);
+  }
+  return entityKeys.length === 0 && cloneKeys.length === 0 ? null : { entityKeys, cloneKeys };
+}
+
+/**
+ * Build the payload one apply writes: dead entity refs become `null` and objects are cloned again, so a reused
+ * checkpoint never shares objects with the world.
+ */
+function preparePayload(
+  world: CheckpointWorld,
+  schema: Record<string, unknown>,
+  fixups: ApplyFixups,
+  properties: Readonly<Record<string, unknown>>,
+): Record<string, unknown> {
+  const payload: Record<string, unknown> = { ...properties };
+  for (const key of fixups.entityKeys) {
+    const target = payload[key];
+    if (target !== null && !world.isEntityAlive(target as Entity)) payload[key] = null;
+  }
+  for (const key of fixups.cloneKeys) payload[key] = cloneFieldValue(schema[key], payload[key]);
+  return payload;
+}
 
 /**
  * Reusable capture of selected component membership and values for an entity set.
@@ -92,8 +132,9 @@ export function captureComponentCheckpoint(
       if (!world.entityHasComponent(entity, component)) return { present: false };
       const storage = world.getComponentInstance(component);
       if (storage.type.schema === null) return { present: true };
-      const properties: Record<string, number> = {};
-      for (const key of keys[index]!) properties[key] = storage.get(entity, key);
+      const schema = storage.type.schema;
+      const properties: Record<string, unknown> = {};
+      for (const key of keys[index]!) properties[key] = cloneFieldValue(schema[key], storage.get(entity, key));
       return { present: true, properties: Object.freeze(properties) };
     });
     entities.push({ entity, components: Object.freeze(captured) });
@@ -118,15 +159,27 @@ export function applyComponentCheckpoint(world: CheckpointWorld, checkpoint: Com
     if (!world.isEntityAlive(entity)) throw new EntityNotFoundError(`Entity ${entity} is not active.`);
   }
 
-  // Validate the final ownership counts before any part of the checkpoint changes.
+  // Payloads per entity, per component: captured values, or reworked copies for entity / cloned object fields.
+  const payloads: (Readonly<Record<string, unknown>> | undefined)[][] = data.entities.map(() => []);
+
+  // Validate the final ownership counts and every payload before any part of the checkpoint changes.
   for (let index = 0; index < data.components.length; index++) {
     const component = data.components[index]!;
+    const schema = component.schema as Record<string, unknown> | null;
+    const fixups = getApplyFixups(schema);
     let finalOwners = world.getOwnerCount(component);
-    for (const { entity, components } of data.entities) {
+    for (let e = 0; e < data.entities.length; e++) {
+      const { entity, components } = data.entities[e]!;
       const captured = components[index]!;
       const present = world.entityHasComponent(entity, component);
       finalOwners += Number(captured.present) - Number(present);
-      if (captured.present) world.validateComponentData(component, captured.properties);
+      if (!captured.present) continue;
+      const properties = captured.properties;
+      const payload = fixups === null || properties === undefined ?
+        properties :
+        preparePayload(world, schema!, fixups, properties);
+      world.validateComponentData(component, payload as Record<string, unknown> | undefined);
+      payloads[e]![index] = payload;
     }
     const cap = component.maxEntities;
     if (cap !== null && cap !== undefined && finalOwners > cap) {
@@ -143,15 +196,16 @@ export function applyComponentCheckpoint(world: CheckpointWorld, checkpoint: Com
       }
     }
   }
-  for (const { entity, components } of data.entities) {
+  for (let e = 0; e < data.entities.length; e++) {
+    const { entity, components } = data.entities[e]!;
     for (let index = 0; index < data.components.length; index++) {
       const component = data.components[index]!;
-      const captured = components[index]!;
-      if (!captured.present) continue;
+      if (!components[index]!.present) continue;
+      const payload = payloads[e]![index] as Record<string, unknown> | undefined;
       if (!world.entityHasComponent(entity, component)) {
-        world.addComponentToEntity(entity, component, captured.properties);
-      } else if (captured.properties !== undefined) {
-        world.setComponentEntityData(entity, component, captured.properties);
+        world.addComponentToEntity(entity, component, payload);
+      } else if (payload !== undefined) {
+        world.setComponentEntityData(entity, component, payload);
       }
     }
   }

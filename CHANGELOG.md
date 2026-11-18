@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+- Add non-numeric component fields with `field.bool()`, `field.enum([...])`,
+  `field.entity()`, `field.string()` and `field.object<T>({ create?, clone? })`.
+  Bool, enum and entity fields use typed columns in the world buffer (`0 / 1`,
+  the label index, and the packed handle with `-1` for none). String and object
+  fields use capacity-length JS arrays indexed by slot. All of them appear in
+  `storage.partitions`. Guarded writes check value types; entity fields reject
+  handles that are not live; guarded reads decode values, and an entity field
+  reads `null` once its target is destroyed. New owners start at `false`, the
+  first label, `null`, `""`, or `create()`. Removing a component releases its
+  string and object values. Rollback and checkpoints copy object references,
+  or call `clone` when it is given.
+  Object fields also accept `encode` / `decode` hooks (a JSON-safe
+  `string | number | null` form) for saving worlds; neither is hashed.
+- Export `cloneFieldValue` (copies a value the way rollback and checkpoints
+  do) and `isFieldDescriptor`.
+- `Component.schema` now returns the declared schema, including field
+  descriptors. `Component.isTag` is `false` for components with only string or
+  object fields. Numeric schema hashes are unchanged.
+- `ComponentCheckpoint` payloads and `ComponentData` / `ComponentValue` for
+  field columns are no longer numbers. `ComponentInstance.get` / `getAt` keep a
+  `string`-key overload typed `number`, so cast results from untyped instances.
 - Reuse entity slots next-fit instead of last-freed-first. A destroyed entity's
   slot is reissued only after the allocator has swept past every other free
   slot, so a held stale handle no longer comes back to life after 32,768

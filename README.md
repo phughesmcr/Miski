@@ -233,6 +233,50 @@ New ownership starts every numeric field at zero, including capped components
 and omitted fields in partial payloads. Public data writes require finite
 numbers; direct partition access remains an unchecked escape hatch.
 
+**Non-numeric fields** — mix `field.*` descriptors with typed arrays:
+
+```ts
+import { field } from "@phughesmcr/miski";
+
+const Unit = new Component({
+  name: "unit",
+  schema: {
+    hp: Uint16Array,
+    alive: field.bool(), // Uint8Array 0 / 1
+    state: field.enum(["idle", "run", "dead"]), // Uint8Array label index
+    target: field.entity(), // Int32Array handle, -1 = none
+    label: field.string(), // JS array
+    mesh: field.object<Mesh>({ create: () => new Mesh(), clone: (m) => m.clone() }),
+  },
+});
+
+world.components.addToEntity(Unit, entity, { state: "run", target: enemy });
+world.components.getEntityData(Unit, entity);
+// { hp: 0, alive: false, state: "run", target: enemy, label: "", mesh: Mesh }
+```
+
+| Field             | Raw `partitions` column      | Guarded value     | New owner starts at     |
+| ----------------- | ---------------------------- | ----------------- | ----------------------- |
+| `field.bool()`    | `Uint8Array` (0 / 1)         | `boolean`         | `false`                 |
+| `field.enum(l)`   | `Uint8Array` / `Uint16Array` | one of the labels | the first label         |
+| `field.entity()`  | `Int32Array` (`-1` = none)   | `Entity \| null`  | `null`                  |
+| `field.string()`  | `string[]`                   | `string`          | `""`                    |
+| `field.object<T>` | `(T \| null)[]`              | `T \| null`       | `create()`, or `null`   |
+
+Guarded writes (`addToEntity`, `setEntityData`, bundles, the proxy,
+`instance.set`) check each value's type, and `undefined` is never accepted.
+Entity fields accept a live entity or `null`; a destroyed handle throws
+`EntityNotFoundError`. Reads (`getEntityData`, `readEntityDataInto`, the proxy,
+`instance.get` / `getAt`) decode raw values; an entity field reads `null` once
+its target is destroyed, even if the slot is reused. Raw partitions hold the
+encoded values, and string / object columns are capacity-length JS arrays
+indexed by slot, as numeric ones are. Removing the component or destroying its
+owner resets string and object cells, so the world stops holding the object.
+Object fields store references: without a `clone` hook, rollback and
+checkpoints restore the same object, but changes made inside it stay. Give
+`encode` / `decode` hooks (to and from `string | number | null`) to make an
+object field saveable.
+
 **Ownership & data** — attach, detach, and bundle without crumbs on the floor:
 
 ```ts
@@ -430,6 +474,13 @@ raw writes to slots that do not own the component are not captured.
 Restoration is order-neutral: the next allocated slots and the iteration order
 of queries and owners match a world that never ran the speculative work.
 Revision tokens continue forward after restoration.
+
+Object fields with a `clone` hook are cloned when a rollback point or
+checkpoint is captured, and again on each checkpoint apply, so a reused
+checkpoint never shares an object with the world. Without the hook both share
+references. Entity fields whose target has died restore as `null`. Field tags
+(`bool`, `enum:["a","b"]`, `entity`, `string`, `object`) are part of the schema
+hash; numeric-only schemas keep their existing hashes.
 
 Checkpoints are reusable and bound to the capturing world; captured entities
 must still be active when applied. A world permits one active rollback scope.

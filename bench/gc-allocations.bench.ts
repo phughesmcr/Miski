@@ -394,7 +394,10 @@ function destroyBundledBatch(entities: Entity[]): void {
 }
 
 class GcMesh {
-  constructor(public id = 0) {}
+  id: number;
+  constructor(id = 0) {
+    this.id = id;
+  }
 }
 const fieldUnit = new Component({
   name: "fieldUnit",

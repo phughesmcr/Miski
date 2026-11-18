@@ -903,7 +903,10 @@ Deno.bench({
 // ---------------------------------------------------------------------------
 
 class BenchMesh {
-  constructor(public id = 0) {}
+  id: number;
+  constructor(id = 0) {
+    this.id = id;
+  }
 }
 
 const fieldUnit = new Component({

@@ -1,10 +1,16 @@
-import type { Partition, Schema, SchemaProperty } from "@phughesmcr/partitionedbuffer";
+import type { Partition } from "@phughesmcr/partitionedbuffer";
 
 import type { $_COMPONENT_ID_KEY, $_PARTITION_KEY } from "@/constants.ts";
 import type { ComponentInstance } from "@/component/component-instance.ts";
 import type { Component } from "@/component/component.ts";
 import type { Entity } from "@/entity/entity.ts";
-import type { PartitionStorage, SchemaOrNull, StorageProxyWithProperties } from "@/types/partitions.ts";
+import type {
+  ComponentFieldSpec,
+  ComponentStorage,
+  FieldSchema,
+  SchemaOrNull,
+  StorageProxyWithProperties,
+} from "@/types/partitions.ts";
 
 /** The stringified JSON format of an EntityManager */
 export type EntityManagerSerialized = {
@@ -61,9 +67,9 @@ export type TagComponentSpec = {
  * can infer `Component<TStorage, TStorage>` without an explicit generic.
  *
  * `schema` is the raw property map (not `Schema<TStorage>`) so constructors like
- * `Float32Array` are preserved instead of widening to `SchemaProperty` / `unknown`.
+ * `Float32Array` and `field.*` descriptors are preserved instead of widening to `SchemaProperty` / `unknown`.
  */
-export type InferredDataComponentSpec<TStorage extends Record<string, SchemaProperty>> = {
+export type InferredDataComponentSpec<TStorage extends Record<string, ComponentFieldSpec>> = {
   /** The component's label */
   name: string;
   /** The component's property definitions */
@@ -88,7 +94,7 @@ export type ComponentSpec<
       [
         Exclude<keyof TValue, keyof TStorage> | Exclude<keyof TStorage, keyof TValue>,
       ] extends [never] ? TValue extends object ? {
-            [K in keyof TValue]: TValue[K] extends number | SchemaProperty ? true : false;
+            [K in keyof TValue]: TValue[K] extends number | ComponentFieldSpec ? true : false;
           }[keyof TValue] extends false ? never : unknown :
         never :
       never
@@ -110,7 +116,7 @@ export type ComponentSpec<
     } :
     {
       /** The component's property definitions */
-      schema: Schema<TStorage>;
+      schema: FieldSchema<TStorage>;
     });
 
 /**
@@ -129,7 +135,7 @@ export interface ComponentConstructor {
    *
    * Prefer this for the common SoA case: `new Component({ name, schema: { x: Float32Array } })`.
    */
-  new <TStorage extends Record<string, SchemaProperty>>(
+  new <TStorage extends Record<string, ComponentFieldSpec>>(
     spec: InferredDataComponentSpec<TStorage>,
   ): Component<TStorage, TStorage>;
 
@@ -167,10 +173,12 @@ export type ComponentInstanceSpec<
   markChanged(entity: Entity): boolean;
   /** Optional revision provider */
   getRevision?: () => number;
+  /** Decode one raw cell for guarded reads; omitted when every column is numeric */
+  decode?: (key: string, raw: unknown) => unknown;
   /** The StorageProxy of the ComponentInstance */
   proxy: TStorage extends null ? null : StorageProxyWithProperties<TValue>;
   /** The storage of the ComponentInstance */
-  storage: TStorage extends null ? null : PartitionStorage<TStorage>;
+  storage: TStorage extends null ? null : ComponentStorage<TStorage>;
   /** The Component of the ComponentInstance */
   type: Component<TValue, TStorage>;
 };

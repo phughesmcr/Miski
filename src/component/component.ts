@@ -6,12 +6,13 @@ import type {
   ComponentSpec,
   DynamicComponent,
 } from "@/types/component.ts";
-import type { Schema, SchemaOrNull } from "@/types/partitions.ts";
+import { type FieldDescriptor, fieldStorageConstructor, isFieldDescriptor } from "@/schema/field.ts";
+import type { FieldSchema, SchemaOrNull } from "@/types/partitions.ts";
 import { isPositiveUint32, isValidName } from "@/utils.ts";
 
 type ComponentSpecRuntime<TStorage extends SchemaOrNull> = {
   name: string;
-  schema?: Schema<TStorage> | null;
+  schema?: FieldSchema<TStorage> | null;
   maxEntities?: number | null;
 };
 
@@ -41,9 +42,73 @@ export function isSupportedColumnConstructor(constructor: unknown): boolean {
 function findUnsupportedColumn(schema: Record<string, unknown>): string | undefined {
   for (const key of Object.keys(schema)) {
     const property = schema[key];
+    if (isFieldDescriptor(property)) continue;
     if (!isSupportedColumnConstructor(Array.isArray(property) ? property[0] : property)) return key;
   }
   return undefined;
+}
+
+/**
+ * Split a logical schema into its numeric entries and its `field.*` entries.
+ * @returns `undefined` when the schema is not a non-empty object with valid field names
+ */
+function splitSchema(
+  schema: unknown,
+): { numeric: Record<string, unknown>; fields: Record<string, FieldDescriptor> } | undefined {
+  if (typeof schema !== "object" || schema === null || Array.isArray(schema)) return undefined;
+  const keys = Object.keys(schema);
+  if (keys.length === 0) return undefined;
+  const numeric: Record<string, unknown> = {};
+  const fields: Record<string, FieldDescriptor> = {};
+  for (const key of keys) {
+    const property = (schema as Record<string, unknown>)[key];
+    if (isFieldDescriptor(property)) {
+      if (!isValidName(key)) return undefined;
+      fields[key] = property;
+    } else {
+      numeric[key] = property;
+    }
+  }
+  return { numeric, fields };
+}
+
+/** @returns `true` if any own entry of `schema` is a `field.*` descriptor */
+function hasFieldDescriptor(schema: object): boolean {
+  for (const key in schema) {
+    if (Object.hasOwn(schema, key) && isFieldDescriptor((schema as Record<string, unknown>)[key])) return true;
+  }
+  return false;
+}
+
+/** @returns `true` if `schema` is a non-empty map of numeric columns and / or `field.*` descriptors */
+function isValidFieldSchema(schema: unknown): boolean {
+  // Numeric-only schemas take the original validation path, so they never pay for a split copy.
+  if (typeof schema === "object" && schema !== null && !hasFieldDescriptor(schema)) return isSchema(schema);
+  const split = splitSchema(schema);
+  if (split === undefined) return false;
+  return Object.keys(split.numeric).length === 0 || isSchema(split.numeric);
+}
+
+/**
+ * Physical schema handed to the partitioned buffer: numeric columns as declared plus the typed column backing each
+ * lowered field (bool / enum / entity), in declaration order. String and object fields are stored outside the
+ * buffer. `null` when no typed column remains.
+ */
+function physicalSchema(schema: Record<string, unknown>): Record<string, unknown> | null {
+  const physical: Record<string, unknown> = {};
+  let count = 0;
+  for (const key of Object.keys(schema)) {
+    const property = schema[key];
+    if (isFieldDescriptor(property)) {
+      const Ctor = fieldStorageConstructor(property);
+      if (Ctor === null) continue;
+      physical[key] = Ctor;
+    } else {
+      physical[key] = property;
+    }
+    count++;
+  }
+  return count === 0 ? null : physical;
 }
 
 /**
@@ -59,7 +124,7 @@ export function isValidComponentSpec<
   const s = spec as ComponentSpec<TValue, TStorage>;
   if (!isValidName(s.name)) return false;
   if (s.maxEntities != null && !isPositiveUint32(s.maxEntities)) return false;
-  if (s.schema && !isSchema(s.schema)) return false;
+  if (s.schema && !isValidFieldSchema(s.schema)) return false;
   if (s.schema && findUnsupportedColumn(s.schema as Record<string, unknown>) !== undefined) return false;
   // Proxy cursor names cannot also be numeric storage columns.
   if (s.schema && (Object.hasOwn(s.schema, "entity") || Object.hasOwn(s.schema, "slot"))) return false;
@@ -102,6 +167,9 @@ class ComponentRuntime<
   /** `true` if the component has no schema */
   readonly #isTag: boolean;
 
+  /** The declared (logical) schema, including `field.*` descriptors */
+  readonly #schema: FieldSchema<TStorage> | null;
+
   /**
    * Create a new component.
    * @param spec - The component's specification.
@@ -110,7 +178,7 @@ class ComponentRuntime<
   constructor(spec: ComponentSpec<TValue, TStorage>) {
     if (!isValidComponentSpec(spec)) {
       const schema = (spec as { schema?: unknown } | null | undefined)?.schema;
-      if (schema && typeof schema === "object" && isSchema(schema)) {
+      if (schema && typeof schema === "object" && isValidFieldSchema(schema)) {
         const key = findUnsupportedColumn(schema as Record<string, unknown>);
         if (key !== undefined) {
           throw new TypeError(
@@ -125,13 +193,17 @@ class ComponentRuntime<
     const runtimeSpec = spec as ComponentSpecRuntime<TStorage>;
 
     this.#id = ComponentRuntime.#nextId++;
+    const schema = runtimeSpec.schema ?? null;
     this.#partition = new Partition<TStorage>({
       name: runtimeSpec.name,
-      schema: runtimeSpec.schema as Schema<TStorage> | null,
+      schema: schema === null || !hasFieldDescriptor(schema) ?
+        schema :
+        physicalSchema(schema as Record<string, unknown>),
       maxOwners: runtimeSpec.maxEntities ?? null,
     } as unknown as PartitionSpec<TStorage>);
 
-    this.#isTag = !runtimeSpec.schema;
+    this.#schema = schema;
+    this.#isTag = !schema;
   }
 
   /** The maximum number of entities able to equip this component per world */
@@ -144,12 +216,12 @@ class ComponentRuntime<
     return this.#partition.name;
   }
 
-  /** The component's property definitions */
-  get schema(): Schema<TStorage> | null {
-    return this.#partition.schema as Schema<TStorage> | null;
+  /** The component's declared property definitions, including `field.*` descriptors */
+  get schema(): FieldSchema<TStorage> | null {
+    return this.#schema;
   }
 
-  /** The component's size in bytes for a single entity */
+  /** Bytes one entity occupies in the world buffer (string / object fields are stored outside it) */
   get size(): number {
     return this.#partition.size;
   }
@@ -189,11 +261,11 @@ export interface Component<
   readonly maxEntities: number | null;
   /** The component's label. */
   readonly name: string;
-  /** The declared numeric column constructors. */
-  readonly schema: Schema<TStorage> | null;
-  /** Bytes occupied by one entity's component data. */
+  /** The declared columns: typed-array constructors and `field.*` descriptors. */
+  readonly schema: FieldSchema<TStorage> | null;
+  /** Bytes one entity occupies in the world buffer (string / object fields are stored outside it). */
   readonly size: number;
-  /** Whether the component has no numeric columns. */
+  /** Whether the component has no data fields. */
   readonly isTag: boolean;
   /** Runtime string tag. */
   readonly [Symbol.toStringTag]: string;

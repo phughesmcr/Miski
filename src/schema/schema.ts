@@ -1,7 +1,8 @@
 import { Component, isValidComponentSpec } from "@/component/component.ts";
 import type { ComponentSpec, DynamicComponent } from "@/types/component.ts";
-import type { ComponentValue, SchemaProperty, TypedArrayConstructor } from "@/types/partitions.ts";
+import type { ComponentFieldSpec, ComponentValue, TypedArrayConstructor } from "@/types/partitions.ts";
 import { isPositiveUint32 } from "@/utils.ts";
+import { type FieldDescriptor, isFieldDescriptor } from "./field.ts";
 
 const FNV_OFFSET = 0xcbf29ce484222325n;
 const FNV_PRIME = 0x100000001b3n;
@@ -33,7 +34,7 @@ const CONSTRUCTOR_TAGS = new Map<TypedArrayConstructor, string>([
  * control in the schema value. Readonly from `const` inference is stripped so
  * storage shapes stay writable through proxies and public APIs.
  */
-export type ComponentSchema<S extends Record<string, SchemaProperty>> = {
+export type ComponentSchema<S extends Record<string, ComponentFieldSpec>> = {
   -readonly [K in keyof S]: S[K];
 };
 
@@ -43,14 +44,14 @@ export type ComponentSchema<S extends Record<string, SchemaProperty>> = {
  * Use with {@link ComponentSchema} when you want a named storage alias, or pass
  * the result straight into `new Component({ schema })`.
  */
-export function defineComponentSchema<const S extends Record<string, SchemaProperty>>(
+export function defineComponentSchema<const S extends Record<string, ComponentFieldSpec>>(
   schema: S,
 ): ComponentSchema<S> {
   return schema;
 }
 
-/** Component property maps keyed by component name. */
-export type SchemaComponentMap = Record<string, Record<string, TypedArrayConstructor>>;
+/** Component property maps keyed by component name: typed-array constructors or `field.*` descriptors. */
+export type SchemaComponentMap = Record<string, Record<string, TypedArrayConstructor | FieldDescriptor>>;
 
 /**
  * Tag declaration for {@link createEcsWorld} / schema compile.
@@ -107,7 +108,9 @@ export type CompiledComponentSchema<
 };
 
 /** Create one strongly typed component definition from its storage schema. */
-export function createComponentFromSchema<TSchema extends Readonly<Record<string, TypedArrayConstructor>>>(
+export function createComponentFromSchema<
+  TSchema extends Readonly<Record<string, TypedArrayConstructor | FieldDescriptor>>,
+>(
   name: string,
   schema: TSchema,
 ): Component<ComponentValue<TSchema>, TSchema> {
@@ -127,7 +130,7 @@ export function createTagFromSpec(name: string, spec: TagSpec): Component<null, 
 }
 
 type NormalizedSchema = {
-  componentMap: Record<string, Readonly<Record<string, TypedArrayConstructor>>>;
+  componentMap: Record<string, Readonly<Record<string, TypedArrayConstructor | FieldDescriptor>>>;
   tagMap: Record<string, TagSpec>;
   entries: readonly CompiledComponentEntry[];
 };
@@ -155,11 +158,14 @@ function normalizeSchema(input: SchemaComponentMap, tags?: TagMap): NormalizedSc
     if (typeof inputProperties !== "object" || inputProperties === null || Array.isArray(inputProperties)) {
       throw new TypeError(`Component ${componentName} must be an object.`);
     }
-    const properties: Record<string, TypedArrayConstructor> = Object.create(null);
+    const properties: Record<string, TypedArrayConstructor | FieldDescriptor> = Object.create(null);
     const compiledProperties: CompiledComponentProperty[] = [];
     for (const propertyName of Object.keys(inputProperties).toSorted()) {
       const constructor = inputProperties[propertyName]!;
-      const tag = CONSTRUCTOR_TAGS.get(constructor);
+      // Field tags ("bool", "enum:[...]", "entity", "string", "object") never collide with constructor tags.
+      const tag = isFieldDescriptor(constructor) ?
+        constructor.tag :
+        CONSTRUCTOR_TAGS.get(constructor as TypedArrayConstructor);
       if (tag === undefined) {
         throw new TypeError(`Unsupported typed-array constructor for ${componentName}.${propertyName}.`);
       }

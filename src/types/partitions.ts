@@ -9,6 +9,7 @@ import type {
 
 import type { StorageProxy } from "@/component/storage-proxy.ts";
 import type { Entity, PackSlot, SlotIndex } from "@/entity/entity.ts";
+import type { FieldDescriptor, FieldRaw, FieldValue } from "@/schema/field.ts";
 
 export type { Partition, PartitionStorage, Schema, SchemaProperty, TypedArray, TypedArrayConstructor };
 
@@ -16,15 +17,15 @@ export type { Partition, PartitionStorage, Schema, SchemaProperty, TypedArray, T
  * The specification for a StorageProxy
  * @param T The Schema / Partition type of the StorageProxy
  */
-export type StorageProxySpec<T> = {
+export type StorageProxySpec<T extends SchemaOrNull> = {
   /** Mark the actual storage slot as changed for this component. */
   markChanged(slot: SlotIndex): void;
   /** Validate a packed entity target against liveness and ownership. */
   has(entity: Entity): boolean;
   /** Pack a raw slot into its current entity handle. */
   packSlot?: PackSlot;
-  /** The Partition data of the StorageProxy */
-  storage: PartitionStorage<T>;
+  /** The component storage of the StorageProxy */
+  storage: ComponentStorage<T>;
   /** The capacity of the World */
   capacity: number;
 };
@@ -32,8 +33,17 @@ export type StorageProxySpec<T> = {
 /** A Schema or null (null = tag component) */
 export type SchemaOrNull<T = unknown> = Schema<T> | null;
 
-/** Resolve the typed-array view type for one schema property definition. */
-export type SchemaPropertyArray<T> = T extends TypedArrayConstructor ? InstanceType<T> :
+/** One component schema entry: a numeric typed-array column or a non-numeric `field.*` descriptor. */
+export type ComponentFieldSpec = SchemaProperty | FieldDescriptor;
+
+/** A component schema object whose entries may be numeric columns or `field.*` descriptors. */
+export type FieldSchema<T> = {
+  [K in keyof T]: ComponentFieldSpec;
+};
+
+/** Resolve the raw storage column type for one schema property definition. */
+export type SchemaPropertyArray<T> = T extends FieldDescriptor ? FieldRaw<T> :
+  T extends TypedArrayConstructor ? InstanceType<T> :
   T extends [infer Constructor extends TypedArrayConstructor, number] ? InstanceType<Constructor> :
   never;
 
@@ -53,12 +63,34 @@ export type ComponentPartitions<T extends SchemaOrNull> = T extends null ? null 
 
 /** The public write/proxy value shape for a component. */
 export type ComponentValue<T> = T extends null ? never : {
-  [K in keyof T]: T[K] extends SchemaProperty ? number : T[K] & number;
+  [K in keyof T]: T[K] extends FieldDescriptor ? FieldValue<T[K]> :
+    T[K] extends SchemaProperty ? number :
+    T[K] extends number ? T[K] & number :
+    T[K];
 };
 
-/** Numeric data read out of component storage. */
+/** Data read out of component storage: numbers for numeric columns, decoded values for `field.*` fields. */
 export type ComponentData<T> = T extends null ? Record<never, number> : {
-  [K in keyof T]: number;
+  [K in keyof T]: T[K] extends FieldDescriptor ? FieldValue<T[K]> :
+    T[K] extends SchemaProperty | number ? number :
+    T[K];
+};
+
+/**
+ * World-local storage for one data component: numeric and lowered field columns live in the shared buffer;
+ * string / object fields are slot-indexed JS arrays. All of them appear in `partitions`.
+ */
+export type ComponentStorage<T extends SchemaOrNull> = {
+  /** Byte offset of the component's typed columns in the world buffer. */
+  readonly byteOffset: number;
+  /** Byte length of the component's typed columns in the world buffer. */
+  readonly byteLength: number;
+  /** Raw columns keyed by field name, indexed by storage slot. */
+  readonly partitions: ComponentPartitions<T>;
+  /** Raw unchecked read of one cell. */
+  get(partition: keyof T, index: number): unknown;
+  /** Raw unchecked write of one cell. */
+  set(partition: keyof T, index: number, value: unknown): void;
 };
 
 /** Compatibility alias for component write/proxy values. */

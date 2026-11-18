@@ -323,6 +323,21 @@ export {
   mergeComponentSchemas,
 } from "@/schema/schema.ts";
 export { createEcsWorld, createEcsWorldFromSchema, createEcsWorldWithSchema, EcsWorld } from "@/world/ecs-world.ts";
+export { cloneFieldValue, field, isFieldDescriptor } from "@/schema/field.ts";
+export type {
+  BoolField,
+  EntityField,
+  EnumField,
+  FieldDescriptor,
+  FieldFactory,
+  FieldKind,
+  FieldRaw,
+  FieldValue,
+  ObjectField,
+  ObjectFieldEncoded,
+  ObjectFieldOptions,
+  StringField,
+} from "@/schema/field.ts";
 
 export type {
   ComposedQueryComponents,
@@ -350,6 +365,7 @@ export type {
   ComponentCheckpoint,
   ComponentConstructor,
   ComponentData,
+  ComponentFieldSpec,
   ComponentInstances,
   ComponentMap,
   ComponentPartitions,
@@ -357,12 +373,14 @@ export type {
   ComponentSchema,
   ComponentsFromSchemaMap,
   ComponentSpec,
+  ComponentStorage,
   ComponentValue,
   DataStorageFromMap,
   DynamicComponent,
   DynamicComponentInstance,
   EcsWorldConfig,
   Entity,
+  FieldSchema,
   InferredDataComponentSpec,
   ParametersExceptFirstTwo,
   Partition,

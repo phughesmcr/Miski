@@ -32,8 +32,11 @@ export type {
 } from "@/types/component.ts";
 export type {
   ComponentData,
+  ComponentFieldSpec,
   ComponentPartitions,
+  ComponentStorage,
   ComponentValue,
+  FieldSchema,
   Partition,
   PartitionStorage,
   Schema,
