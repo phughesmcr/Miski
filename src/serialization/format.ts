@@ -141,6 +141,19 @@ export function fieldTypeCodeOfName(name: unknown): number {
   return 0;
 }
 
+/** {@link fieldValueLimitOfName} result for `field.entity()` columns: cells hold -1 or a handle. */
+export const ENTITY_REF_LIMIT = -1;
+
+/**
+ * The value range a typed field's saved cells must fall in, from its layout type name: `n > 0` for indexes below
+ * `n` (`bool` and `enum:` columns), {@link ENTITY_REF_LIMIT} for entity refs, or 0 when any stored value is valid.
+ */
+export function fieldValueLimitOfName(name: string): number {
+  if (name === "bool") return 2;
+  if (name === "entity") return ENTITY_REF_LIMIT;
+  return name.startsWith("enum:") ? enumTagLabelCount(name) : 0;
+}
+
 export function align8(bytes: number): number {
   return (bytes + 7) & ~7;
 }

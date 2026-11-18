@@ -92,13 +92,13 @@ Deno.test("command buffer x field types: a bad field value drains the queue, the
   assertStrictEquals(commands.pendingCount, 0, "Queue drained");
 });
 
-Deno.test("command buffer x relations: relation presence tags are rejected at flush like direct calls", async () => {
+Deno.test("command buffer x relations: relation presence tags are rejected when queued, like direct calls", async () => {
   const world = await createTestWorld(components);
   const commands = new CommandBuffer(world);
   const a = world.entities.createOrThrow();
-  commands.add(childOf, a);
+  assertThrows(() => commands.add(childOf, a), TypeError, "relation");
   commands.add(unit, a, { hp: 9 });
-  assertThrows(() => commands.flush(), TypeError, "relation");
+  commands.flush();
   assert(!world.components.entityHas(childOf, a), "Relation tag not added without a pair");
   assertEquals(world.components.getEntityData(unit, a).hp, 9, "Later commands still applied");
 });

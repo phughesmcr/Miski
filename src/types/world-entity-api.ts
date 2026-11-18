@@ -64,7 +64,8 @@ export type WorldEntityAPI = {
     overrides?: TBundle & ComponentBundle<TBundle>,
   ): Entity;
   /**
-   * Create `count` entities from a prefab, all or nothing, with the same overrides.
+   * Create `count` entities from a prefab, all or nothing, with the same overrides. Object override values are
+   * shared by every new entity; prefab object defaults are cloned per entity.
    * Returns a borrowed list of the new entities in allocation order (valid until the next instantiate or world
    * mutation), or `undefined` if they do not all fit.
    */

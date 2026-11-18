@@ -22,7 +22,8 @@ Runtime tests live in `*.test.ts` files and run via `deno test` (see `deno.json`
 | `prefab.test.ts` | Prefab definition, `extends` flattening, instantiate / instantiateMany differential against `createWith`, atomicity, capped components, rollback, `EcsWorld` helpers |
 | `prefab_field_types.test.ts` | Prefabs with `field.*` columns: logical defaults, null-only entity refs, per-instance `create()` / `clone`, rejection of shared objects, throwing hooks |
 | `relations_cross.test.ts` | Relations with prefabs and field types: relation entries rejected in prefabs and overrides, numeric-only pair data, rollback and checkpoints restoring side columns and pairs together |
-| `scheduler_cross.test.ts` | Command buffers with field types, relations and prefabs: every field kind at flush, dead entity refs written as null, drain-then-rethrow, relation tags rejected |
+| `feature_review.test.ts` | Post-merge review regressions: save field-value and masked-generation checks, nested `instantiateMany` lists, relation checkpoint order and undefined pair data, command buffers rejecting relations when queued |
+| `scheduler_cross.test.ts` | Command buffers with field types, relations and prefabs: every field kind at flush, dead entity refs written as null, drain-then-rethrow, relation tags rejected when queued |
 | `serialization_cross.test.ts` | World saves with field types and relations: bool/enum/entity round-trips, field tags in layouts, label-order and kind mismatches, JSON view, object fields without hooks and relations rejected on every entry point |
 | `relations.test.ts` | Relations: pairs, order, data, exclusive/acyclic, cleanup and cascades, traversal, guards, checkpoints, rollback, `createEcsWorld` |
 | `relations_model.test.ts` | Seeded random relation operations (including cascades and rollback) checked against a plain-array model |

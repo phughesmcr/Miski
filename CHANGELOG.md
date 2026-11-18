@@ -53,6 +53,16 @@
   strings). Entity-ref defaults must be `null`; pass targets as instantiate overrides. An object field with no prefab
   value calls `create()` for each instance; a given object value is cloned per instance and needs the field's `clone`
   hook, or the prefab is rejected at definition. Null and primitive object-field values are stored as is.
+- Post-merge review fixes:
+  - Command buffers reject relation components when queuing, as the direct calls do, instead of at flush.
+  - Relation pair data treats `undefined` values as absent.
+  - Applying a checkpoint whose relation pairs are unchanged keeps each target's source order and marks nothing
+    changed.
+  - World loads reject bool, enum and entity cells outside their field type, and next generations that would
+    reissue a live handle once masked.
+  - Nested `instantiateMany` calls each keep their own borrowed list.
+  - A throwing `create()` / `clone()` hook, or a rejected `CommandBuffer` command, no longer keeps already-staged
+    string and object values alive.
 - Add entity relations and hierarchies. A `Relation` registers in
   `WorldSpec.components` like a component. Its presence is a tag, so queries
   match any target without archetype fragmentation, and pairs live in a side

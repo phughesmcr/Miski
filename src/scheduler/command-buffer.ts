@@ -13,6 +13,7 @@ import type { ComponentBundle, ComponentBundleEntryInput } from "@/types/compone
 import type { DynamicComponent } from "@/types/component.ts";
 import type { SchemaOrNull, SchemaValues } from "@/types/partitions.ts";
 import type { PendingEntity } from "@/types/scheduler.ts";
+import { isRelation } from "@/relation/relation.ts";
 import { isEntityField } from "@/schema/field.ts";
 import { hasOwnProperty } from "@/utils.ts";
 import { World } from "@/world/world.ts";
@@ -184,6 +185,7 @@ export class CommandBuffer {
    * @returns A placeholder handle usable as the target of later commands on this buffer until it flushes
    * @throws {CapacityError} If more entities are queued than the world can ever hold
    * @throws {NotRegisteredError} If a component is not registered in the world
+   * @throws {TypeError} If a component is a relation
    * @throws {RangeError} If a component appears twice in the bundle
    * @throws {ComponentDataError} If data names an unknown field or a numeric field value is not a finite number
    */
@@ -205,21 +207,26 @@ export class CommandBuffer {
     const stamp = this.#nextBundleStamp();
     this.#sideStaged = this.#sideCount;
     let payload = this.#payloadCount;
-    for (let i = 0; i < entryCount; i++) {
-      const entry = entries![i];
-      if (!Array.isArray(entry) || (entry.length !== 1 && entry.length !== 2)) {
-        throw new TypeError("Bundle entries must be [component] or [component, data] tuples.");
+    try {
+      for (let i = 0; i < entryCount; i++) {
+        const entry = entries![i];
+        if (!Array.isArray(entry) || (entry.length !== 1 && entry.length !== 2)) {
+          throw new TypeError("Bundle entries must be [component] or [component, data] tuples.");
+        }
+        const index = this.#infoFor(entry[0] as DynamicComponent);
+        if (this.#bundleSeen[index] === stamp) {
+          throw new RangeError(`Duplicate component "${this.#infos[index]!.name}" in bundle.`);
+        }
+        this.#bundleSeen[index] = stamp;
+        const record = this.#recordCount + 1 + i;
+        this.#ops[record] = OP_ENTRY;
+        this.#components[record] = index;
+        this.#targets[record] = 0;
+        payload = this.#stagePayload(record, this.#infos[index]!, entry.length === 2 ? entry[1] : undefined, payload);
       }
-      const index = this.#infoFor(entry[0] as DynamicComponent);
-      if (this.#bundleSeen[index] === stamp) {
-        throw new RangeError(`Duplicate component "${this.#infos[index]!.name}" in bundle.`);
-      }
-      this.#bundleSeen[index] = stamp;
-      const record = this.#recordCount + 1 + i;
-      this.#ops[record] = OP_ENTRY;
-      this.#components[record] = index;
-      this.#targets[record] = 0;
-      payload = this.#stagePayload(record, this.#infos[index]!, entry.length === 2 ? entry[1] : undefined, payload);
+    } catch (error) {
+      this.#dropStagedSide();
+      throw error;
     }
 
     const handle = this.#encodePending(this.#spawnCount);
@@ -256,6 +263,7 @@ export class CommandBuffer {
    * @param entity The entity, or a pending entity from {@link spawn}
    * @param data Field values; omitted fields keep their values, or start at zero on new ownership
    * @throws {NotRegisteredError} If the component is not registered in the world
+   * @throws {TypeError} If the component is a relation
    * @throws {ComponentDataError} If data names an unknown field or a numeric field value is not a finite number
    * @throws {SpecError} If `entity` is not a valid handle for this world or buffer
    */
@@ -281,6 +289,7 @@ export class CommandBuffer {
    * @param entity The entity, or a pending entity from {@link spawn}
    * @param data Field values; omitted fields keep their values
    * @throws {NotRegisteredError} If the component is not registered in the world
+   * @throws {TypeError} If the component is a relation
    * @throws {ComponentDataError} If the component is a tag, data names an unknown field, or a numeric value is not finite
    * @throws {SpecError} If `entity` is not a valid handle for this world or buffer
    */
@@ -297,6 +306,7 @@ export class CommandBuffer {
    * @param component The component to remove
    * @param entity The entity, or a pending entity from {@link spawn}
    * @throws {NotRegisteredError} If the component is not registered in the world
+   * @throws {TypeError} If the component is a relation
    * @throws {SpecError} If `entity` is not a valid handle for this world or buffer
    */
   remove<TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
@@ -402,10 +412,22 @@ export class CommandBuffer {
     this.#components[record] = index;
     this.#targets[record] = target;
     this.#sideStaged = this.#sideCount;
-    this.#payloadCount = this.#stagePayload(record, info, data, this.#payloadCount);
+    try {
+      this.#payloadCount = this.#stagePayload(record, info, data, this.#payloadCount);
+    } catch (error) {
+      this.#dropStagedSide();
+      throw error;
+    }
     this.#sideCount = this.#sideStaged;
     this.#recordCount++;
     this.#commandCount++;
+  }
+
+  /** Forget side values staged by a rejected command, so the buffer does not keep them alive. */
+  #dropStagedSide(): void {
+    const values = this.#sideValues;
+    for (let i = this.#sideCount; i < this.#sideStaged; i++) values[i] = undefined;
+    this.#sideStaged = this.#sideCount;
   }
 
   #commitSimple(op: number, componentIndex: number, target: number): void {
@@ -469,6 +491,12 @@ export class CommandBuffer {
     if (cached !== undefined) return cached;
     if (!this.#world.components.isRegistered(component)) {
       throw new NotRegisteredError(formatComponentNotRegistered(componentDisplayName(component)));
+    }
+    if (isRelation(component)) {
+      // Rejected at enqueue, like the direct calls, so a spawn never applies half a bundle.
+      throw new TypeError(
+        `Component "${component.name}" is a relation; add and remove its pairs with world.relations.`,
+      );
     }
     const schema = component.schema as Readonly<Record<string, unknown>> | null;
     const keys = schema === null ? [] : Object.keys(schema);

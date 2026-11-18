@@ -52,7 +52,10 @@ export interface EntityField {
   readonly __raw?: Int32Array;
 }
 
-/** A string field. Stored as a slot-indexed JS array; new owners start at `""`. */
+/**
+ * A string field. Stored as a slot-indexed JS array sized to world capacity (also under `maxEntities`); new owners
+ * start at `""`.
+ */
 export interface StringField {
   /** The field kind. */
   readonly kind: "string";
@@ -68,12 +71,13 @@ export interface StringField {
 export interface ObjectFieldOptions<T> {
   /**
    * Build the value for a new owner that was attached without one. Called once per new owner, before ownership
-   * changes. It must not mutate the world.
+   * changes. It must not mutate the world: values the running call has already staged are not protected from it.
    */
   create?(): T;
   /**
    * Copy a value for rollback capture, checkpoint capture and apply, and component copies. Without it those paths
-   * share references, so changes made inside the object are not undone. Never called with `null`.
+   * share references, so changes made inside the object are not undone. Never called with `null`. Like `create`, it
+   * must not mutate the world.
    */
   clone?(value: T): T;
   /**
@@ -90,7 +94,8 @@ export type ObjectFieldEncoded = string | number | null;
 
 /**
  * A field holding any JS value by reference (meshes, class instances, ...), or `null`. Stored as a slot-indexed JS
- * array. New owners start at `create()` when given, otherwise `null`. Removing the component releases the reference.
+ * array sized to world capacity (also under `maxEntities`). New owners start at `create()` when given, otherwise `null`.
+ * Removing the component releases the reference.
  */
 export interface ObjectField<T = unknown> extends ObjectFieldOptions<T> {
   /** The field kind. */

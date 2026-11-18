@@ -33,7 +33,9 @@ type PrefabPlan = {
   readonly capped: readonly DynamicComponentInstance[];
 };
 
-/** Per-call override staging; one per nesting depth so a getter that instantiates cannot clobber its caller. */
+/**
+ * Per-call staging; one per nesting depth so a getter or field hook that instantiates cannot clobber its caller.
+ */
 type OverrideStaging = {
   /** Override payload by instance id (`undefined` when absent or payload-less). */
   readonly data: (Record<string, unknown> | undefined)[];
@@ -47,6 +49,8 @@ type OverrideStaging = {
   extraCount: number;
   /** Every component of one instance, in archetype-transition order. */
   readonly added: DynamicComponentInstance[];
+  /** Borrowed result of the last bulk instantiate at this depth (allocated on first use). */
+  list: QueryEntityResult | undefined;
 };
 
 /**
@@ -72,9 +76,6 @@ export class PrefabSpawner {
   readonly #staging: OverrideStaging[] = [];
 
   #depth = 0;
-
-  /** Borrowed result of the last bulk instantiate (allocated on first use). */
-  #list: QueryEntityResult | undefined;
 
   constructor(deps: PrefabSpawnerDeps) {
     this.#entityManager = deps.entityManager;
@@ -121,7 +122,7 @@ export class PrefabSpawner {
     try {
       const plan = this.#preflight(prefab, overrides, count, throwOnCapacity, staging);
       if (plan === undefined) return undefined;
-      const list = this.#list ??= new QueryEntityResult(this.#entityManager.capacity);
+      const list = staging.list ??= new QueryEntityResult(this.#entityManager.capacity);
       list.clear();
       list.reserve(count);
       this.#commit(plan, staging, count, list);
@@ -143,6 +144,7 @@ export class PrefabSpawner {
         extras: [],
         extraCount: 0,
         added: [],
+        list: undefined,
       };
       this.#staging[depth] = staging;
     }

@@ -7,6 +7,8 @@ import {
   FIELD_TYPE_NAMES,
   fieldTypeCode,
   fieldTypeCodeOfName,
+  fieldValueLimitOfName,
+  isSideCode,
   WorldSaveError,
   type WorldSaveFieldType,
 } from "./format.ts";
@@ -40,6 +42,11 @@ export type LayoutInfo = {
   readonly codes: readonly (readonly number[] | null)[];
   /** Owner cap per component, or 0 when uncapped. */
   readonly caps: readonly number[];
+  /**
+   * Value limit per typed storage row (side columns skipped, so parallel to a component image's `rows`), from
+   * `fieldValueLimitOfName`; `null` for tags.
+   */
+  readonly limits: readonly (readonly number[] | null)[];
 };
 
 /** Describe the layout of a world's registered component states. */
@@ -94,7 +101,12 @@ export function layoutInfo(layout: WorldSaveLayout): LayoutInfo {
     component.fields === null ? null : component.fields.map((field) => fieldTypeCodeOfName(field.type))
   );
   const caps = layout.components.map((component) => component.maxEntities ?? 0);
-  return { codes, caps };
+  const limits = layout.components.map((component) =>
+    component.fields === null ? null : component.fields
+      .filter((field) => !isSideCode(fieldTypeCodeOfName(field.type)))
+      .map((field) => fieldValueLimitOfName(field.type))
+  );
+  return { codes, caps, limits };
 }
 
 const encoder = new TextEncoder();

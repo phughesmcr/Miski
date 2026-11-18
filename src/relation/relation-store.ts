@@ -468,8 +468,8 @@ export class RelationStore {
     }
     for (let i = 0; i < this.#keys.length; i++) {
       const key = this.#keys[i]!;
-      if (!hasOwnProperty(values, key)) continue;
-      const value = values[key];
+      const value = hasOwnProperty(values, key) ? values[key] : undefined;
+      if (value === undefined) continue;
       if (typeof value !== "number" || !Number.isFinite(value)) {
         throw new ComponentDataError(`Relation "${this.name}" data field "${key}" must be a finite number.`);
       }
@@ -481,7 +481,9 @@ export class RelationStore {
   #writeData(data: Readonly<Record<string, number | undefined>> | undefined, row: number, fresh: boolean): boolean {
     let changed = false;
     for (let i = 0; i < this.#keys.length; i++) {
-      const provided = data !== undefined && hasOwnProperty(data, this.#keys[i]!);
+      // `undefined` counts as absent, matching `RelationDataInput`.
+      const key = this.#keys[i]!;
+      const provided = data !== undefined && hasOwnProperty(data, key) && data[key] !== undefined;
       if (!provided && !fresh) continue;
       const value = provided ? this.#scratchColumns[i]![0]! : 0;
       const column = this.#columns[i]!;
@@ -637,6 +639,8 @@ export class RelationStore {
    */
   replacePairs(source: Entity, targets: readonly Entity[], data: readonly Readonly<Record<string, number>>[]): void {
     const sourceSlot = entityIndex(source);
+    // Unchanged pairs keep their place in each target's source list and do not count as a change.
+    if (this.#hasPairs(sourceSlot, targets, data)) return;
     const hadTargets = this.sourceCount[sourceSlot] !== 0;
     while (this.sourceHead[sourceSlot] !== NONE) this.#unlink(this.sourceHead[sourceSlot]!);
     for (let i = 0; i < targets.length; i++) {
@@ -652,6 +656,25 @@ export class RelationStore {
     else this.#unmarkChanged(sourceSlot);
     if (hadTargets !== hasTargets) this.#host.setPresence(this.instance, source, hasTargets);
     this.#host.bumpRevision(this.instance);
+  }
+
+  /** Whether `sourceSlot` already holds exactly these pairs, in this order, with this data. */
+  #hasPairs(
+    sourceSlot: number,
+    targets: readonly Entity[],
+    data: readonly Readonly<Record<string, number>>[],
+  ): boolean {
+    if (this.sourceCount[sourceSlot] !== targets.length) return false;
+    let row = this.sourceHead[sourceSlot]!;
+    for (let i = 0; i < targets.length; i++) {
+      if (this.rowTarget[row] !== targets[i]) return false;
+      const values = data[i];
+      for (let k = 0; k < this.#keys.length; k++) {
+        if (!Object.is(this.#columns[k]![row], values?.[this.#keys[k]!] ?? 0)) return false;
+      }
+      row = this.#nextBySource[row]!;
+    }
+    return true;
   }
 
   // ---------------------------------------------------------------- rollback

@@ -332,7 +332,7 @@ export class Schedule {
    * then `world.refresh()`.
    *
    * If a system throws, pending commands are discarded, the world is refreshed if it can be, and the error is
-   * rethrown. System callbacks run synchronously; a returned promise is not awaited.
+   * rethrown. The clock has already advanced by `dt`: fixed steps that were still due are dropped, not replayed. System callbacks run synchronously; a returned promise is not awaited.
    * @param dt Seconds since the previous run (finite, >= 0)
    * @throws {RangeError} If `dt` is not a finite number >= 0
    * @throws {WorldStateError} If the world is not initialized, or `run()` is called from inside a run

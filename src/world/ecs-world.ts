@@ -237,7 +237,8 @@ export class EcsWorld<
   }
 
   /**
-   * Create `count` entities from a prefab, all or nothing, with the same overrides.
+   * Create `count` entities from a prefab, all or nothing, with the same overrides. Object override values are
+   * shared by every new entity; prefab object defaults are cloned per entity.
    * @returns a borrowed list of the new entities, valid until the next instantiate or world mutation
    * @throws {CapacityError} - If fewer than `count` entity slots are free
    */

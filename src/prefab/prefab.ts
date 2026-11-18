@@ -147,6 +147,8 @@ function zeroRow(component: DynamicComponent): Record<string, unknown> {
  * A prefab is a definition, like a {@link Component} or a query: it lives outside every world, uses no entity slot,
  * never appears in queries, and can be instantiated in any world that registers its components. Instantiation copies
  * the defaults into the new entity, so later prefab definitions (including children) never affect instances.
+ * Object-field defaults are frozen only at the top level; treat them as read-only, since changing one changes every
+ * later instance (and every prefab that extends this one).
  *
  * @example
  * ```ts

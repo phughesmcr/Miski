@@ -1,4 +1,4 @@
-import { createSlotArray, type EntityArray, entityIndex } from "@/entity/entity.ts";
+import { ENTITY_GEN_MASK, type EntityArray, entityIndex } from "@/entity/entity.ts";
 import type { TypedArray } from "@/types/partitions.ts";
 import {
   align4,
@@ -7,6 +7,7 @@ import {
   bytesEqual,
   CODE_OBJECT,
   CODE_STRING,
+  ENTITY_REF_LIMIT,
   FIELD_TYPE_BYTES,
   FORMAT_VERSION,
   hashBytes64,
@@ -748,7 +749,8 @@ export function validateImage(image: SaveImage, scratch: ValidationScratch, know
     let bits = occupancy[word]!;
     while (bits !== 0) {
       const slot = (word << 5) + (31 - Math.clz32(bits & -bits));
-      if (image.liveGeneration[k++] === image.nextGeneration[slot]) {
+      // Handles keep only the masked generation bits, so compare those.
+      if (((image.liveGeneration[k++]! ^ image.nextGeneration[slot]!) & ENTITY_GEN_MASK) === 0) {
         fail(`World save slot ${slot} would reissue its handle.`);
       }
       bits &= bits - 1;
@@ -828,6 +830,22 @@ export function validateImage(image: SaveImage, scratch: ValidationScratch, know
       if (changedMarks[slot] === epoch) fail(`World save component ${c} marks slot ${slot} changed twice.`);
       changedMarks[slot] = epoch;
     }
+    const limits = image.info.limits[c];
+    if (limits !== null && limits !== undefined) {
+      for (let r = 0; r < limits.length; r++) {
+        const limit = limits[r]!;
+        if (limit === 0) continue;
+        const row = component.rows[r]!;
+        for (let j = 0; j < row.length; j++) {
+          const value = row[j]!;
+          if (
+            limit === ENTITY_REF_LIMIT ? value !== -1 && (value < 0 || entityIndex(value) >= capacity) : value >= limit
+          ) {
+            fail(`World save component ${c} holds a field value outside its type.`);
+          }
+        }
+      }
+    }
   }
 
   const epoch = scratch.next();
@@ -843,9 +861,4 @@ export function validateImage(image: SaveImage, scratch: ValidationScratch, know
       fail("World save window holds an invalid handle.");
     }
   }
-}
-
-/** Allocate an owned slot list of `length` for a capacity. */
-export function slotList(capacity: number, length: number): EntityArray {
-  return createSlotArray(capacity, length);
 }

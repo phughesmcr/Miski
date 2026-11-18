@@ -572,11 +572,17 @@ export class ComponentManager {
    */
   #stageSideInitial(state: ComponentState, data: Record<string, unknown> | undefined): void {
     const fields = state.sideFields;
-    for (let i = 0; i < fields.length; i++) {
-      const property = fields[i]!;
-      if (data !== undefined && hasOwnProperty(data, state.sideKeys[i]!)) continue;
-      const create = property.kind === "object" ? property.create : undefined;
-      state.sideInitial[i] = create === undefined ? sideDefault(property) : create();
+    try {
+      for (let i = 0; i < fields.length; i++) {
+        const property = fields[i]!;
+        if (data !== undefined && hasOwnProperty(data, state.sideKeys[i]!)) continue;
+        const create = property.kind === "object" ? property.create : undefined;
+        state.sideInitial[i] = create === undefined ? sideDefault(property) : create();
+      }
+    } catch (error) {
+      // Values staged before the throw must not stay referenced.
+      this.#clearSideInitial(state);
+      throw error;
     }
   }
 
@@ -711,16 +717,22 @@ export class ComponentManager {
   ): void {
     const fields = state.sideFields;
     const initial = state.sideInitial;
-    for (let i = 0; i < fields.length; i++) {
-      if (data !== undefined && hasOwnProperty(data, state.sideKeys[i]!)) continue;
-      const property = fields[i]!;
-      const value = template[i];
-      if (value !== undefined) {
-        initial[i] = cloneFieldValue(property, value);
-        continue;
+    try {
+      for (let i = 0; i < fields.length; i++) {
+        if (data !== undefined && hasOwnProperty(data, state.sideKeys[i]!)) continue;
+        const property = fields[i]!;
+        const value = template[i];
+        if (value !== undefined) {
+          initial[i] = cloneFieldValue(property, value);
+          continue;
+        }
+        const create = property.kind === "object" ? property.create : undefined;
+        initial[i] = create === undefined ? sideDefault(property) : create();
       }
-      const create = property.kind === "object" ? property.create : undefined;
-      initial[i] = create === undefined ? sideDefault(property) : create();
+    } catch (error) {
+      // Values staged before the throw must not stay referenced.
+      this.#clearSideInitial(state);
+      throw error;
     }
   }
 
