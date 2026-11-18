@@ -106,8 +106,8 @@ JSR publishing is triggered by version tags (`v*`), not by merging to `master`.
 3. Create and push a matching tag:
 
    ```sh
-   git tag v1.0.0-beta.1
-   git push origin v1.0.0-beta.1
+   git tag v1.0.0-beta.2
+   git push origin v1.0.0-beta.2
    ```
 
 4. The Publish workflow runs automatically on the tag push. A `verify` job (no

@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.0.0-beta.2 — 2026-11-18
 
 - Add `SystemSpec.argCount` (0 to 4). A system created with it forwards exactly
   that many arguments to its callback without allocating per call; missing

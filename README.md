@@ -63,13 +63,13 @@ Pick your runtime. Same package, same sweetness.
 
 ```bash
 # Node
-npx jsr add @phughesmcr/miski@1.0.0-beta.1
+npx jsr add @phughesmcr/miski@1.0.0-beta.2
 
 # Deno
-deno add jsr:@phughesmcr/miski@1.0.0-beta.1
+deno add jsr:@phughesmcr/miski@1.0.0-beta.2
 
 # Bun
-bunx jsr add @phughesmcr/miski@1.0.0-beta.1
+bunx jsr add @phughesmcr/miski@1.0.0-beta.2
 ```
 
 ```ts
