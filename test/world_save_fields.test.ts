@@ -126,7 +126,8 @@ function populate(world: World, random: Rng): Entity[] {
         hp: random() % 1000,
         label: TEXTS[random() % TEXTS.length],
         alive: (random() & 1) === 1,
-        mesh: roll === 1 ? null : new Mesh([random() % 9, -(random() % 7), 0.5]),
+        // `0 -` avoids -0, which the JSON mesh hook cannot keep
+        mesh: roll === 1 ? null : new Mesh([random() % 9, 0 - (random() % 7), 0.5]),
         state: (random() & 1) === 1 ? "run" : "idle",
         target: live.length > 1 ? live[random() % (live.length - 1)] : null,
       } as never);

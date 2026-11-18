@@ -19,6 +19,18 @@ Runtime tests live in `*.test.ts` files and run via `deno test` (see `deno.json`
 | `world_integrity.test.ts` | Atomic spawn/checkpoints, historical exits, rollback identities, slot bounds |
 | `world_lifecycle_integrity.test.ts` | Async readiness, teardown concurrency, failure cleanup |
 | `rollback_checkpoint_integrity.test.ts` | One rollback scope, consumed/foreign rollback points, foreign checkpoints, >32-component round-trips |
+| `component_storage_integrity.test.ts` | Capped (dense-row) storage under stray non-owner writes, ownership acquisition, cap clamping, column constructors |
+| `component_rollback_memory.test.ts` | Capped owners and dense rows through rollback and removal, sparse changed window, `getActive` scratch growth, 16-bit-capacity rollback |
+| `component_tracking_regressions.test.ts` | Changed marking for newly owned components, `applyCheckpoint` during `getOwners` iteration, failed bundle spawns stripping committed components |
+| `entity_slot_reuse.test.ts` | Next-fit slot reissue, churn rotation, stale handles not reissued, generation wrap limit |
+| `query_archetype_perf.test.ts` | Query result order and generations through moves, batches and rollback; refills only for related changes, by copying handles |
+| `query_schema_integrity.test.ts` | System arity forwarding, query alias keys and immutable metadata, retained result buffers, schema hashing and bootstrap validation |
+| `query_transition_integrity.test.ts` | Atomic bundle spawn, entered/exited relative to the refresh window (also after rollback), nested transition iteration |
+| `rollback_neutrality.test.ts` | Committing a rollback point leaves allocation and iteration order untouched |
+| `review_regressions.test.ts` | Storage and rollback cost scale with population, rollback keeps query order and allocation cursor, `getActive` bounds, `Query.compose` include roles |
+| `randomized_model.test.ts` | Seeded random operations checked against a plain model, with a twin control world proving rollback leaves no trace |
+| `spawn_scratch_reuse.test.ts` | `EcsWorld.spawn` scratch reuse: no leaked components or data, undefined-skip and tag validation, re-entrant spawns from getters |
+| `system_lifecycle_regressions.test.ts` | Init and destroy hooks awaiting `systems.destroy` reject instead of deadlocking; teardown rejects instead of throwing |
 | `prefab.test.ts` | Prefab definition, `extends` flattening, instantiate / instantiateMany differential against `createWith`, atomicity, capped components, rollback, `EcsWorld` helpers |
 | `prefab_field_types.test.ts` | Prefabs with `field.*` columns: logical defaults, null-only entity refs, per-instance `create()` / `clone`, rejection of shared objects, throwing hooks |
 | `relations_cross.test.ts` | Relations with prefabs and field types: relation entries rejected in prefabs and overrides, numeric-only pair data, rollback and checkpoints restoring side columns and pairs together |
@@ -43,7 +55,9 @@ Runtime tests live in `*.test.ts` files and run via `deno test` (see `deno.json`
 - `createEntity(world)` — create an entity and assert success
 - `createTestWorld(components, capacity?)` — construct, init, and return a world
 
-Assertion helpers live in `helpers.ts`.
+Assertion helpers live in `helpers.ts`. `assertEquals` compares structurally (`Object.is` for primitives, so `NaN`
+equals `NaN` and `-0` differs from `0`; element-wise for arrays and typed arrays; a missing key differs from an
+`undefined` one).
 
 ## Compile-only checks
 
