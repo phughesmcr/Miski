@@ -52,6 +52,7 @@ for modern JavaScript — no leftovers.
 - Typed `createEcsWorld` named-map bootstrap
 - Atomic bundles and bulk add/remove for spawn, load, and query-wide transitions
 - Component-subset checkpoints and speculative world rollback
+- Deterministic whole-world saves: binary, lossless JSON, and deltas
 - Schema compile + stable FNV hash for tooling and saves
 - :page_with_curl: MIT licensed — share freely, keep the wrappers on
 
@@ -441,6 +442,64 @@ for schemas mixing uppercase and lowercase names before upgrading.
 
 `world.queryRevision(query)` bumps when any component in the query is written —
 a little ding every time the batter changes.
+
+### :floppy_disk: World saves
+
+Bottle the whole jar. Pour it back exactly.
+
+```ts
+import {
+  applyWorldDelta,
+  createWorldDelta,
+  loadWorld,
+  measureWorldSave,
+  saveWorld,
+  saveWorldInto,
+  worldSaveFromJSON,
+  worldSaveToJSON,
+} from "@phughesmcr/miski";
+
+const bytes = saveWorld(world); // exact-size Uint8Array
+loadWorld(otherWorld, bytes); // same layout: replaces otherWorld's state
+
+const buffer = new Uint8Array(measureWorldSave(world) * 2);
+const length = saveWorldInto(world, buffer); // no allocation with a reused buffer
+
+const delta = createWorldDelta(bytes, saveWorld(world)); // only what changed
+const next = applyWorldDelta(bytes, delta); // byte-identical to the newer save
+
+const text = JSON.stringify(worldSaveToJSON(bytes)); // lossless JSON view
+loadWorld(otherWorld, worldSaveFromJSON(JSON.parse(text)));
+```
+
+A save holds entity handles with their generations and allocator state,
+component ownership, values and changed lists, the archetype registry order, and
+the open entered / exited window. A loaded world behaves exactly like the saved
+one: the same handles stay valid, the next created entities get the same
+handles, and queries, owners and changes iterate in the same order. Revision
+tokens move forward on load, as after rollback. Systems are code, not data, so
+the target keeps its own.
+
+A save loads only into an initialized world, outside a rollback scope, with the
+same layout: capacity, and the same components in the same order with the same
+names, caps, fields and storage types. `describeWorldSaveLayout(world)` and
+`readWorldSaveHeader(bytes)` show both sides. On a mismatch, `loadWorld` throws
+`WorldSaveError` naming the first difference, unless you pass a migration:
+
+```ts
+loadWorld(world, oldBytes, {
+  migrate: (document, target) => ({ ...document, layout: target /* rename, fill, drop... */ }),
+});
+```
+
+`migrate` runs only on a mismatch and receives the save as a JSON document and
+the world's layout. Its result is validated like any other save. Every load is
+validated in full before anything changes, so a corrupt, truncated or
+incompatible save leaves the world untouched. Saves are little-endian. Raw
+writes to slots that do not own a component are not saved; NaN payload bits do
+not survive the JSON view.
+
+A delta is bound to its base save: applying it to any other save throws.
 
 ---
 

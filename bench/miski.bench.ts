@@ -1,6 +1,19 @@
 /// <reference lib="deno.ns" />
 
-import { Component, entityIndex, Query, World } from "../mod.ts";
+import {
+  applyWorldDelta,
+  Component,
+  createWorldDelta,
+  entityIndex,
+  loadWorld,
+  measureWorldSave,
+  Query,
+  saveWorld,
+  saveWorldInto,
+  World,
+  worldSaveFromJSON,
+  worldSaveToJSON,
+} from "../mod.ts";
 import type { ComponentInstance, Entity } from "../mod.ts";
 import {
   countEntities,
@@ -887,6 +900,68 @@ Deno.bench({
     movementMedium.movement(1 / 60);
     entitySink ^= countEntities(movementMedium.world.entities.query(movementFrameRenderableQuery));
     movementMedium.world.refresh();
+  },
+});
+
+// --- Serialization ---
+const saveSource = await populateMixedWorld(MEDIUM_CAPACITY);
+const saveLoadTarget = await populateMixedWorld(MEDIUM_CAPACITY);
+const saveBuffer = new Uint8Array(measureWorldSave(saveSource.world) + 1024);
+const savedBytes = saveWorld(saveSource.world);
+const savedSmall = saveWorld((await populateMixedWorld(SMALL_CAPACITY)).world);
+const savedDocument = worldSaveToJSON(savedSmall);
+const deltaBaseBytes = savedBytes;
+saveSource.world.components.setEntityData(saveSource.components.position, saveSource.entities[0]!, { x: -1, y: -1 });
+const deltaNextBytes = saveWorld(saveSource.world);
+const deltaBytes = createWorldDelta(deltaBaseBytes, deltaNextBytes);
+
+Deno.bench({
+  name: "saveWorldInto 8K mixed world - reused buffer",
+  group: "serialization",
+  baseline: true,
+  fn: () => {
+    numericSink ^= saveWorldInto(saveSource.world, saveBuffer);
+  },
+});
+
+Deno.bench({
+  name: "saveWorld 8K mixed world - fresh buffer",
+  group: "serialization",
+  fn: () => {
+    objectSink = saveWorld(saveSource.world);
+  },
+});
+
+Deno.bench({
+  name: "loadWorld 8K mixed world into a populated world",
+  group: "serialization",
+  fn: () => {
+    loadWorld(saveLoadTarget.world, savedBytes);
+  },
+});
+
+Deno.bench({
+  name: "createWorldDelta 8K mixed world - one value changed",
+  group: "serialization",
+  fn: () => {
+    objectSink = createWorldDelta(deltaBaseBytes, deltaNextBytes);
+  },
+});
+
+Deno.bench({
+  name: "applyWorldDelta 8K mixed world - one value changed",
+  group: "serialization",
+  fn: () => {
+    objectSink = applyWorldDelta(deltaBaseBytes, deltaBytes);
+  },
+});
+
+Deno.bench({
+  name: "worldSaveToJSON + worldSaveFromJSON 1K mixed world",
+  group: "serialization",
+  fn: () => {
+    objectSink = worldSaveFromJSON(worldSaveToJSON(savedSmall));
+    objectSink = savedDocument;
   },
 });
 

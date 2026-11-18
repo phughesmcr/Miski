@@ -31,6 +31,12 @@ export type SnapshottableComponentState = {
   changedPositions?: EntityArray;
 };
 
+/** Snapshottable state plus the storage keys parallel to its columns, read by world saves. */
+export type SaveableComponentState = SnapshottableComponentState & {
+  /** Partition keys parallel to `storageColumns`. */
+  readonly storageKeys: readonly string[];
+};
+
 /** Component-manager callbacks used to rebuild tracking state during restore. */
 export type ComponentSnapshotRestoreHooks<T extends SnapshottableComponentState> = {
   /** Allocate ownership tracking with room for `minOwners` and return the owner flags. */

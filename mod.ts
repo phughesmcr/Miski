@@ -7,7 +7,7 @@
  * Public surface tiers:
  * - **Core** - World, Component, Query, System, entity handles, errors
  * - **Hot-path** - dense `queryList`, direct `.storage.partitions` writes, `frame`
- * - **Tooling** - `createEcsWorld`, schema hash, checkpoints, rollback, canonicalize
+ * - **Tooling** - `createEcsWorld`, schema hash, checkpoints, rollback, world saves, canonicalize
  *
  * Prefer `.storage.partitions` for SoA access (`.partitions` is an alias).
  * House rule: `slots` for storage / partitions; `entities` for identity
@@ -278,6 +278,39 @@
  * // mutate...
  * restoreWorldRollbackPoint(game.world, point);
  * ```
+ *
+ * @example World saves, JSON documents and deltas
+ * ```ts
+ * import {
+ *   applyWorldDelta,
+ *   Component,
+ *   createWorldDelta,
+ *   loadWorld,
+ *   saveWorld,
+ *   World,
+ *   worldSaveFromJSON,
+ *   worldSaveToJSON,
+ * } from "@phughesmcr/miski";
+ *
+ * const position = new Component({ name: "position", schema: { x: Float32Array, y: Float32Array } });
+ * const world = new World({ capacity: 256, components: [position] });
+ * await world.init();
+ * const entity = world.entities.createOrThrow();
+ * world.components.addToEntity(position, entity, { x: 1, y: 2 });
+ *
+ * // A save holds entities, generations, ownership, values, archetype order and the open window.
+ * const base = saveWorld(world);
+ * world.components.setEntityData(position, entity, { x: 5, y: 6 });
+ * const next = saveWorld(world);
+ *
+ * // A delta rebuilds `next` from `base` byte for byte.
+ * const delta = createWorldDelta(base, next);
+ * loadWorld(world, applyWorldDelta(base, delta));
+ *
+ * // A lossless JSON view of the same save.
+ * const text = JSON.stringify(worldSaveToJSON(next));
+ * loadWorld(world, worldSaveFromJSON(JSON.parse(text)));
+ * ```
  */
 
 // --- Core ---
@@ -323,6 +356,21 @@ export {
   mergeComponentSchemas,
 } from "@/schema/schema.ts";
 export { createEcsWorld, createEcsWorldFromSchema, createEcsWorldWithSchema, EcsWorld } from "@/world/ecs-world.ts";
+export {
+  describeWorldSaveLayout,
+  loadWorld,
+  measureWorldSave,
+  readWorldSaveHeader,
+  saveWorld,
+  saveWorldInto,
+} from "@/serialization/world-save.ts";
+export { worldSaveFromJSON, worldSaveToJSON } from "@/serialization/document.ts";
+export { applyWorldDelta, createWorldDelta } from "@/serialization/delta.ts";
+export { WorldSaveError } from "@/serialization/format.ts";
+export type { WorldSaveHeader, WorldSaveLoadOptions } from "@/serialization/world-save.ts";
+export type { WorldSaveComponentDocument, WorldSaveDocument, WorldSaveNumber } from "@/serialization/document.ts";
+export type { WorldSaveComponentLayout, WorldSaveField, WorldSaveLayout } from "@/serialization/layout.ts";
+export type { WorldSaveFieldType } from "@/serialization/format.ts";
 
 export type {
   ComposedQueryComponents,
