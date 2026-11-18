@@ -52,7 +52,7 @@ for modern JavaScript — no leftovers.
 - Typed `createEcsWorld` named-map bootstrap
 - Atomic bundles and bulk add/remove for spawn, load, and query-wide transitions
 - Component-subset checkpoints and speculative world rollback
-- Deterministic whole-world saves: binary, lossless JSON, and deltas
+- Deterministic whole-world saves, binary or lossless JSON
 - Schema compile + stable FNV hash for tooling and saves
 - :page_with_curl: MIT licensed — share freely, keep the wrappers on
 
@@ -449,8 +449,6 @@ Bottle the whole jar. Pour it back exactly.
 
 ```ts
 import {
-  applyWorldDelta,
-  createWorldDelta,
   loadWorld,
   measureWorldSave,
   saveWorld,
@@ -465,9 +463,6 @@ loadWorld(otherWorld, bytes); // same layout: replaces otherWorld's state
 const buffer = new Uint8Array(measureWorldSave(world) * 2);
 const length = saveWorldInto(world, buffer); // no allocation with a reused buffer
 
-const delta = createWorldDelta(bytes, saveWorld(world)); // only what changed
-const next = applyWorldDelta(bytes, delta); // byte-identical to the newer save
-
 const text = JSON.stringify(worldSaveToJSON(bytes)); // lossless JSON view
 loadWorld(otherWorld, worldSaveFromJSON(JSON.parse(text)));
 ```
@@ -477,8 +472,13 @@ component ownership, values and changed lists, the archetype registry order, and
 the open entered / exited window. A loaded world behaves exactly like the saved
 one: the same handles stay valid, the next created entities get the same
 handles, and queries, owners and changes iterate in the same order. Revision
-tokens move forward on load, as after rollback. Systems are code, not data, so
-the target keeps its own.
+tokens move forward on load, as after rollback.
+
+A save covers ECS state only. Systems, schedules and their clocks are not part
+of it: the target keeps its own systems, and anything outside the world (a
+scheduler's tick and accumulator, pending command buffers, your own game state)
+must be stored alongside the save. Save and load between frames, not in the
+middle of one.
 
 A save loads only into an initialized world, outside a rollback scope, with the
 same layout: capacity, and the same components in the same order with the same
@@ -498,8 +498,6 @@ validated in full before anything changes, so a corrupt, truncated or
 incompatible save leaves the world untouched. Saves are little-endian. Raw
 writes to slots that do not own a component are not saved; NaN payload bits do
 not survive the JSON view.
-
-A delta is bound to its base save: applying it to any other save throws.
 
 ---
 

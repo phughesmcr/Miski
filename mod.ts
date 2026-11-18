@@ -279,12 +279,10 @@
  * restoreWorldRollbackPoint(game.world, point);
  * ```
  *
- * @example World saves, JSON documents and deltas
+ * @example World saves and JSON documents
  * ```ts
  * import {
- *   applyWorldDelta,
  *   Component,
- *   createWorldDelta,
  *   loadWorld,
  *   saveWorld,
  *   World,
@@ -303,9 +301,8 @@
  * world.components.setEntityData(position, entity, { x: 5, y: 6 });
  * const next = saveWorld(world);
  *
- * // A delta rebuilds `next` from `base` byte for byte.
- * const delta = createWorldDelta(base, next);
- * loadWorld(world, applyWorldDelta(base, delta));
+ * // Load replaces the world's state with the save.
+ * loadWorld(world, base);
  *
  * // A lossless JSON view of the same save.
  * const text = JSON.stringify(worldSaveToJSON(next));
@@ -365,7 +362,6 @@ export {
   saveWorldInto,
 } from "@/serialization/world-save.ts";
 export { worldSaveFromJSON, worldSaveToJSON } from "@/serialization/document.ts";
-export { applyWorldDelta, createWorldDelta } from "@/serialization/delta.ts";
 export { WorldSaveError } from "@/serialization/format.ts";
 export type { WorldSaveHeader, WorldSaveLoadOptions } from "@/serialization/world-save.ts";
 export type { WorldSaveComponentDocument, WorldSaveDocument, WorldSaveNumber } from "@/serialization/document.ts";

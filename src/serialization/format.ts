@@ -1,7 +1,7 @@
 import { MiskiError } from "@/errors.ts";
 import type { TypedArray, TypedArrayConstructor } from "@/types/partitions.ts";
 
-/** Thrown when a world save, save document or delta is malformed, corrupt or incompatible with its target. */
+/** Thrown when a world save or save document is malformed, corrupt or incompatible with its target. */
 export class WorldSaveError extends MiskiError {
   /**
    * Create a world save error.
@@ -16,8 +16,6 @@ export class WorldSaveError extends MiskiError {
 
 /** "MSKI" read as a little-endian u32. */
 export const SAVE_MAGIC = 0x494b534d;
-/** "MSKD" read as a little-endian u32. */
-export const DELTA_MAGIC = 0x444b534d;
 export const FORMAT_VERSION = 1;
 
 /**
@@ -179,15 +177,6 @@ export class ViewCache {
     this.#length = buffer.byteLength;
     return fresh;
   }
-}
-
-/** Word-wise FNV-1a over `count` u32 words starting at word `start`; used to bind deltas to their saves. */
-export function hashWords(words: Uint32Array, start: number, count: number): number {
-  let hash = 0x811c9dc5;
-  for (let i = 0; i < count; i++) {
-    hash = Math.imul(hash ^ words[start + i]!, 0x01000193);
-  }
-  return hash >>> 0;
 }
 
 /** Two independent byte-wise FNV-1a 32 hashes, giving a 64-bit layout fingerprint `[low, high]`. */

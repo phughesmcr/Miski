@@ -1,7 +1,7 @@
 /// <reference lib="deno.ns" />
 
 /**
- * Full world save / load, the JSON view, migration hooks and deltas.
+ * Full world save / load, the JSON view and migration hooks.
  *
  * The core property: a world loaded from a save is indistinguishable from the world that was saved. Both are driven
  * with the same seeded operation stream afterwards and must agree on every handle, every iteration order, every
@@ -9,10 +9,8 @@
  */
 
 import {
-  applyWorldDelta,
   captureWorldRollbackPoint,
   Component,
-  createWorldDelta,
   describeWorldSaveLayout,
   type DynamicComponent,
   type Entity,
@@ -471,45 +469,6 @@ Deno.test("migrate hooks run only on a layout mismatch and their result is valid
   assert(bytesEqual(saveWorld(newWorld), before), "A failed migration leaves the world untouched");
 });
 
-for (const seed of [2, 9, 31]) {
-  Deno.test(`deltas reconstruct the next save exactly (seed ${seed})`, async () => {
-    const h: Harness = { world: await createWorld(300), live: [] };
-    const random = rng(seed);
-    churn(h, random, 300);
-    let base = saveWorld(h.world);
-    for (let round = 0; round < 12; round++) {
-      churn(h, random, 1 + (random() % 60));
-      if (round % 4 === 0) h.world.refresh();
-      const next = saveWorld(h.world);
-      const delta = createWorldDelta(base, next);
-      assert(bytesEqual(applyWorldDelta(base, delta), next), `Delta round ${round} must rebuild the next save`);
-      base = next;
-    }
-  });
-}
-
-Deno.test("deltas are small for small changes and reject the wrong base", async () => {
-  const h: Harness = { world: await createWorld(4096), live: [] };
-  churn(h, rng(4), 3000);
-  h.world.refresh();
-  const base = saveWorld(h.world);
-  const unchanged = createWorldDelta(base, base);
-  assert(unchanged.byteLength <= 128, `An empty delta should be tiny, got ${unchanged.byteLength}`);
-  assert(bytesEqual(applyWorldDelta(base, unchanged), base), "Empty delta rebuilds the base");
-
-  const owner = handles(h.world.components.getOwners(position))[0]! as Entity;
-  h.world.components.setEntityData(position, owner, { x: 123, y: 456 });
-  const next = saveWorld(h.world);
-  const delta = createWorldDelta(base, next);
-  assert(delta.byteLength * 20 < next.byteLength, `Delta ${delta.byteLength} B vs save ${next.byteLength} B`);
-  assert(bytesEqual(applyWorldDelta(base, delta), next), "Delta rebuilds the next save");
-
-  assertThrows(() => applyWorldDelta(next, delta), WorldSaveError, "base");
-  assertThrows(() => applyWorldDelta(base, base), WorldSaveError, "magic");
-  const otherWorld = await createWorld(16);
-  assertThrows(() => createWorldDelta(saveWorld(otherWorld), next), WorldSaveError, "layout");
-});
-
 Deno.test("a loaded world shares no memory with the save bytes", async () => {
   const source: Harness = { world: await createWorld(300), live: [] };
   churn(source, rng(13), 400);
@@ -528,38 +487,4 @@ Deno.test("a loaded world shares no memory with the save bytes", async () => {
   churn(target, rng(14), 200);
   target.world.refresh();
   assert(bytesEqual(bytes, pristine), "Using the loaded world must not write into the save");
-});
-
-Deno.test("corrupt deltas throw WorldSaveError or rebuild the exact target", async () => {
-  const h: Harness = { world: await createWorld(300), live: [] };
-  const random = rng(19);
-  churn(h, random, 400);
-  const base = saveWorld(h.world);
-  churn(h, random, 40);
-  const next = saveWorld(h.world);
-  const delta = createWorldDelta(base, next);
-  let rejected = 0;
-  for (let trial = 0; trial < 600; trial++) {
-    const corrupt = delta.slice();
-    const flips = 1 + (random() % 3);
-    for (let i = 0; i < flips; i++) {
-      const at = random() % corrupt.byteLength;
-      // Mix single-byte noise with whole-word extremes, which probe length overflow.
-      if (random() % 4 === 0 && at + 4 <= corrupt.byteLength) {
-        new DataView(corrupt.buffer).setUint32(at & ~3, random() % 2 === 0 ? 0xffffffff : 0xfffffffc, true);
-      } else {
-        corrupt[at] = random() & 0xff;
-      }
-    }
-    try {
-      assert(bytesEqual(applyWorldDelta(base, corrupt), next), `Accepted corrupt delta must rebuild next (${trial})`);
-    } catch (error) {
-      assert(error instanceof WorldSaveError, `Corrupt delta must throw WorldSaveError, got ${String(error)}`);
-      rejected++;
-    }
-  }
-  assert(rejected > 300, `Expected most corrupt deltas to be rejected, got ${rejected}`);
-  for (let cut = 0; cut < delta.byteLength; cut += 4) {
-    assertThrows(() => applyWorldDelta(base, delta.subarray(0, cut)), WorldSaveError, "");
-  }
 });

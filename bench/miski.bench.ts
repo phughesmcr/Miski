@@ -1,9 +1,7 @@
 /// <reference lib="deno.ns" />
 
 import {
-  applyWorldDelta,
   Component,
-  createWorldDelta,
   entityIndex,
   loadWorld,
   measureWorldSave,
@@ -910,10 +908,6 @@ const saveBuffer = new Uint8Array(measureWorldSave(saveSource.world) + 1024);
 const savedBytes = saveWorld(saveSource.world);
 const savedSmall = saveWorld((await populateMixedWorld(SMALL_CAPACITY)).world);
 const savedDocument = worldSaveToJSON(savedSmall);
-const deltaBaseBytes = savedBytes;
-saveSource.world.components.setEntityData(saveSource.components.position, saveSource.entities[0]!, { x: -1, y: -1 });
-const deltaNextBytes = saveWorld(saveSource.world);
-const deltaBytes = createWorldDelta(deltaBaseBytes, deltaNextBytes);
 
 Deno.bench({
   name: "saveWorldInto 8K mixed world - reused buffer",
@@ -937,22 +931,6 @@ Deno.bench({
   group: "serialization",
   fn: () => {
     loadWorld(saveLoadTarget.world, savedBytes);
-  },
-});
-
-Deno.bench({
-  name: "createWorldDelta 8K mixed world - one value changed",
-  group: "serialization",
-  fn: () => {
-    objectSink = createWorldDelta(deltaBaseBytes, deltaNextBytes);
-  },
-});
-
-Deno.bench({
-  name: "applyWorldDelta 8K mixed world - one value changed",
-  group: "serialization",
-  fn: () => {
-    objectSink = applyWorldDelta(deltaBaseBytes, deltaBytes);
   },
 });
 

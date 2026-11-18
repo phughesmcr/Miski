@@ -11,9 +11,8 @@
   first and throw the new `WorldSaveError` without changing the world. A save
   loads only into a world with the same layout; `loadWorld`'s `migrate` option
   converts a save written with a different layout. Also add
-  `measureWorldSave`, `readWorldSaveHeader`, `describeWorldSaveLayout`, a
-  lossless JSON view (`worldSaveToJSON` / `worldSaveFromJSON`) and deltas
-  between two saves (`createWorldDelta` / `applyWorldDelta`).
+  `measureWorldSave`, `readWorldSaveHeader`, `describeWorldSaveLayout` and a
+  lossless JSON view (`worldSaveToJSON` / `worldSaveFromJSON`).
 - Reuse entity slots next-fit instead of last-freed-first. A destroyed entity's
   slot is reissued only after the allocator has swept past every other free
   slot, so a held stale handle no longer comes back to life after 32,768
