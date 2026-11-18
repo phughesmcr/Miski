@@ -716,6 +716,7 @@ export class World {
       entities: this.#entityManager,
       components: this.#componentManager,
       archetypes: this.#archetypeManager,
+      relations: this.#relationManager,
       assertSaveReady: () => this.#assertInitialized(),
       assertLoadReady: () => {
         this.#assertInitialized();

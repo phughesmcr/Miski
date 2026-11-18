@@ -33,8 +33,15 @@ export const SECTION_ENTITIES = 1;
 export const SECTION_ARCHETYPES = 2;
 export const SECTION_COMPONENTS = 3;
 export const SECTION_WINDOW = 4;
-/** Number of sections a version 1 writer emits. */
+/** Relation pair indexes; written only when the layout has relations. */
+export const SECTION_RELATIONS = 5;
+/** Number of sections a version 1 writer emits for a layout without relations (one more with relations). */
 export const SECTION_COUNT = 4;
+
+/** Number of sections of a save whose layout has `relations` relation components. */
+export function sectionCount(relations: number): number {
+  return relations === 0 ? SECTION_COUNT : SECTION_COUNT + 1;
+}
 
 /** Storage type of one saved numeric component field. */
 export type WorldSaveNumericFieldType = "i8" | "i16" | "i32" | "u8" | "u16" | "u32" | "f32" | "f64" | "u8c";

@@ -664,6 +664,60 @@ export class RelationStore {
     return true;
   }
 
+  // ---------------------------------------------------------------- world saves (read without allocating)
+
+  /** Pair pool high-water mark; always 0 for exclusive relations. */
+  get savedHighWater(): number {
+    return this.#highWater;
+  }
+
+  get freeRowCount(): number {
+    return this.#freeCount;
+  }
+
+  /** Free row `i` of the free stack, bottom first. */
+  freeRowAt(i: number): number {
+    return this.#freeRows[i]!;
+  }
+
+  get liveSourceCount(): number {
+    return this.#liveSourceCount;
+  }
+
+  /** Live source slot `i`, in the order rollback captures them. */
+  liveSourceAt(i: number): number {
+    return this.#liveSources[i]!;
+  }
+
+  /** Next row of the same source, or {@link NONE}. */
+  nextRowBySource(row: number): number {
+    return this.#nextBySource[row]!;
+  }
+
+  /** First slot of the first-targeted list, or {@link NONE}. */
+  get firstTargetSlot(): number {
+    return this.#allHead;
+  }
+
+  /** Next slot of the first-targeted list, or {@link NONE}. */
+  nextTargetSlot(slot: number): number {
+    return this.#allNext[slot]!;
+  }
+
+  get changedCount(): number {
+    return this.#changedCount;
+  }
+
+  /** Changed source slot `i`, in changed-iteration order. */
+  changedAt(i: number): number {
+    return this.#changedSlots[i]!;
+  }
+
+  /** Pair data column `i`, in schema order. Replaced when the pool grows. */
+  dataColumn(i: number): TypedArray {
+    return this.#columns[i]!;
+  }
+
   // ---------------------------------------------------------------- rollback
 
   captureState(): RelationStoreSnapshot {

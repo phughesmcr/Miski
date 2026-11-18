@@ -419,6 +419,7 @@ Deno.test("saveWorldInto writes string saves into a reused buffer", async () => 
   populate(source, rng(10));
   const expected = saveWorld(source);
   const target = new Uint8Array(expected.byteLength + 64);
+  target.fill(0xff); // every pad byte must be written, not inherited
   for (let i = 0; i < 3; i++) {
     const written = saveWorldInto(source, target);
     assertStrictEquals(written, expected.byteLength, "written length");

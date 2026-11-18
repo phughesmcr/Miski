@@ -269,6 +269,9 @@ const named = await populateNamedWorld(MEDIUM_CAPACITY);
 const namedSaveTarget = new Uint8Array(measureWorldSave(named.world) + 1024);
 const meshed = await populateNamedWorld(MEDIUM_CAPACITY, true);
 const meshedSaveTarget = new Uint8Array(measureWorldSave(meshed.world) + 1024);
+// Relation saves: pair pools, pair lists and pair data are written straight from the relation stores.
+const relationSave = await populateRelationWorld(MEDIUM_CAPACITY, 4_096);
+const relationSaveTarget = new Uint8Array(measureWorldSave(relationSave.world) + 1024);
 const movement = await populateMovementWorld(MEDIUM_CAPACITY);
 const fixedArityMovement = await populateMovementWorld(MEDIUM_CAPACITY, undefined, 1);
 const lifecycle = await populateSparseLifecycleWorld(MEDIUM_CAPACITY);
@@ -1069,6 +1072,12 @@ const scenarios: Scenario[] = [
   {
     ...budgeted("saveWorldInto 8K world with strings - reused buffer", 4_000, () => {
       numericSink ^= saveWorldInto(named.world, namedSaveTarget);
+    }),
+    warmupIterations: 30_000,
+  },
+  {
+    ...budgeted("saveWorldInto 8K world with relations - reused buffer", 4_000, () => {
+      numericSink ^= saveWorldInto(relationSave.world, relationSaveTarget);
     }),
     warmupIterations: 30_000,
   },

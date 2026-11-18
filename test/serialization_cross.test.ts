@@ -7,7 +7,6 @@ import {
   field,
   loadWorld,
   measureWorldSave,
-  Relation,
   saveWorld,
   saveWorldInto,
   World,
@@ -93,10 +92,9 @@ Deno.test("saves x field types: the JSON view round-trips field tags", async () 
   assertEquals(Array.from(again), Array.from(bytes), "JSON view is lossless");
 });
 
-Deno.test("saves x field types and relations: unsupported worlds throw on every entry point", async () => {
+Deno.test("saves x field types: unsupported worlds throw on every entry point", async () => {
   const cases: [string, DynamicComponent][] = [
     ["meshed.mesh", new Component({ name: "meshed", schema: { hp: Uint8Array, mesh: field.object() } })],
-    ["relation", new Relation({ name: "childOf", exclusive: true })],
   ];
   const plain = await worldOf([unitOf()]);
   const bytes = saveWorld(plain);

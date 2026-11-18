@@ -447,8 +447,15 @@ export type {
   WorldSaveFieldValues,
   WorldSaveNumber,
   WorldSaveObjectValue,
+  WorldSaveRelationDocument,
+  WorldSaveRelationPair,
 } from "@/serialization/document.ts";
-export type { WorldSaveComponentLayout, WorldSaveField, WorldSaveLayout } from "@/serialization/layout.ts";
+export type {
+  WorldSaveComponentLayout,
+  WorldSaveField,
+  WorldSaveLayout,
+  WorldSaveRelationLayout,
+} from "@/serialization/layout.ts";
 export type { WorldSaveFieldType, WorldSaveNumericFieldType } from "@/serialization/format.ts";
 
 export type {

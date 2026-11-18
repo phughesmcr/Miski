@@ -34,8 +34,7 @@
   equivalent bundle, and steady-state instantiation allocates nothing. `EcsWorld` gains `prefab`,
   `instantiate` and `instantiateMany` for named specs.
 - World saves record `field.*` hash tags (`bool`, `entity`, `enum:[...]`) as field types, so the layout check
-  catches kind changes and reordered enum labels. Worlds with relations are rejected by every save and load entry
-  point until saves support them.
+  catches kind changes and reordered enum labels.
 - World saves support `field.string()` and `field.object()` fields. Strings are written as UTF-8 (an offset table
   plus a heap), and `saveWorldInto` stays allocation-free for them; a string with a lone surrogate throws
   `WorldSaveError`. Object fields are saved through their `encode` / `decode` hooks, which are never called with
@@ -43,6 +42,13 @@
   `decode` before changing the world, so a throwing hook leaves it untouched. The JSON view holds strings as
   strings and object cells as `WorldSaveObjectValue` (`{ number: "NaN" }` and so on for numbers JSON cannot hold).
   `WorldSaveComponentDocument.values` is now typed `WorldSaveFieldValues`.
+- World saves support relations. A RELATIONS section holds each relation's row pool, sources and pairs in store order,
+  target lists, changed sources and live pair data, so a loaded world returns the same `getTargets`, `getSources` and
+  `traverse` order and hands out the same rows. The layout records `exclusive`, `acyclic`, `onDeleteTarget` and pair
+  fields (`WorldSaveLayout` components gain an optional `relation`), and every load checks pairs, rows, target lists
+  and acyclic chains before changing the world. The JSON view gains `relations`, keyed by relation name and present
+  only when the layout has relations (`WorldSaveRelationDocument`, `WorldSaveRelationPair`). Saves of worlds without
+  relations are unchanged, and `saveWorldInto` stays allocation-free with relations.
 - Command buffers carry `field.*` values through their side column. A queued entity-ref value whose target died
   before the flush is written as `null` instead of failing the command; direct guarded writes still reject dead
   handles.

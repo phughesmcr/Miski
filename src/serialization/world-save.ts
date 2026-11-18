@@ -1,8 +1,9 @@
 import type { Archetype } from "@/archetype/archetype.ts";
 import type { SideField } from "@/component/field-codec.ts";
+import { entityIndex } from "@/entity/entity.ts";
 import type { DynamicComponentInstance } from "@/types/component.ts";
 import type { TypedArray } from "@/types/partitions.ts";
-import { isRelation } from "@/relation/relation.ts";
+import { NONE, type RelationStore, type RelationStoreSnapshot } from "@/relation/relation-store.ts";
 import type { World } from "@/world/world.ts";
 import type { WorldSaveDocument } from "./document.ts";
 import { docToImage, imageToDoc } from "./document.ts";
@@ -18,10 +19,11 @@ import {
   objectColumnBytes,
   SECTION_ARCHETYPES,
   SECTION_COMPONENTS,
-  SECTION_COUNT,
   SECTION_ENTITIES,
   SECTION_HEADER_BYTES,
+  SECTION_RELATIONS,
   SECTION_WINDOW,
+  sectionCount,
   slotWidth,
   stringColumnBytes,
   ViewCache,
@@ -38,6 +40,8 @@ import {
   heapBytes,
   type KnownLayout,
   parseSave,
+  relationPayloadBytes,
+  relationTargetOrder,
   type SaveImage,
   validateImage,
   ValidationScratch,
@@ -102,22 +106,25 @@ type SaveContext = KnownLayout & {
   /** Number of encoded cells currently held in the object columns' `encoded` arrays. */
   encodedCount: number;
   scratch: ValidationScratch | undefined;
+  /** Relation stores in layout order. */
+  readonly relations: readonly RelationStore[];
+  /** Pair and target counts per relation, set by `measure`. */
+  readonly relationCounts: Int32Array;
 };
 
 const contexts = new WeakMap<World, SaveContext>();
 
 function contextOf(world: World): SaveContext {
-  let context = contexts.get(world);
-  if (context !== undefined) return context;
+  return contexts.get(world) ?? createContext(world);
+}
+
+// Kept apart from `contextOf`: closures here capture locals, and V8 allocates their context on every call of the
+// enclosing function, including calls that return a cached context.
+function createContext(world: World): SaveContext {
   const host = (world as unknown as { [worldSaveHost](): WorldSaveHost })[worldSaveHost]();
   const states = host.components.saveStates;
-  for (const state of states) {
-    const name = state.instance.type.name;
-    if (isRelation(state.instance.type)) {
-      throw new WorldSaveError(`Component ${name} is a relation; world saves do not support relations yet.`);
-    }
-  }
   const layout = layoutOfStates(host.capacity, states);
+  const info = layoutInfo(layout);
   const side = states.map((state) =>
     state.sideFields.map((field, s): SideColumn => ({
       code: field.kind === "string" ? CODE_STRING : CODE_OBJECT,
@@ -129,12 +136,12 @@ function contextOf(world: World): SaveContext {
   );
   const layoutBlock = encodeLayout(layout);
   const [low, high] = hashBytes64(layoutBlock);
-  context = {
+  const context: SaveContext = {
     host,
     capacity: host.capacity,
     layout,
     layoutBlock,
-    info: layoutInfo(layout),
+    info,
     layoutHashLow: low,
     layoutHashHigh: high,
     wordsPerSet: wordCount(states.length),
@@ -144,6 +151,8 @@ function contextOf(world: World): SaveContext {
     sideBytes: new Float64Array(states.length),
     encodedCount: 0,
     scratch: undefined,
+    relations: info.relations.map((relation) => host.relations!.store(states[relation.component]!.instance.type)),
+    relationCounts: new Int32Array(info.relations.length * 2),
   };
   contexts.set(world, context);
   return context;
@@ -228,7 +237,8 @@ function measure(context: SaveContext): number {
   const { host, capacity, info } = context;
   const width = slotWidth(capacity);
   const live = liveCount(context);
-  let bytes = 40 + context.layoutBlock.length + SECTION_COUNT * SECTION_HEADER_BYTES;
+  const relations = context.relations;
+  let bytes = 40 + context.layoutBlock.length + sectionCount(relations.length) * SECTION_HEADER_BYTES;
   bytes += entitiesPayloadBytes(capacity, live);
   bytes += archetypesPayloadBytes(host.archetypes.archetypeCount, context.wordsPerSet, live, width);
   const states = host.components.saveStates;
@@ -240,7 +250,78 @@ function measure(context: SaveContext): number {
     bytes += componentPayloadBytes(state.ownerCount, state.changedCount, info.codes[c]!, width, side);
   }
   bytes += windowPayloadBytes(host.archetypes.transitionWindow.touchedCount, width);
+  for (let r = 0; r < relations.length; r++) bytes += measureRelation(context, r);
   return bytes;
+}
+
+/** Count a relation's pairs and targets into `relationCounts`; returns its payload bytes. */
+function measureRelation(context: SaveContext, r: number): number {
+  const store = context.relations[r]!;
+  let pairs = 0;
+  for (let i = 0; i < store.liveSourceCount; i++) pairs += store.sourceCount[store.liveSourceAt(i)]!;
+  let targets = 0;
+  for (let slot = store.firstTargetSlot; slot !== NONE; slot = store.nextTargetSlot(slot)) targets++;
+  context.relationCounts[r * 2] = pairs;
+  context.relationCounts[r * 2 + 1] = targets;
+  return relationPayloadBytes(
+    store.freeRowCount,
+    store.liveSourceCount,
+    pairs,
+    targets,
+    store.changedCount,
+    context.info.relations[r]!.codes,
+  );
+}
+
+/** Write one relation at `offset` (8-aligned), right after `measure`. Allocates nothing. @returns the end offset */
+function writeRelation(context: SaveContext, views: Views, r: number, offset: number): number {
+  const store = context.relations[r]!;
+  const pairs = context.relationCounts[r * 2]!;
+  const u32 = views.u32;
+  const sources = store.liveSourceCount;
+  let w = offset >>> 2;
+  u32[w++] = store.savedHighWater;
+  u32[w++] = store.freeRowCount;
+  u32[w++] = sources;
+  u32[w++] = pairs;
+  u32[w++] = context.relationCounts[r * 2 + 1]!;
+  u32[w++] = store.changedCount;
+  for (let i = 0; i < store.freeRowCount; i++) u32[w++] = store.freeRowAt(i);
+  for (let i = 0; i < sources; i++) u32[w++] = store.liveSourceAt(i);
+  for (let i = 0; i < sources; i++) u32[w++] = store.sourceCount[store.liveSourceAt(i)]!;
+  for (let i = 0; i < sources; i++) {
+    for (let row = store.sourceHead[store.liveSourceAt(i)]!; row !== NONE; row = store.nextRowBySource(row)) {
+      u32[w] = row;
+      u32[w + pairs] = store.rowTarget[row]!;
+      w++;
+    }
+  }
+  w += pairs;
+  for (let slot = store.firstTargetSlot; slot !== NONE; slot = store.nextTargetSlot(slot)) u32[w++] = slot;
+  for (let slot = store.firstTargetSlot; slot !== NONE; slot = store.nextTargetSlot(slot)) {
+    for (let row = store.targetHead[slot]!; row !== NONE; row = store.nextByTarget[row]!) {
+      u32[w++] = store.rowSource[row]!;
+    }
+  }
+  for (let i = 0; i < store.changedCount; i++) u32[w++] = store.changedAt(i);
+  let p = align8(w << 2);
+  zeroPad(views, w << 2, p);
+  const codes = context.info.relations[r]!.codes;
+  for (let c = 0; c < codes.length; c++) {
+    const code = codes[c]!;
+    const bytes = FIELD_TYPE_BYTES[code]!;
+    const view = views.column(code);
+    const column = store.dataColumn(c);
+    let j = p / bytes;
+    for (let i = 0; i < sources; i++) {
+      for (let row = store.sourceHead[store.liveSourceAt(i)]!; row !== NONE; row = store.nextRowBySource(row)) {
+        view[j++] = column[row]!;
+      }
+    }
+    const end = p + pairs * bytes;
+    zeroPad(views, end, p = align8(end));
+  }
+  return p;
 }
 
 /** Write a slot list; returns the end offset. */
@@ -393,7 +474,27 @@ function writeWorld(context: SaveContext, views: Views, base: number, total: num
     u32[w + touched + i] = origin === undefined ? 0 : window.handleAt(slot);
   }
   w += touched * 2;
-  zeroPad(views, w << 2, base + total);
+  offset = p + windowPayloadBytes(touched, width);
+  zeroPad(views, w << 2, offset);
+
+  // Relations: pools, sources and pairs in store order, target lists, changed sources, pair data.
+  const relations = context.relations;
+  if (relations.length === 0) return;
+  let relationBytes = 0;
+  for (let r = 0; r < relations.length; r++) {
+    const store = relations[r]!;
+    relationBytes += relationPayloadBytes(
+      store.freeRowCount,
+      store.liveSourceCount,
+      context.relationCounts[r * 2]!,
+      context.relationCounts[r * 2 + 1]!,
+      store.changedCount,
+      info.relations[r]!.codes,
+    );
+  }
+  p = writeSectionHeader(views, offset, SECTION_RELATIONS, relationBytes);
+  for (let r = 0; r < relations.length; r++) p = writeRelation(context, views, r, p);
+  zeroPad(views, p, base + total);
 }
 
 /**
@@ -490,6 +591,57 @@ function decodeObjects(context: SaveContext, components: readonly ComponentImage
   return out ?? components;
 }
 
+/** Build a rollback snapshot of a validated relation, linking each target's pairs in its saved order. */
+function relationSnapshot(image: SaveImage, r: number, scratch: ValidationScratch): RelationStoreSnapshot {
+  const relation = image.relations[r]!;
+  const order = relationTargetOrder(image, r, scratch);
+  const pairs = relation.rows.length;
+  const rows = relation.rows;
+  const rowNextByTarget = new Int32Array(pairs);
+  const rowPrevByTarget = new Int32Array(pairs);
+  const count = relation.targetSlots.length;
+  const targetHandles = new Uint32Array(count);
+  const targetHeads = new Int32Array(count);
+  const targetTails = new Int32Array(count);
+  const targetCounts = new Uint32Array(count);
+  let j = 0;
+  for (let t = 0; t < count; t++) {
+    const slot = relation.targetSlots[t]!;
+    const first = order[j]!;
+    targetHandles[t] = relation.targets[first]!;
+    targetHeads[t] = rows[first]!;
+    let prev = NONE;
+    let previous = -1;
+    for (; j < pairs && entityIndex(relation.targets[order[j]!]!) === slot; j++) {
+      const k = order[j]!;
+      rowPrevByTarget[k] = prev;
+      if (previous !== -1) rowNextByTarget[previous] = rows[k]!;
+      prev = rows[k]!;
+      previous = k;
+      targetCounts[t]!++;
+    }
+    rowNextByTarget[previous] = NONE;
+    targetTails[t] = prev;
+  }
+  return {
+    highWater: relation.highWater,
+    freeRows: Int32Array.from(relation.freeRows),
+    sources: Int32Array.from(relation.sources),
+    sourceCounts: relation.sourceCounts,
+    rows: Int32Array.from(rows),
+    rowTargets: relation.targets,
+    rowNextByTarget,
+    rowPrevByTarget,
+    rowData: relation.data,
+    targets: Int32Array.from(relation.targetSlots),
+    targetHandles,
+    targetHeads,
+    targetTails,
+    targetCounts,
+    changed: Int32Array.from(relation.changed),
+  };
+}
+
 /** Number of leading saved archetypes whose component sets match the world's registry. */
 function matchingPrefix(context: SaveContext, image: SaveImage): number {
   const archetypes = context.host.archetypes;
@@ -545,6 +697,7 @@ export function loadWorld(world: World, bytes: Uint8Array, options?: WorldSaveLo
   validateImage(image, context.scratch, matchingPrefix(context, image));
   // Decode objects before anything changes, so a throwing hook leaves the world untouched.
   const components = decodeObjects(context, image.components);
+  const relations = image.relations.map((_, r) => relationSnapshot(image, r, context.scratch!));
 
   host.entities.restoreSaved(image.occupancy, image.cursor, image.nextGeneration, image.liveGeneration);
   host.components.restoreSnapshot({ states: components });
@@ -553,6 +706,7 @@ export function loadWorld(world: World, bytes: Uint8Array, options?: WorldSaveLo
     origins: image.windowOrigins,
     handles: image.windowHandles,
   });
+  if (relations.length !== 0) host.relations!.restoreState(relations);
   host.finishLoad();
 }
 

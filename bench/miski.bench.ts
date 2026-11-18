@@ -1286,6 +1286,27 @@ Deno.bench({
   },
 });
 
+const relationSaveSource = await populateRelationWorld(MEDIUM_CAPACITY, 4_096);
+const relationSaveTarget = await populateRelationWorld(MEDIUM_CAPACITY, 2_048);
+const relationBuffer = new Uint8Array(measureWorldSave(relationSaveSource.world) + 1024);
+const relationBytes = saveWorld(relationSaveSource.world);
+
+Deno.bench({
+  name: "saveWorldInto 8K world with 4K-node relations - reused buffer",
+  group: "serialization",
+  fn: () => {
+    numericSink ^= saveWorldInto(relationSaveSource.world, relationBuffer);
+  },
+});
+
+Deno.bench({
+  name: "loadWorld 8K world with 4K-node relations into a populated world",
+  group: "serialization",
+  fn: () => {
+    loadWorld(relationSaveTarget.world, relationBytes);
+  },
+});
+
 if (entitySink === Number.MIN_SAFE_INTEGER || numericSink === Number.MIN_SAFE_INTEGER || objectSink === null) {
   throw new Error("unreachable benchmark sink");
 }

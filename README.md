@@ -803,8 +803,14 @@ throwing `decode` fails the load with `WorldSaveError` (the hook's error is its
 `cause`) before anything changes. Allocation inside your hooks is yours; the
 save itself adds none.
 
-Worlds with relations cannot be saved or loaded yet: every save entry point
-throws `WorldSaveError` rather than writing a partial save.
+Relations are saved with their pairs, pair data and changed sources. The layout
+records each relation's `exclusive`, `acyclic` and `onDeleteTarget` options and
+its pair data fields, so a mismatch is caught like any other layout change. A
+loaded world returns the same `getTargets`, `getSources` and `traverse` order
+as the saved one, and new pairs get the same rows. With a reused buffer,
+`saveWorldInto` writes relations without allocating. Pair data is saved for
+live pairs only. In the JSON view, `document.relations` holds each relation by
+name, and it is present only when the layout has relations.
 
 ---
 

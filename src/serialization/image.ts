@@ -1,4 +1,4 @@
-import { ENTITY_GEN_MASK, type EntityArray, entityIndex } from "@/entity/entity.ts";
+import { ENTITY_GEN_MASK, type EntityArray, entityIndex, packEntity } from "@/entity/entity.ts";
 import type { TypedArray } from "@/types/partitions.ts";
 import {
   align4,
@@ -20,11 +20,12 @@ import {
   SAVE_MAGIC,
   SECTION_ARCHETYPES,
   SECTION_COMPONENTS,
-  SECTION_COUNT,
   SECTION_ENTITIES,
   SECTION_HEADER_BYTES,
+  SECTION_RELATIONS,
   SECTION_REQUIRED,
   SECTION_WINDOW,
+  sectionCount,
   slotWidth,
   stringColumnBytes,
   utf8Decoder,
@@ -35,7 +36,7 @@ import {
   WorldSaveError,
   writeUtf8,
 } from "./format.ts";
-import { decodeLayout, type LayoutInfo, layoutInfo, type WorldSaveLayout } from "./layout.ts";
+import { decodeLayout, type LayoutInfo, layoutInfo, type RelationInfo, type WorldSaveLayout } from "./layout.ts";
 
 /** One component's saved state; shaped like a rollback component snapshot so restore can reuse it. */
 export type ComponentImage = {
@@ -55,6 +56,33 @@ export type ComponentImage = {
 
 /** The shared empty side-row list of components without string / object fields. */
 export const NO_SIDE_ROWS: readonly (readonly unknown[])[] = Object.freeze([]);
+
+/**
+ * One relation's saved pair index, shaped after the relation store's rollback capture. Pairs are listed by source in
+ * live-source order, each source's pairs in its target order; `rows`, `targets` and every `data` column are parallel.
+ */
+export type RelationImage = {
+  /** Pair pool high-water mark (0 for exclusive relations, whose row is the source slot). */
+  readonly highWater: number;
+  /** Free pair rows, bottom of the free stack first. */
+  readonly freeRows: Uint32Array;
+  /** Source slots in live-source order. */
+  readonly sources: Uint32Array;
+  /** Number of pairs of each source, parallel to `sources`. */
+  readonly sourceCounts: Uint32Array;
+  /** Pair row of each pair. */
+  readonly rows: Uint32Array;
+  /** Target handle of each pair. */
+  readonly targets: Uint32Array;
+  /** Pair data columns in schema order. */
+  readonly data: readonly TypedArray[];
+  /** Target slots in first-targeted order. */
+  readonly targetSlots: Uint32Array;
+  /** Per target in `targetSlots` order, the source slots of its pairs in that target's source order. */
+  readonly sourcesByTarget: Uint32Array;
+  /** Changed source slots in changed-iteration order. */
+  readonly changed: Uint32Array;
+};
 
 /** A decoded world save. Arrays may be views into the source bytes; treat them as read-only. */
 export type SaveImage = {
@@ -83,6 +111,8 @@ export type SaveImage = {
   readonly windowOrigins: Uint32Array;
   /** Window-start handle per touched slot (0 when the origin is 0). */
   readonly windowHandles: Uint32Array;
+  /** Pair index of every relation, parallel to `info.relations` (empty without relations). */
+  readonly relations: readonly RelationImage[];
 };
 
 /** A parsed save: the image plus the exact, 8-byte-aligned bytes it was read from. */
@@ -225,6 +255,50 @@ export function windowPayloadBytes(count: number, width: number): number {
   return align8(8 + align4(count * width) + count * 8);
 }
 
+/**
+ * Payload bytes of one saved relation: six u32 counts; u32 free rows, sources, source pair counts, pair rows, pair
+ * target handles, target slots, sources by target and changed sources, padded to 8; then each pair data column,
+ * padded to 8. Integer math (the save writers' hot path); counts read from bytes go through
+ * {@link untrustedRelationBytes} first.
+ */
+export function relationPayloadBytes(
+  free: number,
+  sources: number,
+  pairs: number,
+  targets: number,
+  changed: number,
+  codes: readonly number[],
+): number {
+  let bytes = 24 + align8((free + sources * 2 + pairs * 3 + targets + changed) * 4);
+  for (let c = 0; c < codes.length; c++) bytes += align8(pairs * FIELD_TYPE_BYTES[codes[c]!]!);
+  return bytes;
+}
+
+/** {@link relationPayloadBytes} for untrusted u32 counts: float math, so huge counts cannot wrap to a small size. */
+function untrustedRelationBytes(
+  free: number,
+  sources: number,
+  pairs: number,
+  targets: number,
+  changed: number,
+  codes: readonly number[],
+): number {
+  let bytes = 24 + Math.ceil((free + sources * 2 + pairs * 3 + targets + changed) / 2) * 8;
+  for (let c = 0; c < codes.length; c++) bytes += Math.ceil((pairs * FIELD_TYPE_BYTES[codes[c]!]!) / 8) * 8;
+  return bytes;
+}
+
+function relationImageBytes(relation: RelationImage, info: RelationInfo): number {
+  return relationPayloadBytes(
+    relation.freeRows.length,
+    relation.sources.length,
+    relation.rows.length,
+    relation.targetSlots.length,
+    relation.changed.length,
+    info.codes,
+  );
+}
+
 /** Bytes before the first section. */
 export function prefixBytes(layoutBlock: Uint8Array): number {
   return HEADER_BYTES + layoutBlock.length;
@@ -248,7 +322,7 @@ export function writeHeader(
   u32[w + 5] = known.layoutBlock.length;
   u32[w + 6] = known.layoutHashLow;
   u32[w + 7] = known.layoutHashHigh;
-  u32[w + 8] = SECTION_COUNT;
+  u32[w + 8] = sectionCount(known.info.relations.length);
   u32[w + 9] = 0;
   views.u8.set(known.layoutBlock, base + HEADER_BYTES);
   return base + HEADER_BYTES + known.layoutBlock.length;
@@ -271,7 +345,8 @@ export function imageBytes(image: SaveImage): number {
   const width = slotWidth(image.capacity);
   let population = 0;
   for (let i = 0; i < image.populations.length; i++) population += image.populations[i]!.length;
-  let bytes = prefixBytes(image.layoutBlock) + SECTION_COUNT * SECTION_HEADER_BYTES;
+  const relations = image.info.relations;
+  let bytes = prefixBytes(image.layoutBlock) + sectionCount(relations.length) * SECTION_HEADER_BYTES;
   bytes += entitiesPayloadBytes(image.capacity, image.liveGeneration.length);
   bytes += archetypesPayloadBytes(image.populations.length, image.wordsPerSet, population, width);
   for (let c = 0; c < image.components.length; c++) {
@@ -281,6 +356,7 @@ export function imageBytes(image: SaveImage): number {
     bytes += componentPayloadBytes(component.owners.length, component.changed.length, codes, width, sideBytes);
   }
   bytes += windowPayloadBytes(image.windowSlots.length, width);
+  for (let r = 0; r < relations.length; r++) bytes += relationImageBytes(image.relations[r]!, relations[r]!);
   return bytes;
 }
 
@@ -389,6 +465,47 @@ export function writeImage(image: SaveImage): Uint8Array {
   zeroPad(views, end, origins);
   u32.set(image.windowOrigins, origins >>> 2);
   u32.set(image.windowHandles, (origins >>> 2) + touched);
+  offset = p + windowPayloadBytes(touched, width);
+
+  // Relations
+  const relations = image.info.relations;
+  if (relations.length === 0) return out;
+  let relationBytes = 0;
+  for (let r = 0; r < relations.length; r++) relationBytes += relationImageBytes(image.relations[r]!, relations[r]!);
+  p = writeSectionHeader(views, offset, SECTION_RELATIONS, relationBytes);
+  for (let r = 0; r < relations.length; r++) {
+    const relation = image.relations[r]!;
+    const pairs = relation.rows.length;
+    let w = p >>> 2;
+    u32[w++] = relation.highWater;
+    u32[w++] = relation.freeRows.length;
+    u32[w++] = relation.sources.length;
+    u32[w++] = pairs;
+    u32[w++] = relation.targetSlots.length;
+    u32[w++] = relation.changed.length;
+    for (
+      const list of [
+        relation.freeRows,
+        relation.sources,
+        relation.sourceCounts,
+        relation.rows,
+        relation.targets,
+        relation.targetSlots,
+        relation.sourcesByTarget,
+        relation.changed,
+      ]
+    ) {
+      u32.set(list, w);
+      w += list.length;
+    }
+    p = align8(w << 2);
+    const codes = relations[r]!.codes;
+    for (let c = 0; c < codes.length; c++) {
+      const source = relation.data[c]!;
+      views.u8.set(new Uint8Array(source.buffer, source.byteOffset, pairs * FIELD_TYPE_BYTES[codes[c]!]!), p);
+      p = align8(p + pairs * FIELD_TYPE_BYTES[codes[c]!]!);
+    }
+  }
   return out;
 }
 
@@ -471,6 +588,7 @@ export function parseSave(input: Uint8Array, known?: KnownLayout): ParsedSave {
   let archetypes: Pick<SaveImage, "wordsPerSet" | "archetypeBits" | "populations"> | undefined;
   let components: ComponentImage[] | undefined;
   let window: Pick<SaveImage, "windowSlots" | "windowOrigins" | "windowHandles"> | undefined;
+  let relations: RelationImage[] | undefined;
 
   const sectionCount = u32[w + 8]!;
   let offset = HEADER_BYTES + layoutBytes;
@@ -597,6 +715,12 @@ export function parseSave(input: Uint8Array, known?: KnownLayout): ParsedSave {
         };
         break;
       }
+      case SECTION_RELATIONS: {
+        if (relations !== undefined) fail("World save repeats its relation section.");
+        if (info.relations.length === 0) fail("World save holds relations its layout does not declare.");
+        relations = readRelations(views, p, p + payload, info.relations);
+        break;
+      }
       default: {
         if ((sectionFlags & SECTION_REQUIRED) !== 0) {
           fail(`World save requires an unsupported feature (section ${tag}).`);
@@ -606,7 +730,11 @@ export function parseSave(input: Uint8Array, known?: KnownLayout): ParsedSave {
     offset = end;
   }
   if (offset !== total) fail("World save length does not match its sections.");
-  if (entities === undefined || archetypes === undefined || components === undefined || window === undefined) {
+  if (relations === undefined && info.relations.length === 0) relations = [];
+  if (
+    entities === undefined || archetypes === undefined || components === undefined || window === undefined ||
+    relations === undefined
+  ) {
     fail("World save is missing a required section.");
   }
   const image: SaveImage = {
@@ -620,8 +748,62 @@ export function parseSave(input: Uint8Array, known?: KnownLayout): ParsedSave {
     ...archetypes,
     components,
     ...window,
+    relations,
   };
   return { image, bytes };
+}
+
+/** Bounds-check and view the relation section, one entry per layout relation. */
+function readRelations(views: Views, start: number, limit: number, infos: readonly RelationInfo[]): RelationImage[] {
+  const u32 = views.u32;
+  const out: RelationImage[] = new Array(infos.length);
+  let q = start;
+  for (let r = 0; r < infos.length; r++) {
+    const info = infos[r]!;
+    if (q + 24 > limit) fail("World save relation section is truncated.");
+    let w = q >>> 2;
+    const highWater = u32[w]!;
+    const free = u32[w + 1]!;
+    const sources = u32[w + 2]!;
+    const pairs = u32[w + 3]!;
+    const targets = u32[w + 4]!;
+    const changed = u32[w + 5]!;
+    const bytes = untrustedRelationBytes(free, sources, pairs, targets, changed, info.codes);
+    if (bytes > limit - q) fail("World save relation section is truncated.");
+    w += 6;
+    const take = (count: number): Uint32Array => u32.subarray(w, w += count);
+    const freeRows = take(free);
+    const sourceSlots = take(sources);
+    const sourceCounts = take(sources);
+    const rows = take(pairs);
+    const pairTargets = take(pairs);
+    const targetSlots = take(targets);
+    const sourcesByTarget = take(pairs);
+    const changedSlots = take(changed);
+    let p = align8(w << 2);
+    const data: TypedArray[] = new Array(info.codes.length);
+    for (let c = 0; c < info.codes.length; c++) {
+      const code = info.codes[c]!;
+      const index = p / FIELD_TYPE_BYTES[code]!;
+      data[c] = views.column(code).subarray(index, index + pairs);
+      p = align8(p + pairs * FIELD_TYPE_BYTES[code]!);
+    }
+    out[r] = {
+      highWater,
+      freeRows,
+      sources: sourceSlots,
+      sourceCounts,
+      rows,
+      targets: pairTargets,
+      data,
+      targetSlots,
+      sourcesByTarget,
+      changed: changedSlots,
+    };
+    q += bytes;
+  }
+  if (q !== limit) fail("World save relation section length does not match its contents.");
+  return out;
 }
 
 /**
@@ -695,17 +877,46 @@ function readObjectCells(
   return readStringCells(views, strings, count, limit, out, kinds, component);
 }
 
+/** Per-slot scratch for relation checks, allocated on the first save with relations. */
+type RelationScratch = {
+  /** Generation of every live slot. */
+  readonly generation: Uint32Array;
+  /** Per-slot stamp (owner index + 1) for duplicate and lookup checks. */
+  readonly stamp: Int32Array;
+  /** Per-slot pair index or bucket cursor. */
+  readonly slotPair: Int32Array;
+  /** Pairs per target slot. */
+  readonly targetCounts: Uint32Array;
+  /** Exclusive target slot per source slot, or -1. */
+  readonly parent: Int32Array;
+  /** Cycle walk state per slot: 0 unvisited, 1 on the current path, 2 done. */
+  readonly walk: Uint8Array;
+};
+
 /** Reusable per-capacity scratch for {@link validateImage}. */
 export class ValidationScratch {
   readonly archetypeOf: Int32Array;
   readonly marks: Uint32Array;
   readonly changedMarks: Uint32Array;
   epoch = 0;
+  #relation: RelationScratch | undefined;
 
   constructor(capacity: number) {
     this.archetypeOf = new Int32Array(capacity);
     this.marks = new Uint32Array(capacity);
     this.changedMarks = new Uint32Array(capacity);
+  }
+
+  get relation(): RelationScratch {
+    const capacity = this.marks.length;
+    return this.#relation ??= {
+      generation: new Uint32Array(capacity),
+      stamp: new Int32Array(capacity),
+      slotPair: new Int32Array(capacity),
+      targetCounts: new Uint32Array(capacity),
+      parent: new Int32Array(capacity),
+      walk: new Uint8Array(capacity),
+    };
   }
 
   next(): number {
@@ -861,4 +1072,192 @@ export function validateImage(image: SaveImage, scratch: ValidationScratch, know
       fail("World save window holds an invalid handle.");
     }
   }
+
+  if (image.info.relations.length === 0) return;
+  const generation = scratch.relation.generation;
+  let g = 0;
+  for (let word = 0; word < occupancy.length; word++) {
+    let bits = occupancy[word]!;
+    while (bits !== 0) {
+      generation[(word << 5) + (31 - Math.clz32(bits & -bits))] = image.liveGeneration[g++]!;
+      bits &= bits - 1;
+    }
+  }
+  for (let r = 0; r < image.info.relations.length; r++) validateRelation(image, r, scratch);
+}
+
+function isLive(occupancy: Uint32Array, slot: number): boolean {
+  return ((occupancy[slot >>> 5]! >>> (slot & 31)) & 1) === 1;
+}
+
+/**
+ * Check one relation against the store's invariants, so the rollback restore it feeds can trust it: live, unique
+ * sources that are exactly the presence tag's owners; changed sources among them; pair rows that, with the free
+ * rows, fill the pool exactly (exclusive: row = source slot, no pool); live targets with matching generations; no
+ * repeated pair; target lists that hold every pair once under its own target; and no cycle in an acyclic relation.
+ */
+function validateRelation(image: SaveImage, r: number, scratch: ValidationScratch): void {
+  const info = image.info.relations[r]!;
+  const relation = image.relations[r]!;
+  const capacity = image.capacity;
+  const occupancy = image.occupancy;
+  const bad = (problem: string): never => fail(`World save relation ${info.name} ${problem}.`);
+  const { generation, stamp, targetCounts, parent, walk } = scratch.relation;
+  const sources = relation.sources;
+  const pairs = relation.rows.length;
+
+  // Sources: live, unique, with at least one pair (exactly one when exclusive), and the presence tag's owners.
+  const marks = scratch.marks;
+  const epoch = scratch.next();
+  let total = 0;
+  for (let i = 0; i < sources.length; i++) {
+    const slot = sources[i]!;
+    if (slot >= capacity || !isLive(occupancy, slot)) bad("lists a source that is not live");
+    if (marks[slot] === epoch) bad(`lists source ${slot} twice`);
+    marks[slot] = epoch;
+    const count = relation.sourceCounts[i]!;
+    if (count === 0) bad(`source ${slot} has no targets`);
+    if (info.exclusive && count !== 1) bad(`is exclusive but source ${slot} has ${count} targets`);
+    total += count;
+  }
+  if (total !== pairs) bad("pair counts do not add up");
+  const owners = image.components[info.component]!.owners;
+  if (owners.length !== sources.length) bad("sources do not match its presence tag owners");
+  for (let j = 0; j < owners.length; j++) {
+    if (marks[owners[j]!] !== epoch) bad("sources do not match its presence tag owners");
+  }
+  const changedMarks = scratch.changedMarks;
+  for (let i = 0; i < relation.changed.length; i++) {
+    const slot = relation.changed[i]!;
+    if (slot >= capacity || marks[slot] !== epoch || changedMarks[slot] === epoch) bad("changed list is corrupt");
+    changedMarks[slot] = epoch;
+  }
+
+  // Rows: exclusive rows are the source slot; otherwise pair and free rows partition [0, highWater).
+  if (info.exclusive) {
+    if (relation.highWater !== 0 || relation.freeRows.length !== 0) bad("pair rows are corrupt");
+    for (let i = 0; i < sources.length; i++) if (relation.rows[i] !== sources[i]) bad("pair rows are corrupt");
+  } else {
+    const highWater = relation.highWater;
+    if (highWater !== pairs + relation.freeRows.length) bad("pair rows are corrupt");
+    const used = new Uint8Array(highWater);
+    for (const list of [relation.freeRows, relation.rows]) {
+      for (let i = 0; i < list.length; i++) {
+        const row = list[i]!;
+        if (row >= highWater || used[row] !== 0) bad("pair rows are corrupt");
+        used[row] = 1;
+      }
+    }
+  }
+
+  // Targets: live with the saved generation, never twice for one source.
+  stamp.fill(0);
+  targetCounts.fill(0);
+  parent.fill(-1);
+  let k = 0;
+  for (let i = 0; i < sources.length; i++) {
+    const slot = sources[i]!;
+    const end = k + relation.sourceCounts[i]!;
+    for (; k < end; k++) {
+      const handle = relation.targets[k]!;
+      const target = entityIndex(handle);
+      if (
+        handle > 0x7fffffff || target >= capacity || !isLive(occupancy, target) ||
+        packEntity(target, generation[target]!) !== handle
+      ) {
+        bad("pair targets an entity that is not live");
+      }
+      if (stamp[target] === i + 1) bad(`repeats the pair ${slot} -> ${target}`);
+      stamp[target] = i + 1;
+      targetCounts[target]!++;
+      parent[slot] = target;
+    }
+  }
+
+  // Target lists: every target once, in any order the store could reach; each lists exactly its pairs' sources.
+  targetPairOrder(image, r, scratch);
+
+  // Acyclic: walk each source's parent chain once.
+  if (!info.acyclic) return;
+  walk.fill(0);
+  for (let i = 0; i < sources.length; i++) {
+    let slot = sources[i]!;
+    while (slot !== -1 && walk[slot] === 0) {
+      walk[slot] = 1;
+      slot = parent[slot]!;
+    }
+    if (slot !== -1 && walk[slot] === 1) bad("forms a cycle");
+    for (slot = sources[i]!; slot !== -1 && walk[slot] === 1; slot = parent[slot]!) walk[slot] = 2;
+  }
+}
+
+/**
+ * Check a relation's target lists against its pairs and return the pair indices in target-list order (grouped by
+ * target in first-targeted order). Expects `targetCounts` from {@link validateRelation}'s pair pass.
+ */
+function targetPairOrder(image: SaveImage, r: number, scratch: ValidationScratch): Uint32Array {
+  const info = image.info.relations[r]!;
+  const relation = image.relations[r]!;
+  const capacity = image.capacity;
+  const bad = (): never => fail(`World save relation ${info.name} target lists are corrupt.`);
+  const { stamp, slotPair, targetCounts } = scratch.relation;
+  const pairs = relation.rows.length;
+  const targetSlots = relation.targetSlots;
+
+  // Bucket the pairs by target, buckets in target-list order (slotPair holds each target's bucket cursor).
+  const marks = scratch.marks;
+  const epoch = scratch.next();
+  let listed = 0;
+  for (let t = 0; t < targetSlots.length; t++) {
+    const slot = targetSlots[t]!;
+    if (slot >= capacity || targetCounts[slot] === 0 || marks[slot] === epoch) bad();
+    marks[slot] = epoch;
+    slotPair[slot] = listed;
+    listed += targetCounts[slot]!;
+  }
+  if (listed !== pairs) bad();
+  const bucket = new Uint32Array(pairs);
+  const pairSource = new Uint32Array(pairs);
+  let k = 0;
+  for (let i = 0; i < relation.sources.length; i++) {
+    const end = k + relation.sourceCounts[i]!;
+    for (; k < end; k++) {
+      pairSource[k] = relation.sources[i]!;
+      bucket[slotPair[entityIndex(relation.targets[k]!)]!++] = k;
+    }
+  }
+
+  // Each target's list must name each of its bucket's sources exactly once.
+  const order = new Uint32Array(pairs);
+  const byTarget = relation.sourcesByTarget;
+  stamp.fill(0);
+  let start = 0;
+  for (let t = 0; t < targetSlots.length; t++) {
+    const end = start + targetCounts[targetSlots[t]!]!;
+    for (let j = start; j < end; j++) {
+      const pair = bucket[j]!;
+      stamp[pairSource[pair]!] = t + 1;
+      slotPair[pairSource[pair]!] = pair;
+    }
+    for (let j = start; j < end; j++) {
+      const source = byTarget[j]!;
+      if (source >= capacity || stamp[source] !== t + 1) bad();
+      stamp[source] = 0;
+      order[j] = slotPair[source]!;
+    }
+    start = end;
+  }
+  return order;
+}
+
+/**
+ * Pair indices of a validated relation in target-list order: each target's pairs, targets in first-targeted order.
+ * @param scratch - Scratch the image was validated with
+ */
+export function relationTargetOrder(image: SaveImage, r: number, scratch: ValidationScratch): Uint32Array {
+  const { targetCounts } = scratch.relation;
+  const relation = image.relations[r]!;
+  targetCounts.fill(0);
+  for (let k = 0; k < relation.targets.length; k++) targetCounts[entityIndex(relation.targets[k]!)]!++;
+  return targetPairOrder(image, r, scratch);
 }

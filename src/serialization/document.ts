@@ -1,4 +1,4 @@
-import { createSlotArray, type EntityArray } from "@/entity/entity.ts";
+import { createSlotArray, type EntityArray, entityIndex } from "@/entity/entity.ts";
 import type { TypedArray } from "@/types/partitions.ts";
 import {
   CODE_OBJECT,
@@ -14,12 +14,20 @@ import {
   type ComponentImage,
   NO_SIDE_ROWS,
   parseSave,
+  type RelationImage,
   type SaveImage,
   validateImage,
   ValidationScratch,
   writeImage,
 } from "./image.ts";
-import { decodeLayout, encodeLayout, layoutInfo, layoutProblem, type WorldSaveLayout } from "./layout.ts";
+import {
+  decodeLayout,
+  encodeLayout,
+  layoutInfo,
+  layoutProblem,
+  type RelationInfo,
+  type WorldSaveLayout,
+} from "./layout.ts";
 
 /** A saved number. Values JSON cannot hold are spelled as strings. */
 export type WorldSaveNumber = number | "NaN" | "Infinity" | "-Infinity" | "-0";
@@ -48,6 +56,30 @@ export type WorldSaveComponentDocument = {
    * object fields hold {@link WorldSaveObjectValue} cells.
    */
   readonly values?: Readonly<Record<string, WorldSaveFieldValues>>;
+};
+
+/** One saved relation pair. */
+export type WorldSaveRelationPair = {
+  /** Pair row (the index into the relation's pair data; the source slot for an exclusive relation). */
+  readonly row: number;
+  /** Target entity handle. */
+  readonly target: number;
+  /** Pair data by field; absent for relations without data. */
+  readonly data?: Readonly<Record<string, WorldSaveNumber>>;
+};
+
+/** One saved relation: its pair pool, pairs by source, target lists and changed sources, all in store order. */
+export type WorldSaveRelationDocument = {
+  /** Pair pool high-water mark (0 for exclusive relations). */
+  readonly highWater: number;
+  /** Free pair rows, bottom of the free stack first. */
+  readonly freeRows: readonly number[];
+  /** Sources in live order, each with its pairs in target order. */
+  readonly sources: readonly { readonly slot: number; readonly pairs: readonly WorldSaveRelationPair[] }[];
+  /** Targets in first-targeted order, each with its sources' slots in that target's order. */
+  readonly targets: readonly { readonly slot: number; readonly sources: readonly number[] }[];
+  /** Changed sources in changed-iteration order. */
+  readonly changed: readonly number[];
 };
 
 /**
@@ -79,6 +111,8 @@ export type WorldSaveDocument = {
     readonly origins: readonly (number | null)[];
     readonly handles: readonly number[];
   };
+  /** Relations keyed by name; present only when the layout has relations. */
+  readonly relations?: Readonly<Record<string, WorldSaveRelationDocument>>;
 };
 
 function encodeNumber(value: number): WorldSaveNumber {
@@ -155,7 +189,7 @@ export function imageToDoc(image: SaveImage): WorldSaveDocument {
   for (let i = 0; i < origins.length; i++) {
     origins[i] = image.windowOrigins[i] === 0 ? null : image.windowOrigins[i]! - 1;
   }
-  return {
+  const document: WorldSaveDocument = {
     format: "miski-world",
     version: FORMAT_VERSION,
     layout,
@@ -168,6 +202,52 @@ export function imageToDoc(image: SaveImage): WorldSaveDocument {
     archetypes,
     components,
     window: { slots: toArray(image.windowSlots), origins, handles: toArray(image.windowHandles) },
+  };
+  const relations = image.info.relations;
+  if (relations.length === 0) return document;
+  return {
+    ...document,
+    relations: Object.fromEntries(relations.map((info, r) => [info.name, relationToDoc(info, image.relations[r]!)])),
+  };
+}
+
+function relationToDoc(info: RelationInfo, relation: RelationImage): WorldSaveRelationDocument {
+  const sources: { slot: number; pairs: WorldSaveRelationPair[] }[] = [];
+  let k = 0;
+  for (let i = 0; i < relation.sources.length; i++) {
+    const pairs: WorldSaveRelationPair[] = [];
+    const end = k + relation.sourceCounts[i]!;
+    for (; k < end; k++) {
+      const pair = { row: relation.rows[k]!, target: relation.targets[k]! };
+      if (info.codes.length === 0) {
+        pairs.push(pair);
+        continue;
+      }
+      const data: Record<string, WorldSaveNumber> = {};
+      for (let c = 0; c < info.codes.length; c++) data[info.keys[c]!] = encodeNumber(relation.data[c]![k]!);
+      pairs.push({ ...pair, data });
+    }
+    sources.push({ slot: relation.sources[i]!, pairs });
+  }
+  // Target list lengths are not stored: count each target's pairs.
+  const counts = new Map<number, number>();
+  for (let j = 0; j < relation.targets.length; j++) {
+    const slot = entityIndex(relation.targets[j]!);
+    counts.set(slot, (counts.get(slot) ?? 0) + 1);
+  }
+  let j = 0;
+  const targets = Array.from(relation.targetSlots, (slot) => {
+    const end = j + (counts.get(slot) ?? 0);
+    const list = toArray(relation.sourcesByTarget.subarray(j, end));
+    j = end;
+    return { slot, sources: list };
+  });
+  return {
+    highWater: relation.highWater,
+    freeRows: toArray(relation.freeRows),
+    sources,
+    targets,
+    changed: toArray(relation.changed),
   };
 }
 
@@ -372,6 +452,8 @@ export function docToImage(document: unknown): SaveImage {
     integers(window["handles"], "window.handles", 0xffff_ffff, windowSlots.length),
   );
 
+  const relations = relationsFromDoc(document["relations"], info.relations, capacity);
+
   const image: SaveImage = {
     capacity,
     layout,
@@ -390,9 +472,108 @@ export function docToImage(document: unknown): SaveImage {
     windowSlots: slotsOf(capacity, windowSlots),
     windowOrigins,
     windowHandles,
+    relations,
   };
   validateImage(image, new ValidationScratch(capacity), 0);
   return image;
+}
+
+function integerAt(value: unknown, path: string, max: number): number {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value > max) {
+    fail(path, `must be an integer from 0 to ${max}`);
+  }
+  return value;
+}
+
+function recordAt(value: unknown, path: string): Record<string, unknown> {
+  if (!isRecord(value)) fail(path, "must be an object");
+  return value;
+}
+
+/** Shape-check the document's relations; the pair index itself is checked by `validateImage`. */
+function relationsFromDoc(value: unknown, infos: readonly RelationInfo[], capacity: number): RelationImage[] {
+  if (infos.length === 0) {
+    if (value !== undefined) fail("relations", "must be absent for a layout without relations");
+    return [];
+  }
+  const saved = recordAt(value, "relations");
+  for (const name of Object.keys(saved)) {
+    if (!infos.some((info) => info.name === name)) fail("relations", `holds unknown relation ${JSON.stringify(name)}`);
+  }
+  const maxSlot = capacity - 1;
+  return infos.map((info): RelationImage => {
+    const path = `relations[${JSON.stringify(info.name)}]`;
+    const entry = recordAt(Object.hasOwn(saved, info.name) ? saved[info.name] : undefined, path);
+    const highWater = integerAt(entry["highWater"], `${path}.highWater`, 0xffff_ffff);
+    const freeRows = Uint32Array.from(integers(entry["freeRows"], `${path}.freeRows`, 0xffff_ffff));
+    const sourceList = arrayAt(entry["sources"], `${path}.sources`);
+    const sources = new Uint32Array(sourceList.length);
+    const sourceCounts = new Uint32Array(sourceList.length);
+    const rows: number[] = [];
+    const targets: number[] = [];
+    const columns: number[][] = info.codes.map(() => []);
+    for (let i = 0; i < sourceList.length; i++) {
+      const sourcePath = `${path}.sources[${i}]`;
+      const source = recordAt(sourceList[i], sourcePath);
+      sources[i] = integerAt(source["slot"], `${sourcePath}.slot`, maxSlot);
+      const pairs = arrayAt(source["pairs"], `${sourcePath}.pairs`);
+      sourceCounts[i] = pairs.length;
+      for (let p = 0; p < pairs.length; p++) {
+        const pairPath = `${sourcePath}.pairs[${p}]`;
+        const pair = recordAt(pairs[p], pairPath);
+        rows.push(integerAt(pair["row"], `${pairPath}.row`, 0xffff_ffff));
+        targets.push(integerAt(pair["target"], `${pairPath}.target`, 0x7fff_ffff));
+        const data = pair["data"];
+        if (info.codes.length === 0) {
+          if (data !== undefined) fail(`${pairPath}.data`, "must be absent for a relation without data");
+          continue;
+        }
+        const values = recordAt(data, `${pairPath}.data`);
+        for (const key of Object.keys(values)) {
+          if (!info.keys.includes(key)) fail(`${pairPath}.data`, `holds unknown field ${JSON.stringify(key)}`);
+        }
+        for (let c = 0; c < info.codes.length; c++) {
+          const fieldPath = `${pairPath}.data[${JSON.stringify(info.keys[c])}]`;
+          const number = decodeNumber(Object.hasOwn(values, info.keys[c]!) ? values[info.keys[c]!] : undefined);
+          if (number === undefined) fail(fieldPath, "must be a number");
+          const range = INTEGER_RANGE[info.codes[c]!];
+          if (range !== undefined && (!Number.isInteger(number) || number < range[0] || number > range[1])) {
+            fail(fieldPath, `must be an integer from ${range[0]} to ${range[1]}`);
+          }
+          columns[c]!.push(number);
+        }
+      }
+    }
+    const targetList = arrayAt(entry["targets"], `${path}.targets`);
+    const targetSlots = new Uint32Array(targetList.length);
+    const sourcesByTarget: number[] = [];
+    for (let t = 0; t < targetList.length; t++) {
+      const targetPath = `${path}.targets[${t}]`;
+      const target = recordAt(targetList[t], targetPath);
+      targetSlots[t] = integerAt(target["slot"], `${targetPath}.slot`, maxSlot);
+      for (const slot of integers(target["sources"], `${targetPath}.sources`, maxSlot)) sourcesByTarget.push(slot);
+    }
+    // The section stores target lists back to back, so their total length must be the pair count.
+    if (sourcesByTarget.length !== rows.length) {
+      fail(`${path}.targets`, "must name one source per pair, so its target lists are corrupt");
+    }
+    return {
+      highWater,
+      freeRows,
+      sources,
+      sourceCounts,
+      rows: Uint32Array.from(rows),
+      targets: Uint32Array.from(targets),
+      data: columns.map((column, c) => {
+        const out = new FIELD_TYPE_CONSTRUCTORS[info.codes[c]!]!(column.length);
+        for (let j = 0; j < column.length; j++) out[j] = column[j]!;
+        return out;
+      }),
+      targetSlots,
+      sourcesByTarget: Uint32Array.from(sourcesByTarget),
+      changed: Uint32Array.from(integers(entry["changed"], `${path}.changed`, maxSlot)),
+    };
+  });
 }
 
 /**
