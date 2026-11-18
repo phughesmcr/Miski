@@ -1,6 +1,7 @@
 import { isValidName as isValidNamePartitionedBuffer } from "@phughesmcr/partitionedbuffer";
 
 import { INVALID_NAMES, MAX_UINT32, MIN_UINT32 } from "./constants.ts";
+import type { TypedArray } from "./types/partitions.ts";
 
 /** @return `true` if the object has the given key */
 export function hasOwnProperty<T>(object: T, key: PropertyKey): key is keyof T {
@@ -58,4 +59,16 @@ export function noop(..._args: unknown[]): void {}
 export function isValidName(name: string): boolean {
   const initial = isValidNamePartitionedBuffer(name);
   return initial && !INVALID_NAMES.includes(name);
+}
+
+/** @returns `true` if `value` is a thenable */
+export function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
+  return !!value && typeof (value as PromiseLike<unknown>).then === "function";
+}
+
+/** Copy `array` into a new typed array of the same type and `length` (at least `array.length`). */
+export function growTypedArray<T extends TypedArray>(array: T, length: number): T {
+  const next = new (array.constructor as new (length: number) => T)(length);
+  (next as unknown as { set(source: ArrayLike<number>): void }).set(array as ArrayLike<number>);
+  return next;
 }

@@ -1,15 +1,8 @@
 /// <reference lib="deno.ns" />
 
 import { Component, ComponentDataError, type DynamicComponent, type Entity, field, Prefab } from "../mod.ts";
-import { createTestWorld } from "./fixtures.ts";
+import { createTestWorld, Mesh } from "./fixtures.ts";
 import { assert, assertEquals, assertStrictEquals, assertThrows } from "./helpers.ts";
-
-class Mesh {
-  vertices: number[];
-  constructor(vertices: number[] = []) {
-    this.vertices = vertices;
-  }
-}
 
 let created = 0;
 const createMesh = (): Mesh => {

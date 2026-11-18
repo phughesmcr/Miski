@@ -1,3 +1,9 @@
+import {
+  assertBundleArray,
+  assertBundleEntry,
+  duplicateComponentError,
+  relationComponentError,
+} from "@/component/bundle-entry.ts";
 import { type Component, isSupportedColumnConstructor } from "@/component/component.ts";
 import type { Entity } from "@/entity/entity.ts";
 import {
@@ -15,7 +21,7 @@ import type { SchemaOrNull, SchemaValues } from "@/types/partitions.ts";
 import type { PendingEntity } from "@/types/scheduler.ts";
 import { isRelation } from "@/relation/relation.ts";
 import { isEntityField } from "@/schema/field.ts";
-import { hasOwnProperty } from "@/utils.ts";
+import { growTypedArray, hasOwnProperty } from "@/utils.ts";
 import { World } from "@/world/world.ts";
 
 const OP_SPAWN = 1;
@@ -65,36 +71,6 @@ type ComponentInfo = {
   /** Every reusable data object above, so side values can be released after a flush. */
   readonly dataObjects: Record<string, unknown>[];
 };
-
-function growUint8(array: Uint8Array, size: number): Uint8Array {
-  const next = new Uint8Array(size);
-  next.set(array);
-  return next;
-}
-
-function growUint16(array: Uint16Array, size: number): Uint16Array {
-  const next = new Uint16Array(size);
-  next.set(array);
-  return next;
-}
-
-function growInt32(array: Int32Array, size: number): Int32Array {
-  const next = new Int32Array(size);
-  next.set(array);
-  return next;
-}
-
-function growUint32(array: Uint32Array, size: number): Uint32Array {
-  const next = new Uint32Array(size);
-  next.set(array);
-  return next;
-}
-
-function growFloat64(array: Float64Array, size: number): Float64Array {
-  const next = new Float64Array(size);
-  next.set(array);
-  return next;
-}
 
 /**
  * A queue of structural changes (spawn, destroy, add, set, remove) applied to a world later, at `flush()`.
@@ -197,9 +173,7 @@ export class CommandBuffer {
       throw new CapacityError(`World is at capacity (${this.#world.entities.capacity} entities).`);
     }
     const entries = bundle as readonly ComponentBundleEntryInput[] | undefined;
-    if (entries !== undefined && !Array.isArray(entries)) {
-      throw new TypeError("Bundle must be an array of [component] or [component, data] tuples.");
-    }
+    if (entries !== undefined) assertBundleArray(entries, "Bundle");
     const entryCount = entries === undefined ? 0 : entries.length;
     this.#reserveRecords(1 + entryCount);
 
@@ -209,13 +183,11 @@ export class CommandBuffer {
     let payload = this.#payloadCount;
     try {
       for (let i = 0; i < entryCount; i++) {
-        const entry = entries![i];
-        if (!Array.isArray(entry) || (entry.length !== 1 && entry.length !== 2)) {
-          throw new TypeError("Bundle entries must be [component] or [component, data] tuples.");
-        }
+        const entry: unknown = entries![i];
+        assertBundleEntry(entry, "Bundle entries");
         const index = this.#infoFor(entry[0] as DynamicComponent);
         if (this.#bundleSeen[index] === stamp) {
-          throw new RangeError(`Duplicate component "${this.#infos[index]!.name}" in bundle.`);
+          throw duplicateComponentError(this.#infos[index]!.name, "bundle");
         }
         this.#bundleSeen[index] = stamp;
         const record = this.#recordCount + 1 + i;
@@ -492,12 +464,8 @@ export class CommandBuffer {
     if (!this.#world.components.isRegistered(component)) {
       throw new NotRegisteredError(formatComponentNotRegistered(componentDisplayName(component)));
     }
-    if (isRelation(component)) {
-      // Rejected at enqueue, like the direct calls, so a spawn never applies half a bundle.
-      throw new TypeError(
-        `Component "${component.name}" is a relation; add and remove its pairs with world.relations.`,
-      );
-    }
+    // Rejected at enqueue, like the direct calls, so a spawn never applies half a bundle.
+    if (isRelation(component)) throw relationComponentError(component.name);
     const schema = component.schema as Readonly<Record<string, unknown>> | null;
     const keys = schema === null ? [] : Object.keys(schema);
     const keyIndex: Record<string, number> = Object.create(null);
@@ -530,7 +498,7 @@ export class CommandBuffer {
       dataObjects: [row],
     });
     this.#infoIndex.set(component, index);
-    if (this.#bundleSeen.length <= index) this.#bundleSeen = growUint32(this.#bundleSeen, (index + 1) * 2);
+    if (this.#bundleSeen.length <= index) this.#bundleSeen = growTypedArray(this.#bundleSeen, (index + 1) * 2);
     return index;
   }
 
@@ -572,18 +540,18 @@ export class CommandBuffer {
     const needed = this.#recordCount + extra;
     if (needed <= this.#ops.length) return;
     const size = Math.max(needed, this.#ops.length * 2);
-    this.#ops = growUint8(this.#ops, size);
-    this.#components = growUint16(this.#components, size);
-    this.#targets = growInt32(this.#targets, size);
-    this.#payloadStarts = growUint32(this.#payloadStarts, size);
-    this.#payloadCounts = growUint32(this.#payloadCounts, size);
-    this.#masks = growInt32(this.#masks, size);
+    this.#ops = growTypedArray(this.#ops, size);
+    this.#components = growTypedArray(this.#components, size);
+    this.#targets = growTypedArray(this.#targets, size);
+    this.#payloadStarts = growTypedArray(this.#payloadStarts, size);
+    this.#payloadCounts = growTypedArray(this.#payloadCounts, size);
+    this.#masks = growTypedArray(this.#masks, size);
   }
 
   #growPayload(needed: number): void {
     const size = Math.max(needed, this.#payloadFields.length * 2);
-    this.#payloadFields = growUint16(this.#payloadFields, size);
-    this.#payloadValues = growFloat64(this.#payloadValues, size);
+    this.#payloadFields = growTypedArray(this.#payloadFields, size);
+    this.#payloadValues = growTypedArray(this.#payloadValues, size);
   }
 
   /** The entity a target refers to, or -1 for a pending entity whose spawn has not run. */
@@ -632,7 +600,7 @@ export class CommandBuffer {
     const entryCount = this.#payloadCounts[record]!;
     // Mark the spawn failed until it succeeds, so later commands on its pending handle are skipped.
     const index = (-this.#targets[record]! - 1) & PENDING_INDEX_MASK;
-    if (index >= this.#spawned.length) this.#spawned = growInt32(this.#spawned, Math.max(16, (index + 1) * 2));
+    if (index >= this.#spawned.length) this.#spawned = growTypedArray(this.#spawned, Math.max(16, (index + 1) * 2));
     this.#spawned[index] = -1;
     const bundle = this.#bundles[entryCount] ?? (this.#bundles[entryCount] = new Array(entryCount));
     for (let i = 0; i < entryCount; i++) {

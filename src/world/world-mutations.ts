@@ -1,6 +1,12 @@
 import type { ArchetypeManager } from "@/archetype/archetype-manager.ts";
 import type { Component } from "@/component/component.ts";
 import type { ComponentInstance } from "@/component/component-instance.ts";
+import {
+  assertBundleArray,
+  assertBundleEntry,
+  duplicateComponentError,
+  relationComponentError,
+} from "@/component/bundle-entry.ts";
 import type { ComponentBundleCommitEntry, ComponentManager } from "@/component/component-manager.ts";
 import {
   asEntity,
@@ -99,11 +105,7 @@ export class WorldMutations {
 
   /** Throw if a generic component path targets a relation presence tag. */
   #assertNotRelation(instance: DynamicComponentInstance): void {
-    if (this.#relationInstances[instance.id] === 1) {
-      throw new TypeError(
-        `Component "${instance.type.name}" is a relation; add and remove its pairs with world.relations.`,
-      );
-    }
+    if (this.#relationInstances[instance.id] === 1) throw relationComponentError(instance.type.name);
   }
 
   /** Add or remove a relation presence tag through the archetype path (used by world.relations only). */
@@ -367,14 +369,14 @@ export class WorldMutations {
    * @returns Active staged entry count in {@link #bundleEntries}
    */
   #preflightBundle(bundle: readonly ComponentBundleEntryInput[]): number {
-    if (!Array.isArray(bundle)) {
-      throw new TypeError("Bundle must be an array of [component] or [component, data] tuples.");
-    }
+    assertBundleArray(bundle, "Bundle");
     for (let i = 0; i < bundle.length; i++) {
-      const entry = bundle[i];
-      if (!Array.isArray(entry) || (entry.length !== 1 && entry.length !== 2)) {
+      const entry: unknown = bundle[i];
+      try {
+        assertBundleEntry(entry, "Bundle entries");
+      } catch (error) {
         this.#clearBundleEntries();
-        throw new TypeError("Bundle entries must be [component] or [component, data] tuples.");
+        throw error;
       }
 
       const instance = this.#componentManager.getInstance(entry[0]);
@@ -390,7 +392,7 @@ export class WorldMutations {
 
       if (this.#bundleSeenComponents[instance.id] === 1) {
         this.#clearBundleEntries();
-        throw new RangeError(`Duplicate component "${instance.type.name}" in bundle.`);
+        throw duplicateComponentError(instance.type.name, "bundle");
       }
 
       let data: Partial<Record<string, number>> | undefined;

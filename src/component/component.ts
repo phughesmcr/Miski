@@ -7,7 +7,7 @@ import type {
   DynamicComponent,
 } from "@/types/component.ts";
 import { type FieldDescriptor, fieldStorageConstructor, isFieldDescriptor } from "@/schema/field.ts";
-import type { FieldSchema, SchemaOrNull } from "@/types/partitions.ts";
+import type { FieldSchema, SchemaOrNull, TypedArrayConstructor } from "@/types/partitions.ts";
 import { isPositiveUint32, isValidName } from "@/utils.ts";
 
 type ComponentSpecRuntime<TStorage extends SchemaOrNull> = {
@@ -32,6 +32,11 @@ const SUPPORTED_COLUMN_CONSTRUCTORS: ReadonlySet<unknown> = new Set<unknown>([
   Float32Array,
   Float64Array,
 ]);
+
+/** The typed-array constructor of a numeric schema property (`Ctor` or `[Ctor, initial]`). */
+export function columnConstructor(property: unknown): TypedArrayConstructor {
+  return (Array.isArray(property) ? property[0] : property) as TypedArrayConstructor;
+}
 
 /** @returns `true` if `constructor` is a typed-array constructor supported for component columns */
 export function isSupportedColumnConstructor(constructor: unknown): boolean {

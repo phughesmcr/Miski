@@ -620,38 +620,46 @@ export class ArchetypeManager {
    * order, query archetype order, and per-archetype iteration order all match the captured world.
    */
   restoreState(snapshot: ArchetypeManagerSnapshot): void {
+    this.#forgetPopulations();
+    const keep = snapshot.archetypeCount;
+    this.#truncateRegistry(keep);
+    for (let i = 0; i < keep; i++) this.#restorePopulation(this.#archetypes[i]!, snapshot.populations.get(i));
+    this.#window.restore(snapshot.window);
+    this.#membershipRebuildRequired = true;
+  }
+
+  /** Clear the transition tracker and every archetype's population (and its slots in the entity table). */
+  #forgetPopulations(): void {
     this.#tracker.clearPopulated();
     this.#tracker.clearEmptied();
     // Every mapped slot sits in exactly one archetype's population, so clearing populations clears the table
     // in O(live entities) rather than O(capacity).
     for (let i = 0; i < this.#archetypeCount; i++) this.#archetypes[i]!.forgetSlots(this.entityArchetypes);
-    const keep = snapshot.archetypeCount;
+  }
+
+  /** Drop archetypes registered at index `keep` and later, with the cached edges that lead to them. */
+  #truncateRegistry(keep: number): void {
+    if (keep >= this.#archetypeCount) return;
     for (let i = keep; i < this.#archetypeCount; i++) {
-      const archetype = this.#archetypes[i]!;
-      this.registry.delete(archetype.id);
+      this.registry.delete(this.#archetypes[i]!.id);
       this.#archetypes[i] = undefined as unknown as Archetype;
     }
-    if (keep < this.#archetypeCount) {
-      for (let i = 0; i < keep; i++) {
-        const archetype = this.#archetypes[i]!;
-        pruneEdges(archetype.addTransitions, keep);
-        pruneEdges(archetype.removeTransitions, keep);
-      }
-      this.#archetypeCount = keep;
-    }
-
     for (let i = 0; i < keep; i++) {
       const archetype = this.#archetypes[i]!;
-      const population = snapshot.populations.get(i);
-      if (population === undefined) {
-        archetype.clearPopulation();
-        continue;
-      }
-      archetype.restorePopulation(population);
-      for (let p = 0; p < population.length; p++) this.entityArchetypes[population[p]!] = archetype;
+      pruneEdges(archetype.addTransitions, keep);
+      pruneEdges(archetype.removeTransitions, keep);
     }
-    this.#window.restore(snapshot.window);
-    this.#membershipRebuildRequired = true;
+    this.#archetypeCount = keep;
+  }
+
+  /** Install an archetype's population (empty when `undefined`) and map its slots to it. */
+  #restorePopulation(archetype: Archetype, population: EntityArray | undefined): void {
+    if (population === undefined || population.length === 0) {
+      archetype.clearPopulation();
+      return;
+    }
+    archetype.restorePopulation(population);
+    for (let p = 0; p < population.length; p++) this.entityArchetypes[population[p]!] = archetype;
   }
   /** Number of registered archetypes. @internal */
   get archetypeCount(): number {
@@ -688,28 +696,14 @@ export class ArchetypeManager {
       readonly handles: ArrayLike<number>;
     },
   ): void {
-    this.#tracker.clearPopulated();
-    this.#tracker.clearEmptied();
-    for (let i = 0; i < this.#archetypeCount; i++) this.#archetypes[i]!.forgetSlots(this.entityArchetypes);
-
+    this.#forgetPopulations();
     const count = populations.length;
     const limit = Math.min(count, this.#archetypeCount);
     let keep = 0;
     while (keep < limit && sameWords(this.#archetypes[keep]!.bitfield.buffer, bits, keep * wordsPerSet, wordsPerSet)) {
       keep++;
     }
-    if (keep < this.#archetypeCount) {
-      for (let i = keep; i < this.#archetypeCount; i++) {
-        this.registry.delete(this.#archetypes[i]!.id);
-        this.#archetypes[i] = undefined as unknown as Archetype;
-      }
-      for (let i = 0; i < keep; i++) {
-        const archetype = this.#archetypes[i]!;
-        pruneEdges(archetype.addTransitions, keep);
-        pruneEdges(archetype.removeTransitions, keep);
-      }
-      this.#archetypeCount = keep;
-    }
+    this.#truncateRegistry(keep);
     const componentCount = this.#componentCount;
     for (let i = keep; i < count; i++) {
       const bitfield = new BooleanArray(componentCount);
@@ -731,16 +725,7 @@ export class ArchetypeManager {
       this.#registerArchetype(archetype.id, archetype);
     }
 
-    for (let i = 0; i < count; i++) {
-      const archetype = this.#archetypes[i]!;
-      const population = populations[i]!;
-      if (population.length === 0) {
-        archetype.clearPopulation();
-        continue;
-      }
-      archetype.restorePopulation(population);
-      for (let p = 0; p < population.length; p++) this.entityArchetypes[population[p]!] = archetype;
-    }
+    for (let i = 0; i < count; i++) this.#restorePopulation(this.#archetypes[i]!, populations[i]!);
 
     const touched = window.slots.length;
     const origins = new Array<Archetype | undefined>(touched);

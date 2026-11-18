@@ -1,5 +1,11 @@
 import type { Archetype } from "@/archetype/archetype.ts";
 import type { ArchetypeManager } from "@/archetype/archetype-manager.ts";
+import {
+  assertBundleArray,
+  assertBundleEntry,
+  duplicateComponentError,
+  relationComponentError,
+} from "@/component/bundle-entry.ts";
 import type { ComponentManager, ComponentTemplateRow } from "@/component/component-manager.ts";
 import { asSlotIndex, type BorrowedEntityList, type Entity, entityIndex } from "@/entity/entity.ts";
 import type { EntityManager } from "@/entity/entity-manager.ts";
@@ -235,27 +241,21 @@ export class PrefabSpawner {
 
   /** Resolve, validate and stage override tuples (canonical values land in each component's scratch). */
   #stageOverrides(plan: PrefabPlan, overrides: readonly ComponentBundleEntryInput[], staging: OverrideStaging): void {
-    if (!Array.isArray(overrides)) {
-      throw new TypeError("Prefab overrides must be an array of [component] or [component, data] tuples.");
-    }
+    assertBundleArray(overrides, "Prefab overrides");
     const componentManager = this.#componentManager;
     for (let i = 0; i < overrides.length; i++) {
-      const entry = overrides[i];
-      if (!Array.isArray(entry) || (entry.length !== 1 && entry.length !== 2)) {
-        throw new TypeError("Prefab override entries must be [component] or [component, data] tuples.");
-      }
+      const entry: unknown = overrides[i];
+      assertBundleEntry(entry, "Prefab override entries");
       const instance = componentManager.getInstance(entry[0]);
       if (instance === undefined) {
         throw new NotRegisteredError(formatComponentNotRegistered(componentDisplayName(entry[0])));
       }
       if (isRelation(instance.type)) {
-        throw new TypeError(
-          `Component "${instance.type.name}" is a relation; add its pairs with world.relations after instantiating.`,
-        );
+        throw relationComponentError(instance.type.name, "add its pairs with world.relations after instantiating");
       }
       const id = instance.id;
       if (staging.seen[id] === 1) {
-        throw new RangeError(`Duplicate component "${instance.type.name}" in prefab overrides.`);
+        throw duplicateComponentError(instance.type.name, "prefab overrides");
       }
       staging.seen[id] = 1;
       staging.ids[staging.idCount++] = id;

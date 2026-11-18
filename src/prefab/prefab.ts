@@ -1,10 +1,10 @@
-import { Component } from "@/component/component.ts";
+import { columnConstructor, Component } from "@/component/component.ts";
 import { ComponentDataError } from "@/errors.ts";
 import { isRelation } from "@/relation/relation.ts";
 import { type FieldDescriptor, isFieldDescriptor } from "@/schema/field.ts";
 import type { ComponentBundle, ComponentBundleEntryInput } from "@/types/component-bundle.ts";
 import type { DynamicComponent } from "@/types/component.ts";
-import type { ComponentData, SchemaOrNull, SchemaProperty, TypedArray } from "@/types/partitions.ts";
+import type { ComponentData, SchemaOrNull } from "@/types/partitions.ts";
 import { hasOwnProperty, isObject } from "@/utils.ts";
 import { canonicalizeStoredValue } from "@/value/canonicalize.ts";
 
@@ -30,10 +30,6 @@ export type PrefabDefaults = Readonly<Record<string, unknown>> | null;
 
 /** Mutable defaults while a definition is being flattened. */
 type DraftRow = Record<string, unknown> | null;
-
-function columnConstructor(property: SchemaProperty): new (length: number) => TypedArray {
-  return (Array.isArray(property) ? property[0] : property) as unknown as new (length: number) => TypedArray;
-}
 
 /**
  * Validate one non-numeric field value for a prefab definition.
@@ -109,7 +105,7 @@ function mergeDefinitionData(component: DynamicComponent, row: Record<string, un
       throw new ComponentDataError(`Component ${name} data field "${key}" must be a finite number.`);
     }
     // Canonicalize through the field's own typed array, so instances store exactly these values.
-    row[key] = canonicalizeStoredValue(name, key, value, new (columnConstructor(property as SchemaProperty))(1));
+    row[key] = canonicalizeStoredValue(name, key, value, new (columnConstructor(property))(1));
   }
 }
 

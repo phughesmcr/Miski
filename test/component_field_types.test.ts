@@ -20,15 +20,8 @@ import {
   System,
 } from "../mod.ts";
 import { ComponentManager } from "../src/component/component-manager.ts";
-import { createEntity, createTestWorld } from "./fixtures.ts";
+import { createEntity, createTestWorld, Mesh } from "./fixtures.ts";
 import { assert, assertEquals, assertStrictEquals, assertThrows, ids } from "./helpers.ts";
-
-class Mesh {
-  vertices: number[];
-  constructor(vertices: number[] = []) {
-    this.vertices = vertices;
-  }
-}
 
 function unitComponent(maxEntities?: number, create?: () => Mesh, clone?: (mesh: Mesh) => Mesh) {
   const mesh = create === undefined && clone === undefined ?

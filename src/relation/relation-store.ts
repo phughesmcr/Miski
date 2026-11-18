@@ -5,12 +5,13 @@ import {
   entityIndex,
   ReusableSlotPackIterator,
 } from "@/entity/entity.ts";
+import { columnConstructor } from "@/component/component.ts";
 import { ComponentDataError, EntityNotFoundError, formatEntityNotActive } from "@/errors.ts";
 import type { DynamicComponentInstance } from "@/types/component.ts";
 import type { QueryInstance } from "@/types/query.ts";
 import type { SchemaOrNull, TypedArray, TypedArrayConstructor } from "@/types/partitions.ts";
 import type { Relation } from "./relation.ts";
-import { hasOwnProperty, isObject } from "@/utils.ts";
+import { growTypedArray, hasOwnProperty, isObject } from "@/utils.ts";
 import { canonicalizeStoredValue } from "@/value/canonicalize.ts";
 import { RelationList } from "./relation-list.ts";
 
@@ -50,10 +51,6 @@ export type RelationStoreSnapshot = {
   readonly targetCounts: Uint32Array;
   readonly changed: Int32Array;
 };
-
-function columnConstructor(property: unknown): TypedArrayConstructor {
-  return (Array.isArray(property) ? property[0] : property) as TypedArrayConstructor;
-}
 
 /**
  * World-local pair index for one relation.
@@ -201,24 +198,14 @@ export class RelationStore {
     if (length <= this.#rowCapacity) return;
     let next = this.#rowCapacity * 2;
     while (next < length) next *= 2;
-    const grow = <T extends Int32Array | Uint32Array>(from: T, make: (n: number) => T): T => {
-      const to = make(next);
-      to.set(from);
-      return to;
-    };
-    const i32 = (n: number): Int32Array => new Int32Array(n);
-    this.rowSource = grow(this.rowSource, i32);
-    this.rowTarget = grow(this.rowTarget, (n) => new Uint32Array(n));
-    this.#nextBySource = grow(this.#nextBySource, i32);
-    this.#prevBySource = grow(this.#prevBySource, i32);
-    this.nextByTarget = grow(this.nextByTarget, i32);
-    this.#prevByTarget = grow(this.#prevByTarget, i32);
-    this.#freeRows = grow(this.#freeRows, i32);
-    for (let i = 0; i < this.#columns.length; i++) {
-      const column = new this.#constructors[i]!(next);
-      column.set(this.#columns[i]!);
-      this.#columns[i] = column;
-    }
+    this.rowSource = growTypedArray(this.rowSource, next);
+    this.rowTarget = growTypedArray(this.rowTarget, next);
+    this.#nextBySource = growTypedArray(this.#nextBySource, next);
+    this.#prevBySource = growTypedArray(this.#prevBySource, next);
+    this.nextByTarget = growTypedArray(this.nextByTarget, next);
+    this.#prevByTarget = growTypedArray(this.#prevByTarget, next);
+    this.#freeRows = growTypedArray(this.#freeRows, next);
+    for (let i = 0; i < this.#columns.length; i++) this.#columns[i] = growTypedArray(this.#columns[i]!, next);
     this.#rowCapacity = next;
     this.#syncPartitions();
   }

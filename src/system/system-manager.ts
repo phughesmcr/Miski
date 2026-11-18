@@ -5,7 +5,7 @@ import type { SystemCallback, SystemInstance, TypedSystemCallback } from "@/type
 import type { SystemBindings } from "@/types/system.ts";
 import type { UntypedQueryComponents } from "@/types/query.ts";
 import type { WorldContext } from "@/types/world-api.ts";
-import { noop } from "@/utils.ts";
+import { isPromiseLike, noop } from "@/utils.ts";
 import { currentHookOwner, runInHookScope } from "./hook-scope.ts";
 import { createSystemInstance, type System } from "./system.ts";
 
@@ -49,10 +49,6 @@ function destructionWaitsOn(target: SystemRegistration, caller: HookRun): boolea
     for (const next of run.awaiting) stack.push(next);
   }
   return false;
-}
-
-function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
-  return !!value && typeof (value as PromiseLike<unknown>).then === "function";
 }
 
 /** The SystemManager is responsible for creating, registering, initializing, and destroying systems. */

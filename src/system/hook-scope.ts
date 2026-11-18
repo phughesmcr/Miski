@@ -7,6 +7,8 @@
  * fall back to the teardown signal in the world, which rejects waiting `onReady` calls once teardown starts.
  */
 
+import { isPromiseLike } from "@/utils.ts";
+
 type HookScope = { active: boolean; owner: object | undefined };
 
 type AsyncLocalStorageLike = {
@@ -27,10 +29,6 @@ function createStorage(): AsyncLocalStorageLike | undefined {
 }
 
 const storage = createStorage();
-
-function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
-  return !!value && typeof (value as PromiseLike<unknown>).then === "function";
-}
 
 /**
  * Run a lifecycle hook, marking it and its asynchronous continuations as hook code until it settles.

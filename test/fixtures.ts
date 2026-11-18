@@ -2,6 +2,14 @@ import { Component, defineComponentSchema, World } from "../mod.ts";
 import type { ComponentSchema, ComponentSpec, DynamicComponent, Entity } from "../mod.ts";
 import { assert } from "./helpers.ts";
 
+/** A stand-in for an object-field value (a render mesh). */
+export class Mesh {
+  vertices: number[];
+  constructor(vertices: number[] = []) {
+    this.vertices = vertices;
+  }
+}
+
 export const vec2Schema = defineComponentSchema({ x: Float32Array, y: Float32Array });
 export type Vec2 = ComponentSchema<typeof vec2Schema>;
 

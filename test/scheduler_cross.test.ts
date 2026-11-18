@@ -10,15 +10,8 @@ import {
   Prefab,
   Relation,
 } from "../mod.ts";
-import { createTestWorld } from "./fixtures.ts";
+import { createTestWorld, Mesh } from "./fixtures.ts";
 import { assert, assertEquals, assertStrictEquals, assertThrows } from "./helpers.ts";
-
-class Mesh {
-  id: number;
-  constructor(id = 0) {
-    this.id = id;
-  }
-}
 
 const unit = new Component({
   name: "unit",
@@ -40,7 +33,7 @@ Deno.test("command buffer x field types: every field kind applies at flush", asy
   const commands = new CommandBuffer(world);
   const other = world.entities.createOrThrow();
   const entity = world.entities.createOrThrow();
-  const mesh = new Mesh(3);
+  const mesh = new Mesh([3]);
   commands.add(unit, entity, { hp: 4, alive: true, state: "run", target: other, label: "x", mesh });
   commands.flush();
   const data = world.components.getEntityData(unit, entity);
