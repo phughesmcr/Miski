@@ -21,6 +21,9 @@ Runtime tests live in `*.test.ts` files and run via `deno test` (see `deno.json`
 | `rollback_checkpoint_integrity.test.ts` | One rollback scope, consumed/foreign rollback points, foreign checkpoints, >32-component round-trips |
 | `prefab.test.ts` | Prefab definition, `extends` flattening, instantiate / instantiateMany differential against `createWith`, atomicity, capped components, rollback, `EcsWorld` helpers |
 | `prefab_field_types.test.ts` | Prefabs with `field.*` columns: logical defaults, null-only entity refs, per-instance `create()` / `clone`, rejection of shared objects, throwing hooks |
+| `relations_cross.test.ts` | Relations with prefabs and field types: relation entries rejected in prefabs and overrides, numeric-only pair data, rollback and checkpoints restoring side columns and pairs together |
+| `relations.test.ts` | Relations: pairs, order, data, exclusive/acyclic, cleanup and cascades, traversal, guards, checkpoints, rollback, `createEcsWorld` |
+| `relations_model.test.ts` | Seeded random relation operations (including cascades and rollback) checked against a plain-array model |
 | `release_integrity.test.ts` | Runtime, `deno.json`, README install snippet, and CHANGELOG version consistency (reads `README.md` and `CHANGELOG.md`; `deno task test` grants `--allow-read` for just those files) |
 
 ## Shared fixtures

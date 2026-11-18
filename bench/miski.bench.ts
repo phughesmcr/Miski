@@ -24,6 +24,7 @@ import {
   mustCreateEntity,
   populateMixedWorld,
   populateMovementWorld,
+  populateRelationWorld,
   populateSparseLifecycleWorld,
   populateWideWorld,
   type RenderState,
@@ -1130,6 +1131,88 @@ Deno.bench({
   fn: () => {
     const point = captureWorldRollbackPoint(fieldWorld);
     restoreWorldRollbackPoint(fieldWorld, point);
+  },
+});
+
+const relations = await populateRelationWorld(MEDIUM_CAPACITY);
+const relationLeafA = relations.entities[1_000]!;
+const relationLeafB = relations.entities[1_001]!;
+const relationParentA = relations.entities[10]!;
+const relationParentB = relations.entities[20]!;
+const relationHub = relations.entities[300]!;
+const relationQuery = new Query({ all: [relations.position, relations.likes] });
+const relationData = { weight: 0 };
+let relationToggle = false;
+
+Deno.bench({
+  name: "relation add/remove multi-target pair",
+  group: "relations",
+  baseline: true,
+  fn: () => {
+    relations.world.relations.add(relations.likes, relationLeafA, relationHub);
+    relations.world.relations.remove(relations.likes, relationLeafA, relationHub);
+  },
+});
+
+Deno.bench({
+  name: "exclusive relation retarget",
+  group: "relations",
+  fn: () => {
+    relationToggle = !relationToggle;
+    relations.world.relations.add(relations.childOf, relationLeafB, relationToggle ? relationParentA : relationParentB);
+  },
+});
+
+Deno.bench({
+  name: "relation lookups - sources, targets, queryList by target",
+  group: "relations",
+  fn: () => {
+    entitySink ^= relations.world.relations.getSources(relations.childOf, relationParentA).count;
+    entitySink ^= relations.world.relations.getTargets(relations.likes, relationLeafA).count;
+    entitySink ^= relations.world.relations.queryList(relationQuery, relations.likes, relationHub).count;
+  },
+});
+
+Deno.bench({
+  name: "relation data setData + readDataInto",
+  group: "relations",
+  fn: () => {
+    relationData.weight = (relationData.weight + 1) % 1_000;
+    const target = relations.world.relations.getTarget(relations.aims, relationLeafA)!;
+    relations.world.relations.setData(relations.aims, relationLeafA, target, relationData);
+    relations.world.relations.readDataInto(relations.aims, relationLeafA, target, relationData);
+  },
+});
+
+Deno.bench({
+  name: "hierarchy traverse 1,024 nodes (cached)",
+  group: "relations",
+  fn: () => {
+    entitySink ^= relations.world.relations.traverse(relations.childOf).count;
+  },
+});
+
+Deno.bench({
+  name: "hierarchy reparent + traverse 1,024 nodes",
+  group: "relations",
+  fn: () => {
+    relationToggle = !relationToggle;
+    relations.world.relations.add(relations.childOf, relationLeafA, relationToggle ? relationParentA : relationParentB);
+    entitySink ^= relations.world.relations.traverse(relations.childOf).count;
+  },
+});
+
+Deno.bench({
+  name: "cascade destroy 5-node subtree + rebuild + refresh",
+  group: "relations",
+  fn: () => {
+    const parent = mustCreateEntity(relations.world);
+    relations.world.relations.add(relations.childOf, parent, relationHub);
+    for (let i = 0; i < 4; i++) {
+      relations.world.relations.add(relations.childOf, mustCreateEntity(relations.world), parent);
+    }
+    relations.world.entities.destroy(parent);
+    relations.world.refresh();
   },
 });
 

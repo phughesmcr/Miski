@@ -6,6 +6,7 @@ import type { EntityManager } from "@/entity/entity-manager.ts";
 import { CapacityError, componentDisplayName, formatComponentNotRegistered, NotRegisteredError } from "@/errors.ts";
 import { QueryEntityResult } from "@/query/query-pool.ts";
 import type { ComponentBundleEntryInput } from "@/types/component-bundle.ts";
+import { isRelation } from "@/relation/relation.ts";
 import type { DynamicComponentInstance } from "@/types/component.ts";
 import { Prefab, prefabDefaults } from "./prefab.ts";
 
@@ -244,6 +245,11 @@ export class PrefabSpawner {
       const instance = componentManager.getInstance(entry[0]);
       if (instance === undefined) {
         throw new NotRegisteredError(formatComponentNotRegistered(componentDisplayName(entry[0])));
+      }
+      if (isRelation(instance.type)) {
+        throw new TypeError(
+          `Component "${instance.type.name}" is a relation; add its pairs with world.relations after instantiating.`,
+        );
       }
       const id = instance.id;
       if (staging.seen[id] === 1) {

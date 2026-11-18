@@ -33,10 +33,27 @@
   over the defaults and may add components. An instance is indistinguishable from `createWith` with the
   equivalent bundle, and steady-state instantiation allocates nothing. `EcsWorld` gains `prefab`,
   `instantiate` and `instantiateMany` for named specs.
+- Prefabs reject relations, in definitions and in instantiate overrides (a pair needs a target in a specific
+  world); attach pairs with `world.relations` after instantiating. Relation pair data stays numeric: `field.*`
+  descriptors in a relation schema throw `SpecError`.
 - Prefabs support `field.*` columns. Defaults are logical values (`Prefab.get` returns booleans, enum labels and
   strings). Entity-ref defaults must be `null`; pass targets as instantiate overrides. An object field with no prefab
   value calls `create()` for each instance; a given object value is cloned per instance and needs the field's `clone`
   hook, or the prefab is rejected at definition. Null and primitive object-field values are stored as is.
+- Add entity relations and hierarchies. A `Relation` registers in
+  `WorldSpec.components` like a component. Its presence is a tag, so queries
+  match any target without archetype fragmentation, and pairs live in a side
+  index reached through the new `world.relations` API: `add`, `remove`,
+  `removeAll`, `has`, `getTarget`, `getTargets`, `getSources`,
+  `getAllTargets`, `queryList`, `getData`, `readDataInto`, `setData`,
+  `getChanged`, `traverse` and `getInstance`. Relations may be exclusive
+  (`exclusive`) and cycle-free (`acyclic`), carry typed per-pair data, and
+  destroy their sources when a target is destroyed
+  (`onDeleteTarget: "cascade"`); by default only the pairs are removed.
+  Rollback and component checkpoints restore pairs, order and data exactly.
+  `createEcsWorld` accepts `relations`. The generic component add and remove
+  APIs throw a `TypeError` for relation tags. `WorldContext` gains
+  `relations`.
 - Reuse entity slots next-fit instead of last-freed-first. A destroyed entity's
   slot is reissued only after the allocator has swept past every other free
   slot, so a held stale handle no longer comes back to life after 32,768

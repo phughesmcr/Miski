@@ -3,6 +3,7 @@ import type { DynamicComponent } from "@/types/component.ts";
 import type { WorldArchetypeAPI } from "@/types/world-archetype-api.ts";
 import type { WorldComponentAPI } from "@/types/world-component-api.ts";
 import type { WorldEntityAPI } from "@/types/world-entity-api.ts";
+import type { WorldRelationAPI } from "@/types/world-relation-api.ts";
 import type { WorldSystemAPI } from "@/types/world-system-api.ts";
 
 export type { ComponentBundle, ComponentBundleEntryFor, ComponentBundleEntryInput } from "@/types/component-bundle.ts";
@@ -33,6 +34,7 @@ export type WorldContext = {
   readonly entities: WorldEntityAPI;
   readonly systems: WorldSystemAPI;
   readonly archetypes: WorldArchetypeAPI;
+  readonly relations: WorldRelationAPI;
   init(): Promise<void>;
   destroy(): Promise<void>;
   refresh(): void;

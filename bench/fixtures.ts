@@ -1,6 +1,6 @@
 /// <reference lib="deno.ns" />
 
-import { Component, Query, System, World } from "../mod.ts";
+import { Component, Query, Relation, System, World } from "../mod.ts";
 import type { ComponentInstance, Entity } from "../mod.ts";
 
 export type Vec2 = { x: Float32ArrayConstructor; y: Float32ArrayConstructor };
@@ -252,4 +252,33 @@ export async function populateWideWorld(
 
   world.refresh();
   return { world, components, entities };
+}
+
+export type Link = { weight: Float32ArrayConstructor };
+
+/**
+ * A world with a 4-ary `childOf` hierarchy over `nodes` entities (cascade, acyclic), a multi-target `likes`
+ * relation (each node likes the next two nodes) and an exclusive data relation `aims`.
+ */
+export async function populateRelationWorld(capacity: number, nodes: number = 1_024) {
+  const position = new Component<Vec2>({ name: "position", schema: { x: Float32Array, y: Float32Array } });
+  const childOf = new Relation({ name: "childOf", exclusive: true, acyclic: true, onDeleteTarget: "cascade" });
+  const likes = new Relation({ name: "likes" });
+  const aims = new Relation({ name: "aims", exclusive: true, schema: { weight: Float32Array } });
+  const world = new World({ capacity, components: [position, childOf, likes, aims] });
+  await world.init();
+  const entities: Entity[] = [];
+  for (let i = 0; i < nodes; i++) {
+    const entity = mustCreateEntity(world);
+    world.components.addToEntity(position, entity, { x: i, y: i });
+    entities.push(entity);
+    if (i > 0) world.relations.add(childOf, entity, entities[(i - 1) >> 2]!);
+  }
+  for (let i = 0; i < nodes; i++) {
+    world.relations.add(likes, entities[i]!, entities[(i + 1) % nodes]!);
+    world.relations.add(likes, entities[i]!, entities[(i + 2) % nodes]!);
+    world.relations.add(aims, entities[i]!, entities[(i + 7) % nodes]!, { weight: i });
+  }
+  world.refresh();
+  return { world, position, childOf, likes, aims, entities };
 }

@@ -1,5 +1,6 @@
 import { Component } from "@/component/component.ts";
 import { ComponentDataError } from "@/errors.ts";
+import { isRelation } from "@/relation/relation.ts";
 import { type FieldDescriptor, isFieldDescriptor } from "@/schema/field.ts";
 import type { ComponentBundle, ComponentBundleEntryInput } from "@/types/component-bundle.ts";
 import type { DynamicComponent } from "@/types/component.ts";
@@ -194,6 +195,12 @@ export class Prefab<
       const component = entry[0] as DynamicComponent;
       if (!(component instanceof (Component as unknown as abstract new (...args: never[]) => DynamicComponent))) {
         throw new TypeError("Prefab entries must reference a Component.");
+      }
+      if (isRelation(component)) {
+        // Pairs need a target in a specific world; attach them with world.relations after instantiation.
+        throw new TypeError(
+          `Component "${component.name}" is a relation; add its pairs with world.relations after instantiating.`,
+        );
       }
       if (own.has(component)) {
         throw new RangeError(`Duplicate component "${component.name}" in prefab.`);

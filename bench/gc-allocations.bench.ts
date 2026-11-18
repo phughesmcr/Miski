@@ -15,6 +15,7 @@ import {
   mustCreateEntity,
   populateMixedWorld,
   populateMovementWorld,
+  populateRelationWorld,
   populateSparseLifecycleWorld,
   populateWideWorld,
   type RenderState,
@@ -266,6 +267,23 @@ await refillWorld.init();
 for (let i = 0; i < 4_096; i++) refillWorld.components.addToEntity(refillTag, mustCreateEntity(refillWorld));
 const refillQuery = new Query({ all: [refillTag] });
 refillWorld.refresh();
+// Relations: a 1,024-node 4-ary hierarchy plus multi-target and exclusive data relations.
+const rel = await populateRelationWorld(MEDIUM_CAPACITY);
+const relLeafA = rel.entities[1_000]!;
+const relLeafB = rel.entities[1_001]!;
+const relParentA = rel.entities[10]!;
+const relParentB = rel.entities[20]!;
+const relHub = rel.entities[300]!;
+const relPositionQuery = new Query({ all: [rel.position, rel.likes] });
+const relAimsOut = { weight: 0 };
+let relToggle = false;
+// Warm every pooled list and the pair pool before measurement.
+rel.world.relations.getSources(rel.childOf, rel.entities[0]!);
+rel.world.relations.getTargets(rel.likes, relLeafA);
+rel.world.relations.queryList(relPositionQuery, rel.likes, relHub);
+rel.world.relations.traverse(rel.childOf);
+rel.world.relations.add(rel.likes, relLeafA, relHub);
+rel.world.relations.remove(rel.likes, relLeafA, relHub);
 mixed.world.entities.query(movementQuery);
 mixed.world.entities.query(renderableQuery);
 mixed.world.entities.query(renderIncludeQuery);
@@ -855,6 +873,61 @@ const scenarios: Scenario[] = [
     refillWorld.entities.destroy(entity);
     entitySink ^= refillWorld.entities.queryList(refillQuery).count;
     refillWorld.refresh();
+  }),
+  budgeted("relation add/remove multi-target pair", 50_000, () => {
+    rel.world.relations.add(rel.likes, relLeafA, relHub);
+    rel.world.relations.remove(rel.likes, relLeafA, relHub);
+  }),
+  budgeted("exclusive relation retarget", 50_000, () => {
+    relToggle = !relToggle;
+    rel.world.relations.add(rel.childOf, relLeafB, relToggle ? relParentA : relParentB);
+  }),
+  budgeted("relation lookups: sources, targets, queryList by target", 50_000, () => {
+    entitySink ^= rel.world.relations.getSources(rel.childOf, relParentA).count;
+    entitySink ^= rel.world.relations.getTargets(rel.likes, relLeafA).count;
+    entitySink ^= rel.world.relations.queryList(relPositionQuery, rel.likes, relHub).count;
+    entitySink ^= rel.world.relations.has(rel.likes, relLeafA, relHub) ? 1 : 0;
+  }),
+  budgeted("relation data setData + readDataInto", 50_000, () => {
+    relAimsOut.weight = (relAimsOut.weight + 1) % 1_000;
+    rel.world.relations.setData(rel.aims, relLeafA, rel.world.relations.getTarget(rel.aims, relLeafA)!, relAimsOut);
+    rel.world.relations.readDataInto(
+      rel.aims,
+      relLeafB,
+      rel.world.relations.getTarget(rel.aims, relLeafB)!,
+      relAimsOut,
+    );
+  }),
+  {
+    name: "hierarchy traverse 1,024 nodes (cached)",
+    iterations: 200_000,
+    // A cache hit is a revision compare; long rounds keep a one-off recompile (~20 KiB) below the budget.
+    warmupIterations: 50_000,
+    maxSteadyStateBeforeGcBytesPerIter: ZERO_ALLOC_BUDGET_BYTES_PER_ITER,
+    fn: () => {
+      entitySink ^= rel.world.relations.traverse(rel.childOf).count;
+    },
+  },
+  {
+    name: "hierarchy reparent + traverse 1,024 nodes",
+    iterations: 20_000,
+    // The traversal loop keeps tiering up past 10k calls; a recompile inside a round adds a fixed ~7 KiB, so long
+    // rounds after a long warmup keep that below the per-iteration budget (same remedy as the batch scenarios).
+    warmupIterations: 20_000,
+    maxSteadyStateBeforeGcBytesPerIter: ZERO_ALLOC_BUDGET_BYTES_PER_ITER,
+    fn: () => {
+      relToggle = !relToggle;
+      rel.world.relations.add(rel.childOf, relLeafA, relToggle ? relParentA : relParentB);
+      entitySink ^= rel.world.relations.traverse(rel.childOf).count;
+    },
+  },
+  budgeted("cascade destroy 5-node subtree + rebuild + refresh", 20_000, () => {
+    const parent = mustCreateEntity(rel.world);
+    rel.world.relations.add(rel.childOf, parent, relHub);
+    for (let i = 0; i < 4; i++) rel.world.relations.add(rel.childOf, mustCreateEntity(rel.world), parent);
+    rel.world.entities.destroy(parent);
+    entitySink ^= countEntities(rel.world.relations.getChanged(rel.childOf));
+    rel.world.refresh();
   }),
 ];
 

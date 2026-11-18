@@ -297,6 +297,23 @@ export {
 } from "@/errors.ts";
 export { Prefab } from "@/prefab/prefab.ts";
 export { isValidQuerySpec, Query } from "@/query/query.ts";
+export { isRelation, Relation } from "@/relation/relation.ts";
+export type {
+  DataRelationSpec,
+  RelationConstructor,
+  RelationDeletePolicy,
+  RelationSpec,
+  RelationSpecBase,
+  TagRelationSpec,
+} from "@/relation/relation.ts";
+export type {
+  AnyRelation,
+  BorrowedHierarchyList,
+  BorrowedRelationList,
+  RelationDataInput,
+  RelationInstance,
+  WorldRelationAPI,
+} from "@/types/world-relation-api.ts";
 export { isValidSystemSpec, System } from "@/system/system.ts";
 export {
   captureWorldRollbackPoint,
@@ -339,6 +356,7 @@ export type {
   ObjectFieldOptions,
   StringField,
 } from "@/schema/field.ts";
+export type { RelationMap, RelationOptions, RelationsFromMap } from "@/world/ecs-world.ts";
 
 export type {
   ComposedQueryComponents,
