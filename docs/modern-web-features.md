@@ -1,134 +1,171 @@
 # Modern JS / web platform features for Miski
 
-Research report, no source changes. Written 2026-11 against branch `1.0.0-alpha` (`deno.json` 1.0.0-beta.2; README
-targets Deno ^2.9.7, Node ^24, Bun ^1.3; `lib: ["esnext","dom"]`, `erasableSyntaxOnly: true`).
+Research report. Written 2026-11 against branch `1.0.0-alpha` (`deno.json` 1.0.0-beta.2; README targets Deno ^2.9.7,
+Node ^24, Bun ^1.3; `lib: ["esnext","dom"]`, `erasableSyntaxOnly: true`). Revised after seven follow-up explorations,
+each of which prototyped or benchmarked its topic (Deno 2.9.8 / V8 15.0 on aarch64 macOS unless stated). Their full
+notes (diffs, bench tables, sources) are in the side-session notes folder of the session that commissioned this report:
+`small-apis.md`, `disposables.md` (+ two `.patch` files), `float16.md`, `buffers.md`, `async-context.md`,
+`task-scheduling.md`, `workers-sab.md`.
 
 Sources: GoogleChrome/modern-web-guidance-src (`guides/js/js/guide.md`, `guides/performance/{schedule-tasks-by-priority,
-break-up-long-tasks}`, `features/*`), TC39 proposal tracker, MDN/Chrome Status from memory. **Version numbers below
-come from memory, not live lookups; confirm on chromestatus.com / `deno eval` before adopting anything.** Items I am
-unsure about are marked `(verify)`.
+break-up-long-tasks}`), TC39 proposal repos, `@mdn/browser-compat-data` 8.1.9, chromestatus, V8 source, and local
+runtime checks (Deno 2.9.8, Node 26, Bun 1.4.4). Node 24.0 and Bun 1.3 floors were not installed, so their versions come
+from BCD, not local runs. Anything still unconfirmed is marked `(verify)`.
 
-What the guidance repo covers that is relevant: `structuredClone`, copying array methods, `Object/Map.groupBy`,
-`Promise.withResolvers`, `AbortSignal.timeout/any`, binary text encoding (base64/hex), `scheduler.postTask` /
-`scheduler.yield`, Temporal, workers/Wasm. It says nothing about `using`, `Float16Array`, resizable buffers, iterator
-helpers or `AsyncContext`; those come from TC39/Chrome status.
+The guidance repo covers `structuredClone`, copying array methods, `Object/Map.groupBy`, `Promise.withResolvers`,
+`AbortSignal.timeout/any`, base64/hex, `scheduler.postTask` / `scheduler.yield`, Temporal and workers/Wasm. It says
+nothing about `using`, `Float16Array`, resizable buffers, iterator helpers or `AsyncContext`.
 
-Key constraint: Miski's hot paths are zero-allocation and GC-budgeted (`deno task bench:gc`). Anything that allocates
-per call (iterator helpers, `using` on a fresh object, `structuredClone`) is out of the hot path by definition, and any
-change to column storage ripples through `@phughesmcr/partitionedbuffer`, which Miski does not own in this repo.
+Key constraint: hot paths are zero-allocation and GC-budgeted (`deno task bench:gc`). Anything that allocates per call
+is out of the hot path, and column storage changes go through `@phughesmcr/partitionedbuffer`.
 
 ## Ranked table
 
-| # | Feature | Where in Miski | Benefit | Cost / risk | Support | Recommendation |
-|---|---|---|---|---|---|---|
-| 1 | `Symbol.asyncDispose` on `World` | `world.ts:550` `destroy()` | Ergonomics: `await using world = ...` guarantees teardown in tests/examples | One method alias; no behaviour change; TS >= 5.2 | Chrome 134, Deno 2.x, Node 24, Bun (verify) | **Adopt now** |
-| 2 | `Error.isError` | `command-buffer.ts:687` (`instanceof Error`) | Correct across realms (workers, iframes, vm); also catches DOMException-like errors | Trivial; needs `typeof Error.isError` guard or lib typing | Chrome 134, Deno >= 2.2, Node 24 | **Adopt now** |
-| 3 | `Promise.withResolvers` (finish) | `world.ts:352-354` hand-rolled `new Promise` + stored resolver; `world.ts:118` already uses it | Consistency, 3 fewer lines | Executor-throw semantics unchanged here (resolver only) | Chrome 119 | **Adopt now** |
-| 4 | `Promise.try` | `system-manager.ts:134` (`Promise.resolve(initResult)` after manual `try`), other hook wrappers | Removes sync-throw/async-reject split in hook runners | Hooks are called synchronously on purpose (`runInHookScope`); only use where result is already thenable-checked | Chrome 128, Deno 2.x | Later (low value) |
-| 5 | `using` for checkpoints/rollback points | `checkpoint.ts` (`captureCheckpoint`, `world.ts:663`), `rollback.ts` | Scoped capture/discard; guarantees buffers released on throw | Public API addition on returned objects; must not allocate on hot path; checkpoints are pooled so dispose = return to pool | Chrome 134 | Later (design first) |
-| 6 | `using` for CommandBuffer / borrowed lists | `command-buffer.ts`, `query-pool.ts`, `archetype.ts:350` | Nothing to dispose: borrowed views are not owned | Forcing `Symbol.dispose` onto reusable views adds a call per query | - | No |
-| 7 | Iterator helpers | `query-iterators.ts:87`, `relation-list.ts:107`, `entity.ts:182,224` | `.map/.filter/.take` for cold code (debug tools, tests, editor) | Each helper allocates an iterator wrapper; breaks GC budget on hot paths; reusable iterators (`ReusableEntityIterator`) already beat them | Chrome 122, Deno, Node 22 | No for core; allow in docs/examples |
-| 8 | `Float16Array` columns | `component.ts:21-30` (`SUPPORTED_COLUMN_CONSTRUCTORS` rejects it explicitly) | Half memory for normalized values (colors, UVs, health fractions); `Math.f16round`, `DataView.getFloat16` | Needs partitionedbuffer + `TypedArrayConstructor` typing support; ~3 decimal digits, easy to misuse; saves/field-codec/layout need a new type tag | Chrome 135, Deno (V8 >= 13.5), Node 24, Bun (verify); TS lib `esnext.float16` (TS 5.9+) | Later (after partitionedbuffer) |
-| 9 | Resizable `ArrayBuffer` / growable `SAB` | `utils.ts:70` `growTypedArray`; `relation-store.ts:201-208`; `archetype.ts:171-182`; `relation-list.ts:50` | Grow without copy/re-point; length-tracking views | Capacity is a fixed world param already, so only pools grow; length-tracking views have slower element access in V8 (verify with bench); borrowed views stay valid only if tracking, changing the "re-read after growth" contract | Chrome 111, Deno, Node 20+ | Later (prototype + bench) |
-| 10 | `ArrayBuffer.prototype.transfer` | `growTypedArray` (grow = alloc + copy today); worker handoff | Possible realloc without copy, and detaches old buffer (kills stale borrowed views loudly); zero-copy to workers | Detaching changes semantics for anything still holding the old view; gain only at growth events | Chrome 114, Deno, Node 21+ | Later (pair with #9) |
-| 11 | `Uint8Array` `toBase64` / `toHex` / `fromBase64` | `format.ts:262` `hashHex`, `schema.ts:296` fnv hex; save-to-string transport (JSON view in `document.ts:403`) | Native, no `btoa`/loop; a `worldSaveToBase64()` helper for localStorage/URL transport | `document.ts` currently has no binary-to-string step, so benefit is only for new helpers; Deno/Node support lags Chrome (verify); needs fallback | Chrome 140, Safari 18.2, Node 25 (verify), Deno (verify) | Later; feature-detect with fallback |
-| 12 | `Map.prototype.getOrInsert[Computed]` / WeakMap | `ecs-world.ts:195,292`, `prefab.ts:203`, relation/query registries using `get`/`has`+`set` | Removes double lookups and `??=` boilerplate | Stage 3 (upsert); shipped in Chrome ~145, Deno/Node later (verify); needs fallback or lib types | Chrome 145 (verify) | Later; no benefit measurable on cold paths |
-| 13 | `AsyncContext` | `hook-scope.ts` (uses `process.getBuiltinModule("node:async_hooks").AsyncLocalStorage`; browsers fall back to teardown signal) | Would give browsers the same deterministic self-wait detection as Deno/Node | TC39 stage 2, V8 behind a flag, **not shipped in Chrome** (verify). Do not depend on it | not shipped | Later: add as a feature-detected second backend behind the existing `AsyncLocalStorageLike` shape |
-| 14 | `scheduler.postTask` / `scheduler.yield` | `schedule.ts` (frame/systems runner) | Opt-in "yield between systems" mode so long frames do not block input; priority-aware background systems | Core is synchronous by design; async variant changes determinism and rollback assumptions; belongs in an adapter, not core | Chrome 94 / `yield` 129; Deno/Node absent (needs guard) | Later, as optional adapter |
-| 15 | Workers + `SharedArrayBuffer` systems | Column storage (partitionedbuffer), `Schedule` | The SoA layout is the natural fit for parallel systems | Needs cross-origin isolation (COOP/COEP), `Atomics` sync, a data-race model; huge scope; commands/relations/archetype moves are single-threaded | Chrome (isolated pages) | Later (research spike); no for 1.0 |
-| 16 | `structuredClone` | `prefab.ts`, field `object` encode/decode cells, checkpoint object columns | Clone object-field values (Map/Set/typed arrays/cycles) | Allocates, throws on functions, drops prototypes; Miski already has canonical encode/decode hooks (`canonicalize.ts`) | Everywhere | No (leave to user hooks) |
-| 17 | `Atomics.pause` | none | Only for worker spin-waits | No workers today | Chrome 133 | No (revisit with #15) |
-| 18 | `Math.sumPrecise` | none | No float summation in core | - | Chrome 140ish (verify) | No |
-| 19 | `RegExp.escape` | none (no regexes built from user input) | - | - | Chrome 136 | No |
-| 20 | Records/tuples | - | - | Withdrawn; successor ("Composites") early stage | none | No |
-| 21 | Decorators | - | - | Stage 3, not natively shipped; not erasable TS, conflicts with `erasableSyntaxOnly` | none | No |
-| 22 | Import attributes | - | Nothing to import as JSON | - | Chrome 123 | No |
-| 23 | Web Locks / OffscreenCanvas | - | Out of scope for an ECS core | - | Chrome | No |
+| # | Feature | Where in Miski | Finding | Support | Recommendation |
+|---|---|---|---|---|---|
+| 1 | `Error.isError` | `command-buffer.ts:687` (the only `instanceof Error` in `src/`) | Cross-realm and `DOMException` safe. Applied in a prototype; suite green | Chrome 134, Node 24.3, Deno 2.2, Bun 1.1.39. **Node 24.0–24.2 lack it** → module-level `typeof` fallback | **Adopt now** |
+| 2 | `Promise.withResolvers` | `world.ts:352` `#initPromise` + `#initResolver` (only hand-rolled one) | Becomes one `#init` field; `?.` calls on the resolver go. Prototype green | Chrome 119, Node 22, Deno 1.38, Bun 1.0 | **Adopt now** |
+| 3 | `World[Symbol.asyncDispose]` | `world.ts` `destroy()` | `await using world` tears down on scope exit. Designed against the now-idempotent `destroy()` | Chrome 134, Node 24.0, Deno 2.2.10, Bun 1.3.0; Safari (verify) | **Adopt now** |
+| 4 | Disposable rollback scope (`using`) | `src/rollback/rollback.ts` | Real hazard: an open rollback point blocks every later capture ("already active") and loads (`assertLoadReady`), so one leaked by a throw wedges the world | as #3 | **Adopt now** (new API, more effort) |
+| 5 | `Float16Array` columns | `component.ts:21-35`, `schema.ts:22`, `serialization/format.ts` | Feasible and small. f16 within 0–25% of f32 speed on aarch64. Saves without f16 stay byte-identical | Chrome 135, Node 24.0, Deno, Bun 1.1.23 (BCD summary, verify); TS 6.0.3 types it | **Later**: needs a partitionedbuffer release first |
+| 6 | `scheduler.yield` / `postTask` | `src/scheduler/schedule.ts` | Docs recipe now; opt-in yielding adapter only if frames can exceed 50 ms. Determinism preserved in prototype | `yield`: Chrome 129, Firefox 142, no Safari. `postTask`: Chrome 94, Firefox 101 (verify) | **Docs now**, adapter later |
+| 7 | `AsyncContext` | `src/system/hook-scope.ts` | Stage 2. Not in Chrome (no flag, no origin trial found), not in Deno 2.9.8. Polyfill not viable | none | **Later**: feature-detected backend when it ships |
+| 8 | Workers + `SharedArrayBuffer` | partitionedbuffer, `scheduler/order.ts` | partitionedbuffer can't back a SAB today. Best-case crossover ≈ 2–3e4 entities (realistically ≥ 5e4); 3.9× at 4e6 with 4 workers | Chrome with cross-origin isolation | **Later**, optional module outside core |
+| 9 | `Map.getOrInsert[Computed]` | `archetype.ts:329`, `archetype-manager.ts:208`, `command-buffer.ts:462,655`, `prefab-spawner.ts:175`, `query-manager.ts:225`, `world-save.ts:110` | Every site builds a non-trivial value or would add a closure allocation | Chrome 145, Deno 2.6.7, Bun 1.2.20, **Node 26.0** | **Later**: no measurable gain; revisit at Node floor 26 |
+| 10 | `Uint8Array` `toBase64` / `toHex` | none (`hashHex`/`fnv1a64` format numbers/BigInt, not bytes) | Users can already call `saveWorld(...).toBase64()` | Chrome 140, Deno 2.5, Bun 1.1.22, **Node 25.0** | **Later**: no call site; reconsider a helper at Node floor 25 |
+| 11 | Resizable `ArrayBuffer` / growable SAB | `utils.ts:70`, `relation-store.ts:201-208`, `archetype.ts` `#reserve`, `relation-list.ts:50`, `component-manager.ts` `#allocateList` | Views over resizable buffers are **4–7× slower** per element (growable SAB 20–40×). Prototype: queries unchanged, relation lookups 11–27% slower, no growth gain (doubling already amortizes) | Baseline 2024 | **No** |
+| 12 | `ArrayBuffer.prototype.transfer` | growth sites; worker handoff | V8 does not realloc in place: same cost as alloc+copy. Detach breaks users holding `partitions[key]` across a grow | Baseline 2024 | **No** (maybe an opt-in stale-view debug check) |
+| 13 | `Promise.try` | `system-manager.ts` `#runHook`, `#initLateRecord` | Hook runners rely on sync throws, synchronous `end()` and `isPromiseLike` branching; no call site simplifies | Chrome 128 | **No** |
+| 14 | `using` on checkpoints | `checkpoint.ts`, `world.ts` `captureCheckpoint` | A checkpoint is frozen, reusable data that owns nothing | - | **No** |
+| 15 | `using` on CommandBuffer / Schedule / query pools / prefab spawners | `scheduler/**`, `query-pool.ts`, `prefab-spawner.ts` | CommandBuffer dispose must pick flush or discard, both hide bugs; the rest own nothing | - | **No** |
+| 16 | `using` in hot paths | anywhere | Allocates even on pooled objects: 5M iterations 385 ms / 1030 GC events vs try/finally 6 ms / 4 | - | **No** |
+| 17 | Iterator helpers | `query-iterators.ts:87`, `relation-list.ts:107`, `entity.ts:182,224` | Allocate wrappers; Miski's reusable iterators already avoid that | Chrome 122 | **No** in `src/`; fine in examples |
+| 18 | `structuredClone` | object fields, prefabs | Miski already has `clone`/`encode`/`decode` hooks; clone drops prototypes | everywhere | **No** |
+| 19 | `Atomics.pause` / `Atomics.waitAsync` | none today | Only relevant inside #8 (Chrome's main thread can't `Atomics.wait`, so joins need `waitAsync`) | Chrome 133 / 87 | **No** (part of #8) |
+| 20 | `Math.sumPrecise`, `RegExp.escape`, import attributes, Web Locks, OffscreenCanvas | none | No call site | - | **No** |
+| 21 | Records/tuples, decorators | - | Records/tuples withdrawn; decorators not shipped natively and not erasable TS | none | **No** |
 
 ## Adopt now, ordered by value per effort
 
-1. **`Error.isError` in the command buffer** (minutes, tiny risk).
-2. **Finish `Promise.withResolvers` in `World` constructor** (minutes, zero risk).
-3. **`World[Symbol.asyncDispose]`** (small, additive, high ergonomic return in tests and examples).
+1. **`Error.isError`** (minutes): one line plus a fallback for Node 24.0–24.2.
+2. **`Promise.withResolvers` in the `World` constructor** (minutes, zero risk).
+3. **`scheduler.yield` docs recipe** (docs only, no code).
+4. **`World[Symbol.asyncDispose]`** (small, additive).
+5. **Disposable rollback scope** (new public API and about 15 tests, but it fixes a real wedge).
 
-None of these touches a hot path, so the GC budgets are unaffected. Everything else is "later": the two with real
-upside (`Float16Array`, resizable buffers) both hinge on `@phughesmcr/partitionedbuffer`, so the first action is an
-upstream issue/PR there, plus a bench of length-tracking view access.
+Prototypes for 1 and 2 exist uncommitted in worktree `agent-a6ba9562fbd8ace4a`. Patches for 4 and 5 are in the notes
+folder (`disposables-world-prototype.patch`, `disposables-prototype.patch`).
+
+`World.destroy()` was made idempotent alongside this report: it is a no-op on a destroyed world. A call while teardown
+is running still rejects "World is being destroyed", because without async context tracking (browsers) it can't be told
+apart from a destroy hook calling `destroy()`, which would wait on itself.
 
 ### 1. `Error.isError` (`command-buffer.ts:687`)
 
 ```ts
-// before
-if (!(error instanceof Error) || record >= this.#recordCount) return;
-// after
-if (!Error.isError(error) || record >= this.#recordCount) return;
+const isError: (value: unknown) => value is Error =
+  typeof Error.isError === "function" ? Error.isError : (value): value is Error => value instanceof Error;
+// ...
+if (!isError(error) || record >= this.#recordCount) return;
 ```
 
-Cross-realm safe (errors thrown from worker-originated or iframe callbacks fail `instanceof`). TS: needs `lib` with
-`Error.isError` (TS 5.9+ `esnext.error`); if the pinned Deno's TS lacks it, declare a one-line ambient type. Add a
-`typeof Error.isError === "function"` fallback only if Node/Bun floors lack it (Node 24 and Bun 1.3 have V8/JSC support;
-verify Bun).
+Keep the `MiskiError` / `RangeError` checks elsewhere as they are; they test specific classes. Drop the fallback once
+the Node floor is 24.3.
 
-### 2. `Promise.withResolvers` in the `World` constructor (`world.ts:352-354`)
+### 2. `Promise.withResolvers` (`world.ts:352`)
 
 ```ts
-// before
-this.#initPromise = new Promise((resolve) => { this.#initResolver = resolve; });
-// after
-const init = Promise.withResolvers<WorldInitResult>(); // match the existing resolver's type
-this.#initPromise = init.promise;
-this.#initResolver = init.resolve;
+readonly #init: PromiseWithResolvers<WorldState> = Promise.withResolvers<WorldState>(); // existing resolver type
+// constructor: remove the `new Promise` block; callers use this.#init.promise / this.#init.resolve(...)
 ```
 
-Identical behaviour, same style as `#teardownStarted` at `world.ts:118`, matches the guidance guide's DO.
+Same pattern as `#teardownStarted` at `world.ts:118`.
 
-### 3. `Symbol.asyncDispose` on `World` (`world.ts:550`)
+### 3. `scheduler.yield` recipe (README / docs)
 
 ```ts
-async destroy(): Promise<void> { /* unchanged */ }
-async [Symbol.asyncDispose](): Promise<void> { await this.destroy(); }
+const yieldToMain = globalThis.scheduler?.yield?.bind(globalThis.scheduler) ??
+  (() => new Promise<void>((r) => setTimeout(r, 0)));
+for (;;) {
+  schedule.run(dt);
+  await yieldToMain(); // between frames, never inside a system
+}
 ```
+
+Background work (analytics, saves to IndexedDB) goes through `scheduler.postTask(fn, { priority: "background" })` on
+data copied out of the world. Do **not** give systems `postTask` priorities: that reorders simulation work. Only if
+single frames can exceed 50 ms, add an opt-in `runScheduleYielding` adapter. It needs `Schedule` split into
+`begin/step/end/abort`, yields only at phase boundaries after the command flush, and must forbid save, rollback and
+`setClock` while a frame is suspended. The prototype matched plain `run()` exactly with 26 yields/frame and cost about
+100 B/frame when it never yields, plus about 150 B per actual yield. Rebuild `run()` on `begin/step` and check
+`bench/scheduler.bench.ts` first.
+
+### 4. `World[Symbol.asyncDispose]`
 
 ```ts
-await using world = new World(spec);
-// ... run frames; destroy() runs on scope exit, even on throw
+#disposal: Promise<void> | undefined;
+
+[Symbol.asyncDispose](): Promise<void> {
+  if (this.#state === "uninitialized" || this.#state === "destroyed") return Promise.resolve();
+  this.#disposal ??= this.destroy().catch((error) => {
+    this.#disposal = undefined; // an error-state world can be disposed again
+    throw error;
+  });
+  return this.#disposal;
+}
 ```
 
-Requirements: TS 5.2+ (already satisfied by `lib: esnext`), `Symbol.asyncDispose` exists in Chrome 134+, Deno, Node 24,
-Bun (verify). **`destroy()` is not idempotent**: it throws when the state is `uninitialized` or `destroyed`
-(`world.ts:551-553`) and when already destroying. So the dispose method must skip those states
-(`if (state is initialized or error) await this.destroy()`), otherwise `await using` after an explicit `destroy()`, or
-on a world that never initialized, throws from the disposer. Add a CHANGELOG line and tests for disposal on throw and
-after explicit destroy. Optionally the same for `Schedule` if it owns resources (not examined).
+- `uninitialized` is a no-op, not a throw: throwing from a disposer would hide the scope body's real error inside a
+  `SuppressedError`.
+- Concurrent disposals share `#disposal`. Disposing while someone else's `destroy()` runs rejects "being destroyed",
+  consistent with `destroy()`.
 
-## Notes on specific "no" and "later" calls
+### 5. Disposable rollback scope (`src/rollback/rollback.ts`)
 
-- **AsyncContext** is the right long-term replacement for `AsyncLocalStorage` in `hook-scope.ts` because it is standard
-  and works in browsers, but it has not shipped in Chrome, so replacing ALS now would regress Deno/Node/Bun. The module
-  already isolates the storage behind `AsyncLocalStorageLike`; the future change is a second `createStorage()` branch
-  using `new AsyncContext.Variable()`, preferred when present. Re-check chromestatus before each release.
-- **Float16Array**: `component.ts:21` documents it is rejected because the public `TypedArrayConstructor` type lacks
-  it. That is a partitionedbuffer typing gap, not a platform gap. Saves would need a new field-type tag (the layout
-  code in `serialization/layout.ts` hashes layouts, so adding a type is a format version event).
-- **Resizable buffers**: the "re-read columns after the pool grows" contract (`world-relation-api.ts:34`) exists
-  because growth swaps arrays. Length-tracking views would remove the contract, but V8 optimizes fixed-length views
-  better, which is Miski's whole premise. Only worth it if a bench shows no regression.
-- **Iterator helpers**: acceptable for tooling on top of Miski (docs/examples); do not use in `src/` iterators. Miski's
-  own `[Symbol.iterator]` returns reusable iterator objects to avoid allocation; helpers would defeat that.
-- **scheduler.yield / postTask** from the guidance repo suit apps *using* Miski (yield between `world.update` calls or
-  between phases), not the core. A docs recipe is cheaper than an API.
-- **Base64/hex**: `hashHex` and `fnv1a64` use `toString(16)` on numbers/BigInt, which `Uint8Array.toHex` does not
-  replace (they hash to numbers, not bytes). Value is limited to new save-transport helpers.
-
-## Verification still needed
-
-Checked on the pinned Deno 2.9.8 (CI runtime), with this command:
-
-```bash
-deno eval 'console.log(typeof Error.isError, typeof Float16Array, typeof Uint8Array.prototype.toBase64, typeof Map.prototype.getOrInsert, typeof Promise.try, typeof Symbol.asyncDispose, typeof AsyncContext)'
+```ts
+using scope = world.rollback.scope(); // opens a rollback point
+simulate();
+if (ok) scope.commit(); // otherwise scope exit restores
 ```
 
-Result: `Error.isError`, `Float16Array`, `Uint8Array.prototype.toBase64`, `Map.prototype.getOrInsert` and `Promise.try`
-are all functions; `Symbol.asyncDispose` is a symbol; `AsyncContext` is `undefined`. So Deno CI supports every runtime
-feature in the table except `AsyncContext`. Chrome and Node/Bun versions are still from memory. TS typing (the `lib`
-entries for `Error.isError`, `Float16Array`, `getOrInsert`) was not checked; run `deno check` on a scratch file first.
+`WorldRollbackScope` has a sync `[Symbol.dispose]` and `commit()`, `restore()` and `isOpen`. Dispose restores if still
+open, and just drops the point if the world is no longer `initialized`. Use it in user code at frame/turn granularity,
+not per entity (see row 16).
+
+## Later items: what has to happen first
+
+- **Float16Array:** release partitionedbuffer with `Float16Array` in `TypedArray` / `TypedArrayConstructor`
+  (`utils.ts:13-34`) and a `"Float16Array"` case (max 65504) in `isValidTypedArrayValue` (`utils.ts:144`). Bare
+  `{ v: Float16Array }` already works at runtime; the tuple form `[Float16Array, init]` does not. Alignment is
+  `max(BYTES_PER_ELEMENT, 8)`, so no layout change is needed. Then in Miski:
+  - add it to `SUPPORTED_COLUMN_CONSTRUCTORS` and the error message (`component.ts:21-35,193`);
+  - append `"f16"` to the hashed, append-only `CONSTRUCTOR_TAGS` (`schema.ts:22`);
+  - in `serialization/format.ts`, add field type code 12 to `FIELD_TYPE_NAMES/BYTES/CONSTRUCTORS`, `Views` and
+    `column()`;
+  - flip the "Float16 rejected" test (`test/component_storage_integrity.test.ts:150-180`).
+
+  `FORMAT_VERSION` stays 1, and older Miski versions reject f16 saves cleanly. Bench on x86 without F16C before
+  recommending it, because f16 may be software-emulated there.
+- **AsyncContext:** add `fromAsyncContext() ?? createStorage()` to `hook-scope.ts`. It casts `globalThis` to a local
+  structural type, so it passes `deno check` without `any` (TS has no lib type yet). It is dead code on every current
+  target, so land it only with a stub-backed test (a `createHookScope(backend)` factory). The browser-first hook-scope
+  work (hook context argument) may make it optional.
+- **Workers + SAB:**
+  - Upstream: a SAB backing option or a `SharedPartitionedBuffer`. `PartitionedBuffer extends ArrayBuffer`, so it can't
+    be a SAB today.
+  - Miski exports a cloneable column manifest: component, field, type, byteOffset and length.
+  - Optional `reads`/`writes` per system. `order.ts` emits Kahn levels instead of a flat order, and undeclared systems
+    act as barriers.
+  - Worker writes bypass changed tracking, so mark changes in bulk at the join.
+  - It needs `crossOriginIsolated` and a `runAsync` path.
+
+  The cheapest first step is just the manifest, so users can run their own kernels.
+- **`getOrInsert`, base64/hex:** gated on the Node floor (26 and 25), and even then low value.
+
+## Remaining verification
+
+- Safari support for `await using` / `DisposableStack`, and the `postTask` support versions.
+- `Float16Array` performance on x86 without F16C. The Node 24.0 and Bun 1.3 floors come from BCD only.
+- `scheduler.yield()` allocation cost inside real Chrome. The adapter prototype was measured on Deno with a
+  `setTimeout` fallback.
+- The workers/SAB crossover inside Chrome with `Atomics.waitAsync`.
