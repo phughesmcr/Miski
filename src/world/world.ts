@@ -749,4 +749,9 @@ export class World {
   }
 }
 
-export { captureWorldRollbackPoint, commitWorldRollbackPoint, restoreWorldRollbackPoint } from "@/rollback/rollback.ts";
+export {
+  captureWorldRollbackPoint,
+  commitWorldRollbackPoint,
+  restoreWorldRollbackPoint,
+  WorldRollbackScope,
+} from "@/rollback/rollback.ts";

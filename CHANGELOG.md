@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add `WorldRollbackScope`: a rollback point for `using` blocks. Leaving the
+  block without `commit()` restores the world, so a throw can't leave the
+  world's one rollback scope open (which blocked every later capture and world
+  load). It also has `restore()` and `isOpen`. On a world that is no longer
+  initialized, disposal just drops the point.
 - `World` implements `Symbol.asyncDispose`: `await using world = new World(spec)`
   destroys it when the scope exits, even on a throw. A never-initialized or
   already destroyed world is left alone; overlapping disposals share one

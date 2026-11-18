@@ -393,6 +393,7 @@ export {
   commitWorldRollbackPoint,
   restoreWorldRollbackPoint,
   World,
+  WorldRollbackScope,
 } from "@/world/world.ts";
 export { isValidWorldSpec } from "@/world/utils.ts";
 export { isValidName } from "@/utils.ts";

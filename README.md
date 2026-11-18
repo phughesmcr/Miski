@@ -708,6 +708,15 @@ import {
 const point = captureWorldRollbackPoint(world);
 restoreWorldRollbackPoint(world, point);
 
+// Or let a `using` block close it: leaving without commit() restores the
+// world, even on a throw, so a failed turn can't leave the scope open.
+import { WorldRollbackScope } from "@phughesmcr/miski";
+{
+  using scope = new WorldRollbackScope(world);
+  simulateTurn();
+  if (turnIsValid()) scope.commit();
+}
+
 import { compileComponentSchema, componentSchemaHash } from "@phughesmcr/miski";
 
 compileComponentSchema({ Position: { x: Float32Array, y: Float32Array } });
