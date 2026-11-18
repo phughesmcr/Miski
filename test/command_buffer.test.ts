@@ -32,11 +32,11 @@ Deno.test("command buffer defers destroy until flush", async () => {
   const { world, commands } = await setup();
   const entity = createEntity(world);
   commands.destroy(entity);
-  assertStrictEquals(commands.size, 1, "one queued command");
+  assertStrictEquals(commands.pendingCount, 1, "one queued command");
   assert(world.entities.isActive(entity), "not applied before flush");
   commands.flush();
   assert(!world.entities.isActive(entity), "applied by flush");
-  assertStrictEquals(commands.size, 0, "flush empties the buffer");
+  assertStrictEquals(commands.pendingCount, 0, "flush empties the buffer");
   await world.destroy();
 });
 
@@ -182,7 +182,7 @@ Deno.test("command buffer validates components and data when queued", async () =
   assertThrows(() => commands.spawn([[unregistered]]), NotRegisteredError, "unregistered");
   assertThrows(() => commands.spawn([[position], [position]] as never), RangeError, "position");
   assertThrows(() => commands.destroy(1.5 as Entity), SpecError, "entity");
-  assertStrictEquals(commands.size, 0, "rejected commands are not queued");
+  assertStrictEquals(commands.pendingCount, 0, "rejected commands are not queued");
   await world.destroy();
 });
 
@@ -212,7 +212,7 @@ Deno.test("command buffer flush failure applies the remaining commands, then ret
   assertStrictEquals(world.components.getEntityData(position, owner).x, 3, "commands after the failure applied");
   assert(world.components.entityHas(tag, owner), "later add applied");
   assert(!world.entities.isActive(doomed), "later destroy applied");
-  assertStrictEquals(commands.size, 0, "buffer is empty");
+  assertStrictEquals(commands.pendingCount, 0, "buffer is empty");
   commands.set(position, owner, { x: 5 });
   commands.flush();
   assertStrictEquals(world.components.getEntityData(position, owner).x, 5, "buffer is reusable");
@@ -263,7 +263,7 @@ Deno.test("command buffer grows past its initial capacity", async () => {
   const world = await createTestWorld([position, tag], 4096);
   const commands = new CommandBuffer(world);
   for (let i = 0; i < 3000; i++) commands.spawn([[position, { x: i, y: -i }], [tag]]);
-  assertStrictEquals(commands.size, 3000, "size counts commands, not bundle entries");
+  assertStrictEquals(commands.pendingCount, 3000, "pendingCount counts commands, not bundle entries");
   commands.flush();
   assertStrictEquals(world.entities.getActiveCount(), 3000, "all spawned");
   const owners = world.components.getOwnersSnapshot(position)!;
@@ -347,7 +347,7 @@ Deno.test("command buffer passes non-numeric schema fields through a side column
 
   commands.add(point, entity, { x: 7, y: 2 });
   commands.add(point, entity, { x: "eight" } as never);
-  assertStrictEquals(commands.size, 2, "non-numeric values are not validated when queued");
+  assertStrictEquals(commands.pendingCount, 2, "non-numeric values are not validated when queued");
   assertThrows(() => commands.flush(), ComponentDataError, "point");
   assertEquals(world.components.getEntityData(point, entity), { x: 7, y: 2 }, "side value written by the world");
   assertStrictEquals(passed.length, 2, "both commands reached the world");

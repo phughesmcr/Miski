@@ -415,7 +415,7 @@ Deno.test("schedule refreshes, discards pending commands, and rethrows when a sy
   }
   assertStrictEquals(caught, boom, "the system's error is rethrown unchanged");
   assert(world.entities.isActive(victim), "pending commands are discarded");
-  assertStrictEquals(schedule.commands.size, 0, "the command buffer is empty");
+  assertStrictEquals(schedule.commands.pendingCount, 0, "the command buffer is empty");
   assertEquals([...world.archetypes.queryEntered(query)], [], "the world was refreshed");
   fail = false;
   schedule.run(0);
@@ -541,6 +541,49 @@ Deno.test("schedule flushes commands at the end of each phase", async () => {
   });
   schedule.run(2);
   assertEquals(counts, [0, 0, 1, 2, 3], "same phase does not see its commands; later phases and steps do");
+  await world.destroy();
+});
+
+Deno.test("schedule rethrows a command failure at a phase flush after applying the rest of the phase", async () => {
+  const position = vec2Component("position");
+  const world = await createTestWorld([position, tag], 16);
+  const query = new Query({ all: [tag] });
+  const anchor = createEntity(world);
+  world.components.addToEntity(tag, anchor);
+  const nonOwner = createEntity(world);
+  const later = createEntity(world);
+  world.refresh();
+  const log: string[] = [];
+  let fail = true;
+  const schedule = new Schedule(world, { phases: ["a", "b"] });
+  schedule.add(
+    new System({
+      name: "queuer",
+      query,
+      argCount: 1,
+      callback: (_c, _e, ctx: ScheduleContext) => {
+        log.push("queuer");
+        if (fail) ctx.commands.set(position, nonOwner, { x: 1 });
+        ctx.commands.add(position, later, { x: 2 });
+      },
+    }),
+    { phase: "a" },
+  );
+  schedule.add(logSystem("next", log), { phase: "b" });
+  let caught: unknown;
+  try {
+    schedule.run(0);
+  } catch (error) {
+    caught = error;
+  }
+  assert(caught instanceof Error && caught.message.includes("CommandBuffer set position"), "flush error rethrown");
+  assertEquals(log, ["queuer"], "later phases do not run after a failed flush");
+  assertStrictEquals(world.components.getEntityData(position, later).x, 2, "the rest of the phase's commands applied");
+  assertEquals([...world.archetypes.queryEntered(new Query({ all: [position] }))], [], "the world was refreshed");
+  fail = false;
+  log.length = 0;
+  schedule.run(0);
+  assertEquals(log, ["queuer", "next"], "the schedule is usable after a failed flush");
   await world.destroy();
 });
 

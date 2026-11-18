@@ -452,6 +452,30 @@ function commandTransitionBatch(round: number): void {
 
 let commandRound = 0;
 
+// Side-column payloads: until non-numeric field types land, patch the buffer-visible schema so `x` (still a real
+// Float32 column in the world) is treated as a non-typed-array field and goes through the side column.
+const sidePoint = new Component({ name: "sidePoint", schema: { x: Float32Array, y: Float32Array } });
+const sideWorld = new World({ capacity: SMALL_CAPACITY, components: [sidePoint] });
+await sideWorld.init();
+Object.defineProperty(sidePoint, "schema", { value: { x: { kind: "side" }, y: Float32Array }, configurable: true });
+const sideEntities: Entity[] = [];
+for (let i = 0; i < 128; i++) {
+  const entity = mustCreateEntity(sideWorld);
+  sideWorld.components.addToEntity(sidePoint, entity, { x: 0, y: 0 });
+  sideEntities.push(entity);
+}
+sideWorld.refresh();
+const sideBuffer = new CommandBuffer(sideWorld);
+const sideData = { x: 0, y: 0 };
+
+function commandSideColumnBatch(round: number): void {
+  sideData.x = round & 15;
+  sideData.y = round & 7;
+  for (let i = 0; i < sideEntities.length; i++) sideBuffer.set(sidePoint, sideEntities[i]!, sideData);
+  sideBuffer.flush();
+  sideWorld.refresh();
+}
+
 const scenarios: Scenario[] = [
   {
     name: "world constructor allocating",
@@ -769,6 +793,9 @@ const scenarios: Scenario[] = [
   }),
   budgeted("command buffer spawn/despawn 128 projectile bundles + flush + refresh", 10_000, () => {
     commandSpawnDespawnBatch();
+  }),
+  budgeted("command buffer set side-column + numeric field on 128 entities + flush", 10_000, () => {
+    commandSideColumnBatch(commandRound++);
   }),
   budgeted("related spawn/tag/destroy + queryList refill of 4096 entities", 20_000, () => {
     const entity = mustCreateEntity(refillWorld);

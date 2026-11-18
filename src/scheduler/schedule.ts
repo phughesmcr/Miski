@@ -414,7 +414,7 @@ export class Schedule {
       if (entry.runIf !== undefined && entry.runIf(context) !== true) continue;
       entry.instance(context);
     }
-    if (this.#commands.size > 0) this.#commands.flush();
+    if (this.#commands.pendingCount > 0) this.#commands.flush();
   }
 
   #find(system: ScheduleSystemReference): Entry | undefined {

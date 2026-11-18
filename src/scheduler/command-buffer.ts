@@ -137,6 +137,8 @@ export class CommandBuffer {
   #sideStaged = 0;
   /** One past the highest side slot written since the last release. */
   #sideHigh = 0;
+  /** Set when a wide component's reusable row was filled with an entity's values, which may include references. */
+  #rowsHoldValues = false;
 
   /** Entities created by this flush's spawns, by spawn index. */
   #spawned: Int32Array = new Int32Array(0);
@@ -168,7 +170,7 @@ export class CommandBuffer {
   }
 
   /** The number of queued commands. */
-  get size(): number {
+  get pendingCount(): number {
     return this.#commandCount;
   }
 
@@ -356,7 +358,7 @@ export class CommandBuffer {
     this.#payloadCount = 0;
     this.#spawnCount = 0;
     this.#epoch = (this.#epoch + 1) & PENDING_EPOCH_MASK;
-    if (this.#sideHigh > 0) this.#releaseSideValues();
+    if (this.#sideHigh > 0 || this.#rowsHoldValues) this.#releaseSideValues();
   }
 
   /** Drop references to queued side values so they can be collected; the arrays keep their size for reuse. */
@@ -364,6 +366,7 @@ export class CommandBuffer {
     const values = this.#sideValues;
     for (let i = 0; i < this.#sideHigh; i++) values[i] = undefined;
     this.#sideHigh = 0;
+    this.#rowsHoldValues = false;
     this.#sideCount = 0;
     this.#sideStaged = 0;
     const infos = this.#infos;
@@ -634,6 +637,7 @@ export class CommandBuffer {
       const owned = !isNew && this.#world.components.entityHas(info.component, entity);
       if (owned) {
         data = info.row;
+        if (info.sideKeys.length > 0) this.#rowsHoldValues = true;
         this.#world.components.readEntityDataInto(info.component, entity, data as Record<string, number>);
       } else if (info.sideKeys.length === 0) {
         data = info.row;

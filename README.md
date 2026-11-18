@@ -472,7 +472,10 @@ function loop(dt: number) {
   system whose async `init` is still pending, or that was destroyed, makes
   `run()` throw `WorldStateError`: `await world.onReady()` after adding.
 - **Errors.** If a system throws, pending commands are discarded, the world
-  is refreshed, and the error is rethrown. Callbacks run synchronously.
+  is refreshed, and the error is rethrown. If a command fails when a phase
+  flushes, the rest of that flush still applies, later phases are skipped, the
+  world is refreshed, and the first command error is rethrown. Callbacks run
+  synchronously.
 - **Saves and rollback.** Supported between `run()` calls only. The
   schedule's clock is not part of a world save or rollback point: keep
   `schedule.getClock()` (plain data) alongside it, and after restoring call
@@ -507,7 +510,7 @@ partway: if a command throws, every other command still applies, then the first
 error is rethrown, naming the failing command. Commands on the entity of a
 failed spawn are skipped. Numeric fields must be finite numbers when queued;
 any other schema field is held by reference, validated by the world at flush,
-and released afterwards. `size` counts queued commands. Steady-state queuing and
+and released afterwards. `pendingCount` counts queued commands. Steady-state queuing and
 flushing does not allocate.
 
 ### :rewind: Checkpoints, rollback, schema
