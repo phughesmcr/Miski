@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Support `Float16Array` component columns (requires
+  `@phughesmcr/partitionedbuffer` ^0.5.0, now the minimum). Schemas hash it as
+  `f16`; hashes of existing schemas are unchanged. World saves use the new field
+  type code 12 (`"f16"`), so saves without f16 columns are byte-identical and
+  older versions reject f16 saves as an unknown field type.
 - `World.destroy()` is idempotent: on a destroyed world it now resolves without
   doing anything instead of throwing. A call while teardown is still running
   still rejects ("World is being destroyed").

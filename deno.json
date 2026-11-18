@@ -44,7 +44,7 @@
   "imports": {
     "@/": "./src/",
     "@phughesmcr/booleanarray": "jsr:@phughesmcr/booleanarray@^0.13.0",
-    "@phughesmcr/partitionedbuffer": "jsr:@phughesmcr/partitionedbuffer@^0.4.1"
+    "@phughesmcr/partitionedbuffer": "jsr:@phughesmcr/partitionedbuffer@^0.5.0"
   },
   "lint": {
     "exclude": ["bench/**/*.ts", "example/**/*.ts", "example/**/*.js", "test/**"],

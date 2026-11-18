@@ -157,6 +157,7 @@ Deno.test("column constructors are consistent across Component and compileCompon
     Uint16Array,
     Int32Array,
     Uint32Array,
+    Float16Array,
     Float32Array,
     Float64Array,
   ];
@@ -166,11 +167,7 @@ Deno.test("column constructors are consistent across Component and compileCompon
     new Component({ name: "c", schema });
     compileComponentSchema({ c: schema });
   }
-  const unsupported: unknown[] = [
-    BigInt64Array,
-    BigUint64Array,
-    (globalThis as Record<string, unknown>)["Float16Array"],
-  ].filter((ctor) => ctor !== undefined);
+  const unsupported: unknown[] = [BigInt64Array, BigUint64Array];
   for (const Ctor of unsupported) {
     const schema = { v: Ctor } as never;
     assert(!isValidComponentSpec({ name: "c", schema }), `${(Ctor as { name: string }).name} invalid for Component`);
@@ -178,6 +175,15 @@ Deno.test("column constructors are consistent across Component and compileCompon
     assertThrows(() => compileComponentSchema({ c: schema }), TypeError, "typed-array");
     assertThrows(() => new Component({ name: "c", schema: { v: [Ctor, 0] } as never }), TypeError, "Invalid component");
   }
+});
+
+Deno.test("adding Float16Array support leaves existing schema hashes unchanged", () => {
+  const hash = compileComponentSchema({ c: { a: Float32Array, b: Uint8Array } }).schemaHash;
+  assertEquals(hash, "3af682df5b7ddb6a", "Existing tags must keep their hashes");
+  assert(
+    compileComponentSchema({ c: { a: Float16Array, b: Uint8Array } }).schemaHash !== hash,
+    "f16 hashes differently from f32",
+  );
 });
 
 Deno.test("adding Uint8ClampedArray support leaves existing schema hashes unchanged", () => {

@@ -238,6 +238,11 @@ New ownership starts every numeric field at zero, including capped components
 and omitted fields in partial payloads. Public data writes require finite
 numbers; direct partition access remains an unchecked escape hatch.
 
+Numeric fields may use any number-valued typed array, including
+`Float16Array`: half the memory of `Float32Array` for values that tolerate
+about 3 significant digits (range ±65504; guarded writes outside it throw).
+`BigInt64Array` and `BigUint64Array` are not supported.
+
 **Non-numeric fields** — mix `field.*` descriptors with typed arrays:
 
 ```ts
