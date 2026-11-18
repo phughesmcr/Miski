@@ -754,3 +754,34 @@ Deno.test("overlapping async disposals share one teardown, and a failed one can 
   assertEquals(world.state, "destroyed", "A later disposal retries teardown");
   assertEquals(calls, 1, "The failed system was unregistered, so its hook does not run again");
 });
+
+Deno.test("async disposal rejects during a running destroy() and works after in-flight init or failed init", async () => {
+  const tag = lifecycleTag();
+  const running = new World({ capacity: 8, components: [tag] });
+  await running.init();
+  const teardown = running.destroy();
+  await assertRejects(() => running[Symbol.asyncDispose](), WorldStateError, "being destroyed");
+  await teardown;
+  assertEquals(running.state, "destroyed", "The running destroy() completes");
+
+  const initializing = new World({ capacity: 8, components: [tag] });
+  const gate = Promise.withResolvers<void>();
+  initializing.systems.create(makeSystem(tag, "slowInit", { init: () => gate.promise }));
+  const init = initializing.init();
+  const disposal = initializing[Symbol.asyncDispose]();
+  gate.resolve();
+  await init;
+  await disposal;
+  assertEquals(initializing.state, "destroyed", "Disposal waits for in-flight init, then tears down");
+
+  const failed = new World({ capacity: 8, components: [tag] });
+  failed.systems.create(makeSystem(tag, "failingInit", {
+    init: () => {
+      throw new Error("init failed");
+    },
+  }));
+  await assertRejects(() => failed.init(), Error, "init failed");
+  assertEquals(failed.state, "error", "Failed init leaves the error state");
+  await failed[Symbol.asyncDispose]();
+  assertEquals(failed.state, "destroyed", "Disposal cleans up an errored world");
+});
