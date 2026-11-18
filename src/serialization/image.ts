@@ -254,6 +254,8 @@ export function writeImage(image: SaveImage): Uint8Array {
   return out;
 }
 
+// Holds views over the most recently parsed buffer, so repeated loads of one save allocate no views. It keeps that
+// one buffer reachable until another save is parsed.
 const readViews = new ViewCache();
 
 function fail(message: string): never {
@@ -518,6 +520,19 @@ export function validateImage(image: SaveImage, scratch: ValidationScratch, know
     }
   }
   if (live !== image.liveGeneration.length) fail("World save live entity count does not match occupancy.");
+  // A live slot's next generation must differ from its current one, or destroying and re-creating it would
+  // reissue the live handle.
+  let k = 0;
+  for (let word = 0; word < occupancy.length; word++) {
+    let bits = occupancy[word]!;
+    while (bits !== 0) {
+      const slot = (word << 5) + (31 - Math.clz32(bits & -bits));
+      if (image.liveGeneration[k++] === image.nextGeneration[slot]) {
+        fail(`World save slot ${slot} would reissue its handle.`);
+      }
+      bits &= bits - 1;
+    }
+  }
   if (image.cursor >= capacity) fail("World save allocation cursor is out of range.");
 
   const componentCount = image.layout.components.length;

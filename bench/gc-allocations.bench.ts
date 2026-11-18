@@ -78,8 +78,9 @@ const WIDE_ARCHETYPE_TRANSITION_BUDGET_BYTES_PER_ITER = 1_100;
 // Load validates into cached scratch and builds one small view per saved array: O(components + archetypes), not
 // O(entities). Measured about 400 B/iter on the mixed 8K world.
 const WORLD_LOAD_BUDGET_BYTES_PER_ITER = 1_000;
-// Create + apply: views over both saves, the delta itself and the changed chunks (about 1.9 KB/iter measured), plus
-// the rebuilt save, which is added per scenario.
+// Create + apply: views over both saves, the delta itself and the changed chunks (about 1.9 KB/iter measured). The
+// scenario adds one rebuilt save on top: apply must return a fresh save, and its off-heap backing store is reclaimed
+// at times V8 chooses, so a run that samples before reclamation would otherwise fail spuriously.
 const WORLD_DELTA_BUDGET_BYTES_PER_ITER = 4_000;
 const checkMode = Deno.args.includes("--check");
 

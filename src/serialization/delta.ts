@@ -35,7 +35,6 @@ const OP_PATCH = 1;
 const OP_REPLACE = 2;
 /** Unchanged bytes shorter than this between two runs are folded into one run (a run header costs 8 bytes). */
 const RUN_GAP = 8;
-const MAX_ARCHETYPES = 1 << 20;
 
 /** Chunks of an image in delta order: fixed chunks, per-component chunks, then populations. */
 function chunksOf(image: SaveImage): TypedArray[] {
@@ -201,8 +200,6 @@ function fail(message: string): never {
   throw new WorldSaveError(message);
 }
 
-const EMPTY_U8 = new Uint8Array(0);
-
 /**
  * Rebuild the next save from a base save and a delta made by {@link createWorldDelta}.
  * @returns The next save, byte-identical to the one the delta was made from
@@ -232,23 +229,28 @@ export function applyWorldDelta(base: Uint8Array, delta: Uint8Array): Uint8Array
   const cursor = head[9]!;
   const archetypeCount = head[10]!;
   const recordCount = head[11]!;
-  if (archetypeCount === 0 || archetypeCount > MAX_ARCHETYPES) fail("World delta archetype count is corrupt.");
+  // Every archetype beyond the base needs its bitset in the delta, which bounds the count by the delta's size.
+  const room = Math.floor((total - DELTA_HEADER_BYTES) / (4 * image.wordsPerSet));
+  if (archetypeCount === 0 || archetypeCount > image.populations.length + room) {
+    fail("World delta archetype count is corrupt.");
+  }
 
   const from = chunksOf(image);
   const fixed = fixedChunkCount(image);
   const types = fixedChunkTypes(image);
   const slotType = (slotWidth(image.capacity) === 1 ? Uint8Array : Uint16Array) as TypedArrayConstructor;
   const chunkCount = fixed + archetypeCount;
+  const empty = createSlotArray(image.capacity, 0) as TypedArray;
   const chunks: TypedArray[] = new Array(chunkCount);
-  for (let i = 0; i < chunkCount; i++) {
-    chunks[i] = i < from.length ? from[i]! : (createSlotArray(image.capacity, 0) as TypedArray);
-  }
+  for (let i = 0; i < chunkCount; i++) chunks[i] = i < from.length ? from[i]! : empty;
 
+  // Every length is checked against the remaining bytes before anything is allocated or copied. Comparisons are
+  // written as `size > total - offset` so no sum can overflow.
   const bytes = new Uint8Array(d.buffer, d.byteOffset, total);
   let offset = DELTA_HEADER_BYTES;
   let previous = -1;
   for (let r = 0; r < recordCount; r++) {
-    if (offset + RECORD_BYTES > total) fail("World delta is truncated.");
+    if (RECORD_BYTES > total - offset) fail("World delta is truncated.");
     const w = offset >>> 2;
     const chunk = head[w]!;
     const op = head[w + 1]!;
@@ -260,21 +262,25 @@ export function applyWorldDelta(base: Uint8Array, delta: Uint8Array): Uint8Array
     const type = chunk < fixed ? types[chunk]! : slotType;
     if (length % type.BYTES_PER_ELEMENT !== 0) fail("World delta chunk length is corrupt.");
     const current = chunks[chunk]!;
-    const storage = new ArrayBuffer(align8(length));
-    const target = new Uint8Array(storage, 0, length);
+    let target: Uint8Array;
     if (op === OP_REPLACE) {
-      if (runCount !== 0 || offset + align4(length) > total) fail("World delta is truncated.");
+      if (runCount !== 0 || length > total - offset || align4(length) > total - offset) {
+        fail("World delta is truncated.");
+      }
+      target = new Uint8Array(align8(length)).subarray(0, length);
       target.set(bytes.subarray(offset, offset + length));
       offset += align4(length);
     } else if (op === OP_PATCH) {
       if (length !== current.byteLength) fail("World delta patches a chunk of the wrong length.");
-      target.set(current.byteLength === 0 ? EMPTY_U8 : bytesOf(current));
+      if (runCount > (total - offset) / 8) fail("World delta is truncated.");
+      target = new Uint8Array(align8(length)).subarray(0, length);
+      if (length !== 0) target.set(bytesOf(current));
       for (let run = 0; run < runCount; run++) {
-        if (offset + 8 > total) fail("World delta is truncated.");
+        if (8 > total - offset) fail("World delta is truncated.");
         const start = head[offset >>> 2]!;
         const size = head[(offset >>> 2) + 1]!;
         offset += 8;
-        if (start > length || size > length - start || offset + align4(size) > total) {
+        if (start > length || size > length - start || align4(size) > total - offset) {
           fail("World delta run is corrupt.");
         }
         target.set(bytes.subarray(offset, offset + size), start);
@@ -283,8 +289,9 @@ export function applyWorldDelta(base: Uint8Array, delta: Uint8Array): Uint8Array
     } else {
       fail(`World delta has an unknown record type ${op}.`);
     }
-    chunks[chunk] = new type(storage, 0, length / type.BYTES_PER_ELEMENT);
+    chunks[chunk] = new type(target.buffer as ArrayBuffer, 0, length / type.BYTES_PER_ELEMENT);
   }
+  if (offset > total) fail("World delta is truncated.");
 
   const capacity = image.capacity;
   const wordsPerSet = image.wordsPerSet;

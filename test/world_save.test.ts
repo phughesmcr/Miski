@@ -509,3 +509,57 @@ Deno.test("deltas are small for small changes and reject the wrong base", async 
   const otherWorld = await createWorld(16);
   assertThrows(() => createWorldDelta(saveWorld(otherWorld), next), WorldSaveError, "layout");
 });
+
+Deno.test("a loaded world shares no memory with the save bytes", async () => {
+  const source: Harness = { world: await createWorld(300), live: [] };
+  churn(source, rng(13), 400);
+  const bytes = saveWorld(source.world);
+  const pristine = bytes.slice();
+
+  const target: Harness = { world: await createWorld(300), live: [] };
+  loadWorld(target.world, bytes);
+  const loaded = observe(target.world);
+  bytes.fill(0xa5);
+  assertEquals(observe(target.world), loaded, "Overwriting the save must not change the loaded world");
+
+  bytes.set(pristine);
+  loadWorld(target.world, bytes);
+  target.live = handles(target.world.entities.getActive()) as Entity[];
+  churn(target, rng(14), 200);
+  target.world.refresh();
+  assert(bytesEqual(bytes, pristine), "Using the loaded world must not write into the save");
+});
+
+Deno.test("corrupt deltas throw WorldSaveError or rebuild the exact target", async () => {
+  const h: Harness = { world: await createWorld(300), live: [] };
+  const random = rng(19);
+  churn(h, random, 400);
+  const base = saveWorld(h.world);
+  churn(h, random, 40);
+  const next = saveWorld(h.world);
+  const delta = createWorldDelta(base, next);
+  let rejected = 0;
+  for (let trial = 0; trial < 600; trial++) {
+    const corrupt = delta.slice();
+    const flips = 1 + (random() % 3);
+    for (let i = 0; i < flips; i++) {
+      const at = random() % corrupt.byteLength;
+      // Mix single-byte noise with whole-word extremes, which probe length overflow.
+      if (random() % 4 === 0 && at + 4 <= corrupt.byteLength) {
+        new DataView(corrupt.buffer).setUint32(at & ~3, random() % 2 === 0 ? 0xffffffff : 0xfffffffc, true);
+      } else {
+        corrupt[at] = random() & 0xff;
+      }
+    }
+    try {
+      assert(bytesEqual(applyWorldDelta(base, corrupt), next), `Accepted corrupt delta must rebuild next (${trial})`);
+    } catch (error) {
+      assert(error instanceof WorldSaveError, `Corrupt delta must throw WorldSaveError, got ${String(error)}`);
+      rejected++;
+    }
+  }
+  assert(rejected > 300, `Expected most corrupt deltas to be rejected, got ${rejected}`);
+  for (let cut = 0; cut < delta.byteLength; cut += 4) {
+    assertThrows(() => applyWorldDelta(base, delta.subarray(0, cut)), WorldSaveError, "");
+  }
+});

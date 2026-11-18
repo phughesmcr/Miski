@@ -82,7 +82,8 @@ const decoder = new TextDecoder("utf-8", { fatal: true });
 /**
  * Encode the component table (capacity lives in the save header), padded to 8 bytes.
  * Per component: u16 name length, UTF-8 name, u8 kind (0 tag, 1 data), u32 cap (0 = none), and for data components
- * u16 field count then per field u16 name length, UTF-8 name, u8 type code.
+ * u16 field count then per field u16 name length, UTF-8 name, u16 type tag length, UTF-8 type tag. Type tags are the
+ * component hash tags ("f32", "u8c", ...), so new field types add tags without changing the table format.
  */
 export function encodeLayout(layout: WorldSaveLayout): Uint8Array {
   const parts: Uint8Array[] = [];
@@ -113,7 +114,7 @@ export function encodeLayout(layout: WorldSaveLayout): Uint8Array {
     push(new Uint8Array([component.fields.length & 0xff, component.fields.length >>> 8]));
     for (const field of component.fields) {
       pushName(field.name);
-      push(new Uint8Array([fieldTypeCodeOfName(field.type)]));
+      pushName(field.type);
     }
   }
   const out = new Uint8Array(align8(length));
@@ -160,11 +161,13 @@ export function decodeLayout(block: Uint8Array, capacity: number, componentCount
       fields = [];
       for (let f = 0; f < count; f++) {
         const fieldName = name();
-        const code = u8();
-        if (code === 0 || code >= FIELD_TYPE_NAMES.length) {
-          throw new WorldSaveError(`World save layout field ${componentName}.${fieldName} has unknown type ${code}.`);
+        const type = name();
+        if (fieldTypeCodeOfName(type) === 0) {
+          throw new WorldSaveError(
+            `World save layout field ${componentName}.${fieldName} has unsupported type ${JSON.stringify(type)}.`,
+          );
         }
-        fields.push(Object.freeze({ name: fieldName, type: FIELD_TYPE_NAMES[code] as WorldSaveFieldType }));
+        fields.push(Object.freeze({ name: fieldName, type: type as WorldSaveFieldType }));
       }
       Object.freeze(fields);
     }
