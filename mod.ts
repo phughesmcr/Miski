@@ -441,7 +441,13 @@ export {
 export { worldSaveFromJSON, worldSaveToJSON } from "@/serialization/document.ts";
 export { WorldSaveError } from "@/serialization/format.ts";
 export type { WorldSaveHeader, WorldSaveLoadOptions } from "@/serialization/world-save.ts";
-export type { WorldSaveComponentDocument, WorldSaveDocument, WorldSaveNumber } from "@/serialization/document.ts";
+export type {
+  WorldSaveComponentDocument,
+  WorldSaveDocument,
+  WorldSaveFieldValues,
+  WorldSaveNumber,
+  WorldSaveObjectValue,
+} from "@/serialization/document.ts";
 export type { WorldSaveComponentLayout, WorldSaveField, WorldSaveLayout } from "@/serialization/layout.ts";
 export type { WorldSaveFieldType, WorldSaveNumericFieldType } from "@/serialization/format.ts";
 

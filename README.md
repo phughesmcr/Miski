@@ -772,9 +772,39 @@ not survive the JSON view.
 
 `field.bool()`, `field.enum()` and `field.entity()` columns are saved, and the
 layout records their kind and enum labels, so a bool never loads into a `u8`
-field and reordered labels are rejected. Worlds with `field.string()` or
-`field.object()` fields, or with relations, cannot be saved or loaded yet: every
-save entry point throws `WorldSaveError` rather than writing a partial save.
+field and reordered labels are rejected.
+
+`field.string()` fields are saved as UTF-8. A string holding a lone surrogate
+cannot be stored as UTF-8, so saving it throws `WorldSaveError`. With a reused
+buffer, `saveWorldInto` writes strings without allocating; loading allocates
+only the strings it creates.
+
+`field.object()` fields are saved through their `encode` / `decode` hooks:
+
+```ts
+const Sprite = new Component({
+  name: "sprite",
+  schema: {
+    mesh: field.object<Mesh>({
+      encode: (mesh) => mesh.id, // string | number | null
+      decode: (id) => meshes.get(id as number)!,
+    }),
+  },
+});
+```
+
+`encode` runs once per non-null object on every save, and `decode` once per
+saved non-null value on every load; neither is called with `null`. A `null`
+object saves as `null`, and so does an object whose `encode` returns `null`.
+Encoded numbers keep NaN, the infinities and -0. Hooks must not change the
+world. Saving a component whose object field has no hooks throws
+`WorldSaveError` naming the field: object fields are never skipped. A
+throwing `decode` fails the load with `WorldSaveError` (the hook's error is its
+`cause`) before anything changes. Allocation inside your hooks is yours; the
+save itself adds none.
+
+Worlds with relations cannot be saved or loaded yet: every save entry point
+throws `WorldSaveError` rather than writing a partial save.
 
 ---
 

@@ -71,6 +71,17 @@ export function layoutOfStates(capacity: number, states: readonly SaveableCompon
         }
         fields[c] = Object.freeze({ name: key, type: fieldType });
       }
+      // String and object fields follow the typed columns, in schema order.
+      for (let s = 0; s < state.sideKeys.length; s++) {
+        const key = state.sideKeys[s]!;
+        const property = state.sideFields[s]!;
+        if (property.kind === "object" && (property.encode === undefined || property.decode === undefined)) {
+          throw new WorldSaveError(
+            `Component ${type.name}.${key} is an object field without encode / decode hooks, so it cannot be saved.`,
+          );
+        }
+        fields.push(Object.freeze({ name: key, type: property.tag }));
+      }
       Object.freeze(fields);
     }
     components[i] = Object.freeze({ name: type.name, maxEntities: type.maxEntities ?? null, fields });

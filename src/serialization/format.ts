@@ -40,11 +40,18 @@ export const SECTION_COUNT = 4;
 export type WorldSaveNumericFieldType = "i8" | "i16" | "i32" | "u8" | "u16" | "u32" | "f32" | "f64" | "u8c";
 
 /**
- * Type of one saved component field: a numeric storage type, or the hash tag of a `field.*` column stored in a typed
- * column (`"bool"`, `"entity"`, or `enum:` followed by the JSON label list). The tag is part of the layout check, so a
- * bool never loads into a `u8` field and reordered enum labels never load at all.
+ * Type of one saved component field: a numeric storage type, or the hash tag of a `field.*` field: `"bool"`,
+ * `"entity"` or `enum:` followed by the JSON label list (typed columns), `"string"` (UTF-8) or `"object"` (saved
+ * through the field's `encode` / `decode` hooks). The tag is part of the layout check, so a bool never loads into a
+ * `u8` field and reordered enum labels never load at all.
  */
-export type WorldSaveFieldType = WorldSaveNumericFieldType | "bool" | "entity" | `enum:${string}`;
+export type WorldSaveFieldType =
+  | WorldSaveNumericFieldType
+  | "bool"
+  | "entity"
+  | `enum:${string}`
+  | "string"
+  | "object";
 
 /** Numeric field type names by type code (code 0 is unused). Append-only: codes are persisted. */
 export const FIELD_TYPE_NAMES: readonly (WorldSaveNumericFieldType | "")[] = Object.freeze([
@@ -60,8 +67,18 @@ export const FIELD_TYPE_NAMES: readonly (WorldSaveNumericFieldType | "")[] = Obj
   "u8c",
 ]);
 
-/** Element byte size by type code. */
-export const FIELD_TYPE_BYTES: readonly number[] = Object.freeze([0, 1, 2, 4, 1, 2, 4, 4, 8, 1]);
+/** Type code of a `field.string()` column: u32 offsets plus a UTF-8 heap. Append-only, like every code. */
+export const CODE_STRING = 10;
+/** Type code of a `field.object()` column: kinds, numbers, then u32 offsets plus a UTF-8 heap. */
+export const CODE_OBJECT = 11;
+
+/** @returns `true` for variable-length (string / object) type codes, which have no fixed element size */
+export function isSideCode(code: number): boolean {
+  return code === CODE_STRING || code === CODE_OBJECT;
+}
+
+/** Element byte size by type code (0 for variable-length codes). */
+export const FIELD_TYPE_BYTES: readonly number[] = Object.freeze([0, 1, 2, 4, 1, 2, 4, 4, 8, 1, 0, 0]);
 
 /** Typed-array constructor by type code. */
 export const FIELD_TYPE_CONSTRUCTORS: readonly (TypedArrayConstructor | undefined)[] = Object.freeze([
@@ -115,6 +132,8 @@ export function fieldTypeCodeOfName(name: unknown): number {
   if (code !== -1) return code;
   if (name === "bool") return CODE_U8;
   if (name === "entity") return CODE_I32;
+  if (name === "string") return CODE_STRING;
+  if (name === "object") return CODE_OBJECT;
   if (name.startsWith("enum:")) {
     const count = enumTagLabelCount(name);
     return count === 0 ? 0 : count <= 256 ? CODE_U8 : CODE_U16;
@@ -229,6 +248,75 @@ export function hashBytes64(bytes: Uint8Array): [number, number] {
 
 export function hashHex(low: number, high: number): string {
   return high.toString(16).padStart(8, "0") + low.toString(16).padStart(8, "0");
+}
+
+/** Object cell kinds in a saved object column. */
+export const OBJECT_NULL = 0;
+export const OBJECT_NUMBER = 1;
+export const OBJECT_STRING = 2;
+
+/**
+ * UTF-8 byte length of a string, without allocating.
+ * @returns the length, or -1 when the string holds a lone surrogate (UTF-8 cannot represent it)
+ */
+export function utf8Length(text: string): number {
+  let bytes = 0;
+  const length = text.length;
+  for (let i = 0; i < length; i++) {
+    const c = text.charCodeAt(i);
+    if (c < 0x80) bytes += 1;
+    else if (c < 0x800) bytes += 2;
+    else if (c < 0xd800 || c > 0xdfff) bytes += 3;
+    else if (c <= 0xdbff && i + 1 < length) {
+      const d = text.charCodeAt(i + 1);
+      if (d < 0xdc00 || d > 0xdfff) return -1;
+      bytes += 4;
+      i++;
+    } else return -1;
+  }
+  return bytes;
+}
+
+/**
+ * Write a well-formed string (see {@link utf8Length}) as UTF-8 at `offset`, without allocating.
+ * @returns the end offset
+ */
+export function writeUtf8(target: Uint8Array, offset: number, text: string): number {
+  let p = offset;
+  const length = text.length;
+  for (let i = 0; i < length; i++) {
+    let c = text.charCodeAt(i);
+    if (c < 0x80) {
+      target[p++] = c;
+    } else if (c < 0x800) {
+      target[p++] = 0xc0 | (c >>> 6);
+      target[p++] = 0x80 | (c & 0x3f);
+    } else if (c < 0xd800 || c > 0xdfff) {
+      target[p++] = 0xe0 | (c >>> 12);
+      target[p++] = 0x80 | ((c >>> 6) & 0x3f);
+      target[p++] = 0x80 | (c & 0x3f);
+    } else {
+      c = 0x10000 + ((c - 0xd800) << 10) + (text.charCodeAt(++i) - 0xdc00);
+      target[p++] = 0xf0 | (c >>> 18);
+      target[p++] = 0x80 | ((c >>> 12) & 0x3f);
+      target[p++] = 0x80 | ((c >>> 6) & 0x3f);
+      target[p++] = 0x80 | (c & 0x3f);
+    }
+  }
+  return p;
+}
+
+/** Strict UTF-8 decoder that keeps a leading U+FEFF, so saved strings read back exactly. */
+export const utf8Decoder: TextDecoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
+
+/** Bytes a string column of `count` cells takes: u32 offsets (count + 1), then the heap, padded to 8. */
+export function stringColumnBytes(count: number, heapBytes: number): number {
+  return align8((count + 1) * 4 + heapBytes);
+}
+
+/** Bytes an object column of `count` cells takes: u8 kinds, f64 numbers, then a string column. */
+export function objectColumnBytes(count: number, heapBytes: number): number {
+  return align8(count) + count * 8 + stringColumnBytes(count, heapBytes);
 }
 
 export function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {

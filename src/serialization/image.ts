@@ -5,10 +5,17 @@ import {
   align8,
   assertLittleEndian,
   bytesEqual,
+  CODE_OBJECT,
+  CODE_STRING,
   FIELD_TYPE_BYTES,
   FORMAT_VERSION,
   hashBytes64,
   HEADER_BYTES,
+  isSideCode,
+  OBJECT_NULL,
+  OBJECT_NUMBER,
+  OBJECT_STRING,
+  objectColumnBytes,
   SAVE_MAGIC,
   SECTION_ARCHETYPES,
   SECTION_COMPONENTS,
@@ -18,10 +25,14 @@ import {
   SECTION_REQUIRED,
   SECTION_WINDOW,
   slotWidth,
+  stringColumnBytes,
+  utf8Decoder,
+  utf8Length,
   ViewCache,
   type Views,
   wordCount,
   WorldSaveError,
+  writeUtf8,
 } from "./format.ts";
 import { decodeLayout, type LayoutInfo, layoutInfo, type WorldSaveLayout } from "./layout.ts";
 
@@ -33,11 +44,15 @@ export type ComponentImage = {
   readonly changed: EntityArray;
   /** Owned row values per storage column, each parallel to `owners`. */
   readonly rows: readonly TypedArray[];
-  /** Side (string / object) rows; always empty, because saves reject worlds with side columns. */
+  /**
+   * Owned string / object cells per side column, in layout order, each parallel to `owners`. String columns hold
+   * strings. Object columns hold encoded values (`string`, `number` or `null`) in a parsed or document image, and
+   * decoded values only in the copy {@link loadWorld} restores from.
+   */
   readonly sideRows: readonly (readonly unknown[])[];
 };
 
-/** The shared empty side-row list of every saved component. */
+/** The shared empty side-row list of components without string / object fields. */
 export const NO_SIDE_ROWS: readonly (readonly unknown[])[] = Object.freeze([]);
 
 /** A decoded world save. Arrays may be views into the source bytes; treat them as read-only. */
@@ -92,14 +107,116 @@ export function archetypesPayloadBytes(count: number, wordsPerSet: number, popul
   return align8(8 + count * wordsPerSet * 4 + count * 4 + population * width);
 }
 
+/**
+ * Payload bytes of one saved component.
+ * @param sideBytes - Total bytes of its string / object columns (they are variable-length)
+ */
 export function componentPayloadBytes(
   owners: number,
   changed: number,
   codes: readonly number[] | null,
   width: number,
+  sideBytes: number,
 ): number {
-  let bytes = 8 + align8(owners * width) + align8(changed * width);
+  let bytes = 8 + align8(owners * width) + align8(changed * width) + sideBytes;
   if (codes !== null) { for (let c = 0; c < codes.length; c++) bytes += align8(owners * FIELD_TYPE_BYTES[codes[c]!]!); }
+  return bytes;
+}
+
+/**
+ * Write `count` strings as a string column at `offset` (8-aligned): u32 offsets into the heap (count + 1), then the
+ * UTF-8 heap, zero-padded to 8. Cell `j` is `values[slots[j]]`, or `values[j]` when `slots` is `null`. The strings
+ * must be well-formed (see `utf8Length`). Allocates nothing.
+ * @returns the end offset
+ */
+export function writeStringCells(
+  views: Views,
+  offset: number,
+  values: ArrayLike<unknown>,
+  slots: ArrayLike<number> | null,
+  count: number,
+): number {
+  const u32 = views.u32;
+  const w = offset >>> 2;
+  const heap = offset + (count + 1) * 4;
+  let q = heap;
+  for (let j = 0; j < count; j++) {
+    u32[w + j] = q - heap;
+    q = writeUtf8(views.u8, q, (slots === null ? values[j] : values[slots[j]!]) as string);
+  }
+  u32[w + count] = q - heap;
+  const end = align8(q);
+  zeroPad(views, q, end);
+  return end;
+}
+
+/**
+ * Write `count` encoded object cells (`null`, numbers or well-formed strings) as an object column at `offset`
+ * (8-aligned): u8 kinds, padded to 8; f64 numbers (0 for other kinds); then a string column whose cells are empty for
+ * non-strings. Allocates nothing.
+ * @returns the end offset
+ */
+export function writeObjectCells(views: Views, offset: number, values: ArrayLike<unknown>, count: number): number {
+  const u8 = views.u8;
+  const numbers = offset + align8(count);
+  const f64 = views.f64;
+  const n = numbers >>> 3;
+  for (let j = 0; j < count; j++) {
+    const value = values[j];
+    if (typeof value === "number") {
+      u8[offset + j] = OBJECT_NUMBER;
+      f64[n + j] = value;
+    } else {
+      u8[offset + j] = typeof value === "string" ? OBJECT_STRING : OBJECT_NULL;
+      f64[n + j] = 0;
+    }
+  }
+  zeroPad(views, offset + count, numbers);
+  const strings = numbers + count * 8;
+  const u32 = views.u32;
+  const w = strings >>> 2;
+  const heap = strings + (count + 1) * 4;
+  let q = heap;
+  for (let j = 0; j < count; j++) {
+    u32[w + j] = q - heap;
+    const value = values[j];
+    if (typeof value === "string") q = writeUtf8(u8, q, value);
+  }
+  u32[w + count] = q - heap;
+  const end = align8(q);
+  zeroPad(views, q, end);
+  return end;
+}
+
+/**
+ * UTF-8 bytes of the strings among `count` cells (`values[slots[j]]`, or `values[j]` when `slots` is `null`);
+ * non-strings count as empty.
+ * @returns the byte count, or `-(j + 1)` when cell `j` holds a lone surrogate
+ */
+export function heapBytes(values: ArrayLike<unknown>, slots: ArrayLike<number> | null, count: number): number {
+  let bytes = 0;
+  for (let j = 0; j < count; j++) {
+    const value = slots === null ? values[j] : values[slots[j]!];
+    if (typeof value !== "string") continue;
+    const length = utf8Length(value);
+    if (length < 0) return -(j + 1);
+    bytes += length;
+  }
+  return bytes;
+}
+
+/** Total string / object column bytes of an image component whose cells are known to be well-formed. */
+function imageSideBytes(component: ComponentImage, codes: readonly number[] | null): number {
+  if (codes === null) return 0;
+  const count = component.owners.length;
+  let bytes = 0;
+  let s = 0;
+  for (let k = 0; k < codes.length; k++) {
+    const code = codes[k]!;
+    if (!isSideCode(code)) continue;
+    const heap = heapBytes(component.sideRows[s++]!, null, count);
+    bytes += code === CODE_STRING ? stringColumnBytes(count, heap) : objectColumnBytes(count, heap);
+  }
   return bytes;
 }
 
@@ -158,7 +275,9 @@ export function imageBytes(image: SaveImage): number {
   bytes += archetypesPayloadBytes(image.populations.length, image.wordsPerSet, population, width);
   for (let c = 0; c < image.components.length; c++) {
     const component = image.components[c]!;
-    bytes += componentPayloadBytes(component.owners.length, component.changed.length, image.info.codes[c]!, width);
+    const codes = image.info.codes[c]!;
+    const sideBytes = imageSideBytes(component, codes);
+    bytes += componentPayloadBytes(component.owners.length, component.changed.length, codes, width, sideBytes);
   }
   bytes += windowPayloadBytes(image.windowSlots.length, width);
   return bytes;
@@ -215,11 +334,13 @@ export function writeImage(image: SaveImage): Uint8Array {
   let componentBytes = 0;
   for (let c = 0; c < image.components.length; c++) {
     const component = image.components[c]!;
+    const codes = image.info.codes[c]!;
     componentBytes += componentPayloadBytes(
       component.owners.length,
       component.changed.length,
-      image.info.codes[c]!,
+      codes,
       width,
+      imageSideBytes(component, codes),
     );
   }
   p = writeSectionHeader(views, offset, SECTION_COMPONENTS, componentBytes);
@@ -235,10 +356,21 @@ export function writeImage(image: SaveImage): Uint8Array {
     zeroPad(views, end, p = align8(end));
     const codes = image.info.codes[c]!;
     if (codes === null) continue;
+    let t = 0;
+    let s = 0;
     for (let k = 0; k < codes.length; k++) {
-      const bytes = FIELD_TYPE_BYTES[codes[k]!]!;
+      const code = codes[k]!;
+      if (code === CODE_STRING) {
+        p = writeStringCells(views, p, component.sideRows[s++]!, null, owners);
+        continue;
+      }
+      if (code === CODE_OBJECT) {
+        p = writeObjectCells(views, p, component.sideRows[s++]!, owners);
+        continue;
+      }
+      const bytes = FIELD_TYPE_BYTES[code]!;
       // Copy bytes, not numbers, so NaN payloads survive exactly.
-      const source = component.rows[k]!;
+      const source = component.rows[t++]!;
       views.u8.set(new Uint8Array(source.buffer, source.byteOffset, owners * bytes), p);
       end = p + owners * bytes;
       zeroPad(views, end, p = align8(end));
@@ -413,7 +545,8 @@ export function parseSave(input: Uint8Array, known?: KnownLayout): ParsedSave {
           const changed = u32[(q >>> 2) + 1]!;
           if (owners > capacity || changed > owners) fail(`World save component ${c} counts are corrupt.`);
           const codes = info.codes[c]!;
-          if (q + componentPayloadBytes(owners, changed, codes, width) > limit) {
+          // A lower bound: string / object columns are checked as they are read.
+          if (q + componentPayloadBytes(owners, changed, codes, width, 0) > limit) {
             fail("World save component section is truncated.");
           }
           q += 8;
@@ -422,16 +555,28 @@ export function parseSave(input: Uint8Array, known?: KnownLayout): ParsedSave {
           const changedSlots = slotView(q, changed);
           q = align8(q + changed * width);
           const rows: TypedArray[] = [];
+          let sideRows = NO_SIDE_ROWS;
           if (codes !== null) {
             for (let k = 0; k < codes.length; k++) {
-              const bytesPer = FIELD_TYPE_BYTES[codes[k]!]!;
-              const view = views.column(codes[k]!);
+              const code = codes[k]!;
+              if (isSideCode(code)) {
+                if (sideRows === NO_SIDE_ROWS) sideRows = [];
+                const cells = new Array<unknown>(owners);
+                q = code === CODE_STRING ?
+                  readStringCells(views, q, owners, limit, cells, null, c) :
+                  readObjectCells(views, q, owners, limit, cells, c);
+                (sideRows as unknown[][]).push(cells);
+                continue;
+              }
+              const bytesPer = FIELD_TYPE_BYTES[code]!;
+              if (q + owners * bytesPer > limit) fail("World save component section is truncated.");
+              const view = views.column(code);
               const index = q / bytesPer;
               rows.push(view.subarray(index, index + owners));
               q = align8(q + owners * bytesPer);
             }
           }
-          list[c] = { owners: ownerSlots, changed: changedSlots, rows, sideRows: NO_SIDE_ROWS };
+          list[c] = { owners: ownerSlots, changed: changedSlots, rows, sideRows };
         }
         if (q !== limit) fail("World save component section length does not match its contents.");
         components = list;
@@ -476,6 +621,77 @@ export function parseSave(input: Uint8Array, known?: KnownLayout): ParsedSave {
     ...window,
   };
   return { image, bytes };
+}
+
+/**
+ * Read a string column of `count` cells at `offset` into `out`, bounds-checking against `limit`. When `kinds` is
+ * given, only cells of kind {@link OBJECT_STRING} hold strings and every other cell must be empty.
+ * @returns the end offset
+ */
+function readStringCells(
+  views: Views,
+  offset: number,
+  count: number,
+  limit: number,
+  out: unknown[],
+  kinds: Uint8Array | null,
+  component: number,
+): number {
+  const heap = offset + (count + 1) * 4;
+  if (heap > limit) fail("World save component section is truncated.");
+  const u32 = views.u32;
+  const w = offset >>> 2;
+  const heapLength = u32[w + count]!;
+  if (u32[w] !== 0 || heapLength > limit - heap || align8(heap + heapLength) > limit) {
+    fail(`World save component ${component} string column is corrupt.`);
+  }
+  const u8 = views.u8;
+  for (let j = 0; j < count; j++) {
+    const start = u32[w + j]!;
+    const end = u32[w + j + 1]!;
+    if (end < start || end > heapLength) fail(`World save component ${component} string column is corrupt.`);
+    if (kinds !== null && kinds[j] !== OBJECT_STRING) {
+      if (end !== start) fail(`World save component ${component} object column is corrupt.`);
+      continue;
+    }
+    if (start === end) {
+      out[j] = "";
+      continue;
+    }
+    try {
+      out[j] = utf8Decoder.decode(u8.subarray(heap + start, heap + end));
+    } catch (cause) {
+      throw new WorldSaveError(`World save component ${component} holds an invalid UTF-8 string.`, { cause });
+    }
+  }
+  return align8(heap + heapLength);
+}
+
+/**
+ * Read an object column of `count` encoded cells at `offset` into `out`, bounds-checking against `limit`.
+ * @returns the end offset
+ */
+function readObjectCells(
+  views: Views,
+  offset: number,
+  count: number,
+  limit: number,
+  out: unknown[],
+  component: number,
+): number {
+  const numbers = offset + align8(count);
+  const strings = numbers + count * 8;
+  if (strings > limit) fail("World save component section is truncated.");
+  const kinds = views.u8.subarray(offset, offset + count);
+  const f64 = views.f64;
+  const n = numbers >>> 3;
+  for (let j = 0; j < count; j++) {
+    const kind = kinds[j]!;
+    if (kind === OBJECT_NUMBER) out[j] = f64[n + j]!;
+    else if (kind === OBJECT_NULL) out[j] = null;
+    else if (kind !== OBJECT_STRING) fail(`World save component ${component} object column is corrupt.`);
+  }
+  return readStringCells(views, strings, count, limit, out, kinds, component);
 }
 
 /** Reusable per-capacity scratch for {@link validateImage}. */

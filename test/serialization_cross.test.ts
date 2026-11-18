@@ -95,8 +95,7 @@ Deno.test("saves x field types: the JSON view round-trips field tags", async () 
 
 Deno.test("saves x field types and relations: unsupported worlds throw on every entry point", async () => {
   const cases: [string, DynamicComponent][] = [
-    ["string", new Component({ name: "named", schema: { label: field.string() } })],
-    ["object", new Component({ name: "meshed", schema: { hp: Uint8Array, mesh: field.object() } })],
+    ["meshed.mesh", new Component({ name: "meshed", schema: { hp: Uint8Array, mesh: field.object() } })],
     ["relation", new Relation({ name: "childOf", exclusive: true })],
   ];
   const plain = await worldOf([unitOf()]);

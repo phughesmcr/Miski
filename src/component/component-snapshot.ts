@@ -43,6 +43,8 @@ export type SnapshottableComponentState = {
 export type SaveableComponentState = SnapshottableComponentState & {
   /** Partition keys parallel to `storageColumns`. */
   readonly storageKeys: readonly string[];
+  /** Schema keys parallel to `sideColumns`. */
+  readonly sideKeys: readonly string[];
 };
 
 /** Component-manager callbacks used to rebuild tracking state during restore. */

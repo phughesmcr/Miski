@@ -34,8 +34,15 @@
   equivalent bundle, and steady-state instantiation allocates nothing. `EcsWorld` gains `prefab`,
   `instantiate` and `instantiateMany` for named specs.
 - World saves record `field.*` hash tags (`bool`, `entity`, `enum:[...]`) as field types, so the layout check
-  catches kind changes and reordered enum labels. Worlds with string or object fields, or with relations, are
-  rejected by every save and load entry point until saves support them.
+  catches kind changes and reordered enum labels. Worlds with relations are rejected by every save and load entry
+  point until saves support them.
+- World saves support `field.string()` and `field.object()` fields. Strings are written as UTF-8 (an offset table
+  plus a heap), and `saveWorldInto` stays allocation-free for them; a string with a lone surrogate throws
+  `WorldSaveError`. Object fields are saved through their `encode` / `decode` hooks, which are never called with
+  `null`; a component whose object field has no hooks throws `WorldSaveError` naming the field. Loads run every
+  `decode` before changing the world, so a throwing hook leaves it untouched. The JSON view holds strings as
+  strings and object cells as `WorldSaveObjectValue` (`{ number: "NaN" }` and so on for numbers JSON cannot hold).
+  `WorldSaveComponentDocument.values` is now typed `WorldSaveFieldValues`.
 - Command buffers carry `field.*` values through their side column. A queued entity-ref value whose target died
   before the flush is written as `null` instead of failing the command; direct guarded writes still reject dead
   handles.

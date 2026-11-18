@@ -1,4 +1,5 @@
 import type { Archetype } from "@/archetype/archetype.ts";
+import type { SideField } from "@/component/field-codec.ts";
 import type { DynamicComponentInstance } from "@/types/component.ts";
 import type { TypedArray } from "@/types/partitions.ts";
 import { isRelation } from "@/relation/relation.ts";
@@ -8,10 +9,13 @@ import { docToImage, imageToDoc } from "./document.ts";
 import {
   align8,
   assertLittleEndian,
+  CODE_OBJECT,
+  CODE_STRING,
   FIELD_TYPE_BYTES,
   FORMAT_VERSION,
   hashBytes64,
   hashHex,
+  objectColumnBytes,
   SECTION_ARCHETYPES,
   SECTION_COMPONENTS,
   SECTION_COUNT,
@@ -19,6 +23,7 @@ import {
   SECTION_HEADER_BYTES,
   SECTION_WINDOW,
   slotWidth,
+  stringColumnBytes,
   ViewCache,
   type Views,
   wordCount,
@@ -27,8 +32,10 @@ import {
 import { type WorldSaveHost, worldSaveHost } from "./host.ts";
 import {
   archetypesPayloadBytes,
+  type ComponentImage,
   componentPayloadBytes,
   entitiesPayloadBytes,
+  heapBytes,
   type KnownLayout,
   parseSave,
   type SaveImage,
@@ -36,7 +43,9 @@ import {
   ValidationScratch,
   windowPayloadBytes,
   writeHeader,
+  writeObjectCells,
   writeSectionHeader,
+  writeStringCells,
   zeroPad,
 } from "./image.ts";
 import { compareLayouts, encodeLayout, layoutInfo, layoutOfStates, type WorldSaveLayout } from "./layout.ts";
@@ -67,6 +76,18 @@ export type WorldSaveLoadOptions = {
 
 type SparseColumn = { readonly getEntity: (slot: number) => number | undefined };
 
+/** One string / object column of a world, as a save reads it. */
+type SideColumn = {
+  readonly code: number;
+  readonly field: SideField;
+  /** `component.field`, for error messages. */
+  readonly label: string;
+  /** The slot-indexed live column. */
+  readonly column: readonly unknown[];
+  /** Object columns: encoded cells in owner order, filled by `measure` and cleared after each save. */
+  readonly encoded: unknown[] | null;
+};
+
 /** Per-world save state, built once: the layout never changes after construction. */
 type SaveContext = KnownLayout & {
   readonly host: WorldSaveHost;
@@ -74,6 +95,12 @@ type SaveContext = KnownLayout & {
   readonly wordsPerSet: number;
   readonly instances: readonly DynamicComponentInstance[];
   readonly writeViews: ViewCache;
+  /** String / object columns per component, in layout order (empty for most components). */
+  readonly side: readonly (readonly SideColumn[])[];
+  /** Bytes of each component's string / object columns, set by `measure`. */
+  readonly sideBytes: Float64Array;
+  /** Number of encoded cells currently held in the object columns' `encoded` arrays. */
+  encodedCount: number;
   scratch: ValidationScratch | undefined;
 };
 
@@ -89,11 +116,17 @@ function contextOf(world: World): SaveContext {
     if (isRelation(state.instance.type)) {
       throw new WorldSaveError(`Component ${name} is a relation; world saves do not support relations yet.`);
     }
-    for (const property of state.sideFields) {
-      throw new WorldSaveError(`Component ${name} has a ${property.kind} field; world saves do not support it yet.`);
-    }
   }
   const layout = layoutOfStates(host.capacity, states);
+  const side = states.map((state) =>
+    state.sideFields.map((field, s): SideColumn => ({
+      code: field.kind === "string" ? CODE_STRING : CODE_OBJECT,
+      field,
+      label: `${state.instance.type.name}.${state.sideKeys[s]}`,
+      column: state.sideColumns[s]!,
+      encoded: field.kind === "object" ? [] : null,
+    }))
+  );
   const layoutBlock = encodeLayout(layout);
   const [low, high] = hashBytes64(layoutBlock);
   context = {
@@ -107,6 +140,9 @@ function contextOf(world: World): SaveContext {
     wordsPerSet: wordCount(states.length),
     instances: states.map((state) => state.instance),
     writeViews: new ViewCache(),
+    side,
+    sideBytes: new Float64Array(states.length),
+    encodedCount: 0,
     scratch: undefined,
   };
   contexts.set(world, context);
@@ -120,6 +156,74 @@ function liveCount(context: SaveContext): number {
   return live;
 }
 
+/**
+ * Run each owned object's `encode` hook into the column's scratch, check the results, and measure the string / object
+ * columns of component `c`. Lone surrogates and invalid encode results throw before anything is written.
+ */
+function measureSide(
+  context: SaveContext,
+  c: number,
+  ownerList: ArrayLike<number> | undefined,
+  owners: number,
+): number {
+  const columns = context.side[c]!;
+  let bytes = 0;
+  for (let s = 0; s < columns.length; s++) {
+    const side = columns[s]!;
+    if (side.code === CODE_STRING) {
+      const heap = owners === 0 ? 0 : heapBytes(side.column, ownerList!, owners);
+      if (heap < 0) {
+        throw new WorldSaveError(
+          `Component ${side.label} holds a string with a lone surrogate, which UTF-8 cannot store.`,
+        );
+      }
+      bytes += stringColumnBytes(owners, heap);
+      continue;
+    }
+    const encoded = side.encoded!;
+    const encode = (side.field as SideField & { kind: "object" }).encode!;
+    for (let j = 0; j < owners; j++) {
+      const value = side.column[ownerList![j]!];
+      if (value === null) {
+        encoded[j] = null;
+        continue;
+      }
+      let result: unknown;
+      try {
+        result = encode(value);
+      } catch (cause) {
+        throw new WorldSaveError(`Component ${side.label} encode hook threw.`, { cause });
+      }
+      if (result !== null && typeof result !== "string" && typeof result !== "number") {
+        throw new WorldSaveError(
+          `Component ${side.label} encode hook must return a string, number or null, not ${typeof result}.`,
+        );
+      }
+      encoded[j] = result;
+    }
+    if (owners > context.encodedCount) context.encodedCount = owners;
+    const heap = heapBytes(encoded, null, owners);
+    if (heap < 0) {
+      throw new WorldSaveError(
+        `Component ${side.label} encode hook returned a string with a lone surrogate, which UTF-8 cannot store.`,
+      );
+    }
+    bytes += objectColumnBytes(owners, heap);
+  }
+  return bytes;
+}
+
+/** Drop the encoded object cells, so a save does not keep them alive. */
+function releaseEncoded(context: SaveContext): void {
+  const count = context.encodedCount;
+  if (count === 0) return;
+  for (const columns of context.side) {
+    for (const side of columns) side.encoded?.fill(null, 0, Math.min(count, side.encoded.length));
+  }
+  context.encodedCount = 0;
+}
+
+/** Measure the save and stage encoded object cells for `writeWorld`; call `releaseEncoded` afterwards. */
 function measure(context: SaveContext): number {
   const { host, capacity, info } = context;
   const width = slotWidth(capacity);
@@ -128,9 +232,12 @@ function measure(context: SaveContext): number {
   bytes += entitiesPayloadBytes(capacity, live);
   bytes += archetypesPayloadBytes(host.archetypes.archetypeCount, context.wordsPerSet, live, width);
   const states = host.components.saveStates;
+  const sideBytes = context.sideBytes;
   for (let c = 0; c < states.length; c++) {
     const state = states[c]!;
-    bytes += componentPayloadBytes(state.ownerCount, state.changedCount, info.codes[c]!, width);
+    const side = context.side[c]!.length === 0 ? 0 : measureSide(context, c, state.ownerList, state.ownerCount);
+    sideBytes[c] = side;
+    bytes += componentPayloadBytes(state.ownerCount, state.changedCount, info.codes[c]!, width, side);
   }
   bytes += windowPayloadBytes(host.archetypes.transitionWindow.touchedCount, width);
   return bytes;
@@ -149,7 +256,10 @@ function writeSlots(
   return offset + count * width;
 }
 
-/** Serialize live world state at `base` (8-byte aligned, `total` bytes available). Allocates nothing. */
+/**
+ * Serialize live world state at `base` (8-byte aligned, `total` bytes available), right after `measure`.
+ * Allocates nothing.
+ */
 function writeWorld(context: SaveContext, views: Views, base: number, total: number): void {
   const { host, capacity, info, wordsPerSet } = context;
   const width = slotWidth(capacity);
@@ -211,7 +321,13 @@ function writeWorld(context: SaveContext, views: Views, base: number, total: num
   let componentBytes = 0;
   for (let c = 0; c < states.length; c++) {
     const state = states[c]!;
-    componentBytes += componentPayloadBytes(state.ownerCount, state.changedCount, info.codes[c]!, width);
+    componentBytes += componentPayloadBytes(
+      state.ownerCount,
+      state.changedCount,
+      info.codes[c]!,
+      width,
+      context.sideBytes[c]!,
+    );
   }
   p = writeSectionHeader(views, offset, SECTION_COMPONENTS, componentBytes);
   for (let c = 0; c < states.length; c++) {
@@ -228,12 +344,23 @@ function writeWorld(context: SaveContext, views: Views, base: number, total: num
     const codes = info.codes[c]!;
     if (codes === null) continue;
     const columns = state.storageColumns;
+    const side = context.side[c]!;
+    let t = 0;
+    let s = 0;
     for (let k = 0; k < codes.length; k++) {
       const code = codes[k]!;
+      if (code === CODE_STRING) {
+        p = writeStringCells(views, p, side[s++]!.column, ownerList!, owners);
+        continue;
+      }
+      if (code === CODE_OBJECT) {
+        p = writeObjectCells(views, p, side[s++]!.encoded!, owners);
+        continue;
+      }
       const bytes = FIELD_TYPE_BYTES[code]!;
       const view = views.column(code);
       const start = p / bytes;
-      const column = columns[k]!;
+      const column = columns[t++]!;
       if (ArrayBuffer.isView(column)) {
         for (let j = 0; j < owners; j++) view[start + j] = (column as TypedArray)[ownerList![j]!]!;
       } else {
@@ -276,7 +403,11 @@ function writeWorld(context: SaveContext, views: Views, base: number, total: num
 export function measureWorldSave(world: World): number {
   const context = contextOf(world);
   context.host.assertSaveReady();
-  return measure(context);
+  try {
+    return measure(context);
+  } finally {
+    releaseEncoded(context);
+  }
 }
 
 /**
@@ -293,12 +424,16 @@ export function saveWorldInto(world: World, target: Uint8Array): number {
   if ((target.byteOffset & 7) !== 0) {
     throw new RangeError("World save target must be 8-byte aligned (byteOffset % 8 === 0).");
   }
-  const total = measure(context);
-  if (target.byteLength < total) {
-    throw new RangeError(`World save needs ${total} bytes; target has ${target.byteLength} bytes.`);
+  try {
+    const total = measure(context);
+    if (target.byteLength < total) {
+      throw new RangeError(`World save needs ${total} bytes; target has ${target.byteLength} bytes.`);
+    }
+    writeWorld(context, context.writeViews.get(target.buffer), target.byteOffset, total);
+    return total;
+  } finally {
+    releaseEncoded(context);
   }
-  writeWorld(context, context.writeViews.get(target.buffer), target.byteOffset, total);
-  return total;
 }
 
 /**
@@ -311,9 +446,48 @@ export function saveWorldInto(world: World, target: Uint8Array): number {
 export function saveWorld(world: World): Uint8Array {
   const context = contextOf(world);
   context.host.assertSaveReady();
-  const out = new Uint8Array(measure(context));
-  writeWorld(context, new ViewCache().get(out.buffer), 0, out.byteLength);
-  return out;
+  try {
+    const out = new Uint8Array(measure(context));
+    writeWorld(context, new ViewCache().get(out.buffer), 0, out.byteLength);
+    return out;
+  } finally {
+    releaseEncoded(context);
+  }
+}
+
+/** Copy the components whose object columns hold encoded cells, with each cell decoded through its field's hook. */
+function decodeObjects(context: SaveContext, components: readonly ComponentImage[]): readonly ComponentImage[] {
+  let out: ComponentImage[] | undefined;
+  for (let c = 0; c < components.length; c++) {
+    const columns = context.side[c]!;
+    if (!columns.some((side) => side.code === CODE_OBJECT)) continue;
+    const component = components[c]!;
+    const sideRows = component.sideRows.map((cells, s) => {
+      const side = columns[s]!;
+      if (side.code !== CODE_OBJECT) return cells;
+      const decode = (side.field as SideField & { kind: "object" }).decode!;
+      const values = new Array<unknown>(cells.length);
+      for (let j = 0; j < cells.length; j++) {
+        const encoded = cells[j] as string | number | null;
+        if (encoded === null) {
+          values[j] = null;
+          continue;
+        }
+        let value: unknown;
+        try {
+          value = decode(encoded);
+        } catch (cause) {
+          throw new WorldSaveError(`Component ${side.label} decode hook threw.`, { cause });
+        }
+        if (value === undefined) throw new WorldSaveError(`Component ${side.label} decode hook returned undefined.`);
+        values[j] = value;
+      }
+      return values;
+    });
+    out ??= components.slice();
+    out[c] = { ...component, sideRows };
+  }
+  return out ?? components;
 }
 
 /** Number of leading saved archetypes whose component sets match the world's registry. */
@@ -369,9 +543,11 @@ export function loadWorld(world: World, bytes: Uint8Array, options?: WorldSaveLo
     }
   }
   validateImage(image, context.scratch, matchingPrefix(context, image));
+  // Decode objects before anything changes, so a throwing hook leaves the world untouched.
+  const components = decodeObjects(context, image.components);
 
   host.entities.restoreSaved(image.occupancy, image.cursor, image.nextGeneration, image.liveGeneration);
-  host.components.restoreSnapshot({ states: image.components });
+  host.components.restoreSnapshot({ states: components });
   host.archetypes.restoreSaved(context.instances, image.archetypeBits, context.wordsPerSet, image.populations, {
     slots: image.windowSlots,
     origins: image.windowOrigins,

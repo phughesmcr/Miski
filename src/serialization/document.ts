@@ -1,6 +1,15 @@
 import { createSlotArray, type EntityArray } from "@/entity/entity.ts";
 import type { TypedArray } from "@/types/partitions.ts";
-import { FIELD_TYPE_CONSTRUCTORS, FORMAT_VERSION, hashBytes64, wordCount, WorldSaveError } from "./format.ts";
+import {
+  CODE_OBJECT,
+  CODE_STRING,
+  FIELD_TYPE_CONSTRUCTORS,
+  FORMAT_VERSION,
+  hashBytes64,
+  utf8Length,
+  wordCount,
+  WorldSaveError,
+} from "./format.ts";
 import {
   type ComponentImage,
   NO_SIDE_ROWS,
@@ -15,14 +24,30 @@ import { decodeLayout, encodeLayout, layoutInfo, layoutProblem, type WorldSaveLa
 /** A saved number. Values JSON cannot hold are spelled as strings. */
 export type WorldSaveNumber = number | "NaN" | "Infinity" | "-Infinity" | "-0";
 
+/**
+ * One saved `field.object()` cell: what the field's `encode` hook returned. `null` is a null object. Numbers JSON
+ * cannot hold are spelled `{ number: "NaN" }` (and so on), so they never read as an encoded string.
+ */
+export type WorldSaveObjectValue =
+  | string
+  | number
+  | null
+  | { readonly number: "NaN" | "Infinity" | "-Infinity" | "-0" };
+
+/** One saved field column: numbers for numeric and typed fields, strings, or encoded object cells. */
+export type WorldSaveFieldValues = readonly WorldSaveNumber[] | readonly string[] | readonly WorldSaveObjectValue[];
+
 /** One saved component: owners and changed slots in iteration order, and owned values per field. */
 export type WorldSaveComponentDocument = {
   /** Owner slots in owner-iteration order. */
   readonly owners: readonly number[];
   /** Changed slots in changed-iteration order (a subset of `owners`). */
   readonly changed: readonly number[];
-  /** Owned values per field, each parallel to `owners`; absent for tag components. */
-  readonly values?: Readonly<Record<string, readonly WorldSaveNumber[]>>;
+  /**
+   * Owned values per field, each parallel to `owners`; absent for tag components. String fields hold strings and
+   * object fields hold {@link WorldSaveObjectValue} cells.
+   */
+  readonly values?: Readonly<Record<string, WorldSaveFieldValues>>;
 };
 
 /**
@@ -62,6 +87,12 @@ function encodeNumber(value: number): WorldSaveNumber {
   return value > 0 ? "Infinity" : "-Infinity";
 }
 
+function encodeObjectValue(value: unknown): WorldSaveObjectValue {
+  if (typeof value !== "number") return value as string | null;
+  const encoded = encodeNumber(value);
+  return typeof encoded === "number" ? encoded : { number: encoded };
+}
+
 function toArray(list: ArrayLike<number>): number[] {
   const out: number[] = new Array(list.length);
   for (let i = 0; i < list.length; i++) out[i] = list[i]!;
@@ -97,12 +128,26 @@ export function imageToDoc(image: SaveImage): WorldSaveDocument {
       {
         owners: toArray(saved.owners),
         changed: toArray(saved.changed),
-        values: Object.fromEntries(component.fields.map((field, k) => {
-          const row = saved.rows[k]!;
-          const values: WorldSaveNumber[] = new Array(row.length);
-          for (let j = 0; j < row.length; j++) values[j] = encodeNumber(row[j]!);
-          return [field.name, values];
-        })),
+        values: (() => {
+          const codes = image.info.codes[c]!;
+          const out: Record<string, WorldSaveFieldValues> = {};
+          let t = 0;
+          let s = 0;
+          for (let k = 0; k < codes.length; k++) {
+            const name = component.fields![k]!.name;
+            if (codes[k] === CODE_STRING) {
+              out[name] = (saved.sideRows[s++]! as string[]).slice();
+            } else if (codes[k] === CODE_OBJECT) {
+              out[name] = saved.sideRows[s++]!.map(encodeObjectValue);
+            } else {
+              const row = saved.rows[t++]!;
+              const values: WorldSaveNumber[] = new Array(row.length);
+              for (let j = 0; j < row.length; j++) values[j] = encodeNumber(row[j]!);
+              out[name] = values;
+            }
+          }
+          return out;
+        })(),
       };
     return [component.name, entry];
   }));
@@ -181,6 +226,21 @@ const INTEGER_RANGE: readonly (readonly [number, number] | undefined)[] = [
   [0, 0xff],
 ];
 
+/** Check one string or object cell of a document and return its image form. */
+function sideCell(code: number, value: unknown, path: string): unknown {
+  if (typeof value === "string") {
+    if (utf8Length(value) < 0) fail(path, "must not hold a lone surrogate");
+    return value;
+  }
+  if (code === CODE_STRING) fail(path, "must be a string");
+  if (value === null || typeof value === "number") return value;
+  if (isRecord(value) && Object.keys(value).length === 1 && typeof value["number"] === "string") {
+    const number = decodeNumber(value["number"]);
+    if (number !== undefined) return number;
+  }
+  fail(path, 'must be a string, number, null or { number: "NaN" | "Infinity" | "-Infinity" | "-0" }');
+}
+
 function slotsOf(capacity: number, list: readonly number[]): EntityArray {
   const out = createSlotArray(capacity, list.length);
   for (let i = 0; i < list.length; i++) out[i] = list[i]!;
@@ -254,6 +314,7 @@ export function docToImage(document: unknown): SaveImage {
     const owners = integers(saved["owners"], `${path}.owners`, maxSlot);
     const changed = integers(saved["changed"], `${path}.changed`, maxSlot);
     const rows: TypedArray[] = [];
+    let sideRows = NO_SIDE_ROWS;
     const fields = component.fields;
     if (fields === null) {
       if (saved["values"] !== undefined) fail(`${path}.values`, "must be absent for a tag component");
@@ -270,6 +331,13 @@ export function docToImage(document: unknown): SaveImage {
         const list = arrayAt(Object.hasOwn(values, fields[k]!.name) ? values[fields[k]!.name] : undefined, fieldPath);
         if (list.length !== owners.length) fail(fieldPath, `must have one value per owner (${owners.length})`);
         const code = info.codes[c]![k]!;
+        if (code === CODE_STRING || code === CODE_OBJECT) {
+          const cells = new Array<unknown>(list.length);
+          for (let j = 0; j < list.length; j++) cells[j] = sideCell(code, list[j], `${fieldPath}[${j}]`);
+          if (sideRows === NO_SIDE_ROWS) sideRows = [];
+          (sideRows as unknown[][]).push(cells);
+          continue;
+        }
         const row = new FIELD_TYPE_CONSTRUCTORS[code]!(owners.length);
         const range = INTEGER_RANGE[code];
         for (let j = 0; j < list.length; j++) {
@@ -283,7 +351,7 @@ export function docToImage(document: unknown): SaveImage {
         rows.push(row);
       }
     }
-    return { owners: slotsOf(capacity, owners), changed: slotsOf(capacity, changed), rows, sideRows: NO_SIDE_ROWS };
+    return { owners: slotsOf(capacity, owners), changed: slotsOf(capacity, changed), rows, sideRows };
   });
 
   const window = document["window"];

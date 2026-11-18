@@ -30,6 +30,7 @@ import {
   mustCreateEntity,
   populateMixedWorld,
   populateMovementWorld,
+  populateNamedWorld,
   populateRelationWorld,
   populateSparseLifecycleWorld,
   populateWideWorld,
@@ -1261,6 +1262,27 @@ Deno.bench({
   fn: () => {
     objectSink = worldSaveFromJSON(worldSaveToJSON(savedSmall));
     objectSink = savedDocument;
+  },
+});
+
+const namedSource = await populateNamedWorld(MEDIUM_CAPACITY, true);
+const namedTarget = await populateNamedWorld(MEDIUM_CAPACITY, true);
+const namedBuffer = new Uint8Array(measureWorldSave(namedSource.world) + 1024);
+const namedBytes = saveWorld(namedSource.world);
+
+Deno.bench({
+  name: "saveWorldInto 8K world with strings + objects - reused buffer",
+  group: "serialization",
+  fn: () => {
+    numericSink ^= saveWorldInto(namedSource.world, namedBuffer);
+  },
+});
+
+Deno.bench({
+  name: "loadWorld 8K world with strings + objects into a populated world",
+  group: "serialization",
+  fn: () => {
+    loadWorld(namedTarget.world, namedBytes);
   },
 });
 

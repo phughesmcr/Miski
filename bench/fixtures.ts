@@ -1,6 +1,6 @@
 /// <reference lib="deno.ns" />
 
-import { Component, Query, Relation, Schedule, System, World } from "../mod.ts";
+import { Component, field, Query, Relation, Schedule, System, World } from "../mod.ts";
 import type { ComponentInstance, Entity, ScheduleContext } from "../mod.ts";
 
 export type Vec2 = { x: Float32ArrayConstructor; y: Float32ArrayConstructor };
@@ -371,4 +371,48 @@ export async function createDispatchSchedule(
   }
   schedule.run(1 / 60);
   return { world, schedule };
+}
+
+/** Labels of mixed lengths and scripts, so UTF-8 encoding takes every branch. */
+const SAVE_LABELS = [
+  "",
+  "orc",
+  "goblin archer",
+  "caf\u00e9 owner",
+  "\u65e5\u672c\u8a9e\u306e\u540d\u524d",
+  "\u{1f600}x",
+  "a".repeat(48),
+];
+
+/** A mesh handle whose save form is a precomputed key, so its codec allocates nothing. */
+export class SaveMesh {
+  readonly key: string;
+  constructor(key: string) {
+    this.key = key;
+  }
+}
+
+/**
+ * A world with string fields on half its entities and, with `withObjects`, object fields on an eighth.
+ * Without objects every save cost is Miski's own; object encode hooks are user code.
+ */
+export async function populateNamedWorld(capacity: number, withObjects: boolean = false) {
+  const named = new Component({ name: "named", schema: { hp: Uint16Array, label: field.string() } });
+  const titled = new Component({ name: "titled", schema: { title: field.string() } });
+  const meshed = new Component({
+    name: "meshed",
+    schema: {
+      mesh: field.object<SaveMesh>({ encode: (mesh) => mesh.key, decode: (key) => new SaveMesh(key as string) }),
+    },
+  });
+  const world = new World({ capacity, components: withObjects ? [named, titled, meshed] : [named, titled] });
+  await world.init();
+  const meshes = SAVE_LABELS.map((label, i) => new SaveMesh(`mesh:${i}:${label}`));
+  for (let i = 0; i < capacity / 2; i++) {
+    const entity = mustCreateEntity(world);
+    world.components.addToEntity(named, entity, { hp: i & 0xffff, label: SAVE_LABELS[i % SAVE_LABELS.length]! });
+    if (i % 4 === 0) world.components.addToEntity(titled, entity, { title: `title ${i}` });
+    if (withObjects && i % 4 === 1) world.components.addToEntity(meshed, entity, { mesh: meshes[i % meshes.length]! });
+  }
+  return { world, named, titled, meshed };
 }
