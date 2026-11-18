@@ -2,7 +2,7 @@
 /// <reference lib="dom" />
 // deno-lint-ignore-file no-console
 
-import { Component, entityIndex, Query, World } from "../mod.ts";
+import { Component, entityIndex, field, Query, World } from "../mod.ts";
 import type { ComponentInstance, Entity } from "../mod.ts";
 import {
   countEntities,
@@ -59,6 +59,8 @@ const FIXED_ARITY_FRAME_BUDGET_BYTES_PER_ITER = 8;
 const WORLD_CONSTRUCTOR_BUDGET_BYTES_PER_ITER = 12_000;
 const PROJECTILE_SPAWN_DESPAWN_BUDGET_BYTES_PER_ITER = 3_200;
 const GET_ENTITY_DATA_BUDGET_BYTES_PER_ITER = 80;
+// Six-field getEntityData result object (numeric + bool + enum + entity + string + object).
+const GET_FIELD_ENTITY_DATA_BUDGET_BYTES_PER_ITER = 160;
 const DATA_COMPONENT_TRANSITION_BUDGET_BYTES_PER_ITER = ZERO_ALLOC_BUDGET_BYTES_PER_ITER;
 const BATCH_COMPONENT_TRANSITION_BUDGET_BYTES_PER_ITER = ZERO_ALLOC_BUDGET_BYTES_PER_ITER;
 const REFRESH_BUDGET_BYTES_PER_ITER = 800;
@@ -391,6 +393,39 @@ function destroyBundledBatch(entities: Entity[]): void {
   }
 }
 
+class GcMesh {
+  constructor(public id = 0) {}
+}
+const fieldUnit = new Component({
+  name: "fieldUnit",
+  schema: {
+    hp: Uint16Array,
+    alive: field.bool(),
+    state: field.enum(["idle", "run", "dead"]),
+    target: field.entity(),
+    label: field.string(),
+    mesh: field.object<GcMesh>(),
+  },
+});
+const fieldWorld = new World({ capacity: SMALL_CAPACITY, components: [fieldUnit] });
+await fieldWorld.init();
+const fieldMeshes = [new GcMesh(0), new GcMesh(1)];
+const fieldLabels = ["a", "b"];
+const fieldStates = ["idle", "run"] as const;
+const fieldTarget = mustCreateEntity(fieldWorld);
+const fieldEntity = fieldWorld.entities.createWithOrThrow([[fieldUnit, { label: "x" }]]);
+const fieldTransitionEntity = mustCreateEntity(fieldWorld);
+const fieldProxy = fieldWorld.components.require(fieldUnit).proxy;
+const fieldWriteData = {
+  hp: 0,
+  alive: false,
+  state: "idle" as "idle" | "run" | "dead",
+  target: fieldTarget as Entity | null,
+  label: "a",
+  mesh: fieldMeshes[0]! as GcMesh | null,
+};
+const fieldReadOut = { ...fieldWriteData };
+
 const scenarios: Scenario[] = [
   {
     name: "world constructor allocating",
@@ -692,6 +727,50 @@ const scenarios: Scenario[] = [
       fixedArityMovement.world.refresh();
     },
   },
+  budgeted("proxy writes of bool/enum/entity/string/object fields", 250_000, () => {
+    const i = numericSink++;
+    fieldProxy.entity = fieldEntity;
+    fieldProxy.alive = (i & 1) === 1;
+    fieldProxy.state = fieldStates[i & 1]!;
+    fieldProxy.target = (i & 1) === 1 ? fieldTarget : null;
+    fieldProxy.label = fieldLabels[i & 1]!;
+    fieldProxy.mesh = fieldMeshes[i & 1]!;
+    fieldWorld.refresh();
+  }),
+  budgeted("proxy reads of bool/enum/entity/string/object fields", 250_000, () => {
+    fieldProxy.entity = fieldEntity;
+    numericSink ^= fieldProxy.alive ? 1 : 0;
+    numericSink ^= fieldProxy.state.length;
+    entitySink ^= fieldProxy.target ?? 0;
+    numericSink ^= fieldProxy.label.length;
+    objectSink = fieldProxy.mesh;
+  }),
+  budgeted("setEntityData all field kinds with reused data object", 250_000, () => {
+    const i = numericSink++;
+    fieldWriteData.hp = i & 0xff;
+    fieldWriteData.alive = (i & 1) === 1;
+    fieldWriteData.state = fieldStates[i & 1]!;
+    fieldWriteData.label = fieldLabels[i & 1]!;
+    fieldWriteData.mesh = fieldMeshes[i & 1]!;
+    fieldWorld.components.setEntityData(fieldUnit, fieldEntity, fieldWriteData);
+    fieldWorld.refresh();
+  }),
+  budgeted("readEntityDataInto all field kinds", 250_000, () => {
+    numericSink ^= fieldWorld.components.readEntityDataInto(fieldUnit, fieldEntity, fieldReadOut) ? 1 : 0;
+  }),
+  {
+    name: "getEntityData all field kinds allocating object materialization",
+    iterations: 100_000,
+    maxSteadyStateBeforeGcBytesPerIter: GET_FIELD_ENTITY_DATA_BUDGET_BYTES_PER_ITER,
+    fn: () => {
+      objectSink = fieldWorld.components.getEntityData(fieldUnit, fieldEntity);
+    },
+  },
+  budgeted("add/remove component with all field kinds + refresh", 100_000, () => {
+    fieldWorld.components.addToEntity(fieldUnit, fieldTransitionEntity);
+    fieldWorld.components.removeFromEntity(fieldUnit, fieldTransitionEntity);
+    fieldWorld.refresh();
+  }),
   budgeted("related spawn/tag/destroy + queryList refill of 4096 entities", 20_000, () => {
     const entity = mustCreateEntity(refillWorld);
     refillWorld.components.addToEntity(refillTag, entity);

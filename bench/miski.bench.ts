@@ -1,6 +1,14 @@
 /// <reference lib="deno.ns" />
 
-import { Component, entityIndex, Query, World } from "../mod.ts";
+import {
+  captureWorldRollbackPoint,
+  Component,
+  entityIndex,
+  field,
+  Query,
+  restoreWorldRollbackPoint,
+  World,
+} from "../mod.ts";
 import type { ComponentInstance, Entity } from "../mod.ts";
 import {
   countEntities,
@@ -887,6 +895,163 @@ Deno.bench({
     movementMedium.movement(1 / 60);
     entitySink ^= countEntities(movementMedium.world.entities.query(movementFrameRenderableQuery));
     movementMedium.world.refresh();
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Non-numeric field types
+// ---------------------------------------------------------------------------
+
+class BenchMesh {
+  constructor(public id = 0) {}
+}
+
+const fieldUnit = new Component({
+  name: "fieldUnit",
+  schema: {
+    hp: Uint16Array,
+    alive: field.bool(),
+    state: field.enum(["idle", "run", "dead"]),
+    target: field.entity(),
+    label: field.string(),
+    mesh: field.object<BenchMesh>(),
+  },
+});
+const fieldWorld = new World({ capacity: MEDIUM_CAPACITY, components: [fieldUnit] });
+await fieldWorld.init();
+const fieldMeshes = [new BenchMesh(0), new BenchMesh(1)];
+const fieldLabels = ["a", "b"];
+const fieldStates = ["idle", "run"] as const;
+const fieldEntities: Entity[] = [];
+for (let i = 0; i < 1024; i++) {
+  fieldEntities.push(
+    fieldWorld.entities.createWithOrThrow([[fieldUnit, { hp: i, label: "x", mesh: fieldMeshes[0]! }]]),
+  );
+}
+const fieldTarget = fieldEntities[0]!;
+const fieldEntity = fieldEntities[1]!;
+const fieldTransitionEntity = mustCreateEntity(fieldWorld);
+const fieldInstance = fieldWorld.components.require(fieldUnit);
+const fieldProxy = fieldInstance.proxy;
+const fieldWriteData = {
+  hp: 0,
+  alive: false,
+  state: "idle" as "idle" | "run" | "dead",
+  target: fieldTarget as Entity | null,
+  label: "a",
+  mesh: fieldMeshes[0]! as BenchMesh | null,
+};
+const fieldReadOut = { ...fieldWriteData };
+
+Deno.bench({
+  name: "proxy numeric field write (baseline)",
+  group: "field types",
+  baseline: true,
+  fn: () => {
+    fieldProxy.entity = fieldEntity;
+    fieldProxy.hp = numericSink++ & 0xff;
+  },
+});
+
+Deno.bench({
+  name: "proxy bool field write",
+  group: "field types",
+  fn: () => {
+    fieldProxy.entity = fieldEntity;
+    fieldProxy.alive = (numericSink++ & 1) === 1;
+  },
+});
+
+Deno.bench({
+  name: "proxy enum field write",
+  group: "field types",
+  fn: () => {
+    fieldProxy.entity = fieldEntity;
+    fieldProxy.state = fieldStates[numericSink++ & 1]!;
+  },
+});
+
+Deno.bench({
+  name: "proxy entity field write",
+  group: "field types",
+  fn: () => {
+    fieldProxy.entity = fieldEntity;
+    fieldProxy.target = (numericSink++ & 1) === 1 ? fieldTarget : null;
+  },
+});
+
+Deno.bench({
+  name: "proxy string field write",
+  group: "field types",
+  fn: () => {
+    fieldProxy.entity = fieldEntity;
+    fieldProxy.label = fieldLabels[numericSink++ & 1]!;
+  },
+});
+
+Deno.bench({
+  name: "proxy object field write",
+  group: "field types",
+  fn: () => {
+    fieldProxy.entity = fieldEntity;
+    fieldProxy.mesh = fieldMeshes[numericSink++ & 1]!;
+  },
+});
+
+Deno.bench({
+  name: "proxy entity field read (generation-checked)",
+  group: "field types",
+  fn: () => {
+    fieldProxy.entity = fieldEntity;
+    entitySink ^= fieldProxy.target ?? 0;
+  },
+});
+
+Deno.bench({
+  name: "setEntityData all field kinds",
+  group: "field types",
+  fn: () => {
+    const i = numericSink++;
+    fieldWriteData.hp = i & 0xff;
+    fieldWriteData.alive = (i & 1) === 1;
+    fieldWriteData.state = fieldStates[i & 1]!;
+    fieldWriteData.label = fieldLabels[i & 1]!;
+    fieldWriteData.mesh = fieldMeshes[i & 1]!;
+    fieldWorld.components.setEntityData(fieldUnit, fieldEntity, fieldWriteData);
+  },
+});
+
+Deno.bench({
+  name: "readEntityDataInto all field kinds",
+  group: "field types",
+  fn: () => {
+    numericSink ^= fieldWorld.components.readEntityDataInto(fieldUnit, fieldEntity, fieldReadOut) ? 1 : 0;
+  },
+});
+
+Deno.bench({
+  name: "getEntityData all field kinds",
+  group: "field types",
+  fn: () => {
+    objectSink = fieldWorld.components.getEntityData(fieldUnit, fieldEntity);
+  },
+});
+
+Deno.bench({
+  name: "add/remove component with all field kinds",
+  group: "field types",
+  fn: () => {
+    fieldWorld.components.addToEntity(fieldUnit, fieldTransitionEntity);
+    fieldWorld.components.removeFromEntity(fieldUnit, fieldTransitionEntity);
+  },
+});
+
+Deno.bench({
+  name: "rollback capture + restore - 1024 owners, all field kinds",
+  group: "field types",
+  fn: () => {
+    const point = captureWorldRollbackPoint(fieldWorld);
+    restoreWorldRollbackPoint(fieldWorld, point);
   },
 });
 

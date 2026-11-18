@@ -15,6 +15,7 @@ Runtime tests live in `*.test.ts` files and run via `deno test` (see `deno.json`
 | `learnings.test.ts` | Newer APIs: frame, revision, createEcsWorld, schema hash, checkpoint, rollback |
 | `module_graph.test.ts` | Forbidden import coupling edges |
 | `component_integrity.test.ts` | Guarded identities, numeric writes, reserved schema fields, capped defaults |
+| `component_field_types.test.ts` | `field.*` bool / enum / entity / string / object fields: layout, defaults, validation, proxy, rollback, checkpoints, copy |
 | `world_integrity.test.ts` | Atomic spawn/checkpoints, historical exits, rollback identities, slot bounds |
 | `world_lifecycle_integrity.test.ts` | Async readiness, teardown concurrency, failure cleanup |
 | `rollback_checkpoint_integrity.test.ts` | One rollback scope, consumed/foreign rollback points, foreign checkpoints, >32-component round-trips |
@@ -39,6 +40,7 @@ These files are type-checked by `deno task check` but are **not** executed by `d
 - `query_constructor_inference.ts` — typed `Query({ all: { … } })` constructor inference
 - `typed_ecs_world_inference.ts` — `createEcsWorld` / schema-world spawn and storage inference
 - `entity_api_inference.ts` — slot bounds reject packed entity handles
+- `field_type_inference.ts` — `field.*` value, payload, proxy and partition types
 
 They use `@ts-expect-error` to assert that invalid access is rejected at compile time.
 
