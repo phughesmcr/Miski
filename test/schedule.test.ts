@@ -2,7 +2,10 @@
 
 import {
   AlreadyRegisteredError,
+  captureWorldRollbackPoint,
+  type ComponentInstance,
   Query,
+  restoreWorldRollbackPoint,
   Schedule,
   type ScheduleContext,
   SpecError,
@@ -599,5 +602,114 @@ Deno.test("schedule systems see their query entities", async () => {
   );
   schedule.run(1 / 60);
   assertEquals(seen, [[entity]], "the borrowed entity list is passed");
+  await world.destroy();
+});
+
+Deno.test("schedule clock round-trips through getClock and setClock", async () => {
+  const world = await setup();
+  const seen: number[][] = [];
+  const schedule = new Schedule(world, { phases: [{ name: "physics", fixed: true }, "update"], fixedStep: 0.25 });
+  schedule.add(probeSystem("probe", seen, (ctx) => [ctx.tick, ctx.fixedTick, ctx.time, ctx.alpha]), {
+    phase: "update",
+  });
+  assertEquals(schedule.getClock(), { tick: 0, fixedTick: 0, elapsed: 0, accumulator: 0 }, "fresh clock");
+  schedule.run(0.375);
+  const clock = schedule.getClock();
+  assertEquals(clock, { tick: 1, fixedTick: 1, elapsed: 0.375, accumulator: 0.125 }, "clock after one run");
+  (clock as { tick: number }).tick = 99;
+  assertStrictEquals(schedule.getClock().tick, 1, "getClock returns a copy");
+
+  schedule.run(0.5);
+  schedule.setClock({ tick: 1, fixedTick: 1, elapsed: 0.375, accumulator: 0.125 });
+  assertEquals(schedule.getClock(), { tick: 1, fixedTick: 1, elapsed: 0.375, accumulator: 0.125 }, "clock restored");
+  assertStrictEquals(schedule.accumulator, 0.125, "accumulator restored");
+  seen.length = 0;
+  schedule.run(0.5);
+  assertEquals(seen, [[2, 3, 0.875, 0.5]], "the next run continues from the restored clock");
+
+  for (
+    const bad of [
+      { tick: -1, fixedTick: 0, elapsed: 0, accumulator: 0 },
+      { tick: 1.5, fixedTick: 0, elapsed: 0, accumulator: 0 },
+      { tick: 0, fixedTick: Number.NaN, elapsed: 0, accumulator: 0 },
+      { tick: 0, fixedTick: 0, elapsed: Infinity, accumulator: 0 },
+      { tick: 0, fixedTick: 0, elapsed: 0, accumulator: -0.5 },
+    ]
+  ) {
+    assertThrows(() => schedule.setClock(bad), RangeError, "clock");
+  }
+  assertEquals(
+    schedule.getClock(),
+    { tick: 2, fixedTick: 3, elapsed: 0.875, accumulator: 0.125 },
+    "rejected unchanged",
+  );
+
+  schedule.add(
+    new System({
+      name: "rewinder",
+      query: new Query({ all: [tag] }),
+      argCount: 0,
+      callback: () => schedule.setClock({ tick: 0, fixedTick: 0, elapsed: 0, accumulator: 0 }),
+    }),
+    { phase: "update" },
+  );
+  assertThrows(() => schedule.run(0), WorldStateError, "running");
+  await world.destroy();
+});
+
+Deno.test("schedule resumes identically after a rollback restore between runs plus setClock", async () => {
+  const position = vec2Component("position");
+  const world = await createTestWorld([position, tag], 64);
+  for (let i = 0; i < 4; i++) world.entities.createWithOrThrow([[position, { x: i, y: 0 }], [tag]]);
+  const movers = new Query({ all: [position, tag] });
+  const schedule = new Schedule(world, { phases: [{ name: "physics", fixed: true }, "update"], fixedStep: 0.25 });
+  const log: string[] = [];
+  schedule.add(
+    new System({
+      name: "physics",
+      query: movers,
+      argCount: 1,
+      callback: (components, entities, ctx: ScheduleContext) => {
+        const p = (components["position"] as ComponentInstance<{ x: Float32ArrayConstructor }>).storage!.partitions;
+        for (let i = 0; i < entities.count; i++) p.x[entities.slots[i]!] = p.x[entities.slots[i]!]! + ctx.dt;
+        if (ctx.fixedTick % 3 === 0) ctx.commands.spawn([[position, { x: 0, y: ctx.fixedTick }], [tag]]);
+      },
+    }),
+    { phase: "physics" },
+  );
+  schedule.add(
+    new System({
+      name: "cullAndLog",
+      query: movers,
+      argCount: 1,
+      callback: (_components, entities, ctx: ScheduleContext) => {
+        const rows: string[] = [];
+        for (let i = 0; i < entities.count; i++) {
+          const entity = entities.entities[i]!;
+          const data = ctx.world.components.getEntityData(position, entity);
+          // Slots, not handles: generations keep moving forward across a restore.
+          rows.push(`${entities.slots[i]}:${data.x}:${data.y}`);
+          if (data.x > 3) ctx.commands.destroy(entity);
+        }
+        log.push(`${ctx.tick}/${ctx.fixedTick}/${ctx.time}/${ctx.alpha} ${rows.sort().join(",")}`);
+      },
+    }),
+    { phase: "update" },
+  );
+  const frames = [0.3, 0.4, 0.1, 0.55, 0.2, 0.75];
+  schedule.run(0.3);
+  schedule.run(0.3);
+  log.length = 0;
+
+  const point = captureWorldRollbackPoint(world);
+  const clock = schedule.getClock();
+  for (const dt of frames) schedule.run(dt);
+  const first = log.splice(0);
+
+  restoreWorldRollbackPoint(world, point);
+  schedule.setClock(clock);
+  for (const dt of frames) schedule.run(dt);
+  assertEquals(log, first, "same entities, values, ticks, times and alphas after resimulating");
+  assertEquals(first.length, frames.length, "one log line per run");
   await world.destroy();
 });

@@ -451,6 +451,7 @@ export { CommandBuffer } from "@/scheduler/command-buffer.ts";
 export { Schedule } from "@/scheduler/schedule.ts";
 export type {
   PendingEntity,
+  ScheduleClock,
   ScheduleContext,
   SchedulePhaseSpec,
   ScheduleSpec,

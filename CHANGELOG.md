@@ -9,11 +9,15 @@
   Systems get one reused `ScheduleContext` and must declare `argCount` 1 or 0.
   `runIf` and `setEnabled` skip systems. `run(dt)` refreshes the world once at
   the end, like `world.frame`, and is allocation-free in steady state.
+  `getClock()` / `setClock()` save and restore its clock as plain data
+  alongside a world save or rollback point (between runs only).
 - Add `CommandBuffer` for deferred `spawn` (with a bundle, returning a
   `PendingEntity`), `destroy`, `add`, `set` and `remove`. Queuing validates
   and copies data; `flush()` applies commands in order like the direct calls
-  and skips commands for inactive entities. A `Schedule` flushes its buffer at
-  the end of each phase.
+  and skips commands for inactive entities. A failing command does not stop
+  the flush: the rest still apply and the first error is rethrown. Non-numeric
+  schema fields are queued by reference and validated at flush. A `Schedule`
+  flushes its buffer at the end of each phase.
 - Reuse entity slots next-fit instead of last-freed-first. A destroyed entity's
   slot is reissued only after the allocator has swept past every other free
   slot, so a held stale handle no longer comes back to life after 32,768

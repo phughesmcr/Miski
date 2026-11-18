@@ -38,6 +38,21 @@ export interface ScheduleContext {
   readonly alpha: number;
 }
 
+/**
+ * A schedule's clock as plain data, from `Schedule.getClock()` and for `Schedule.setClock()`. Save it alongside a
+ * world save or rollback point; saves and rollback are only supported between `run()` calls.
+ */
+export type ScheduleClock = {
+  /** `run()` calls started so far. */
+  readonly tick: number;
+  /** Fixed steps run so far. */
+  readonly fixedTick: number;
+  /** Total `dt` passed to `run()` so far, in seconds. */
+  readonly elapsed: number;
+  /** Unsimulated time carried to the next fixed step, in seconds. */
+  readonly accumulator: number;
+};
+
 /** A phase in a {@link ScheduleSpec}: a name, or a name with `fixed: true` for a fixed-rate phase. */
 export type SchedulePhaseSpec = string | {
   /** The phase name. */

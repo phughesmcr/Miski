@@ -186,14 +186,19 @@ Deno.test("command buffer validates components and data when queued", async () =
   await world.destroy();
 });
 
-Deno.test("command buffer flush failure keeps the applied prefix, drops the rest, and stays usable", async () => {
+Deno.test("command buffer flush failure applies the remaining commands, then rethrows the first error", async () => {
   const { world, commands } = await setup();
   const owner = createEntity(world);
   const nonOwner = createEntity(world);
+  const otherNonOwner = createEntity(world);
+  const doomed = createEntity(world);
   world.components.addToEntity(position, owner, { x: 0, y: 0 });
   commands.set(position, owner, { x: 1 });
   commands.set(position, nonOwner, { x: 2 });
   commands.set(position, owner, { x: 3 });
+  commands.set(position, otherNonOwner, { x: 4 });
+  commands.add(tag, owner);
+  commands.destroy(doomed);
   let caught: unknown;
   try {
     commands.flush();
@@ -201,13 +206,16 @@ Deno.test("command buffer flush failure keeps the applied prefix, drops the rest
     caught = error;
   }
   assert(caught instanceof ComponentOwnershipError, "set on an active non-owner throws like the direct API");
-  assert((caught as Error).message.includes("set"), "message names the command");
-  assert((caught as Error).message.includes("position"), "message names the component");
-  assertStrictEquals(world.components.getEntityData(position, owner).x, 1, "applied prefix stays");
-  assertStrictEquals(commands.size, 0, "remaining commands are dropped");
-  commands.set(position, owner, { x: 4 });
+  const message = (caught as Error).message;
+  assert(message.includes("set") && message.includes("position"), "message names the command and component");
+  assert(message.includes(`entity ${nonOwner}`), "the first failure is the one rethrown");
+  assertStrictEquals(world.components.getEntityData(position, owner).x, 3, "commands after the failure applied");
+  assert(world.components.entityHas(tag, owner), "later add applied");
+  assert(!world.entities.isActive(doomed), "later destroy applied");
+  assertStrictEquals(commands.size, 0, "buffer is empty");
+  commands.set(position, owner, { x: 5 });
   commands.flush();
-  assertStrictEquals(world.components.getEntityData(position, owner).x, 4, "buffer is reusable");
+  assertStrictEquals(world.components.getEntityData(position, owner).x, 5, "buffer is reusable");
   await world.destroy();
 });
 
@@ -227,9 +235,14 @@ Deno.test("command buffer spawn respects component owner caps atomically", async
   const world = await createTestWorld([hero, tag]);
   const commands = new CommandBuffer(world);
   commands.spawn([[hero, { hp: 1 }]]);
-  commands.spawn([[tag], [hero, { hp: 2 }]]);
+  const failed = commands.spawn([[tag], [hero, { hp: 2 }]]);
+  commands.add(tag, failed);
+  commands.destroy(failed);
+  commands.spawn([[tag]]);
   assertThrows(() => commands.flush(), RangeError, "hero");
-  assertStrictEquals(world.entities.getActiveCount(), 1, "the failed spawn left no half-built entity");
+  assertStrictEquals(world.entities.getActiveCount(), 2, "failed spawns leave no half-built entity; later ones run");
+  assertStrictEquals(world.components.getOwnersSnapshot(hero)!.length, 1, "one hero");
+  assertStrictEquals(world.components.getOwnersSnapshot(tag)!.length, 1, "commands on a failed spawn are skipped");
   await world.destroy();
 });
 
@@ -313,4 +326,37 @@ Deno.test("command buffer handles partial payloads on the widest masked and on w
     assertThrows(() => commands.flush(), ComponentOwnershipError, `wide${count}`);
     await world.destroy();
   }
+});
+
+Deno.test("command buffer passes non-numeric schema fields through a side column", async () => {
+  // Stand-in for field-types descriptors: any schema entry that is not a typed-array constructor is non-numeric.
+  const point = new Component({ name: "point", schema: defineComponentSchema({ x: Float32Array, y: Float32Array }) });
+  const world = await createTestWorld([point], 16);
+  Object.defineProperty(point, "schema", { value: { x: { kind: "side" }, y: Float32Array }, configurable: true });
+  const commands = new CommandBuffer(world);
+  const entity = createEntity(world);
+  const passed: Record<string, unknown>[] = [];
+  const addToEntity = world.components.addToEntity;
+  Object.defineProperty(world.components, "addToEntity", {
+    value: (component: never, target: never, data?: Record<string, unknown>) => {
+      if (data !== undefined) passed.push(data);
+      return (addToEntity as (...args: unknown[]) => unknown)(component, target, data);
+    },
+    configurable: true,
+  });
+
+  commands.add(point, entity, { x: 7, y: 2 });
+  commands.add(point, entity, { x: "eight" } as never);
+  assertStrictEquals(commands.size, 2, "non-numeric values are not validated when queued");
+  assertThrows(() => commands.flush(), ComponentDataError, "point");
+  assertEquals(world.components.getEntityData(point, entity), { x: 7, y: 2 }, "side value written by the world");
+  assertStrictEquals(passed.length, 2, "both commands reached the world");
+  assertStrictEquals(passed[1]!["x"], undefined, "the reused data object releases side values after flush");
+
+  const spawned = commands.spawn([[point, { x: 3 }]]);
+  commands.add(point, spawned, { x: 4 });
+  commands.flush();
+  const owners = world.components.getOwnersSnapshot(point)!;
+  assertEquals(world.components.getEntityData(point, owners[owners.length - 1]!), { x: 4, y: 0 }, "spawn path");
+  await world.destroy();
 });

@@ -1,4 +1,4 @@
-import type { Component } from "@/component/component.ts";
+import { type Component, isSupportedColumnConstructor } from "@/component/component.ts";
 import type { Entity } from "@/entity/entity.ts";
 import {
   CapacityError,
@@ -49,11 +49,17 @@ type ComponentInfo = {
   readonly keys: readonly string[];
   /** Field name to index in `keys`. */
   readonly keyIndex: Readonly<Record<string, number>>;
+  /** Per field: 1 if its values go through the side column (not a typed-array field), else 0. */
+  readonly side: Uint8Array;
+  /** Names of the side-column fields. */
+  readonly sideKeys: readonly string[];
   readonly isTag: boolean;
   /** Reusable data objects holding exactly the provided fields, keyed by field mask. */
-  readonly byMask: Map<number, Record<string, number>>;
+  readonly byMask: Map<number, Record<string, unknown>>;
   /** Reusable all-fields data object for components too wide for a field mask. */
-  readonly row: Record<string, number>;
+  readonly row: Record<string, unknown>;
+  /** Every reusable data object above, so side values can be released after a flush. */
+  readonly dataObjects: Record<string, unknown>[];
 };
 
 function growUint8(array: Uint8Array, size: number): Uint8Array {
@@ -93,11 +99,14 @@ function growFloat64(array: Float64Array, size: number): Float64Array {
  * {@link Schedule} owns one and flushes it at the end of each phase.
  *
  * Queuing validates components and copies data immediately, so a mistake throws at the call site and data objects
- * may be reused straight away. Steady-state queuing and flushing does not allocate.
+ * may be reused straight away. Numeric fields are copied by value and must be finite numbers. Any other schema field
+ * (one whose schema entry is not a typed-array constructor) is held by reference in a side column, validated by the
+ * world at flush, and released after the flush. Steady-state queuing and flushing does not allocate.
  *
  * At flush, commands apply in queue order exactly as the direct world calls would, except that a command whose
- * target entity is no longer active is skipped. If a command throws, the commands already applied stay applied, the
- * rest are dropped, and the error (prefixed with the failing command) is rethrown.
+ * target entity is no longer active is skipped. A flush never stops partway: if a command throws, the remaining
+ * commands still apply, and the first error (prefixed with the failing command) is rethrown once the queue is drained.
+ * Commands that target the entity of a failed spawn are skipped.
  */
 export class CommandBuffer {
   readonly #world: World;
@@ -120,6 +129,15 @@ export class CommandBuffer {
   #payloadValues: Float64Array = new Float64Array(INITIAL_PAYLOAD);
   #payloadCount = 0;
 
+  /** Values of side-column fields; a payload value is then an index into this array. */
+  #sideValues: unknown[] = [];
+  /** Side values committed by queued commands. */
+  #sideCount = 0;
+  /** Side values written by the command being queued (committed only if queuing succeeds). */
+  #sideStaged = 0;
+  /** One past the highest side slot written since the last release. */
+  #sideHigh = 0;
+
   /** Entities created by this flush's spawns, by spawn index. */
   #spawned: Int32Array = new Int32Array(0);
   #spawnCount = 0;
@@ -134,7 +152,7 @@ export class CommandBuffer {
   /** Reusable bundle arrays by length, and reusable entry tuples by position. */
   #bundles: unknown[][] = [];
   #tagTuples: [DynamicComponent][] = [];
-  #dataTuples: [DynamicComponent, Record<string, number>][] = [];
+  #dataTuples: [DynamicComponent, Record<string, unknown>][] = [];
 
   #flushing = false;
 
@@ -161,7 +179,7 @@ export class CommandBuffer {
    * @throws {CapacityError} If more entities are queued than the world can ever hold
    * @throws {NotRegisteredError} If a component is not registered in the world
    * @throws {RangeError} If a component appears twice in the bundle
-   * @throws {ComponentDataError} If data names an unknown field or a value is not a finite number
+   * @throws {ComponentDataError} If data names an unknown field or a numeric field value is not a finite number
    */
   spawn<const TBundle extends readonly ComponentBundleEntryInput[]>(
     bundle?: TBundle & ComponentBundle<TBundle>,
@@ -179,6 +197,7 @@ export class CommandBuffer {
 
     // Stage every entry before committing anything, so a rejected bundle queues nothing.
     const stamp = this.#nextBundleStamp();
+    this.#sideStaged = this.#sideCount;
     let payload = this.#payloadCount;
     for (let i = 0; i < entryCount; i++) {
       const entry = entries![i];
@@ -207,6 +226,7 @@ export class CommandBuffer {
     this.#masks[record] = 0;
     this.#recordCount += 1 + entryCount;
     this.#payloadCount = payload;
+    this.#sideCount = this.#sideStaged;
     this.#commandCount++;
     this.#spawnCount++;
     return handle as PendingEntity;
@@ -230,7 +250,7 @@ export class CommandBuffer {
    * @param entity The entity, or a pending entity from {@link spawn}
    * @param data Field values; omitted fields keep their values, or start at zero on new ownership
    * @throws {NotRegisteredError} If the component is not registered in the world
-   * @throws {ComponentDataError} If data names an unknown field or a value is not a finite number
+   * @throws {ComponentDataError} If data names an unknown field or a numeric field value is not a finite number
    * @throws {SpecError} If `entity` is not a valid handle for this world or buffer
    */
   add(component: Component<null, null>, entity: Entity | PendingEntity): void;
@@ -255,7 +275,7 @@ export class CommandBuffer {
    * @param entity The entity, or a pending entity from {@link spawn}
    * @param data Field values; omitted fields keep their values
    * @throws {NotRegisteredError} If the component is not registered in the world
-   * @throws {ComponentDataError} If the component is a tag, data names an unknown field, or a value is not finite
+   * @throws {ComponentDataError} If the component is a tag, data names an unknown field, or a numeric value is not finite
    * @throws {SpecError} If `entity` is not a valid handle for this world or buffer
    */
   set<TValue extends Exclude<SchemaOrNull, null>, TStorage extends Exclude<SchemaOrNull, null> = TValue>(
@@ -286,24 +306,38 @@ export class CommandBuffer {
 
   /**
    * Apply every queued command in order, then empty the buffer. Pending handles from before the flush become invalid.
+   *
+   * A failing command does not stop the flush: every other command still applies, then the first error is rethrown.
    * @throws {WorldStateError} If called while this buffer is flushing
-   * @throws The first error a command raises; earlier commands stay applied and later ones are dropped
+   * @throws The first error a command raised, prefixed with that command
    */
   flush(): void {
     this.#assertNotFlushing();
     if (this.#recordCount === 0) return;
     this.#flushing = true;
-    let record = 0;
+    let failed = false;
+    let failure: unknown;
     try {
       const count = this.#recordCount;
-      while (record < count) record = this.#apply(record);
-    } catch (error) {
-      this.#annotate(error, record);
-      throw error;
+      let record = 0;
+      while (record < count) {
+        const next = this.#ops[record] === OP_SPAWN ? record + 1 + this.#payloadCounts[record]! : record + 1;
+        try {
+          this.#apply(record);
+        } catch (error) {
+          if (!failed) {
+            failed = true;
+            failure = error;
+            this.#annotate(error, record);
+          }
+        }
+        record = next;
+      }
     } finally {
       this.#flushing = false;
       this.#reset();
     }
+    if (failed) throw failure;
   }
 
   /** Discard every queued command. Pending handles from before the clear become invalid. */
@@ -322,6 +356,29 @@ export class CommandBuffer {
     this.#payloadCount = 0;
     this.#spawnCount = 0;
     this.#epoch = (this.#epoch + 1) & PENDING_EPOCH_MASK;
+    if (this.#sideHigh > 0) this.#releaseSideValues();
+  }
+
+  /** Drop references to queued side values so they can be collected; the arrays keep their size for reuse. */
+  #releaseSideValues(): void {
+    const values = this.#sideValues;
+    for (let i = 0; i < this.#sideHigh; i++) values[i] = undefined;
+    this.#sideHigh = 0;
+    this.#sideCount = 0;
+    this.#sideStaged = 0;
+    const infos = this.#infos;
+    for (let i = 0; i < infos.length; i++) {
+      const info = infos[i]!;
+      const keys = info.sideKeys;
+      if (keys.length === 0) continue;
+      const objects = info.dataObjects;
+      for (let j = 0; j < objects.length; j++) {
+        const data = objects[j]!;
+        for (let k = 0; k < keys.length; k++) {
+          if (hasOwnProperty(data, keys[k]!)) data[keys[k]!] = undefined;
+        }
+      }
+    }
   }
 
   #queueData(op: number, component: DynamicComponent, entity: Entity | PendingEntity, data: unknown): void {
@@ -337,7 +394,9 @@ export class CommandBuffer {
     this.#ops[record] = op;
     this.#components[record] = index;
     this.#targets[record] = target;
+    this.#sideStaged = this.#sideCount;
     this.#payloadCount = this.#stagePayload(record, info, data, this.#payloadCount);
+    this.#sideCount = this.#sideStaged;
     this.#recordCount++;
     this.#commandCount++;
   }
@@ -373,12 +432,20 @@ export class CommandBuffer {
           throw new ComponentDataError(`Component ${info.name} does not define data field "${key}".`);
         }
         const value = values[key];
-        if (typeof value !== "number" || !Number.isFinite(value)) {
-          throw new ComponentDataError(`Component ${info.name} data field "${key}" must be a finite number.`);
-        }
         if (position >= this.#payloadFields.length) this.#growPayload(position + 1);
+        if (info.side[field] === 1) {
+          // Validated by the world at flush; queued by reference.
+          const slot = this.#sideStaged++;
+          this.#sideValues[slot] = value;
+          if (this.#sideStaged > this.#sideHigh) this.#sideHigh = this.#sideStaged;
+          this.#payloadValues[position] = slot;
+        } else {
+          if (typeof value !== "number" || !Number.isFinite(value)) {
+            throw new ComponentDataError(`Component ${info.name} data field "${key}" must be a finite number.`);
+          }
+          this.#payloadValues[position] = value;
+        }
         this.#payloadFields[position] = field;
-        this.#payloadValues[position] = value;
         position++;
         mask |= 1 << field;
       }
@@ -396,12 +463,20 @@ export class CommandBuffer {
     if (!this.#world.components.isRegistered(component)) {
       throw new NotRegisteredError(formatComponentNotRegistered(componentDisplayName(component)));
     }
-    const keys = component.schema === null ? [] : Object.keys(component.schema);
+    const schema = component.schema as Readonly<Record<string, unknown>> | null;
+    const keys = schema === null ? [] : Object.keys(schema);
     const keyIndex: Record<string, number> = Object.create(null);
-    const row: Record<string, number> = {};
+    const side = new Uint8Array(keys.length);
+    const sideKeys: string[] = [];
+    const row: Record<string, unknown> = {};
     for (let i = 0; i < keys.length; i++) {
-      keyIndex[keys[i]!] = i;
-      row[keys[i]!] = 0;
+      const key = keys[i]!;
+      keyIndex[key] = i;
+      row[key] = 0;
+      if (!isSupportedColumnConstructor(schema![key])) {
+        side[i] = 1;
+        sideKeys.push(key);
+      }
     }
     const index = this.#infos.length;
     this.#infos.push({
@@ -409,9 +484,12 @@ export class CommandBuffer {
       name: component.name,
       keys,
       keyIndex,
+      side,
+      sideKeys,
       isTag: keys.length === 0,
       byMask: new Map(),
       row,
+      dataObjects: [row],
     });
     this.#infoIndex.set(component, index);
     if (this.#bundleSeen.length <= index) this.#bundleSeen = growUint32(this.#bundleSeen, (index + 1) * 2);
@@ -477,16 +555,19 @@ export class CommandBuffer {
     return index < this.#spawned.length ? this.#spawned[index]! : -1;
   }
 
-  /** Apply the command at `record`. @returns the index of the next command record */
-  #apply(record: number): number {
+  /** Apply the command at `record`. */
+  #apply(record: number): void {
     const op = this.#ops[record]!;
-    if (op === OP_SPAWN) return this.#applySpawn(record);
+    if (op === OP_SPAWN) {
+      this.#applySpawn(record);
+      return;
+    }
     const world = this.#world;
     const entity = this.#resolve(this.#targets[record]!) as Entity;
-    if ((entity as number) < 0 || !world.entities.isActive(entity)) return record + 1;
+    if ((entity as number) < 0 || !world.entities.isActive(entity)) return;
     if (op === OP_DESTROY) {
       world.entities.destroy(entity);
-      return record + 1;
+      return;
     }
     const info = this.#infos[this.#components[record]!]!;
     const component = info.component;
@@ -496,7 +577,7 @@ export class CommandBuffer {
       world.components.setEntityData(
         component as Component<Record<string, never>>,
         entity,
-        this.#dataFor(record, info, entity, false),
+        this.#dataFor(record, info, entity, false) as Record<string, number>,
       );
     } else if (this.#payloadCounts[record] === 0) {
       world.components.addToEntity(component as Component<null, null>, entity);
@@ -504,14 +585,17 @@ export class CommandBuffer {
       world.components.addToEntity(
         component as Component<Record<string, never>>,
         entity,
-        this.#dataFor(record, info, entity, false),
+        this.#dataFor(record, info, entity, false) as Record<string, number>,
       );
     }
-    return record + 1;
   }
 
-  #applySpawn(record: number): number {
+  #applySpawn(record: number): void {
     const entryCount = this.#payloadCounts[record]!;
+    // Mark the spawn failed until it succeeds, so later commands on its pending handle are skipped.
+    const index = (-this.#targets[record]! - 1) & PENDING_INDEX_MASK;
+    if (index >= this.#spawned.length) this.#spawned = growInt32(this.#spawned, Math.max(16, (index + 1) * 2));
+    this.#spawned[index] = -1;
     const bundle = this.#bundles[entryCount] ?? (this.#bundles[entryCount] = new Array(entryCount));
     for (let i = 0; i < entryCount; i++) {
       const entry = record + 1 + i;
@@ -532,45 +616,52 @@ export class CommandBuffer {
     if (entity === undefined) {
       throw new CapacityError(`World is at capacity (${this.#world.entities.capacity} entities).`);
     }
-    const index = (-this.#targets[record]! - 1) & PENDING_INDEX_MASK;
-    if (index >= this.#spawned.length) this.#spawned = growInt32(this.#spawned, Math.max(16, (index + 1) * 2));
     this.#spawned[index] = entity;
-    return record + 1 + entryCount;
   }
 
   /**
    * Build the data object for a payload record. Narrow components reuse an object holding exactly the provided
-   * fields, so omitted fields stay omitted. Wide components fill omitted fields from the entity's current values
-   * (or zero when it is new or not an owner).
+   * fields, so omitted fields stay omitted. Wide components fill omitted fields from the entity's current values;
+   * when it is new or not an owner, omitted numeric fields are zero and omitted side fields are left out (a fresh
+   * object, so that cold case allocates).
    */
-  #dataFor(record: number, info: ComponentInfo, entity: Entity, isNew: boolean): Record<string, number> {
+  #dataFor(record: number, info: ComponentInfo, entity: Entity, isNew: boolean): Record<string, unknown> {
     const mask = this.#masks[record]!;
-    let data: Record<string, number>;
+    const start = this.#payloadStarts[record]!;
+    const end = start + this.#payloadCounts[record]!;
+    let data: Record<string, unknown>;
     if (mask === WIDE_MASK) {
-      data = info.row;
       const owned = !isNew && this.#world.components.entityHas(info.component, entity);
       if (owned) {
-        this.#world.components.readEntityDataInto(info.component, entity, data);
-      } else {
+        data = info.row;
+        this.#world.components.readEntityDataInto(info.component, entity, data as Record<string, number>);
+      } else if (info.sideKeys.length === 0) {
+        data = info.row;
         for (let i = 0; i < info.keys.length; i++) data[info.keys[i]!] = 0;
+      } else {
+        data = {};
+        for (let i = 0; i < info.keys.length; i++) {
+          if (info.side[i] === 0) data[info.keys[i]!] = 0;
+        }
       }
     } else {
       data = info.byMask.get(mask) ?? this.#createMaskedData(info, mask);
     }
-    const start = this.#payloadStarts[record]!;
-    const end = start + this.#payloadCounts[record]!;
     for (let i = start; i < end; i++) {
-      data[info.keys[this.#payloadFields[i]!]!] = this.#payloadValues[i]!;
+      const field = this.#payloadFields[i]!;
+      const value = this.#payloadValues[i]!;
+      data[info.keys[field]!] = info.side[field] === 1 ? this.#sideValues[value] : value;
     }
     return data;
   }
 
-  #createMaskedData(info: ComponentInfo, mask: number): Record<string, number> {
-    const data: Record<string, number> = {};
+  #createMaskedData(info: ComponentInfo, mask: number): Record<string, unknown> {
+    const data: Record<string, unknown> = {};
     for (let i = 0; i < info.keys.length; i++) {
       if ((mask & (1 << i)) !== 0) data[info.keys[i]!] = 0;
     }
     info.byMask.set(mask, data);
+    info.dataObjects.push(data);
     return data;
   }
 

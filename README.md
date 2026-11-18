@@ -453,6 +453,11 @@ function loop(dt: number) {
   an accumulator and runs every fixed phase, in order, once per whole step due
   (up to `maxFixedSteps`; whole steps beyond that are dropped). Other phases
   run once per `run()`.
+- **Change windows and fixed phases.** The world refreshes once per `run()`,
+  not per fixed step, so what a fixed-phase system sees in the
+  entered / exited / changed windows depends on how many steps ran that frame.
+  Don't base simulation logic in fixed phases on those windows; read them in
+  variable phases instead.
 - **Context.** Every system receives the same reused `ScheduleContext`:
   `dt`, `time`, `tick`, `fixedTick`, `alpha` (leftover fraction of a step, for
   interpolation), `phase`, `fixed`, `world`, and `commands`. Declare
@@ -468,8 +473,12 @@ function loop(dt: number) {
   `run()` throw `WorldStateError`: `await world.onReady()` after adding.
 - **Errors.** If a system throws, pending commands are discarded, the world
   is refreshed, and the error is rethrown. Callbacks run synchronously.
-- **Rollback.** The schedule's clock and pending commands are outside
-  rollback points. Restore them yourself if you resimulate.
+- **Saves and rollback.** Supported between `run()` calls only. The
+  schedule's clock is not part of a world save or rollback point: keep
+  `schedule.getClock()` (plain data) alongside it, and after restoring call
+  `schedule.setClock(clock)`. The schedule flushes its commands every phase,
+  so its buffer is empty between runs; call `commands.clear()` on any buffer
+  you fill outside a run to drop commands from the abandoned timeline.
 
 **Command buffers** queue structural changes so you can mutate while
 iterating a borrowed view. A `Schedule` flushes its buffer (`ctx.commands`)
@@ -493,9 +502,13 @@ reused straight away and bad data throws at the call site. Flushing applies
 each command as the direct call would (`createWith`, `destroy`,
 `addToEntity`, `setEntityData`, `removeFromEntity`), except that commands for
 entities no longer active are skipped. `set` on an active entity that has lost
-the component still throws, as the direct call does. If a command throws, the
-ones before it stay applied, the rest are dropped, and the error names the
-failing command. Steady-state queuing and flushing does not allocate.
+the component still throws, as the direct call does. A flush never stops
+partway: if a command throws, every other command still applies, then the first
+error is rethrown, naming the failing command. Commands on the entity of a
+failed spawn are skipped. Numeric fields must be finite numbers when queued;
+any other schema field is held by reference, validated by the world at flush,
+and released afterwards. `size` counts queued commands. Steady-state queuing and
+flushing does not allocate.
 
 ### :rewind: Checkpoints, rollback, schema
 

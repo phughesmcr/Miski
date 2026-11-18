@@ -2,6 +2,7 @@ import { AlreadyRegisteredError, SpecError, WorldStateError } from "@/errors.ts"
 import { System } from "@/system/system.ts";
 import type { ComponentMap } from "@/types/component.ts";
 import type {
+  ScheduleClock,
   ScheduleContext,
   SchedulePhaseSpec,
   ScheduleSpec,
@@ -177,6 +178,49 @@ export class Schedule {
   /** Seconds accumulated toward the next fixed step. */
   get accumulator(): number {
     return this.#accumulator;
+  }
+
+  /**
+   * A copy of the schedule's clock, as plain data. Save it with a world save or rollback point and pass it to
+   * {@link setClock} when restoring, so the schedule resumes exactly where it was.
+   */
+  getClock(): ScheduleClock {
+    return {
+      tick: this.#context.tick,
+      fixedTick: this.#context.fixedTick,
+      elapsed: this.#elapsed,
+      accumulator: this.#accumulator,
+    };
+  }
+
+  /**
+   * Restore a clock from {@link getClock}. Call it between runs, not from a system.
+   * @throws {RangeError} If a value is negative or not finite, or `tick` / `fixedTick` is not an integer
+   * @throws {WorldStateError} If called during `run()`
+   */
+  setClock(clock: ScheduleClock): void {
+    if (this.#running) throw new WorldStateError("Schedule.setClock() cannot be called while the schedule is running");
+    if (!isObject(clock)) throw new RangeError("Schedule clock must be an object");
+    const { tick, fixedTick, elapsed, accumulator } = clock;
+    if (!Number.isSafeInteger(tick) || tick < 0) {
+      throw new RangeError(`Schedule clock tick must be an integer >= 0, got ${String(tick)}`);
+    }
+    if (!Number.isSafeInteger(fixedTick) || fixedTick < 0) {
+      throw new RangeError(`Schedule clock fixedTick must be an integer >= 0, got ${String(fixedTick)}`);
+    }
+    if (typeof elapsed !== "number" || !Number.isFinite(elapsed) || elapsed < 0) {
+      throw new RangeError(`Schedule clock elapsed must be a finite number >= 0, got ${String(elapsed)}`);
+    }
+    if (typeof accumulator !== "number" || !Number.isFinite(accumulator) || accumulator < 0) {
+      throw new RangeError(`Schedule clock accumulator must be a finite number >= 0, got ${String(accumulator)}`);
+    }
+    const context = this.#context;
+    context.tick = tick;
+    context.fixedTick = fixedTick;
+    context.time = elapsed;
+    context.alpha = this.#fixedStart === -1 ? 0 : (accumulator % this.#fixedStep) / this.#fixedStep;
+    this.#elapsed = elapsed;
+    this.#accumulator = accumulator;
   }
 
   /** The context passed to systems (reused across calls; read-only to callers). */
