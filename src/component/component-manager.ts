@@ -28,6 +28,7 @@ import {
   type ComponentManagerSnapshot,
   type ComponentSnapshotRestoreHooks,
   restoreComponentManagerSnapshot,
+  type SaveableComponentState,
 } from "./component-snapshot.ts";
 import {
   type ComponentStorageWriteState,
@@ -1232,6 +1233,11 @@ export class ComponentManager {
   /** Capture a full ownership + column snapshot for rollback. */
   captureSnapshot(): ComponentManagerSnapshot {
     return captureComponentManagerSnapshot(this.#states);
+  }
+
+  /** Component states in registration (instance id) order, read by world saves. @internal */
+  get saveStates(): readonly SaveableComponentState[] {
+    return this.#states;
   }
 
   /** Restore a full ownership + column snapshot for rollback. */

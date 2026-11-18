@@ -23,10 +23,12 @@ Runtime tests live in `*.test.ts` files and run via `deno test` (see `deno.json`
 | `prefab_field_types.test.ts` | Prefabs with `field.*` columns: logical defaults, null-only entity refs, per-instance `create()` / `clone`, rejection of shared objects, throwing hooks |
 | `relations_cross.test.ts` | Relations with prefabs and field types: relation entries rejected in prefabs and overrides, numeric-only pair data, rollback and checkpoints restoring side columns and pairs together |
 | `scheduler_cross.test.ts` | Command buffers with field types, relations and prefabs: every field kind at flush, dead entity refs written as null, drain-then-rethrow, relation tags rejected |
+| `serialization_cross.test.ts` | World saves with field types and relations: bool/enum/entity round-trips, field tags in layouts, label-order and kind mismatches, JSON view, unsupported worlds rejected on every entry point |
 | `relations.test.ts` | Relations: pairs, order, data, exclusive/acyclic, cleanup and cascades, traversal, guards, checkpoints, rollback, `createEcsWorld` |
 | `relations_model.test.ts` | Seeded random relation operations (including cascades and rollback) checked against a plain-array model |
 | `schedule.test.ts` | `Schedule`: phase and constraint order, cycles, fixed timestep, context, run conditions, refresh and error semantics, per-phase command flushes, clock save/restore with rollback |
 | `command_buffer.test.ts` | `CommandBuffer`: deferred spawn/destroy/add/set/remove, pending handles, partial payloads, inactive targets, drain-on-error flushes, wide and non-numeric fields, growth |
+| `world_save.test.ts` | Whole-world saves: twin-world load differential, `saveWorldInto`, header/layout, mismatch and migrate, corruption fuzz, JSON round-trip, no aliasing |
 | `release_integrity.test.ts` | Runtime, `deno.json`, README install snippet, and CHANGELOG version consistency (reads `README.md` and `CHANGELOG.md`; `deno task test` grants `--allow-read` for just those files) |
 
 ## Shared fixtures

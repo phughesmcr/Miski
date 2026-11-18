@@ -33,6 +33,9 @@
   over the defaults and may add components. An instance is indistinguishable from `createWith` with the
   equivalent bundle, and steady-state instantiation allocates nothing. `EcsWorld` gains `prefab`,
   `instantiate` and `instantiateMany` for named specs.
+- World saves record `field.*` hash tags (`bool`, `entity`, `enum:[...]`) as field types, so the layout check
+  catches kind changes and reordered enum labels. Worlds with string or object fields, or with relations, are
+  rejected by every save and load entry point until saves support them.
 - Command buffers carry `field.*` values through their side column. A queued entity-ref value whose target died
   before the flush is written as `null` instead of failing the command; direct guarded writes still reject dead
   handles.
@@ -73,6 +76,17 @@
   the flush: the rest still apply and the first error is rethrown. Non-numeric
   schema fields are queued by reference and validated at flush. A `Schedule`
   flushes its buffer at the end of each phase.
+- Add whole-world saves. `saveWorld` / `saveWorldInto` (no allocation with a
+  reused buffer) write entity handles and generations, allocator state,
+  component ownership, values and changed lists, archetype registry order and
+  the open transition window. `loadWorld` replaces an initialized world's state
+  with a save so that it behaves exactly like the saved world, including future
+  entity handles and every iteration order. Loads validate the whole save
+  first and throw the new `WorldSaveError` without changing the world. A save
+  loads only into a world with the same layout; `loadWorld`'s `migrate` option
+  converts a save written with a different layout. Also add
+  `measureWorldSave`, `readWorldSaveHeader`, `describeWorldSaveLayout` and a
+  lossless JSON view (`worldSaveToJSON` / `worldSaveFromJSON`).
 - Reuse entity slots next-fit instead of last-freed-first. A destroyed entity's
   slot is reissued only after the allocator has swept past every other free
   slot, so a held stale handle no longer comes back to life after 32,768

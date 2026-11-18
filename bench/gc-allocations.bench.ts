@@ -2,7 +2,19 @@
 /// <reference lib="dom" />
 // deno-lint-ignore-file no-console
 
-import { CommandBuffer, Component, entityIndex, field, Prefab, Query, World } from "../mod.ts";
+import {
+  CommandBuffer,
+  Component,
+  entityIndex,
+  field,
+  loadWorld,
+  measureWorldSave,
+  Prefab,
+  Query,
+  saveWorld,
+  saveWorldInto,
+  World,
+} from "../mod.ts";
 import type { ComponentInstance, Entity } from "../mod.ts";
 import {
   countEntities,
@@ -72,6 +84,9 @@ const QUERY_TRANSITION_TRACKING_BUDGET_BYTES_PER_ITER = 1_800;
 const WIDE_ARCHETYPE_TRANSITION_BUDGET_BYTES_PER_ITER = 1_100;
 // A scheduled frame runs the same work as the manual argCount frame, so it shares that budget.
 const SCHEDULED_FRAME_BUDGET_BYTES_PER_ITER = FIXED_ARITY_FRAME_BUDGET_BYTES_PER_ITER;
+// Load validates into cached scratch and builds one small view per saved array: O(components + archetypes), not
+// O(entities). Measured about 400 B/iter on the mixed 8K world.
+const WORLD_LOAD_BUDGET_BYTES_PER_ITER = 1_000;
 const checkMode = Deno.args.includes("--check");
 
 const gc = (globalThis as { gc?: GcFn }).gc;
@@ -242,6 +257,9 @@ function budgeted(name: string, iterations: number, fn: () => void): Scenario {
 }
 
 const mixed = await populateMixedWorld(MEDIUM_CAPACITY);
+// Serialization: a reused caller buffer and a self-load over the mixed 8K world.
+const saveTarget = new Uint8Array(measureWorldSave(mixed.world) + 1024);
+const savedMixed = saveWorld(mixed.world);
 const movement = await populateMovementWorld(MEDIUM_CAPACITY);
 const fixedArityMovement = await populateMovementWorld(MEDIUM_CAPACITY, undefined, 1);
 const lifecycle = await populateSparseLifecycleWorld(MEDIUM_CAPACITY);
@@ -1032,6 +1050,22 @@ const scenarios: Scenario[] = [
     entitySink ^= countEntities(rel.world.relations.getChanged(rel.childOf));
     rel.world.refresh();
   }),
+  {
+    ...budgeted("saveWorldInto 8K mixed world - reused buffer", 4_000, () => {
+      numericSink ^= saveWorldInto(mixed.world, saveTarget);
+    }),
+    // Let the writer reach its optimized tier first; earlier tiers allocate feedback and code once.
+    warmupIterations: 30_000,
+  },
+  {
+    name: "loadWorld 8K mixed world - self-load",
+    iterations: 2_000,
+    warmupIterations: 500,
+    maxSteadyStateBeforeGcBytesPerIter: WORLD_LOAD_BUDGET_BYTES_PER_ITER,
+    fn: () => {
+      loadWorld(mixed.world, savedMixed);
+    },
+  },
 ];
 
 console.log("Miski ECS GC allocation pressure benchmark");

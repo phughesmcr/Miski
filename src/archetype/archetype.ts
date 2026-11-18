@@ -335,6 +335,14 @@ export class Archetype {
   }
 
   /**
+   * Live dense population in iteration order; only the first {@link getPopulationCount} entries are valid.
+   * @internal
+   */
+  get populationSlots(): EntityArray {
+    return this.#entityList;
+  }
+
+  /**
    * Copy the dense population in iteration order, for rollback.
    * @internal
    */

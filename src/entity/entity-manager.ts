@@ -228,6 +228,56 @@ export class EntityManager {
     );
   }
 
+  /** Allocation cursor: the slot where the next acquisition starts searching. @internal */
+  get allocationCursor(): number {
+    return this.#slots.cursor;
+  }
+
+  /** Live occupancy bitmap words; read-only by contract. @internal */
+  get occupancyWords(): Uint32Array {
+    return this.#slots.words;
+  }
+
+  /** Live per-slot generations (unmasked); read-only by contract. @internal */
+  get generations(): Uint32Array {
+    return this.#generation;
+  }
+
+  /** Live per-slot next allocation generations (unmasked); read-only by contract. @internal */
+  get nextGenerations(): Uint32Array {
+    return this.#nextGeneration;
+  }
+
+  /**
+   * Replace identity state with a validated world save.
+   * Free slots always hold their next generation, so only live slots need a separate generation.
+   * @param occupancy - Occupancy bitmap words
+   * @param cursor - Allocation cursor
+   * @param nextGeneration - Next allocation generation of every slot
+   * @param liveGeneration - Generations of occupied slots, in ascending slot order
+   * @internal
+   */
+  restoreSaved(
+    occupancy: Uint32Array,
+    cursor: number,
+    nextGeneration: Uint32Array,
+    liveGeneration: Uint32Array,
+  ): void {
+    this.#slots.restore(occupancy, cursor);
+    this.#nextGeneration.set(nextGeneration);
+    const generation = this.#generation;
+    generation.set(nextGeneration);
+    let count = 0;
+    for (let word = 0; word < occupancy.length; word++) {
+      let bits = occupancy[word]!;
+      while (bits !== 0) {
+        const slot = (word << 5) + (31 - Math.clz32(bits & -bits));
+        generation[slot] = liveGeneration[count++]!;
+        bits &= bits - 1;
+      }
+    }
+  }
+
   /**
    * Capture reversible identity state: occupancy, the pool's allocation cursor, and the generations of live slots.
    * Free slots need no generation: restore retires them at their (monotonic) next generation.

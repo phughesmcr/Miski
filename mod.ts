@@ -7,7 +7,7 @@
  * Public surface tiers:
  * - **Core** - World, Component, Query, System, entity handles, errors
  * - **Hot-path** - dense `queryList`, direct `.storage.partitions` writes, `frame`
- * - **Tooling** - `createEcsWorld`, schema hash, checkpoints, rollback, canonicalize
+ * - **Tooling** - `createEcsWorld`, schema hash, checkpoints, rollback, world saves, canonicalize
  * - **Scheduling** - `Schedule` (phases, ordering, fixed timestep), `CommandBuffer`
  *
  * Prefer `.storage.partitions` for SoA access (`.partitions` is an alias).
@@ -321,6 +321,36 @@
  * // mutate...
  * restoreWorldRollbackPoint(game.world, point);
  * ```
+ *
+ * @example World saves and JSON documents
+ * ```ts
+ * import {
+ *   Component,
+ *   loadWorld,
+ *   saveWorld,
+ *   World,
+ *   worldSaveFromJSON,
+ *   worldSaveToJSON,
+ * } from "@phughesmcr/miski";
+ *
+ * const position = new Component({ name: "position", schema: { x: Float32Array, y: Float32Array } });
+ * const world = new World({ capacity: 256, components: [position] });
+ * await world.init();
+ * const entity = world.entities.createOrThrow();
+ * world.components.addToEntity(position, entity, { x: 1, y: 2 });
+ *
+ * // A save holds entities, generations, ownership, values, archetype order and the open window.
+ * const base = saveWorld(world);
+ * world.components.setEntityData(position, entity, { x: 5, y: 6 });
+ * const next = saveWorld(world);
+ *
+ * // Load replaces the world's state with the save.
+ * loadWorld(world, base);
+ *
+ * // A lossless JSON view of the same save.
+ * const text = JSON.stringify(worldSaveToJSON(next));
+ * loadWorld(world, worldSaveFromJSON(JSON.parse(text)));
+ * ```
  */
 
 // --- Core ---
@@ -400,6 +430,20 @@ export type {
   StringField,
 } from "@/schema/field.ts";
 export type { RelationMap, RelationOptions, RelationsFromMap } from "@/world/ecs-world.ts";
+export {
+  describeWorldSaveLayout,
+  loadWorld,
+  measureWorldSave,
+  readWorldSaveHeader,
+  saveWorld,
+  saveWorldInto,
+} from "@/serialization/world-save.ts";
+export { worldSaveFromJSON, worldSaveToJSON } from "@/serialization/document.ts";
+export { WorldSaveError } from "@/serialization/format.ts";
+export type { WorldSaveHeader, WorldSaveLoadOptions } from "@/serialization/world-save.ts";
+export type { WorldSaveComponentDocument, WorldSaveDocument, WorldSaveNumber } from "@/serialization/document.ts";
+export type { WorldSaveComponentLayout, WorldSaveField, WorldSaveLayout } from "@/serialization/layout.ts";
+export type { WorldSaveFieldType, WorldSaveNumericFieldType } from "@/serialization/format.ts";
 
 export type {
   ComposedQueryComponents,

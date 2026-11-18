@@ -653,6 +653,111 @@ export class ArchetypeManager {
     this.#window.restore(snapshot.window);
     this.#membershipRebuildRequired = true;
   }
+  /** Number of registered archetypes. @internal */
+  get archetypeCount(): number {
+    return this.#archetypeCount;
+  }
+
+  /** The archetype at a registry index below {@link archetypeCount}. @internal */
+  archetypeAt(index: number): Archetype {
+    return this.#archetypes[index]!;
+  }
+
+  /**
+   * Replace archetype state with a validated world save.
+   *
+   * The longest prefix of the current registry whose component sets match the save is kept, with its cached edges;
+   * the rest is dropped and re-registered in saved order. Registry order, query archetype order and per-archetype
+   * iteration order then all match the saved world, and repeated loads of similar saves reuse their archetypes.
+   * Entity generations must already be restored, because populations pack their handles.
+   * @param instances - Component instances by instance id
+   * @param bits - Component bitsets of every saved archetype, `wordsPerSet` words each, in registry order
+   * @param wordsPerSet - Words per bitset
+   * @param populations - Dense population of every saved archetype, in iteration order
+   * @param window - Touched slots in first-touch order, origin registry indices plus one (0 = none), and handles
+   * @internal
+   */
+  restoreSaved(
+    instances: readonly DynamicComponentInstance[],
+    bits: Uint32Array,
+    wordsPerSet: number,
+    populations: readonly EntityArray[],
+    window: {
+      readonly slots: ArrayLike<number>;
+      readonly origins: ArrayLike<number>;
+      readonly handles: ArrayLike<number>;
+    },
+  ): void {
+    this.#tracker.clearPopulated();
+    this.#tracker.clearEmptied();
+    for (let i = 0; i < this.#archetypeCount; i++) this.#archetypes[i]!.forgetSlots(this.entityArchetypes);
+
+    const count = populations.length;
+    const limit = Math.min(count, this.#archetypeCount);
+    let keep = 0;
+    while (keep < limit && sameWords(this.#archetypes[keep]!.bitfield.buffer, bits, keep * wordsPerSet, wordsPerSet)) {
+      keep++;
+    }
+    if (keep < this.#archetypeCount) {
+      for (let i = keep; i < this.#archetypeCount; i++) {
+        this.registry.delete(this.#archetypes[i]!.id);
+        this.#archetypes[i] = undefined as unknown as Archetype;
+      }
+      for (let i = 0; i < keep; i++) {
+        const archetype = this.#archetypes[i]!;
+        pruneEdges(archetype.addTransitions, keep);
+        pruneEdges(archetype.removeTransitions, keep);
+      }
+      this.#archetypeCount = keep;
+    }
+    const componentCount = this.#componentCount;
+    for (let i = keep; i < count; i++) {
+      const bitfield = new BooleanArray(componentCount);
+      const components: DynamicComponentInstance[] = [];
+      const offset = i * wordsPerSet;
+      for (let id = 0; id < componentCount; id++) {
+        if (((bits[offset + (id >>> 5)]! >>> (id & 31)) & 1) === 0) continue;
+        bitfield.set(id, true);
+        components.push(instances[id]!);
+      }
+      const archetype = new Archetype(
+        this.#capacity,
+        components,
+        bitfield,
+        this.#packSlot,
+        componentCount,
+        this.#positions,
+      );
+      this.#registerArchetype(archetype.id, archetype);
+    }
+
+    for (let i = 0; i < count; i++) {
+      const archetype = this.#archetypes[i]!;
+      const population = populations[i]!;
+      if (population.length === 0) {
+        archetype.clearPopulation();
+        continue;
+      }
+      archetype.restorePopulation(population);
+      for (let p = 0; p < population.length; p++) this.entityArchetypes[population[p]!] = archetype;
+    }
+
+    const touched = window.slots.length;
+    const origins = new Array<Archetype | undefined>(touched);
+    for (let i = 0; i < touched; i++) {
+      const origin = window.origins[i]!;
+      origins[i] = origin === 0 ? undefined : this.#archetypes[origin - 1];
+    }
+    this.#window.restore({ slots: window.slots, origins, handles: window.handles });
+    this.#membershipRebuildRequired = true;
+  }
+}
+
+/** Whether a bitfield's words equal `length` words of `bits` starting at `offset`. */
+function sameWords(words: Uint32Array, bits: Uint32Array, offset: number, length: number): boolean {
+  if (words.length !== length) return false;
+  for (let i = 0; i < length; i++) if (words[i] !== bits[offset + i]) return false;
+  return true;
 }
 
 /** Forget cached transition edges that lead to archetypes dropped by a rollback. */

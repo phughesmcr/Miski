@@ -56,6 +56,7 @@ for modern JavaScript — no leftovers.
 - Component-subset checkpoints and speculative world rollback
 - `Schedule`: phases, `before` / `after` ordering, fixed timestep, run conditions
 - `CommandBuffer`: deferred spawn / destroy / add / set / remove, applied per phase
+- Deterministic whole-world saves, binary or lossless JSON
 - Schema compile + stable FNV hash for tooling and saves
 - :page_with_curl: MIT licensed — share freely, keep the wrappers on
 
@@ -712,6 +713,68 @@ for schemas mixing uppercase and lowercase names before upgrading.
 
 `world.queryRevision(query)` bumps when any component in the query is written —
 a little ding every time the batter changes.
+
+### :floppy_disk: World saves
+
+Bottle the whole jar. Pour it back exactly.
+
+```ts
+import {
+  loadWorld,
+  measureWorldSave,
+  saveWorld,
+  saveWorldInto,
+  worldSaveFromJSON,
+  worldSaveToJSON,
+} from "@phughesmcr/miski";
+
+const bytes = saveWorld(world); // exact-size Uint8Array
+loadWorld(otherWorld, bytes); // same layout: replaces otherWorld's state
+
+const buffer = new Uint8Array(measureWorldSave(world) * 2);
+const length = saveWorldInto(world, buffer); // no allocation with a reused buffer
+
+const text = JSON.stringify(worldSaveToJSON(bytes)); // lossless JSON view
+loadWorld(otherWorld, worldSaveFromJSON(JSON.parse(text)));
+```
+
+A save holds entity handles with their generations and allocator state,
+component ownership, values and changed lists, the archetype registry order, and
+the open entered / exited window. A loaded world behaves exactly like the saved
+one: the same handles stay valid, the next created entities get the same
+handles, and queries, owners and changes iterate in the same order. Revision
+tokens move forward on load, as after rollback.
+
+A save covers ECS state only. Systems, schedules and their clocks are not part
+of it: the target keeps its own systems, and anything outside the world (a
+scheduler's tick and accumulator, pending command buffers, your own game state)
+must be stored alongside the save. Save and load between frames, not in the
+middle of one.
+
+A save loads only into an initialized world, outside a rollback scope, with the
+same layout: capacity, and the same components in the same order with the same
+names, caps, fields and storage types. `describeWorldSaveLayout(world)` and
+`readWorldSaveHeader(bytes)` show both sides. On a mismatch, `loadWorld` throws
+`WorldSaveError` naming the first difference, unless you pass a migration:
+
+```ts
+loadWorld(world, oldBytes, {
+  migrate: (document, target) => ({ ...document, layout: target /* rename, fill, drop... */ }),
+});
+```
+
+`migrate` runs only on a mismatch and receives the save as a JSON document and
+the world's layout. Its result is validated like any other save. Every load is
+validated in full before anything changes, so a corrupt, truncated or
+incompatible save leaves the world untouched. Saves are little-endian. Raw
+writes to slots that do not own a component are not saved; NaN payload bits do
+not survive the JSON view.
+
+`field.bool()`, `field.enum()` and `field.entity()` columns are saved, and the
+layout records their kind and enum labels, so a bool never loads into a `u8`
+field and reordered labels are rejected. Worlds with `field.string()` or
+`field.object()` fields, or with relations, cannot be saved or loaded yet: every
+save entry point throws `WorldSaveError` rather than writing a partial save.
 
 ---
 

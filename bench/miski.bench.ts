@@ -5,10 +5,16 @@ import {
   Component,
   entityIndex,
   field,
+  loadWorld,
+  measureWorldSave,
   Prefab,
   Query,
   restoreWorldRollbackPoint,
+  saveWorld,
+  saveWorldInto,
   World,
+  worldSaveFromJSON,
+  worldSaveToJSON,
 } from "../mod.ts";
 import type { ComponentInstance, Entity } from "../mod.ts";
 import {
@@ -1213,6 +1219,48 @@ Deno.bench({
     }
     relations.world.entities.destroy(parent);
     relations.world.refresh();
+  },
+});
+
+// --- Serialization ---
+const saveSource = await populateMixedWorld(MEDIUM_CAPACITY);
+const saveLoadTarget = await populateMixedWorld(MEDIUM_CAPACITY);
+const saveBuffer = new Uint8Array(measureWorldSave(saveSource.world) + 1024);
+const savedBytes = saveWorld(saveSource.world);
+const savedSmall = saveWorld((await populateMixedWorld(SMALL_CAPACITY)).world);
+const savedDocument = worldSaveToJSON(savedSmall);
+
+Deno.bench({
+  name: "saveWorldInto 8K mixed world - reused buffer",
+  group: "serialization",
+  baseline: true,
+  fn: () => {
+    numericSink ^= saveWorldInto(saveSource.world, saveBuffer);
+  },
+});
+
+Deno.bench({
+  name: "saveWorld 8K mixed world - fresh buffer",
+  group: "serialization",
+  fn: () => {
+    objectSink = saveWorld(saveSource.world);
+  },
+});
+
+Deno.bench({
+  name: "loadWorld 8K mixed world into a populated world",
+  group: "serialization",
+  fn: () => {
+    loadWorld(saveLoadTarget.world, savedBytes);
+  },
+});
+
+Deno.bench({
+  name: "worldSaveToJSON + worldSaveFromJSON 1K mixed world",
+  group: "serialization",
+  fn: () => {
+    objectSink = worldSaveFromJSON(worldSaveToJSON(savedSmall));
+    objectSink = savedDocument;
   },
 });
 

@@ -44,6 +44,7 @@ import {
   restoreRollbackState,
   validateRollbackState,
 } from "@/rollback/rollback.ts";
+import { type WorldSaveHost, worldSaveHost } from "@/serialization/host.ts";
 import { constructWorldAPIs } from "./world-api-facade.ts";
 import { noop } from "@/utils.ts";
 import { assertWorldState, isValidWorldSpec } from "./utils.ts";
@@ -99,6 +100,9 @@ export class World {
 
   /** Active rollback shell, if any */
   #rollbackState: WorldRollbackState | undefined;
+
+  /** Manager access for world saves, created on first use */
+  #saveHost: WorldSaveHost | undefined;
 
   /** The World's current state */
   #state: WorldState;
@@ -703,6 +707,27 @@ export class World {
     if (state.relations !== undefined) this.#relationManager?.restoreState(state.relations);
     this.#queryManager.invalidate();
     this.#entityRevision = ++this.#revision;
+  }
+
+  /** @internal */
+  [worldSaveHost](): WorldSaveHost {
+    return this.#saveHost ??= {
+      capacity: this.#entityManager.capacity,
+      entities: this.#entityManager,
+      components: this.#componentManager,
+      archetypes: this.#archetypeManager,
+      assertSaveReady: () => this.#assertInitialized(),
+      assertLoadReady: () => {
+        this.#assertInitialized();
+        if (this.#rollbackState !== undefined) {
+          throw new WorldStateError("Cannot load a world save while a rollback scope is active.");
+        }
+      },
+      finishLoad: () => {
+        this.#queryManager.invalidate();
+        this.#entityRevision = ++this.#revision;
+      },
+    };
   }
 }
 

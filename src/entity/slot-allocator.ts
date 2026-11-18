@@ -85,6 +85,11 @@ export class SlotAllocator {
     return this.#bits.truthyIndicesInto(out, start, end);
   }
 
+  /** Live occupancy bitmap words (1 = occupied); callers must not write through this view. */
+  get words(): Uint32Array {
+    return this.#words;
+  }
+
   /** @returns a copy of the occupancy bitmap words */
   toUint32Array(): Uint32Array {
     return this.#words.slice();
