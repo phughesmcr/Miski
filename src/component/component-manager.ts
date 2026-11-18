@@ -33,11 +33,13 @@ import {
   type ComponentStorageWriteState,
   prepareEntityStorageData,
   writeEntityStorageData,
+  writeEntityStorageRow,
 } from "./component-storage-write.ts";
 import {
   codecDefault,
   createFieldCodec,
   decodeFieldValue,
+  encodeFieldValue,
   type FieldCodec,
   isSideField,
   sideDefault,
@@ -46,6 +48,14 @@ import {
 import { StorageProxy } from "./storage-proxy.ts";
 
 export type { ComponentManagerSnapshot };
+
+/** A template row compiled for one world by {@link ComponentManager.compileTemplateRow}. @internal */
+export type ComponentTemplateRow = {
+  /** Raw typed-column values parallel to the component's storage keys. */
+  readonly typed: readonly number[];
+  /** Side-column values parallel to the side keys; `undefined` takes the per-owner default. */
+  readonly side: readonly unknown[];
+};
 
 /** Initial length of a component's owner/changed lists; they double on demand up to the list capacity. */
 const INITIAL_LIST_LENGTH = 16;
@@ -632,6 +642,101 @@ export class ComponentManager {
     if (stagesSide) this.#clearSideInitial(state);
 
     return ownershipChanged;
+  }
+
+  /**
+   * Add a registered component instance to a newly created entity, filling its row from template defaults.
+   *
+   * Ownership, capped-row reservation, revision and changed tracking follow {@link addInstanceToEntity}; only the
+   * value source differs. Fields that `data` provides take the canonical values staged by
+   * {@link validateInstanceData}; every other field takes its template default. Side (string / object) defaults are
+   * copied through the field's `clone` hook; an absent object default calls `create()` for each new owner.
+   *
+   * @param instance - The registered component instance
+   * @param slot - The new entity's storage slot (must not own the instance yet)
+   * @param row - A row compiled by {@link compileTemplateRow}, or `null` for tags
+   * @param data - Optional validated override payload
+   * @returns `true` if the component ownership changed
+   * @internal
+   */
+  addInstanceWithRow(
+    instance: DynamicComponentInstance,
+    slot: number,
+    row: ComponentTemplateRow | null,
+    data: Record<string, unknown> | undefined,
+  ): boolean {
+    const state = this.#states[instance.id];
+    if (state === undefined) return false;
+    const owners = this.#ensureOwnershipState(state);
+    if (owners[slot] === 1) return false;
+    const maxEntities = state.maxEntities;
+    if (maxEntities !== 0 && state.ownerCount >= maxEntities) {
+      throw new RangeError(`Component "${instance.type.name}" can only be added to ${maxEntities} entities.`);
+    }
+    const sideKeys = state.sideKeys;
+    const stagesSide = row !== null && sideKeys.length > 0;
+    // Run user hooks before ownership changes, so a throwing `create()` / `clone()` leaves the component untouched.
+    if (stagesSide) this.#stageTemplateSide(state, row.side, data);
+    if (state.usesSparseStorage) this.#reserveSparseSlot(state, owners, slot);
+    this.#acquireOwnership(state, owners, slot);
+    this.#bumpRevision(state);
+    if (instance.storage !== null && row !== null) {
+      writeEntityStorageRow(state, row.typed, data, slot);
+      if (stagesSide) {
+        const sideColumns = state.sideColumns;
+        for (let i = 0; i < sideKeys.length; i++) {
+          sideColumns[i]![slot] = data !== undefined && hasOwnProperty(data, sideKeys[i]!) ?
+            state.sideScratch[i] :
+            state.sideInitial[i];
+        }
+      }
+      this.#markChanged(state, slot);
+    }
+    if (stagesSide) this.#clearSideInitial(state);
+    return true;
+  }
+
+  /** Stage a new owner's side values from a template: overrides skip, given values clone, absent values `create()`. */
+  #stageTemplateSide(
+    state: ComponentState,
+    template: readonly unknown[],
+    data: Record<string, unknown> | undefined,
+  ): void {
+    const fields = state.sideFields;
+    const initial = state.sideInitial;
+    for (let i = 0; i < fields.length; i++) {
+      if (data !== undefined && hasOwnProperty(data, state.sideKeys[i]!)) continue;
+      const property = fields[i]!;
+      const value = template[i];
+      if (value !== undefined) {
+        initial[i] = cloneFieldValue(property, value);
+        continue;
+      }
+      const create = property.kind === "object" ? property.create : undefined;
+      initial[i] = create === undefined ? sideDefault(property) : create();
+    }
+  }
+
+  /**
+   * Compile template defaults (logical values keyed by field name) against this world's column layout.
+   * @param values - Canonical logical values; absent side fields take their per-owner default
+   * @returns raw typed-column values parallel to the storage keys, and side values (`undefined` when absent)
+   * @internal
+   */
+  compileTemplateRow(
+    instance: DynamicComponentInstance,
+    values: Readonly<Record<string, unknown>>,
+  ): ComponentTemplateRow {
+    const state = this.#states[instance.id]!;
+    const name = instance.type.name;
+    const typed = state.storageKeys.map((key, i) => {
+      const codec = state.storageCodecs[i]!;
+      const value = values[key];
+      if (codec === null) return value as number;
+      return encodeFieldValue(codec, name, key, value, state.isEntityActive);
+    });
+    const side = state.sideKeys.map((key) => hasOwnProperty(values, key) ? values[key] : undefined);
+    return { typed, side };
   }
 
   /**

@@ -105,3 +105,22 @@ export function writeEntityStorageData(
   }
   return changed;
 }
+
+/**
+ * Commit a full row for a new owner: staged canonical values for the fields `data` provides, `row` defaults for
+ * the rest. `row` is parallel to `storageKeys` and already canonical; each cell is copied as-is, whatever its type.
+ */
+export function writeEntityStorageRow(
+  state: ComponentStorageWriteState,
+  row: ArrayLike<unknown>,
+  data: Record<string, unknown> | undefined,
+  slot: number,
+): void {
+  const keys = state.storageKeys;
+  const columns = state.storageColumns as unknown as { [slot: number]: unknown }[];
+  for (let i = 0; i < keys.length; i++) {
+    columns[i]![slot] = data !== undefined && hasOwnProperty(data, keys[i]!) ?
+      state.coercionScratchColumns[i]![0] :
+      row[i];
+  }
+}

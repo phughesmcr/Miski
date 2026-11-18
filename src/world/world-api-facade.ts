@@ -19,6 +19,8 @@ import type {
   WorldSystemAPI,
 } from "@/types/world-api.ts";
 import type { WorldMutations } from "./world-mutations.ts";
+import type { PrefabSpawner } from "@/prefab/prefab-spawner.ts";
+import type { Prefab } from "@/prefab/prefab.ts";
 
 type ComponentReference<
   TValue extends SchemaOrNull,
@@ -53,6 +55,7 @@ export type WorldApiHost = {
   readonly queryManager: QueryManager;
   readonly systemManager: SystemManager;
   readonly mutations: WorldApiMutations;
+  readonly prefabs: PrefabSpawner;
 
   getComponentEntityData<TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
     component: ComponentReference<TValue, TStorage>,
@@ -254,6 +257,22 @@ function constructEntityAPI(host: WorldApiHost): WorldEntityAPI {
     ) => {
       host.assertInitialized();
       return host.mutations.createEntityWithBundle(bundle, true)!;
+    },
+    instantiate: (prefab: Prefab, overrides?: readonly ComponentBundleEntryInput[]) => {
+      host.assertInitialized();
+      return host.prefabs.instantiate(prefab, overrides, false);
+    },
+    instantiateOrThrow: (prefab: Prefab, overrides?: readonly ComponentBundleEntryInput[]) => {
+      host.assertInitialized();
+      return host.prefabs.instantiate(prefab, overrides, true)!;
+    },
+    instantiateMany: (prefab: Prefab, count: number, overrides?: readonly ComponentBundleEntryInput[]) => {
+      host.assertInitialized();
+      return host.prefabs.instantiateMany(prefab, count, overrides, false);
+    },
+    instantiateManyOrThrow: (prefab: Prefab, count: number, overrides?: readonly ComponentBundleEntryInput[]) => {
+      host.assertInitialized();
+      return host.prefabs.instantiateMany(prefab, count, overrides, true)!;
     },
     destroy: (entity: Entity) => {
       host.assertInitialized();

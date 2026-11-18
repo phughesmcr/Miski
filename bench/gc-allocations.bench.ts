@@ -2,10 +2,11 @@
 /// <reference lib="dom" />
 // deno-lint-ignore-file no-console
 
-import { Component, entityIndex, field, Query, World } from "../mod.ts";
+import { Component, entityIndex, field, Prefab, Query, World } from "../mod.ts";
 import type { ComponentInstance, Entity } from "../mod.ts";
 import {
   countEntities,
+  createBenchmarkComponents,
   createMovementQuery,
   createRenderableQuery,
   createWideQuery,
@@ -328,6 +329,63 @@ const bundledProjectileBundle = [
   [bundledSpawnLifecycle.components.renderable],
   [bundledSpawnLifecycle.components.projectile],
 ] as const;
+
+// Prefab spawn fixtures: the same projectile as `bundledProjectileBundle`, defined once as a template. The two
+// prefab worlds share one component set so the single prefab is registered in both.
+const prefabComponents = createBenchmarkComponents();
+const prefabSpawnLifecycle = await populateSparseLifecycleWorld(MEDIUM_CAPACITY, prefabComponents);
+const prefabBulkLifecycle = await populateSparseLifecycleWorld(MEDIUM_CAPACITY, prefabComponents);
+const prefabSpawnEntities = new Array<Entity>(128);
+const projectilePrefab = new Prefab({
+  name: "projectile",
+  components: [
+    [prefabComponents.position, { x: 0, y: 0 }],
+    [prefabComponents.velocity, { x: 10, y: -2 }],
+    [prefabComponents.lifetime, { ttl: 2 }],
+    [prefabComponents.renderState, { sprite: 0, layer: 2 }],
+    [prefabComponents.renderable],
+    [prefabComponents.projectile],
+  ],
+});
+const prefabPositionOverride = { x: 0, y: 0 };
+const prefabRenderOverride = { sprite: 0 };
+const prefabOverrides = [
+  [prefabComponents.position, prefabPositionOverride],
+  [prefabComponents.renderState, prefabRenderOverride],
+] as const;
+
+function spawnProjectileBatchWithPrefab(out: Entity[]): void {
+  const entities = prefabSpawnLifecycle.world.entities;
+  for (let i = 0; i < out.length; i++) {
+    prefabPositionOverride.x = i;
+    prefabPositionOverride.y = i;
+    prefabRenderOverride.sprite = i & 255;
+    out[i] = entities.instantiateOrThrow(projectilePrefab, prefabOverrides);
+  }
+}
+
+function destroyPrefabBatch(entities: Entity[]): void {
+  for (let i = 0; i < entities.length; i++) {
+    prefabSpawnLifecycle.world.entities.destroy(entities[i]!);
+  }
+}
+
+function spawnProjectileBatchWithInstantiateMany(): void {
+  const world = prefabBulkLifecycle.world;
+  const list = world.entities.instantiateManyOrThrow(projectilePrefab, 128);
+  const { x, y } = world.components.require(prefabComponents.position).storage.partitions;
+  const sprite = world.components.require(prefabComponents.renderState).storage.partitions.sprite;
+  for (let i = 0; i < list.count; i++) {
+    const slot = list.slots[i]!;
+    x[slot] = i;
+    y[slot] = i;
+    sprite[slot] = i & 255;
+  }
+  for (let i = 0; i < list.count; i++) prefabSpawnEntities[i] = list.entities[i]!;
+  for (let i = 0; i < prefabSpawnEntities.length; i++) world.entities.destroy(prefabSpawnEntities[i]!);
+  entitySink ^= prefabSpawnEntities[0]!;
+  world.refresh();
+}
 let entitySink = 0;
 let numericSink = 0;
 let objectSink: unknown;
@@ -487,6 +545,23 @@ const scenarios: Scenario[] = [
       entitySink ^= bundledSpawnEntities[0]!;
       bundledSpawnLifecycle.world.refresh();
     },
+  },
+  {
+    name: "spawn/despawn 128 projectiles - prefab instantiate + overrides + refresh",
+    iterations: 10_000,
+    maxSteadyStateBeforeGcBytesPerIter: ZERO_ALLOC_BUDGET_BYTES_PER_ITER,
+    fn: () => {
+      spawnProjectileBatchWithPrefab(prefabSpawnEntities);
+      destroyPrefabBatch(prefabSpawnEntities);
+      entitySink ^= prefabSpawnEntities[0]!;
+      prefabSpawnLifecycle.world.refresh();
+    },
+  },
+  {
+    name: "spawn/despawn 128 projectiles - prefab instantiateMany + slot writes + refresh",
+    iterations: 10_000,
+    maxSteadyStateBeforeGcBytesPerIter: ZERO_ALLOC_BUDGET_BYTES_PER_ITER,
+    fn: spawnProjectileBatchWithInstantiateMany,
   },
   budgeted("direct typed-array component writes", 250_000, () => {
     positionStorage.partitions.x[mutationSlot] = (positionStorage.partitions.x[mutationSlot] ?? 0) + 1;
