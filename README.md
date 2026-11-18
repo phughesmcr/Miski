@@ -359,8 +359,9 @@ prefab is defined, and omitted fields are zero. Every check (payloads, owner
 caps, capacity) finishes before allocation, so a rejected call — including a
 bulk call that does not fit in full — allocates nothing and consumes no
 generation. Instances hold plain copies: nothing reads through to the prefab,
-and since prefabs are frozen, nothing can change under them. Rollback and
-checkpoints treat instances like any other entity.
+and since prefabs are frozen, nothing can change under them. Instances are
+ordinary entities (rollback undoes them like `createWith`), while prefabs
+themselves are never part of world state.
 
 `createEcsWorld` has named-map helpers:
 
