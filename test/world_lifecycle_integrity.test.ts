@@ -690,3 +690,67 @@ Deno.test("world destroy is idempotent once the world is destroyed", async () =>
   assertEquals(destroyed, 1, "Destroy hooks run once");
   assertEquals(world.state, "destroyed", "World stays destroyed");
 });
+
+Deno.test("await using destroys the world when the scope exits, including on throw", async () => {
+  const tag = lifecycleTag();
+  let destroyed = 0;
+  const hooks = {
+    destroy: () => {
+      destroyed++;
+    },
+  };
+  let escaped: World | undefined;
+  {
+    await using world = new World({ capacity: 8, components: [tag] });
+    world.systems.create(makeSystem(tag, "scoped", hooks));
+    await world.init();
+    escaped = world;
+  }
+  assertEquals(escaped.state, "destroyed", "Scope exit destroys the world");
+  await assertRejects(
+    async () => {
+      await using world = new World({ capacity: 8, components: [tag] });
+      world.systems.create(makeSystem(tag, "throwing", hooks));
+      await world.init();
+      escaped = world;
+      throw new Error("body failed");
+    },
+    Error,
+    "body failed",
+  );
+  assertEquals(escaped.state, "destroyed", "A throwing scope still destroys the world");
+  assertEquals(destroyed, 2, "Each world's destroy hook runs once");
+});
+
+Deno.test("world async disposal skips uninitialized and destroyed worlds", async () => {
+  const tag = lifecycleTag();
+  const fresh = new World({ capacity: 8, components: [tag] });
+  await fresh[Symbol.asyncDispose]();
+  assertEquals(fresh.state, "uninitialized", "An uninitialized world is left alone");
+  const world = new World({ capacity: 8, components: [tag] });
+  await world.init();
+  await world.destroy();
+  await world[Symbol.asyncDispose]();
+  assertEquals(world.state, "destroyed", "Disposal after destroy() is a no-op");
+});
+
+Deno.test("overlapping async disposals share one teardown, and a failed one can be retried", async () => {
+  const tag = lifecycleTag();
+  const world = new World({ capacity: 8, components: [tag] });
+  let calls = 0;
+  world.systems.create(makeSystem(tag, "failsOnce", {
+    destroy: () => {
+      calls++;
+      if (calls === 1) throw new Error("cleanup failed");
+    },
+  }));
+  await world.init();
+  const first = world[Symbol.asyncDispose]();
+  const second = world[Symbol.asyncDispose]();
+  assert(first === second, "Overlapping disposals share the teardown");
+  await assertRejects(() => first, Error, "cleanup failed");
+  assertEquals(world.state, "error", "A failed teardown leaves the error state");
+  await world[Symbol.asyncDispose]();
+  assertEquals(world.state, "destroyed", "A later disposal retries teardown");
+  assertEquals(calls, 1, "The failed system was unregistered, so its hook does not run again");
+});

@@ -111,6 +111,9 @@ export class World {
 
   #destroying = false;
 
+  /** The teardown started by `[Symbol.asyncDispose]`, shared by overlapping disposals. */
+  #disposal: Promise<void> | undefined;
+
   /** Settles (never rejects) when the in-flight `init()` has finished, successfully or not. */
   #initSettled: Promise<void> | undefined;
 
@@ -120,11 +123,8 @@ export class World {
   /** The first error that moved the world into the `error` state. */
   #failure: { readonly cause: unknown } | undefined;
 
-  /** The promise that resolves when the World is ready */
-  readonly #initPromise: Promise<WorldState>;
-
-  /** Resolver for the init promise */
-  #initResolver?: (value: WorldState) => void;
+  /** Settles with the final state once the World is ready (or failed) */
+  readonly #init: PromiseWithResolvers<WorldState> = Promise.withResolvers<WorldState>();
 
   /** Archetype Management API */
   readonly archetypes: WorldArchetypeAPI;
@@ -349,9 +349,6 @@ export class World {
     }
 
     this.#state = "uninitialized";
-    this.#initPromise = new Promise((resolve) => {
-      this.#initResolver = resolve;
-    });
 
     // Internal managers
     const { capacity, components } = spec;
@@ -517,10 +514,10 @@ export class World {
       this.#throwFailure();
       this.refresh();
       this.#assertInitialized();
-      this.#initResolver?.("initialized");
+      this.#init.resolve("initialized");
     } catch (error) {
       this.#enterErrorState(error);
-      this.#initResolver?.("error");
+      this.#init.resolve("error");
       throw error;
     } finally {
       this.#initializing = false;
@@ -581,6 +578,24 @@ export class World {
   }
 
   /**
+   * Destroy the world when an `await using` scope exits: `await using world = new World(spec);`.
+   *
+   * A world that was never initialized, or is already destroyed, is left as it is. Disposals that overlap
+   * share one teardown; after a failed teardown a later disposal tries again. Like `destroy()`, this
+   * rejects while a teardown started by `destroy()` is still running.
+   */
+  [Symbol.asyncDispose](): Promise<void> {
+    if (this.#state === "uninitialized") return Promise.resolve();
+    if (this.#disposal !== undefined) return this.#disposal;
+    const teardown = this.destroy();
+    this.#disposal = teardown;
+    teardown.catch(() => {
+      if (this.#disposal === teardown) this.#disposal = undefined;
+    });
+    return teardown;
+  }
+
+  /**
    * Wait for initial setup and all currently pending late system init hooks.
    *
    * Do not await this from a system init or destroy hook: readiness waits for the hook, so it would wait on
@@ -592,7 +607,7 @@ export class World {
   async onReady(): Promise<void> {
     this.#assertNotInHook("world.onReady()");
     if (this.#destroying) throw new WorldStateError("World is being destroyed");
-    const state = await Promise.race([this.#initPromise, this.#teardownStarted.promise.then(() => undefined)]);
+    const state = await Promise.race([this.#init.promise, this.#teardownStarted.promise.then(() => undefined)]);
     if (state === undefined || this.#destroying) throw new WorldStateError("World is being destroyed");
     if (state !== "initialized") {
       throw this.#stateError(`World failed to initialize: state is "${state}"`);

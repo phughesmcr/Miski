@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- `World` implements `Symbol.asyncDispose`: `await using world = new World(spec)`
+  destroys it when the scope exits, even on a throw. A never-initialized or
+  already destroyed world is left alone; overlapping disposals share one
+  teardown, and a failed teardown can be retried.
+- Command-buffer flush errors are annotated with the failing command for any
+  real `Error`, including ones from another realm (`Error.isError`).
+- README: a recipe for yielding to the browser between `Schedule.run()` calls.
 - Support `Float16Array` component columns (requires
   `@phughesmcr/partitionedbuffer` ^0.5.0, now the minimum). Schemas hash it as
   `f16`; hashes of existing schemas are unchanged. World saves use the new field

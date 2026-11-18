@@ -198,9 +198,12 @@ readiness signal. Callbacks reject during initialization or teardown.
 
 `destroy()` closes system registration immediately, waits for any in-flight
 `init()` and pending system init hooks, then runs the destroy hook of every
-system whose init completed. Concurrent world teardown rejects. The world ends
+system whose init completed. Concurrent world teardown rejects; calling
+`destroy()` on a destroyed world does nothing. The world ends
 `destroyed` if every hook succeeds; otherwise it stays in `error`. After a
-failed `init()`, `destroy()` still runs from `error`. Lifecycle hooks must not
+failed `init()`, `destroy()` still runs from `error`. `await using world = new World(spec)`
+destroys the world when the scope exits, even on a throw (a never-initialized
+world is left alone). Lifecycle hooks must not
 await `world.onReady()` or `world.destroy()`; doing so rejects with
 `WorldStateError`. Destroy ends the system lifecycle; it does not erase
 retained component buffers. Discard component instances and borrowed views with
@@ -640,6 +643,24 @@ function loop(dt: number) {
   `schedule.setClock(clock)`. The schedule flushes its commands every phase,
   so its buffer is empty between runs; call `commands.clear()` on any buffer
   you fill outside a run to drop commands from the abandoned timeline.
+- **Yielding to the browser.** `run()` is synchronous. To keep input
+  responsive, yield between runs, never inside one. Run background work
+  (analytics, saving to IndexedDB) on data copied out of the world, not as
+  systems with lower priority, which would reorder the simulation:
+
+  ```ts
+  const yieldToMain = globalThis.scheduler?.yield?.bind(globalThis.scheduler) ??
+    (() => new Promise<void>((resolve) => setTimeout(resolve, 0)));
+
+  async function loop() {
+    for (;;) {
+      schedule.run(dt);
+      await yieldToMain(); // `scheduler.yield()` in Chrome 129+; a timer elsewhere
+    }
+  }
+  ```
+
+  For rendering, drive `run()` from `requestAnimationFrame` instead.
 
 **Command buffers** queue structural changes so you can mutate while
 iterating a borrowed view. A `Schedule` flushes its buffer (`ctx.commands`)
