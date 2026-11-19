@@ -2,10 +2,15 @@ import { $_SYSTEM_DESTROY_KEY, $_SYSTEM_INIT_KEY } from "@/constants.ts";
 import { SpecError } from "@/errors.ts";
 import { Query } from "@/query/query.ts";
 import type { ComponentInstances, ComponentMap } from "@/types/component.ts";
-import type { SystemInstance, SystemPrivateMethods, SystemSpec, TypedSystemCallback } from "@/types/system.ts";
+import type {
+  SystemHook,
+  SystemInstance,
+  SystemPrivateMethods,
+  SystemSpec,
+  TypedSystemCallback,
+} from "@/types/system.ts";
 import type { SystemBindings } from "@/types/system.ts";
 import type { UntypedQueryComponents } from "@/types/query.ts";
-import type { WorldContext } from "@/types/world-api.ts";
 import type { BorrowedEntityList } from "@/entity/entity.ts";
 import { isObject, isValidName, noop } from "@/utils.ts";
 
@@ -102,10 +107,10 @@ export class System<
   TReturn = void,
 > implements SystemPrivateMethods {
   /** The function to call when the system is destroyed. */
-  readonly [$_SYSTEM_DESTROY_KEY]: (world: WorldContext) => void | Promise<void>;
+  readonly [$_SYSTEM_DESTROY_KEY]: SystemHook;
 
   /** The function to call when the system is initialized. */
-  readonly [$_SYSTEM_INIT_KEY]: (world: WorldContext) => void | Promise<void>;
+  readonly [$_SYSTEM_INIT_KEY]: SystemHook;
 
   /**
    * The number of arguments the system instance forwards to the callback after the components and entities, or

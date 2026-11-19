@@ -521,6 +521,8 @@ export type {
   StorageProxyWithProperties,
   SystemCallback,
   SystemFunction,
+  SystemHook,
+  SystemHookContext,
   SystemInstance,
   SystemRecord,
   SystemSpec,

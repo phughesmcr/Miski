@@ -57,8 +57,8 @@ Prototypes for 1 and 2 exist uncommitted in worktree `agent-a6ba9562fbd8ace4a`. 
 folder (`disposables-world-prototype.patch`, `disposables-prototype.patch`).
 
 `World.destroy()` was made idempotent alongside this report: it is a no-op on a destroyed world. A call while teardown
-is running still rejects "World is being destroyed", because without async context tracking (browsers) it can't be told
-apart from a destroy hook calling `destroy()`, which would wait on itself.
+is running still rejects "World is being destroyed": Miski no longer uses async context tracking, so it can't be told
+apart from a destroy hook calling `destroy()` after an `await`, which would wait on itself.
 
 ### 1. `Error.isError` (`command-buffer.ts:687`)
 

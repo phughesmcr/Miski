@@ -139,6 +139,21 @@
   rely on slot order.
 - Drop the `@phughesmcr/bitpool` dependency; entity occupancy now lives in a
   small internal allocator over `@phughesmcr/booleanarray`.
+- Detect lifecycle calls from system hooks the same way in every runtime,
+  replacing the `AsyncLocalStorage` path that only Deno, Node and Bun had.
+  `init` and `destroy` hooks now receive a second argument, a
+  `SystemHookContext` with `onReady()`, `destroyWorld()`,
+  `destroySystem(system)` and `pending`. While the hook is pending these
+  reject with `WorldStateError` instead of waiting on the hook itself, even
+  after an `await`; once it settles they act like the world calls. Calling
+  `world.onReady()`, `world.destroy()` or `world.systems.destroy()` directly
+  is only rejected in the synchronous part of a hook. After an `await` the
+  world cannot tell the hook is calling: on Deno, Node and Bun these calls no
+  longer reject. A waiting `world.onReady()` is still released by teardown,
+  but a hook that waits on its own system's destruction (directly or through
+  a cycle) never settles. Use the hook context after an `await`. The first
+  argument is still the world itself. Exports `SystemHook` and
+  `SystemHookContext`.
 
 ## 1.0.0-beta.2 — 2026-11-18
 
@@ -178,8 +193,7 @@
 - Reject, rather than deadlock, a system hook that destroys a system whose
   destruction waits on that hook (including its own system). It rejects with
   `WorldStateError`; non-cyclic destroys from hooks still work. Detection needs
-  `AsyncLocalStorage` (Deno, Node, Bun); in browsers, do not await a destroy that
-  waits on the calling hook.
+  the call to come from the hook: see the hook context entry under Unreleased.
 - Make `world.systems.destroy` always return a promise. World-state failures
   now reject instead of throwing synchronously.
 - Allow systems whose query has only `none` terms. The callback receives an
@@ -215,9 +229,9 @@ Beta hardens the existing ECS surface. It introduces no new ECS features.
   the destroy hook if init never ran; destroying a system while its late init
   is pending discards it, so a later init failure does not poison the world.
 - Reject, rather than deadlock, lifecycle hooks that await `world.onReady()` or
-  `world.destroy()`: they throw `WorldStateError`. Deterministic where
-  `AsyncLocalStorage` exists (Deno, Node, Bun); in browsers, waiting `onReady()`
-  calls reject once teardown starts. Do not await either from a hook.
+  `world.destroy()`: they throw `WorldStateError` when the call is known to
+  come from the hook (see the hook context entry under Unreleased). Do not
+  await either from a hook.
 - Attach `cause` to `WorldStateError` and other `MiskiError` subclasses. After
   a late init failure, `onReady()` and assert errors expose the root cause via
   `error.cause`, and `init()` rejects with the root cause when an init hook

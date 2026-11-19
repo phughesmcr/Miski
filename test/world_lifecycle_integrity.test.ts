@@ -1,7 +1,7 @@
 /// <reference lib="deno.ns" />
 
 import { Query, System, World, WorldStateError } from "../mod.ts";
-import type { WorldContext } from "../mod.ts";
+import type { SystemHook } from "../mod.ts";
 import { tagComponent } from "./fixtures.ts";
 import { assert, assertEquals, assertRejects, assertThrows } from "./helpers.ts";
 
@@ -326,8 +326,8 @@ function makeSystem(
   tag: ReturnType<typeof lifecycleTag>,
   name: string,
   hooks: {
-    init?: (world: WorldContext) => void | Promise<void>;
-    destroy?: (world: WorldContext) => void | Promise<void>;
+    init?: SystemHook;
+    destroy?: SystemHook;
   },
 ) {
   return new System({ name, query: new Query({ all: [tag] }), callback: () => {}, ...hooks });
@@ -526,10 +526,10 @@ Deno.test("a late init hook that awaits onReady is rejected instead of deadlocki
   await world.init();
   let hookError: unknown;
   world.systems.create(makeSystem(tag, "selfWaiting", {
-    init: async () => {
+    init: async (_world, hook) => {
       await Promise.resolve();
       try {
-        await world.onReady();
+        await hook.onReady();
       } catch (error) {
         hookError = error;
       }
