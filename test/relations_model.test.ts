@@ -1,14 +1,6 @@
 /// <reference lib="deno.ns" />
 
-import {
-  captureWorldRollbackPoint,
-  type Entity,
-  Query,
-  Relation,
-  restoreWorldRollbackPoint,
-  type World,
-  type WorldRollbackPoint,
-} from "../mod.ts";
+import { type Entity, Query, Relation, type World, WorldRollbackScope } from "../mod.ts";
 import { createTestWorld } from "./fixtures.ts";
 import { assertEquals, listIds } from "./helpers.ts";
 
@@ -180,7 +172,7 @@ async function runSeed(seed: number, steps: number): Promise<void> {
     })),
   };
   const random = rng(seed);
-  let saved: { point: WorldRollbackPoint; model: Model } | undefined;
+  let saved: { point: WorldRollbackScope; model: Model } | undefined;
   let current = model;
 
   for (let step = 0; step < steps; step++) {
@@ -231,10 +223,10 @@ async function runSeed(seed: number, steps: number): Promise<void> {
       world.refresh();
     } else if (op < 95) {
       if (saved === undefined) {
-        saved = { point: captureWorldRollbackPoint(world), model: cloneModel(current) };
+        saved = { point: new WorldRollbackScope(world), model: cloneModel(current) };
       }
     } else if (saved !== undefined) {
-      restoreWorldRollbackPoint(world, saved.point);
+      saved.point.restore();
       current = saved.model;
       saved = undefined;
     }

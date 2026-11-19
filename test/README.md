@@ -20,7 +20,7 @@ Runtime tests live in `*.test.ts` files and run via `deno test` (see `deno.json`
 | `world_lifecycle_integrity.test.ts` | Async readiness, teardown concurrency, failure cleanup, `await using` disposal during destroy, in-flight init and failed init |
 | `rollback_scope.test.ts` | `WorldRollbackScope` with `using`: restore when left without `commit()` (also on throw), commit, explicit restore, disposal on destroyed and errored worlds |
 | `float16_column.test.ts` | `Float16Array` columns: writes, canonicalization, saves, documents, rollback |
-| `rollback_checkpoint_integrity.test.ts` | One rollback scope, consumed/foreign rollback points, foreign checkpoints, >32-component round-trips |
+| `rollback_checkpoint_integrity.test.ts` | One rollback scope, closed and per-world rollback scopes, foreign checkpoints, >32-component round-trips |
 | `component_storage_integrity.test.ts` | Capped (dense-row) storage under stray non-owner writes, ownership acquisition, cap clamping, column constructors |
 | `component_rollback_memory.test.ts` | Capped owners and dense rows through rollback and removal, sparse changed window, `getActive` scratch growth, 16-bit-capacity rollback |
 | `component_tracking_regressions.test.ts` | Changed marking for newly owned components, `applyCheckpoint` during `getOwners` iteration, failed bundle spawns stripping committed components |
@@ -30,7 +30,7 @@ Runtime tests live in `*.test.ts` files and run via `deno test` (see `deno.json`
 | `query_iteration.test.ts` | Per-call `query()` / `getActive()` iterators: nested loops (same and different queries, different bounds), pool reuse, destroy or remove during `query()` / `queryList()` / `getActive()` iteration |
 | `query_schema_integrity.test.ts` | System arity forwarding, query alias keys and immutable metadata, retained result buffers, schema hashing and bootstrap validation |
 | `query_transition_integrity.test.ts` | Atomic bundle spawn, entered/exited relative to the refresh window (also after rollback), nested transition iteration |
-| `rollback_neutrality.test.ts` | Committing a rollback point leaves allocation and iteration order untouched |
+| `rollback_neutrality.test.ts` | Committing a rollback scope leaves allocation and iteration order untouched |
 | `review_regressions.test.ts` | Storage and rollback cost scale with population, rollback keeps query order and allocation cursor, `getActive` bounds, `Query.compose` include roles |
 | `randomized_model.test.ts` | Seeded random operations checked against a plain model, with a twin control world proving rollback leaves no trace |
 | `spawn_scratch_reuse.test.ts` | `EcsWorld.spawn` scratch reuse: no leaked components or data, undefined-skip and tag validation, re-entrant spawns from getters |

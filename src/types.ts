@@ -86,7 +86,6 @@ export type {
   WorldSystemAPI,
 } from "@/types/world-api.ts";
 export type { CheckpointEntitySet, ComponentCheckpoint } from "@/checkpoint/checkpoint.ts";
-export type { WorldRollbackPoint } from "@/rollback/rollback.ts";
 export type {
   CompiledComponentEntry,
   CompiledComponentProperty,

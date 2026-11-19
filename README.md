@@ -719,21 +719,21 @@ Save a slice. Speculate. Undo. Hash a recipe for later.
 const checkpoint = world.captureCheckpoint([entity], Position);
 world.applyCheckpoint(checkpoint);
 
-import {
-  captureWorldRollbackPoint,
-  restoreWorldRollbackPoint,
-} from "@phughesmcr/miski";
-
-const point = captureWorldRollbackPoint(world);
-restoreWorldRollbackPoint(world, point);
-
-// Or let a `using` block close it: leaving without commit() restores the
-// world, even on a throw, so a failed turn can't leave the scope open.
+// Leaving a `using` block without commit() restores the world, even on a
+// throw, so a failed turn can't leave the scope open.
 import { WorldRollbackScope } from "@phughesmcr/miski";
 {
   using scope = new WorldRollbackScope(world);
   simulateTurn();
   if (turnIsValid()) scope.commit();
+}
+
+// Or close it by hand: restore() undoes, commit() keeps.
+const scope = new WorldRollbackScope(world);
+try {
+  simulateTurn();
+} finally {
+  scope.restore();
 }
 
 import { compileComponentSchema, componentSchemaHash } from "@phughesmcr/miski";
@@ -750,7 +750,7 @@ Restoration is order-neutral: the next allocated slots and the iteration order
 of queries and owners match a world that never ran the speculative work.
 Revision tokens continue forward after restoration.
 
-Object fields with a `clone` hook are cloned when a rollback point or
+Object fields with a `clone` hook are cloned when a rollback scope opens or a
 checkpoint is captured, and again on each checkpoint apply, so a reused
 checkpoint never shares an object with the world. Without the hook both share
 references. Entity fields whose target has died restore as `null`. Field tags
@@ -758,9 +758,18 @@ references. Entity fields whose target has died restore as `null`. Field tags
 hash; numeric-only schemas keep their existing hashes.
 
 Checkpoints are reusable and bound to the capturing world; captured entities
-must still be active when applied. A world permits one active rollback scope.
-Rollback points are owner-bound and consumed by restore or commit; system hooks
-and external side effects are outside the captured ECS state.
+must still be active when applied. `applyCheckpoint` is not atomic: it first
+checks, without writing, that every entity is alive, every payload is valid,
+no capped component overflows and every relation's pairs can be restored, and
+throws with the world unchanged if not. It then writes through the public
+component and relation paths, which run object-field `create()` / `clone()`
+hooks; a hook that throws there leaves the checkpoint partly applied. Wrap the
+apply in a `WorldRollbackScope` when it must be all-or-nothing.
+
+A world permits one open rollback scope, and a world save can't load while one
+is open. `commit()`, `restore()` and disposal each close the scope once; using
+a closed scope throws `WorldStateError`. System hooks and external side effects
+are outside the captured ECS state.
 
 Schema hashes use deterministic code-unit ordering. Regenerate persisted hashes
 for schemas mixing uppercase and lowercase names before upgrading.

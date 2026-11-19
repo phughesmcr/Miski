@@ -2,8 +2,6 @@
 
 import {
   canonicalizeStoredValue,
-  captureWorldRollbackPoint,
-  commitWorldRollbackPoint,
   compileComponentSchema,
   componentSchemaHash,
   createEcsWorld,
@@ -11,7 +9,7 @@ import {
   entityIndex,
   packEntity,
   Query,
-  restoreWorldRollbackPoint,
+  WorldRollbackScope,
 } from "../mod.ts";
 import { assert, assertEquals, assertStrictEquals, assertThrows } from "./helpers.ts";
 import { createTestWorld, vec2Component } from "./fixtures.ts";
@@ -208,18 +206,18 @@ Deno.test("rollback restore reverts speculative mutations", async () => {
   const entity = world.entities.createOrThrow();
   world.components.addToEntity(position, entity, { x: 1, y: 2 });
 
-  const point = captureWorldRollbackPoint(world);
+  const point = new WorldRollbackScope(world);
   world.components.setEntityData(position, entity, { x: 8, y: 8 });
-  restoreWorldRollbackPoint(world, point);
+  point.restore();
   assertEquals(
     world.components.getEntityData(position, entity),
     { x: 1, y: 2 },
     "rollback restores prior values",
   );
 
-  const committed = captureWorldRollbackPoint(world);
+  const committed = new WorldRollbackScope(world);
   world.components.setEntityData(position, entity, { x: 3, y: 4 });
-  commitWorldRollbackPoint(world, committed);
+  committed.commit();
   assertEquals(
     world.components.getEntityData(position, entity),
     { x: 3, y: 4 },

@@ -12,15 +12,13 @@
 
 import {
   asSlotIndex,
-  captureWorldRollbackPoint,
-  commitWorldRollbackPoint,
   Component,
   type DynamicComponent,
   type Entity,
   entityIndex,
   Query,
-  restoreWorldRollbackPoint,
   World,
+  WorldRollbackScope,
 } from "../mod.ts";
 import { assert, assertEquals, assertStrictEquals } from "./helpers.ts";
 
@@ -497,7 +495,7 @@ async function run(seed: number, capacity: number): Promise<void> {
     if (rng() < 0.04) {
       // Speculative scope: random ops, then restore (control never sees them) or commit (control replays them).
       const commit = rng() < 0.4;
-      const point = captureWorldRollbackPoint(subject);
+      const point = new WorldRollbackScope(subject);
       const speculative = cloneModel(model);
       const ops: [Op, boolean][] = [];
       const length = int(rng, 1, 12);
@@ -508,11 +506,11 @@ async function run(seed: number, capacity: number): Promise<void> {
         checkAgainstModel(subject, speculative, `${where} speculative ${i} ${JSON.stringify(op)}`);
       }
       if (commit) {
-        commitWorldRollbackPoint(subject, point);
+        point.commit();
         for (const [op, failed] of ops) replay(control, op, failed);
         model = speculative;
       } else {
-        restoreWorldRollbackPoint(subject, point);
+        point.restore();
         // Handles issued during the discarded scope are retired: later creates in their slots must not revive them.
         const known = new Set([...model.live.keys(), ...model.dead]);
         for (const entity of [...speculative.live.keys(), ...speculative.dead]) {

@@ -26,7 +26,7 @@ is out of the hot path, and column storage changes go through `@phughesmcr/parti
 | 1 | `Error.isError` | `command-buffer.ts:687` (the only `instanceof Error` in `src/`) | Cross-realm and `DOMException` safe. Applied in a prototype; suite green | Chrome 134, Node 24.3, Deno 2.2, Bun 1.1.39. **Node 24.0–24.2 lack it** → module-level `typeof` fallback | **Adopted** |
 | 2 | `Promise.withResolvers` | `world.ts:352` `#initPromise` + `#initResolver` (only hand-rolled one) | Becomes one `#init` field; `?.` calls on the resolver go. Prototype green | Chrome 119, Node 22, Deno 1.38, Bun 1.0 | **Adopted** |
 | 3 | `World[Symbol.asyncDispose]` | `world.ts` `destroy()` | `await using world` tears down on scope exit. Designed against the now-idempotent `destroy()` | Chrome 134, Node 24.0, Deno 2.2.10, Bun 1.3.0; Safari (verify) | **Adopted** |
-| 4 | Disposable rollback scope (`using`) | `src/rollback/rollback.ts` | Real hazard: an open rollback point blocks every later capture ("already active") and loads (`assertLoadReady`), so one leaked by a throw wedges the world | as #3 | **Adopted** (`WorldRollbackScope`) |
+| 4 | Disposable rollback scope (`using`) | `src/rollback/rollback.ts` | Real hazard: an open rollback scope blocks every later capture ("already active") and loads (`assertLoadReady`), so one leaked by a throw wedges the world | as #3 | **Adopted** (`WorldRollbackScope`) |
 | 5 | `Float16Array` columns | `component.ts:21-35`, `schema.ts:22`, `serialization/format.ts` | Feasible and small. f16 within 0–25% of f32 speed on aarch64. Saves without f16 stay byte-identical | Chrome 135, Node 24.0, Deno, Bun 1.1.23 (BCD summary, verify); TS 6.0.3 types it | **Adopted** with partitionedbuffer 0.5.0 |
 | 6 | `scheduler.yield` / `postTask` | `src/scheduler/schedule.ts` | Docs recipe now; opt-in yielding adapter only if frames can exceed 50 ms. Determinism preserved in prototype | `yield`: Chrome 129, Firefox 142, no Safari. `postTask`: Chrome 94, Firefox 101 (verify) | **Docs adopted** (README recipe), adapter later |
 | 7 | `AsyncContext` | `src/system/hook-scope.ts` | Stage 2. Not in Chrome (no flag, no origin trial found), not in Deno 2.9.8. Polyfill not viable | none | **Later**: feature-detected backend when it ships |
@@ -123,13 +123,13 @@ single frames can exceed 50 ms, add an opt-in `runScheduleYielding` adapter. It 
 ### 5. Disposable rollback scope (`src/rollback/rollback.ts`)
 
 ```ts
-using scope = world.rollback.scope(); // opens a rollback point
+using scope = new WorldRollbackScope(world); // opens the world's rollback scope
 simulate();
 if (ok) scope.commit(); // otherwise scope exit restores
 ```
 
 `WorldRollbackScope` has a sync `[Symbol.dispose]` and `commit()`, `restore()` and `isOpen`. Dispose restores if still
-open, and just drops the point if the world is no longer `initialized`. Use it in user code at frame/turn granularity,
+open, and just drops the captured state if the world is no longer `initialized`. Use it in user code at frame/turn granularity,
 not per entity (see row 16).
 
 ## Later items: what has to happen first

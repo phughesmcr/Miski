@@ -1,12 +1,11 @@
 /// <reference lib="deno.ns" />
 
 import {
-  captureWorldRollbackPoint,
   Component,
   loadWorld,
-  restoreWorldRollbackPoint,
   saveWorld,
   World,
+  WorldRollbackScope,
   worldSaveFromDocument,
   worldSaveLayout,
   worldSaveToDocument,
@@ -45,8 +44,8 @@ Deno.test("Float16Array column: write, canonicalize, save, JSON, rollback", asyn
   assertEquals(back.length, bytes.length, "JSON roundtrip size");
   console.log(JSON.stringify(worldSaveLayout(world)));
 
-  const point = captureWorldRollbackPoint(world);
+  const point = new WorldRollbackScope(world);
   world.components.setEntityData(half, e, { v: 2, w: 2 });
-  restoreWorldRollbackPoint(world, point);
+  point.restore();
   assertEquals((world.components.getEntityData(half, e) as { v: number }).v, 65504, "rollback");
 });

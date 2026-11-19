@@ -13,7 +13,7 @@
  * - SoA system loops over `queryList` slots (steering, flocking fields, movement, lifetimes).
  * - Archetype churn: drones gain and lose a `charge` component as excitation waves spread through
  *   the swarm. `queryEntered` / `queryExited` on the charged query drive the ember effects and metrics.
- * - Rollback: "Forecast" captures a rollback point, simulates up to a second ahead, records where
+ * - Rollback: "Forecast" opens a rollback scope, simulates up to a second ahead, records where
  *   drones will go, then restores. When the future arrives the demo measures how far reality drifted
  *   from the forecast; with no user input in between it should be exactly 0.
  *
@@ -24,15 +24,14 @@
  */
 
 import {
-  captureWorldRollbackPoint,
   Component,
   type Entity,
   entityIndex,
   Query,
   type QueryEntityList,
-  restoreWorldRollbackPoint,
   System,
   World,
+  WorldRollbackScope,
 } from "../mod.ts";
 import htmlTemplate from "./visual/index.html" with { type: "text" };
 import clientSource from "./visual/client.js" with { type: "text" };
@@ -788,7 +787,7 @@ const forecast = {
 };
 
 /**
- * Capture a rollback point, simulate ahead, record sampled drone paths, restore.
+ * Open a rollback scope, simulate ahead, record sampled drone paths, restore.
  * Restore is observationally neutral, so the live run replays the forecast exactly unless input changes it.
  */
 const runForecast = (requestedSteps?: number): void => {
@@ -810,7 +809,7 @@ const runForecast = (requestedSteps?: number): void => {
 
   const started = performance.now();
   Object.assign(simSaved, sim);
-  const point = captureWorldRollbackPoint(world);
+  const scope = new WorldRollbackScope(world);
   try {
     for (let step = 1; step <= steps; step++) {
       advance();
@@ -836,7 +835,7 @@ const runForecast = (requestedSteps?: number): void => {
       }
     }
   } finally {
-    restoreWorldRollbackPoint(world, point);
+    scope.restore();
     Object.assign(sim, simSaved);
   }
   forecast.entities = sampleCount;

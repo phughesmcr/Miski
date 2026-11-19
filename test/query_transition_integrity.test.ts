@@ -1,14 +1,6 @@
 /// <reference lib="deno.ns" />
 
-import {
-  CapacityError,
-  captureWorldRollbackPoint,
-  type Entity,
-  Query,
-  restoreWorldRollbackPoint,
-  SpecError,
-  type World,
-} from "../mod.ts";
+import { CapacityError, type Entity, Query, SpecError, type World, WorldRollbackScope } from "../mod.ts";
 import { Archetype } from "../src/archetype/archetype.ts";
 import { createEntity, createTestWorld, tagComponent, vec2Component } from "./fixtures.ts";
 import { assert, assertEquals, assertThrows, ids } from "./helpers.ts";
@@ -118,11 +110,11 @@ Deno.test("rollback restores window origins so later transitions stay window-rel
   world.refresh();
   world.components.addToEntity(tag, member);
 
-  const point = captureWorldRollbackPoint(world);
+  const point = new WorldRollbackScope(world);
   world.components.removeFromEntity(position, member);
   const speculative = createEntity(world);
   world.components.addToEntity(position, speculative);
-  restoreWorldRollbackPoint(world, point);
+  point.restore();
   assertEquals(ids(world.entities.queryEntered(query)), [], "Speculative entry must be discarded");
   assertEquals(ids(world.entities.queryExited(query)), [], "Speculative exit must be discarded");
 

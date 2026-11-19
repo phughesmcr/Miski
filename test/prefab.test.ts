@@ -2,7 +2,6 @@
 
 import {
   CapacityError,
-  captureWorldRollbackPoint,
   Component,
   ComponentDataError,
   createEcsWorld,
@@ -13,8 +12,8 @@ import {
   NotRegisteredError,
   Prefab,
   Query,
-  restoreWorldRollbackPoint,
   World,
+  WorldRollbackScope,
   WorldStateError,
 } from "../mod.ts";
 import type { ComponentBundleEntryInput } from "../mod.ts";
@@ -367,15 +366,15 @@ Deno.test("instantiate inside a rollback scope is undone; instantiate after rest
   const scoutBundle = [[velocity, { x: 1 }], [flying], [stats, { speed: 3 }]] as const;
   const scout = new Prefab({ components: scoutBundle });
 
-  const pointA = captureWorldRollbackPoint(a);
+  const pointA = new WorldRollbackScope(a);
   a.entities.instantiateOrThrow(scout);
   a.entities.instantiateMany(goblin, 5);
-  restoreWorldRollbackPoint(a, pointA);
+  pointA.restore();
   // The twin speculates the same way through createWith, so retired generations match too.
-  const pointB = captureWorldRollbackPoint(b);
+  const pointB = new WorldRollbackScope(b);
   b.entities.createWithOrThrow(scoutBundle);
   for (let i = 0; i < 5; i++) b.entities.createWithOrThrow(goblinBundle);
-  restoreWorldRollbackPoint(b, pointB);
+  pointB.restore();
 
   assertEquals(observe(a, false), untouched, "restore removes every speculative instance");
   assertEquals(observe(a, false), observe(b, false), "restore is neutral");

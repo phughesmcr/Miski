@@ -1,9 +1,7 @@
 /// <reference lib="deno.ns" />
 
 import {
-  captureWorldRollbackPoint,
   cloneFieldValue,
-  commitWorldRollbackPoint,
   compileComponentSchema,
   Component,
   ComponentDataError,
@@ -16,8 +14,8 @@ import {
   isFieldDescriptor,
   isValidComponentSpec,
   Query,
-  restoreWorldRollbackPoint,
   System,
+  WorldRollbackScope,
 } from "../mod.ts";
 import { ComponentManager } from "../src/component/component-manager.ts";
 import { createEntity, createTestWorld, Mesh } from "./fixtures.ts";
@@ -429,13 +427,13 @@ Deno.test("rollback restores every field kind for dense and capped components", 
     const b = world.entities.createWithOrThrow([[unit, { label: "b" }]]);
     const before = [world.components.getEntityData(unit, a), world.components.getEntityData(unit, b)];
 
-    const point = captureWorldRollbackPoint(world);
+    const point = new WorldRollbackScope(world);
     world.components.setEntityData(unit, a, { alive: false, state: "dead", target: null, label: "z", mesh: null });
     world.components.removeFromEntity(unit, b);
     const spec = world.entities.createWithOrThrow([[unit, { mesh: new Mesh([9]), label: "spec" }]]);
     const specSlot = entityIndex(spec);
     meshA.vertices.push(2); // in-place mutation is not undone without a clone hook
-    restoreWorldRollbackPoint(world, point);
+    point.restore();
 
     assertEquals(world.components.getEntityData(unit, a), before[0], `Row a restored (cap ${maxEntities})`);
     assertStrictEquals(world.components.getEntityData(unit, a).mesh, meshA, "Same reference restored");
@@ -458,17 +456,17 @@ Deno.test("object clone hooks give rollback and checkpoints value semantics", as
   const mesh = new Mesh([1]);
   const entity = world.entities.createWithOrThrow([[unit, { mesh }]]);
 
-  const point = captureWorldRollbackPoint(world);
+  const point = new WorldRollbackScope(world);
   assertStrictEquals(clones, 1, "Capture clones owned object cells once");
   mesh.vertices.push(2);
-  restoreWorldRollbackPoint(world, point);
+  point.restore();
   const restored = world.components.getEntityData(unit, entity).mesh!;
   assert(restored !== mesh, "Restore installs the captured clone");
   assertEquals(restored.vertices, [1], "Inner mutation is undone");
   assertStrictEquals(clones, 1, "Restore does not clone again");
 
-  const committed = captureWorldRollbackPoint(world);
-  commitWorldRollbackPoint(world, committed);
+  const committed = new WorldRollbackScope(world);
+  committed.commit();
 
   clones = 0;
   const checkpoint = world.captureCheckpoint([entity], unit);

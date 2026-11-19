@@ -1,16 +1,15 @@
 /// <reference lib="deno.ns" />
 
 import {
-  captureWorldRollbackPoint,
   Component,
   entityIndex,
   field,
   loadWorld,
   Prefab,
   Query,
-  restoreWorldRollbackPoint,
   saveWorld,
   World,
+  WorldRollbackScope,
   worldSaveFromDocument,
   worldSaveToDocument,
 } from "../mod.ts";
@@ -1126,8 +1125,8 @@ Deno.bench({
   name: "rollback capture + restore - 1024 owners, all field kinds",
   group: "field types",
   fn: () => {
-    const point = captureWorldRollbackPoint(fieldWorld);
-    restoreWorldRollbackPoint(fieldWorld, point);
+    const scope = new WorldRollbackScope(fieldWorld);
+    scope.restore();
   },
 });
 
