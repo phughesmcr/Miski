@@ -1,5 +1,7 @@
 /// <reference lib="deno.ns" />
 
+// deno-lint-ignore-file no-await-in-loop -- worlds are built and checked one after another on purpose
+
 import {
   CapacityError,
   cloneFieldValue,
@@ -25,6 +27,7 @@ import { type WorldSaveHost, worldSaveHost } from "../src/serialization/host.ts"
 import { createEntity, createTestWorld, Mesh } from "./fixtures.ts";
 import { assert, assertEquals, assertStrictEquals, assertThrows, ids } from "./helpers.ts";
 
+// deno-lint-ignore explicit-function-return-type -- the inferred component types are the point of this factory
 function unitComponent(maxOwners?: number, create?: () => Mesh, clone?: (mesh: Mesh) => Mesh) {
   const mesh = create === undefined && clone === undefined ?
     field.object<Mesh>() :

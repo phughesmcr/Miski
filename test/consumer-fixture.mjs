@@ -1,3 +1,4 @@
+// deno-lint-ignore-file explicit-function-return-type explicit-module-boundary-types -- plain JavaScript run by scripts/consumer-smoke.ts; it cannot carry type annotations
 function assert(condition, message) {
   if (!condition) throw new Error(message);
 }

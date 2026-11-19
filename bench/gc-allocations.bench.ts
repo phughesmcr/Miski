@@ -1,6 +1,6 @@
 /// <reference lib="deno.ns" />
 /// <reference lib="dom" />
-// deno-lint-ignore-file no-console
+// deno-lint-ignore-file no-console no-top-level-await -- bench scripts are entry points that build their worlds at module load and print their reports
 
 import { getHeapSpaceStatistics, getHeapStatistics } from "node:v8";
 import {

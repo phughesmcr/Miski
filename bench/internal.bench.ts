@@ -167,7 +167,7 @@ function createQueryInstance(
     or,
     not,
     include,
-    archetypes: new Array(),
+    archetypes: [],
     archetypeCount: 0,
     components: Object.freeze(componentsByName),
     id: `${and.toString()}:${or.toString()}:${not.toString()}:${include.toString()}`,

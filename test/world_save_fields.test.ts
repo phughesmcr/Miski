@@ -1,5 +1,7 @@
 /// <reference lib="deno.ns" />
 
+// deno-lint-ignore-file no-await-in-loop -- worlds are built and checked one after another on purpose
+
 /**
  * World saves of `field.*` columns.
  *
@@ -51,6 +53,7 @@ function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
 /** Counts hook calls, and lets a test make decode throw for one encoded value. */
 type HookLog = { encoded: number; decoded: number; nullSeen: boolean; poison: string | undefined };
 
+// deno-lint-ignore explicit-function-return-type -- the inferred field descriptor type are the point of this factory
 function meshField(log: HookLog) {
   return field.object<Mesh>({
     encode: (mesh) => {
@@ -108,7 +111,17 @@ function component(world: World, name: string): DynamicComponent {
   return world.components.getInstance(name)!.type;
 }
 
-const TEXTS = ["", "a", "\ufeffbom", "hello world", "café", "日本語", "\u{1f600} emoji", "x".repeat(300), "NaN"];
+const TEXTS = [
+  "",
+  "a",
+  "\ufeffbom",
+  "hello world",
+  "caf\u00e9",
+  "\u65e5\u672c\u8a9e",
+  "\u{1f600} emoji",
+  "x".repeat(300),
+  "NaN",
+];
 
 /** Populate a world with every field kind, dense and capped, including null objects and freed slots. */
 function populate(world: World, random: Rng): Entity[] {
@@ -433,6 +446,7 @@ Deno.test("saveWorld writes string saves into a reused buffer", async () => {
 // ---------------------------------------------------------------- bool, enum and entity fields
 
 /** A unit with an enum, a bool and an entity ref, for the field-value range checks. */
+// deno-lint-ignore explicit-function-return-type -- the inferred component types are the point of this factory
 function refUnitOf() {
   return new Component({
     name: "unit",
@@ -483,6 +497,7 @@ function smallWorldOf(list: DynamicComponent[]): Promise<World> {
   return worldOf(list, 16);
 }
 
+// deno-lint-ignore explicit-function-return-type -- the inferred component types are the point of this factory
 function unitOf(labels: readonly string[] = ["idle", "run", "dead"], alive: unknown = field.bool()) {
   return new Component({
     name: "unit",

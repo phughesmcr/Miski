@@ -1,7 +1,9 @@
 /// <reference lib="deno.ns" />
 
+// deno-lint-ignore-file no-await-in-loop -- worlds are built and checked one after another on purpose
+
 import { asEntity, Query, System, World, WorldStateError } from "../mod.ts";
-import type { SystemHook } from "../mod.ts";
+import type { Component, SystemHook } from "../mod.ts";
 import { createTestWorld, tagComponent, vec2Component } from "./fixtures.ts";
 import { assert, assertEquals, assertRejects, assertThrows, ids } from "./helpers.ts";
 import { ArchetypeManager } from "../src/archetype/archetype-manager.ts";
@@ -343,10 +345,11 @@ Deno.test("rejected pending system callbacks leave borrowed query views untouche
   }
 });
 
-function lifecycleTag() {
+function lifecycleTag(): Component<null> {
   return tagComponent("tag");
 }
 
+// deno-lint-ignore explicit-function-return-type -- the inferred System type carries the query's component map
 function makeSystem(
   tag: ReturnType<typeof lifecycleTag>,
   name: string,

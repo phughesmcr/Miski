@@ -64,7 +64,7 @@ Deno.test("EcsWorld.spawn called from a spec getter does not clobber the outer s
   const spec = { A: { x: 5 } } as Record<string, unknown>;
   Object.defineProperty(spec, "B", {
     enumerable: true,
-    get() {
+    get(): { x: number } {
       inner = ecs.spawn({ A: { x: 9 } });
       return { x: 7 };
     },

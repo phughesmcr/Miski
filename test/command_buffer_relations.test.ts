@@ -12,7 +12,7 @@ import {
   type PendingEntity,
   Relation,
   RelationCycleError,
-  World,
+  type World,
 } from "../mod.ts";
 import { createTestWorld, tagComponent } from "./fixtures.ts";
 import { assert, assertEquals, assertStrictEquals, assertThrows } from "./helpers.ts";

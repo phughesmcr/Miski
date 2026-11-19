@@ -1,5 +1,7 @@
 /// <reference lib="deno.ns" />
 
+// deno-lint-ignore-file no-top-level-await -- worlds are built at module load, before Deno.bench registers
+
 import {
   Component,
   entityIndex,

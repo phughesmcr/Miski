@@ -94,7 +94,7 @@ Deno.test("schema hashing does not allocate component identities and merge prese
 });
 
 Deno.test("plain schema bootstrap and hashing share validation", () => {
-  for (const name of ["constructor", "__proto__", "toString", "éclair", "🚀"]) {
+  for (const name of ["constructor", "__proto__", "toString", "\u00e9clair", "\u{1f680}"]) {
     const input = { [name]: { x: Float32Array } };
     assertThrows(() => componentSchemaHash(input), SpecError, "Invalid component specification");
     assertThrows(() => compileComponentSchema(input), SpecError, "Invalid component specification");

@@ -1,5 +1,7 @@
 /// <reference lib="deno.ns" />
 
+// deno-lint-ignore-file no-await-in-loop -- worlds are built and checked one after another on purpose
+
 /**
  * Full world save / load, the JSON view and migration hooks.
  *

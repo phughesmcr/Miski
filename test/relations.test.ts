@@ -17,7 +17,7 @@ import {
   Relation,
   RelationCycleError,
   SpecError,
-  World,
+  type World,
   WorldRollbackScope,
 } from "../mod.ts";
 import { createEntity, createTestWorld, tagComponent, vec2Component } from "./fixtures.ts";
@@ -26,6 +26,7 @@ import { assert, assertEquals, assertStrictEquals, assertThrows, ids, listIds } 
 const position = vec2Component("position");
 const hidden = tagComponent("hidden");
 
+// deno-lint-ignore explicit-function-return-type -- the inferred component types are the point of this factory
 function relations() {
   return {
     childOf: new Relation({ name: "childOf", exclusive: true, acyclic: true, onDeleteTarget: "cascade" }),
@@ -502,7 +503,7 @@ Deno.test("rollback restores relation state exactly and order-neutrally", async 
   const before = observe(speculative, defsA, liveS);
   const point = new WorldRollbackScope(speculative);
   // Speculative work: retargets, removals, cascades, new entities and pairs, data writes.
-  world_mutate(speculative, defsA, liveS);
+  worldMutate(speculative, defsA, liveS);
   point.restore();
   assertEquals(observe(speculative, defsA, liveS), before, "observable relation state restored");
   assertEquals(observe(speculative, defsA, liveS), observe(control, defsB, liveC), "matches the control world");
@@ -529,7 +530,7 @@ Deno.test("rollback restores relation state exactly and order-neutrally", async 
   assertStrictEquals(speculative.relations.has(defsA.likes, afterS[0]!, afterS[1]!), true, "committed pair kept");
 });
 
-function world_mutate(world: World, defs: ReturnType<typeof relations>, live: readonly Entity[]): void {
+function worldMutate(world: World, defs: ReturnType<typeof relations>, live: readonly Entity[]): void {
   world.relations.add(defs.childOf, live[3]!, live[1]!);
   world.relations.remove(defs.likes, live[4]!, live[0]!);
   world.relations.add(defs.likes, live[6]!, live[0]!);
@@ -598,6 +599,7 @@ Deno.test("relation pair data treats undefined values as absent", async () => {
 });
 
 /** Relations next to a unit with field-type columns, for the cross-feature tests. */
+// deno-lint-ignore explicit-function-return-type -- the inferred component types are the point of this factory
 function fieldRelations() {
   const childOf = new Relation({ name: "childOf", exclusive: true, acyclic: true, onDeleteTarget: "cascade" });
   const likes = new Relation({ name: "likes" });

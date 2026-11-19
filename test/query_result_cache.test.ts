@@ -244,7 +244,7 @@ Deno.test("a related change refills a query result by copying stored handles, no
   world.entities.destroy(spawned);
   const pack = EntityManager.prototype.packSlot;
   let packed = 0;
-  EntityManager.prototype.packSlot = function (this: EntityManager, slot: number) {
+  EntityManager.prototype.packSlot = function (this: EntityManager, slot: number): ReturnType<typeof pack> {
     packed++;
     return pack.call(this, slot);
   };
@@ -384,7 +384,10 @@ Deno.test("archetype query iterators are reused without sharing state", async ()
 });
 
 /** One world's archetype and query state, wired the way `World` wires it. */
-function worldParts(components: DynamicComponent[], capacity: number) {
+function worldParts(
+  components: DynamicComponent[],
+  capacity: number,
+): { componentManager: ComponentManager; archetypes: ArchetypeManager; queries: QueryManager } {
   const componentManager = new ComponentManager(capacity, components);
   const archetypes = new ArchetypeManager(capacity, components.length);
   const queries = new QueryManager(

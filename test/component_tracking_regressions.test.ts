@@ -1,5 +1,7 @@
 /// <reference lib="deno.ns" />
 
+// deno-lint-ignore-file no-await-in-loop -- worlds are built and checked one after another on purpose
+
 import {
   Component,
   ComponentDataError,
@@ -107,7 +109,10 @@ Deno.test("a bundle spawn that fails mid-commit strips already-committed compone
   const original = ComponentManager.prototype.addInstanceToEntity;
   const failure = new Error("injected mid-commit failure");
   let calls = 0;
-  ComponentManager.prototype.addInstanceToEntity = function (this: ComponentManager, ...args) {
+  ComponentManager.prototype.addInstanceToEntity = function (
+    this: ComponentManager,
+    ...args
+  ): ReturnType<typeof original> {
     if (++calls === 2) throw failure;
     return original.apply(this, args);
   } as typeof original;

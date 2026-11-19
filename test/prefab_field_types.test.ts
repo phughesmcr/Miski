@@ -1,6 +1,6 @@
 /// <reference lib="deno.ns" />
 
-import { Component, ComponentDataError, type DynamicComponent, type Entity, field, Prefab, World } from "../mod.ts";
+import { Component, ComponentDataError, type DynamicComponent, type Entity, field, Prefab } from "../mod.ts";
 import { createTestWorld, Mesh } from "./fixtures.ts";
 import { assert, assertEquals, assertStrictEquals, assertThrows, listIds } from "./helpers.ts";
 
@@ -171,7 +171,6 @@ Deno.test("Prefab object fields: a throwing create() leaves the world unchanged"
 
 Deno.test("a create() hook that breaks its contract by instantiating does not corrupt its caller's borrowed list", async () => {
   const inner = new Component({ name: "inner", schema: { x: Uint8Array } });
-  let world!: World;
   const innerPrefab = new Prefab({ components: [[inner]] });
   const host = new Component({
     name: "host",
@@ -184,7 +183,7 @@ Deno.test("a create() hook that breaks its contract by instantiating does not co
       }),
     },
   });
-  world = await createTestWorld([inner, host], 16);
+  const world = await createTestWorld([inner, host], 16);
   const outer = new Prefab({ components: [[host]] });
   const list = world.entities.instantiateManyOrThrow(outer, 3);
   const entities = listIds(list);

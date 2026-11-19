@@ -24,7 +24,7 @@ Deno.test("a system callback's arguments.length matches the caller's argument co
     new System<Record<string, never>, unknown[], void>({
       name: "argumentsLength",
       query,
-      callback: function () {
+      callback: function (): void {
         seen = Array.from(arguments);
       },
     }),
@@ -189,7 +189,7 @@ Deno.test("a system callback is called without a this value", async () => {
     new System<Record<string, never>, unknown[], void>({
       name: "thisValue",
       query,
-      callback: function (this: unknown) {
+      callback: function (this: unknown): void {
         self = this;
       },
     }),
@@ -211,7 +211,7 @@ Deno.test("a system with argCount forwards exactly that many arguments", async (
         name: `fixed${argCount}`,
         query,
         argCount,
-        callback: function () {
+        callback: function (): void {
           seen = Array.from(arguments).slice(2);
         },
       }),

@@ -43,7 +43,11 @@ Deno.test("Float16Array column: write, canonicalize, save, JSON, rollback", asyn
   const doc = worldSaveToDocument(bytes);
   const back = worldSaveFromDocument(JSON.parse(JSON.stringify(doc)));
   assertEquals(back.length, bytes.length, "JSON roundtrip size");
-  console.log(JSON.stringify(worldSaveLayout(world)));
+  assertEquals(
+    worldSaveLayout(world).components[0]!.fields!.map((f) => f.type),
+    ["f16", "f32"],
+    "the layout records the f16 column type",
+  );
 
   const point = new WorldRollbackScope(world);
   world.components.setEntityData(half, e, { v: 2, w: 2 });

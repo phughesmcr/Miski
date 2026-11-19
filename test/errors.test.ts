@@ -8,7 +8,7 @@ import {
   ComponentOwnershipError,
   field,
   isMiskiError,
-  MiskiError,
+  type MiskiError,
   Prefab,
   Relation,
   RelationCycleError,

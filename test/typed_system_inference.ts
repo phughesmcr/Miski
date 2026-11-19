@@ -20,6 +20,7 @@ import type {
 } from "../mod.ts";
 import { tagComponent, type Vec2, vec2Component, vec2Schema } from "./fixtures.ts";
 // @ts-expect-error AnySystemCallback is not exported from the public mod.ts surface.
+// deno-lint-ignore no-unused-vars -- the import exists only to fail type-checking
 import type { AnySystemCallback } from "../mod.ts";
 
 function expectType<T>(_value: T): void {}

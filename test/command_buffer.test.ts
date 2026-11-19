@@ -1,5 +1,7 @@
 /// <reference lib="deno.ns" />
 
+// deno-lint-ignore-file no-await-in-loop -- worlds are built and checked one after another on purpose
+
 import {
   ArgumentError,
   CapacityError,
@@ -19,7 +21,7 @@ import {
   Query,
   Relation,
   SpecError,
-  World,
+  type World,
 } from "../mod.ts";
 import { createEntity, createTestWorld, Mesh, tagComponent, vec2Component } from "./fixtures.ts";
 import { assert, assertEquals, assertStrictEquals, assertThrows, ids } from "./helpers.ts";

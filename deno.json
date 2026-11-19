@@ -47,7 +47,7 @@
     "@phughesmcr/partitionedbuffer": "jsr:@phughesmcr/partitionedbuffer@^0.5.0"
   },
   "lint": {
-    "exclude": ["bench/**/*.ts", "example/**/*.ts", "example/**/*.js", "test/**"],
+    "exclude": ["example/**/*.ts", "example/**/*.js"],
     "rules": {
       "tags": [
         "jsr",
