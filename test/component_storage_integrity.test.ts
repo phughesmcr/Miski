@@ -61,7 +61,7 @@ for (const how of ["partitions", "proxy-slot"] as const) {
   });
 }
 
-Deno.test("capped bundle, createWith and addToEntities survive stray non-owner writes", async () => {
+Deno.test("capped bundle, create(bundle) and addToEntities survive stray non-owner writes", async () => {
   const position = vec2Component("position", { maxEntities: 2 });
   const world = await createTestWorld([position], 8);
   const instance = world.components.getInstanceOrThrow(position);
@@ -69,8 +69,8 @@ Deno.test("capped bundle, createWith and addToEntities survive stray non-owner w
   strayWrite("partitions", instance, entityIndex(strays[0]!), 5);
   strayWrite("partitions", instance, entityIndex(strays[1]!), 6);
 
-  const created = world.entities.createWithOrThrow([[position, { x: 3, y: 4 }]]);
-  assertEquals(world.components.getEntityDataOrThrow(position, created), { x: 3, y: 4 }, "createWith commits fully");
+  const created = world.entities.createOrThrow([[position, { x: 3, y: 4 }]]);
+  assertEquals(world.components.getEntityDataOrThrow(position, created), { x: 3, y: 4 }, "create(bundle) commits fully");
 
   const bundled = createEntity(world);
   world.components.addBundle(bundled, [[position, { x: 9, y: 9 }]]);
@@ -101,7 +101,7 @@ Deno.test("acquiring ownership with data marks changed identically in dense and 
     const world = await createTestWorld([position], 8);
 
     // Zero payload on fresh storage.
-    const zero = world.entities.createWithOrThrow([[position, { x: 0 }]]);
+    const zero = world.entities.createOrThrow([[position, { x: 0 }]]);
     assertEquals(ids(world.components.getChanged(position)), [zero], `${label}: zero payload marks changed`);
     world.refresh();
 
@@ -203,9 +203,9 @@ Deno.test("EcsWorld.spawn treats undefined tag values as absent", async () => {
     tags: { Player: true },
   });
   await ecs.init();
-  const entity = ecs.spawn({ Position: undefined, Player: undefined });
+  const entity = ecs.spawnOrThrow({ Position: undefined, Player: undefined });
   assert(!ecs.world.components.entityHas("Player", entity), "Undefined tag spawns without the tag");
-  const tagged = ecs.spawn({ Position: { x: 1 }, Player: true });
+  const tagged = ecs.spawnOrThrow({ Position: { x: 1 }, Player: true });
   assert(ecs.world.components.entityHas("Player", tagged), "true still adds the tag");
   assertThrows(() => ecs.spawn({ Player: false as never }), TypeError, "must be spawned with true");
 });

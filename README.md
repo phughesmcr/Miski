@@ -105,7 +105,7 @@ const world = new World({
 
 await world.init();
 
-const entity = world.entities.createWithOrThrow([
+const entity = world.entities.createOrThrow([
   [Position, { x: 0, y: 0 }],
   [Velocity, { x: 1, y: 0.5 }],
 ]);
@@ -154,13 +154,18 @@ const game = createEcsWorld({
 });
 
 await game.init();
-const e = game.spawn({
+const e = game.spawnOrThrow({
   Position: { x: 0, y: 0 },
   Health: { hp: 10, maxHp: 10 },
   Player: true,
 });
 game.storage.Position.get(e, "x");
+game.spawn({ Player: true }); // Entity | undefined — undefined when full
 ```
+
+Every creation method follows one rule: the plain name returns `undefined` when
+the world is full, and the `OrThrow` name throws `CapacityError`. Invalid input
+(unknown components, bad payloads, owner caps) throws from both.
 
 > :warning: **House rule.** Components are fixed at world creation — the kitchen
 > closes after `new World`. Call `world.refresh()` (or wrap a tick in
@@ -375,18 +380,22 @@ subsequent allocations.
 ```ts
 const e = world.entities.createOrThrow();          // throws CapacityError when full
 const e2 = world.entities.createOrThrow();
-const e3 = world.entities.createWithOrThrow([[Position, { x: 1, y: 2 }]]);
+const e3 = world.entities.createOrThrow([[Position, { x: 1, y: 2 }]]);
 const maybe = world.entities.create();             // Entity | undefined — undefined when full
-const maybe2 = world.entities.createWith([[Position, { x: 1, y: 2 }]]); // likewise
+const maybe2 = world.entities.create([[Position, { x: 1, y: 2 }]]); // likewise
 
 world.entities.destroy(e2);
 world.entities.isActive(e);
+world.entities.isEmpty(e);                          // active with no components
 world.entities.getActiveCount();
 world.entities.getAvailableCount();
 
 // Optional active-iteration bounds are raw slots: inclusive start, exclusive end.
 world.entities.getActiveSnapshot(entityIndex(e3));
 ```
+
+Handle `0` is a valid entity (slot 0, generation 0), so test an optional
+result with `=== undefined`, never truthiness: `if (maybe !== undefined)`.
 
 Use `entityIndex(handle)` or `asSlotIndex(index)` for ranged iteration bounds.
 Packed handles are rejected by the TypeScript API. Spawn payload and capacity
@@ -425,7 +434,7 @@ const { x } = world.components.getInstanceOrThrow(Position).storage.partitions;
 for (let i = 0; i < pack.count; i++) x[pack.slots[i]!] = i * 2; // per-instance tweaks
 ```
 
-Instantiating is the same as `createWith` with the prefab's flattened bundle
+Instantiating is the same as `create(bundle)` with the prefab's flattened bundle
 followed by any extra override components: same handles, values, changed
 marks, archetype, entered order, and allocation-free steady state. Defaults
 are validated and canonicalized through each field's typed array when the
@@ -434,15 +443,16 @@ caps, capacity) finishes before allocation, so a rejected call — including a
 bulk call that does not fit in full — allocates nothing and consumes no
 generation. Instances hold plain copies: nothing reads through to the prefab,
 and since prefabs are frozen, nothing can change under them. Instances are
-ordinary entities (rollback undoes them like `createWith`), while prefabs
+ordinary entities (rollback undoes them like `create(bundle)`), while prefabs
 themselves are never part of world state.
 
 `createEcsWorld` has named-map helpers:
 
 ```ts
 const orc = game.prefab({ Position: { x: 0 }, Enemy: true }, { name: "orc" });
-game.instantiate(orc, { Position: { y: 3 } });
-game.instantiateMany(orc, 16);
+game.instantiateOrThrow(orc, { Position: { y: 3 } }); // Entity
+game.instantiate(orc);                                  // Entity | undefined when full
+game.instantiateManyOrThrow(orc, 16);                   // borrowed list, all or nothing
 ```
 
 ### :mag: Queries
@@ -602,7 +612,7 @@ for (let i = 0; i < tree.count; i++) visit(tree.entities[i]!, tree.depths[i]!);
   and a reused slot never inherits pairs.
 - **Rollback and checkpoints** restore pairs, list order and data exactly.
   Checkpoints preflight target liveness and cycles before they mutate anything.
-- The generic component APIs (`addToEntity`, bundles, `createWith`, ...) refuse
+- The generic component APIs (`addToEntity`, bundles, `create(bundle)`, ...) refuse
   relation tags; use `world.relations`. `createEcsWorld` takes
   `relations: { ChildOf: { exclusive: true }, ... }` and exposes
   `ecs.relations.ChildOf`.
@@ -737,7 +747,7 @@ commands.flush();                      // applies in queue order
 
 Queuing validates components and copies data at once, so data objects can be
 reused straight away and bad data throws at the call site. Flushing applies
-each command as the direct call would (`createWith`, `destroy`,
+each command as the direct call would (`create(bundle)`, `destroy`,
 `addToEntity`, `setEntityData`, `removeFromEntity`, `relations.add`,
 `relations.remove`), except that commands for entities no longer active are
 skipped (for `relate` / `unrelate`, if either entity is no longer active). A
@@ -777,10 +787,12 @@ try {
   scope.restore();
 }
 
-import { compileComponentSchema, componentSchemaHash } from "@phughesmcr/miski";
+import { compileComponentSchema, componentSchemaHash, createEcsWorld } from "@phughesmcr/miski";
 
-compileComponentSchema({ Position: { x: Float32Array, y: Float32Array } });
-componentSchemaHash({ Position: { x: Float32Array, y: Float32Array } });
+const schema = compileComponentSchema({ Position: { x: Float32Array, y: Float32Array } });
+componentSchemaHash({ Position: { x: Float32Array, y: Float32Array } }); // === schema.schemaHash
+// A precompiled schema replaces `components` / `tags`; relations still go beside it.
+const typed = createEcsWorld({ capacity: 1024, schema, relations: { ChildOf: { exclusive: true } } });
 ```
 
 Rollback restores ownership, the component values of owned rows (dense and
@@ -939,7 +951,7 @@ toolchain is now pinned to Deno 2.9.7; figures have not been re-measured):
 | Add/remove data component | ~121 ns |
 | Archetype move (common gameplay) | ~334 ns |
 | Bulk add/remove data — 7,168 entities | ~93 ns/entity |
-| Spawn/despawn 128 via `createWith` | ~60 µs |
+| Spawn/despawn 128 via `create(bundle)` | ~60 µs |
 | Game frame (move + query + refresh) | ~6.8 µs |
 
 Hot entity, ownership, direct-write, cached query, changed/owner iteration,

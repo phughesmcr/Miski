@@ -17,19 +17,21 @@ Deno.test("bundle spawn is atomic and never reports a false exit from the root a
   world.entities.queryList(missingPosition);
   world.refresh();
 
-  const soft = world.entities.createWith([[position, { x: 1 }]])!;
-  assertEquals(ids(world.entities.queryExited(missingPosition)), [], "createWith must not exit root");
-  assertEquals(ids(world.entities.queryEntered(missingPosition)), [], "createWith must not enter root");
-  assertEquals(ids(world.entities.queryEntered(hasPosition)), [soft], "createWith enters its final archetype");
-  assert(!world.archetypes.isEntityInRoot(soft), "Bundle spawn must land outside root");
+  const soft = world.entities.create([[position, { x: 1 }]])!;
+  assertEquals(ids(world.entities.queryExited(missingPosition)), [], "create(bundle) must not exit root");
+  assertEquals(ids(world.entities.queryEntered(missingPosition)), [], "create(bundle) must not enter root");
+  assertEquals(ids(world.entities.queryEntered(hasPosition)), [soft], "create(bundle) enters its final archetype");
+  assert(!world.entities.isEmpty(soft), "Bundle spawn must land outside root");
 
-  const strict = world.entities.createWithOrThrow([[position, { x: 2 }]]);
-  assertEquals(ids(world.entities.queryExited(missingPosition)), [], "createWithOrThrow must not exit root");
+  const strict = world.entities.createOrThrow([[position, { x: 2 }]]);
+  assertEquals(ids(world.entities.queryExited(missingPosition)), [], "createOrThrow(bundle) must not exit root");
   assertEquals(sorted(world.entities.queryEntered(hasPosition)), sorted([soft, strict]), "Both spawns entered");
 
-  const empty = world.entities.createWithOrThrow([]);
+  const empty = world.entities.createOrThrow([]);
   assertEquals(ids(world.entities.queryEntered(missingPosition)), [empty], "Empty bundle spawns into root");
   assertEquals(ids(world.entities.queryExited(missingPosition)), [], "Empty bundle spawn is not an exit");
+  assert(world.entities.isEmpty(empty), "An empty bundle creates an empty entity, like create()");
+  assert(world.entities.isEmpty(world.entities.create([])!), "create([]) matches create()");
   await world.destroy();
 });
 
@@ -231,24 +233,24 @@ Deno.test("full-world bundle creation reports payload errors before capacity err
   const world = await createTestWorld([position]);
   const created = Array.from({ length: world.entities.capacity }, () => world.entities.createOrThrow());
 
-  assertThrows(() => world.entities.createWith(42 as never), TypeError, "Bundle");
+  assertThrows(() => world.entities.create(42 as never), TypeError, "Bundle");
   assertThrows(
-    () => world.entities.createWith([[position, { x: Number.MAX_VALUE }]]),
+    () => world.entities.create([[position, { x: Number.MAX_VALUE }]]),
     ComponentDataError,
     "outside its storage range",
   );
   assertThrows(
-    () => world.entities.createWithOrThrow([[position, { nope: 1 } as never]]),
+    () => world.entities.createOrThrow([[position, { nope: 1 } as never]]),
     Error,
     "nope",
   );
-  assertEquals(world.entities.createWith([[position, { x: 1 }]]), undefined, "Valid bundle on full world is undefined");
-  assertThrows(() => world.entities.createWithOrThrow([[position, { x: 1 }]]), CapacityError, "capacity");
+  assertEquals(world.entities.create([[position, { x: 1 }]]), undefined, "Valid bundle on full world is undefined");
+  assertThrows(() => world.entities.createOrThrow([[position, { x: 1 }]]), CapacityError, "capacity");
   assertEquals(world.entities.getActiveSnapshot(), created, "Failures preserve active handles");
 
   // Scratch state must stay clean after a capacity failure.
   world.entities.destroy(created[0]!);
-  const recovered = world.entities.createWithOrThrow([[position, { x: 3 }]]);
+  const recovered = world.entities.createOrThrow([[position, { x: 3 }]]);
   assert(world.entities.isActive(recovered), "Spawn succeeds once capacity returns");
   await world.destroy();
 });

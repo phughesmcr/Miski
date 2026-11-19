@@ -185,8 +185,8 @@ Deno.test("decoded objects are fresh values, and null objects load as null witho
   const source = await worldOf(unitOnly());
   const unit = component(source, "unit") as Component<never>;
   const mesh = new Mesh([1, 2, 3]);
-  const a = source.entities.createWithOrThrow([[unit, { mesh } as never]] as never);
-  const b = source.entities.createWithOrThrow([[unit, { mesh: null } as never]] as never);
+  const a = source.entities.createOrThrow([[unit, { mesh } as never]] as never);
+  const b = source.entities.createOrThrow([[unit, { mesh: null } as never]] as never);
   log.encoded = 0;
   const bytes = saveWorld(source);
   assertStrictEquals(log.encoded, 1, "encode runs once per non-null object per save");
@@ -214,7 +214,7 @@ Deno.test("an encode result of null loads as null", async () => {
     }),
   ];
   const source = await worldOf(list());
-  const e = source.entities.createWithOrThrow([[component(source, "maybe") as Component<never>, {
+  const e = source.entities.createOrThrow([[component(source, "maybe") as Component<never>, {
     value: "dropped",
   } as never]] as never);
   const loaded = await worldOf(list());
@@ -288,14 +288,14 @@ Deno.test("invalid encode results and unencodable strings throw before anything 
         schema: { value: field.object<number>({ encode: () => result as never, decode: () => 0 }) },
       }),
     ]);
-    world.entities.createWithOrThrow([[component(world, "odd") as Component<never>, { value: 1 } as never]] as never);
+    world.entities.createOrThrow([[component(world, "odd") as Component<never>, { value: 1 } as never]] as never);
     assertThrows(() => saveWorld(world), WorldSaveError, "odd.value");
     const target = new Uint8Array(1 << 12).fill(0xaa);
     assertThrows(() => saveWorld(world, target), WorldSaveError, "odd.value");
     assert(target.every((byte) => byte === 0xaa), `${label}: nothing written`);
   }
   const world = await worldOf([new Component({ name: "named", schema: { text: field.string() } })]);
-  world.entities.createWithOrThrow(
+  world.entities.createOrThrow(
     [[component(world, "named") as Component<never>, { text: "ok\ud800" } as never]] as never,
   );
   assertThrows(() => saveWorld(world), WorldSaveError, "named.text");

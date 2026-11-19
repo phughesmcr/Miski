@@ -48,10 +48,10 @@ Deno.test("a newly owned data component is changed whether or not a payload was 
     components.addBundle(f, [[position]]);
     assertEquals(ids(components.getChanged(position)), [f], `${label}: addBundle`);
 
-    // createWith without data.
+    // create(bundle) without data.
     world.refresh();
-    const g = entities.createWithOrThrow([[position], [marker]]);
-    assertEquals(ids(components.getChanged(position)), [g], `${label}: createWith`);
+    const g = entities.createOrThrow([[position], [marker]]);
+    assertEquals(ids(components.getChanged(position)), [g], `${label}: create(bundle)`);
 
     // Tags still skip changed tracking.
     assertEquals(ids(components.getChanged(marker)), [], `${label}: tags are never changed`);
@@ -94,7 +94,7 @@ Deno.test("a bundle spawn that fails mid-commit strips already-committed compone
   } as typeof original;
   let thrown: unknown;
   try {
-    world.entities.createWith([[capped, { x: 1 }], [position, { x: 2 }]]);
+    world.entities.create([[capped, { x: 1 }], [position, { x: 2 }]]);
   } catch (error) {
     thrown = error;
   } finally {

@@ -26,7 +26,6 @@ export type {
   ComponentSpec,
   DynamicComponent,
   DynamicComponentInstance,
-  EntityManagerSerialized,
   InferredDataComponentSpec,
   TagComponentSpec,
 } from "@/types/component.ts";
@@ -76,7 +75,6 @@ export type {
   ComponentInstanceGetter,
   QueryManagerDependencies,
   WorldAPIResult,
-  WorldArchetypeAPI,
   WorldComponentAPI,
   WorldContext,
   WorldEntityAPI,

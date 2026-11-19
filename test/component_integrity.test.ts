@@ -26,7 +26,7 @@ Deno.test("dense and capped storage initialize every new owner with zero default
     const position = vec2Component("position", { maxEntities });
     const world = await createTestWorld([position]);
     const instance = world.components.getInstanceOrThrow(position);
-    const bundled = world.entities.createWithOrThrow([[position]]);
+    const bundled = world.entities.createOrThrow([[position]]);
     const single = createEntity(world);
     world.components.addToEntity(position, single);
     const batched = createEntity(world);
@@ -35,7 +35,7 @@ Deno.test("dense and capped storage initialize every new owner with zero default
       entities: [batched],
       slots: [entityIndex(batched)],
     });
-    const emptyPayload = world.entities.createWithOrThrow([[position, {}]]);
+    const emptyPayload = world.entities.createOrThrow([[position, {}]]);
     for (const entity of [bundled, single, batched, emptyPayload]) {
       assertEquals(
         world.components.getEntityDataOrThrow(position, entity),
@@ -74,11 +74,11 @@ Deno.test("dense and capped storage initialize every new owner with zero default
 Deno.test("component entity access rejects stale, malformed and unowned identities", async () => {
   const position = vec2Component();
   const world = await createTestWorld([position]);
-  const old = world.entities.createWithOrThrow([[position, { x: 1 }]]);
+  const old = world.entities.createOrThrow([[position, { x: 1 }]]);
   const instance = world.components.getInstanceOrThrow(position);
   instance.proxy!.entity = old;
   world.entities.destroy(old);
-  const replacement = world.entities.createWithOrThrow([[position, { x: 2 }]]);
+  const replacement = world.entities.createOrThrow([[position, { x: 2 }]]);
   for (const entity of [old, asEntity(-1), asEntity(0.5), asEntity(Number.NaN), asEntity(2 ** 32 + replacement)]) {
     assert(!instance.has(entity), "Stale and noncanonical handles must not own replacement storage");
     assert(!world.components.entityHas(position, entity), "Manager ownership must validate identity");
@@ -102,8 +102,8 @@ Deno.test("slot cursor marks the actual slot and every real write advances revis
   const position = vec2Component();
   const tag = tagComponent("tag");
   const world = await createTestWorld([position, tag]);
-  const a = world.entities.createWithOrThrow([[position, { x: 1 }]]);
-  const b = world.entities.createWithOrThrow([[position, { x: 2 }]]);
+  const a = world.entities.createOrThrow([[position, { x: 1 }]]);
+  const b = world.entities.createOrThrow([[position, { x: 2 }]]);
   const instance = world.components.getInstanceOrThrow(position);
   instance.set(a, "x", 3);
   world.refresh();
@@ -128,7 +128,7 @@ Deno.test("dense and capped sparse storage share atomic canonical numeric writes
   for (const maxEntities of [undefined, 2]) {
     const position = vec2Component("position", { maxEntities });
     const world = await createTestWorld([position]);
-    const entity = world.entities.createWithOrThrow([[position, { x: 1, y: 1 }]]);
+    const entity = world.entities.createOrThrow([[position, { x: 1, y: 1 }]]);
     const instance = world.components.getInstanceOrThrow(position);
     world.refresh();
     const revision = instance.revision;
@@ -164,15 +164,15 @@ Deno.test("dense and capped sparse storage share atomic canonical numeric writes
 Deno.test("rollback restores capped mappings and pre-scope changes with fresh revision tokens", async () => {
   const position = new Component({ name: "position", schema: { x: Float32Array, y: Float32Array }, maxEntities: 2 });
   const world = await createTestWorld([position]);
-  const first = world.entities.createWithOrThrow([[position, { x: 1, y: 2 }]]);
-  const second = world.entities.createWithOrThrow([[position, { x: 3, y: 4 }]]);
+  const first = world.entities.createOrThrow([[position, { x: 1, y: 2 }]]);
+  const second = world.entities.createOrThrow([[position, { x: 3, y: 4 }]]);
   world.refresh();
   const instance = world.components.getInstanceOrThrow(position);
   instance.set(first, "x", 5);
   const point = new WorldRollbackScope(world);
   world.components.removeFromEntity(position, first);
   world.components.setEntityData(position, second, { x: 8, y: 9 });
-  const third = world.entities.createWithOrThrow([[position, { x: 10, y: 11 }]]);
+  const third = world.entities.createOrThrow([[position, { x: 10, y: 11 }]]);
   const revision = instance.revision;
   point.restore();
   assertEquals(world.components.getEntityDataOrThrow(position, first), { x: 5, y: 2 }, "Restore first sparse mapping");
@@ -196,8 +196,8 @@ Deno.test("bundle and batch commits keep canonical scratch values isolated by co
   const first = vec2Component("first");
   const second = vec2Component("second");
   const world = await createTestWorld([first, second]);
-  const a = world.entities.createWithOrThrow([[first, { x: 1.1 }], [second, { x: 2.2 }]]);
-  const b = world.entities.createWithOrThrow([[second, { x: 3.3 }]]);
+  const a = world.entities.createOrThrow([[first, { x: 1.1 }], [second, { x: 2.2 }]]);
+  const b = world.entities.createOrThrow([[second, { x: 3.3 }]]);
   assertEquals(
     world.components.getInstanceOrThrow(first).get(a, "x"),
     Math.fround(1.1),

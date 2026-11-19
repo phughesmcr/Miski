@@ -120,7 +120,7 @@ function step(h: Harness, random: Rng): void {
       return;
     }
     case 6: {
-      const spawned = world.entities.createWith([[position, { x: random() % 7, y: 1 }], [tagB]]);
+      const spawned = world.entities.create([[position, { x: random() % 7, y: 1 }], [tagB]]);
       if (spawned !== undefined) live.push(spawned);
       return;
     }

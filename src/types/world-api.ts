@@ -1,6 +1,5 @@
 import type { DynamicComponent } from "@/types/component.ts";
 import type { World } from "@/world/world.ts";
-import type { WorldArchetypeAPI } from "@/types/world-archetype-api.ts";
 import type { WorldComponentAPI } from "@/types/world-component-api.ts";
 import type { WorldEntityAPI } from "@/types/world-entity-api.ts";
 import type { WorldSystemAPI } from "@/types/world-system-api.ts";
@@ -13,7 +12,6 @@ export type {
 } from "@/types/world-component-api.ts";
 export type { WorldEntityAPI } from "@/types/world-entity-api.ts";
 export type { WorldSystemAPI } from "@/types/world-system-api.ts";
-export type { WorldArchetypeAPI } from "@/types/world-archetype-api.ts";
 
 /** The specification for a World */
 export type WorldSpec = {
@@ -36,7 +34,6 @@ export type WorldContext = Pick<
   | "components"
   | "entities"
   | "systems"
-  | "archetypes"
   | "relations"
   | "init"
   | "destroy"
@@ -48,8 +45,6 @@ export type WorldContext = Pick<
 
 /** The result of a World API constructor */
 export type WorldAPIResult = {
-  /** The Archetype API */
-  archetypes: WorldArchetypeAPI;
   /** The Component API */
   components: WorldComponentAPI;
   /** The Entity API */

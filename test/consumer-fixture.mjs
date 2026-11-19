@@ -12,7 +12,7 @@ export async function runConsumerSmoke({ createEcsWorld, World }, expectedVersio
   });
   await game.init();
   try {
-    const entity = game.spawn({ Position: { x: 1 }, Player: true });
+    const entity = game.spawnOrThrow({ Position: { x: 1 }, Player: true });
     const position = game.storage.Position;
     assert(position.get(entity, "y") === 0, "Omitted fields must start at zero");
     position.set(entity, "x", 2);
@@ -24,7 +24,7 @@ export async function runConsumerSmoke({ createEcsWorld, World }, expectedVersio
     assert(!game.world.entities.isActive(entity), "Destroyed handles must be inactive");
     assert(game.world.entities.querySnapshot(query).length === 0, "Destroyed entities must leave queries");
     assert(snapshot[0] === entity, "Snapshots must survive later mutations");
-    const replacement = game.spawn({ Position: { x: 3 } });
+    const replacement = game.spawnOrThrow({ Position: { x: 3 } });
     assert(replacement !== entity && position.get(replacement, "x") === 3, "Recycled slots must get new handles");
     return { version: World.version };
   } finally {

@@ -555,7 +555,7 @@ function spawnProjectileBatchRepeated(out: Entity[]): void {
 function spawnProjectileBatchWithCreateWith(out: Entity[]): void {
   for (let i = 0; i < out.length; i++) {
     setBundledProjectileData(i);
-    out[i] = bundledSpawnLifecycle.world.entities.createWithOrThrow(bundledProjectileBundle);
+    out[i] = bundledSpawnLifecycle.world.entities.createOrThrow(bundledProjectileBundle);
   }
 }
 
@@ -594,7 +594,7 @@ const fieldMeshes = [new GcMesh(0), new GcMesh(1)];
 const fieldLabels = ["a", "b"];
 const fieldStates = ["idle", "run"] as const;
 const fieldTarget = mustCreateEntity(fieldWorld);
-const fieldEntity = fieldWorld.entities.createWithOrThrow([[fieldUnit, { label: "x" }]]);
+const fieldEntity = fieldWorld.entities.createOrThrow([[fieldUnit, { label: "x" }]]);
 const fieldTransitionEntity = mustCreateEntity(fieldWorld);
 const fieldInstance = fieldWorld.components.getInstanceOrThrow(fieldUnit);
 const fieldProxy = fieldInstance.proxy;
@@ -704,7 +704,7 @@ function commandPendingRelationBatch(round: number): void {
   pendingLinkData.weight = round & 7;
   for (let i = 0; i < 32; i++) {
     pendingParentData.parent = pendingRoot;
-    // Bundles are added with `add`: a direct `createWith` of a component with `field.*` columns allocates today.
+    // Bundles are added with `add`: a direct `create(bundle)` of a component with `field.*` columns allocates today.
     const parent = pendingBuffer.spawn();
     pendingBuffer.add(pendingNode, parent, pendingParentData);
     pendingChildData.parent = parent;
@@ -775,7 +775,7 @@ const scenarios: Scenario[] = [
     },
   },
   {
-    name: "spawn/despawn 128 projectiles - createWith bundle + refresh",
+    name: "spawn/despawn 128 projectiles - create(bundle) + refresh",
     iterations: 10_000,
     maxSteadyStateBeforeGcBytesPerIter: ZERO_ALLOC_BUDGET_BYTES_PER_ITER,
     fn: () => {

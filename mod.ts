@@ -68,20 +68,22 @@
  * const positionComponent = new Component({ name: "position", schema: { x: Float32Array, y: Float32Array } });
  * const world = new World({ capacity: 1024, components: [positionComponent] });
  *
- * // create() / createWith() return undefined when the world is full.
+ * // create() / create(bundle) return undefined when the world is full; the OrThrow forms throw.
+ * // Handle 0 is a valid entity, so compare with `=== undefined`, never truthiness.
  * const entity1: Entity | undefined = world.entities.create();
  * const entity2: Entity | undefined = world.entities.create();
  * const entity3: Entity = world.entities.createOrThrow(); // throws CapacityError when full
- * const entity4: Entity | undefined = world.entities.createWith([
+ * const entity4: Entity | undefined = world.entities.create([
  *   [positionComponent, { x: 1, y: 2 }],
  * ]);
- * const entity5: Entity = world.entities.createWithOrThrow([
+ * const entity5: Entity = world.entities.createOrThrow([
  *   [positionComponent, { x: 1, y: 2 }],
  * ]);
  * if (entity1 === undefined || entity2 === undefined) throw new Error("world is full");
  * world.entities.destroy(entity2);
  * world.entities.isActive(entity1); // true
  * world.entities.isActive(entity2); // false (destroyed)
+ * world.entities.isEmpty(entity1); // true (active, no components)
  * console.log(entity3, entity4, entity5);
  * ```
  *
@@ -108,7 +110,7 @@
  * ```ts
  * const positionComponent = new Component({ name: "position", schema: { x: Float32Array, y: Float32Array } });
  * const world = new World({ capacity: 1024, components: [positionComponent] });
- * const entity1 = world.entities.createWithOrThrow([[positionComponent, { x: 1, y: 2 }]]);
+ * const entity1 = world.entities.createOrThrow([[positionComponent, { x: 1, y: 2 }]]);
  * const position = world.components.getInstanceOrThrow(positionComponent); // getInstance() -> undefined instead
  *
  * // (a) Hot path: raw SoA columns indexed by slot (entityIndex), never the packed handle.
@@ -306,7 +308,8 @@
  *   },
  * });
  * await game.init();
- * const entity = game.spawn({ Position: { x: 0, y: 0 }, Player: true });
+ * const entity = game.spawnOrThrow({ Position: { x: 0, y: 0 }, Player: true });
+ * game.spawn({ Player: true }); // Entity | undefined: undefined when the world is full
  * game.storage.Position.get(entity, "x");
  *
  * const hash = componentSchemaHash(
@@ -317,7 +320,10 @@
  *   { Position: { x: Float32Array, y: Float32Array } },
  *   { Player: true },
  * );
- * console.log(hash, schema);
+ * console.log(hash === schema.schemaHash);
+ * // A precompiled schema replaces `components` / `tags` and keeps its component identities.
+ * const fromSchema = createEcsWorld({ capacity: 1024, schema });
+ * console.log(fromSchema.components.Position === schema.components.Position); // true
  *
  * // A rollback scope opens on the underlying World; leaving it without commit() restores the world.
  * {
@@ -418,7 +424,7 @@ export {
   defineComponentSchema,
   mergeComponentSchemas,
 } from "@/schema/schema.ts";
-export { createEcsWorld, createEcsWorldFromSchema, createEcsWorldWithSchema, EcsWorld } from "@/world/ecs-world.ts";
+export { createEcsWorld, EcsWorld } from "@/world/ecs-world.ts";
 export { cloneFieldValue, field, isFieldDescriptor } from "@/schema/field.ts";
 export type {
   BoolField,
@@ -532,7 +538,6 @@ export type {
   TypedQuerySpec,
   TypedSystemCallback,
   UntypedQueryComponents,
-  WorldArchetypeAPI,
   WorldComponentAPI,
   WorldContext,
   WorldEntityAPI,

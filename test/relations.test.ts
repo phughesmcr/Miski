@@ -317,11 +317,11 @@ Deno.test("generic component APIs refuse relation presence components", async ()
   assertThrows(() => world.components.addToEntity(likes, b!), TypeError, "world.relations");
   assertThrows(() => world.components.removeFromEntity(likes, a!), TypeError, "world.relations");
   assertThrows(() => world.components.addBundle(b!, [[likes]]), TypeError, "world.relations");
-  assertThrows(() => world.entities.createWith([[position, { x: 1, y: 1 }], [likes]]), TypeError, "world.relations");
+  assertThrows(() => world.entities.create([[position, { x: 1, y: 1 }], [likes]]), TypeError, "world.relations");
   const list = world.entities.queryList(new Query({ all: [likes] }));
   assertThrows(() => world.components.removeFromEntities(likes, list), TypeError, "world.relations");
   assertThrows(() => world.components.addToEntities(likes, list), TypeError, "world.relations");
-  assertStrictEquals(world.entities.getActiveCount(), 2, "the rejected createWith allocated nothing");
+  assertStrictEquals(world.entities.getActiveCount(), 2, "the rejected create(bundle) allocated nothing");
   assertEquals(listIds(world.relations.getTargets(likes, a!)), [b], "relation state untouched");
 });
 
@@ -543,8 +543,8 @@ Deno.test("createEcsWorld declares typed relations", async () => {
     },
   });
   await game.init();
-  const parent = game.spawn({ Position: { x: 0, y: 0 } });
-  const child = game.spawn({ Position: { x: 1, y: 1 } });
+  const parent = game.spawnOrThrow({ Position: { x: 0, y: 0 } });
+  const child = game.spawnOrThrow({ Position: { x: 1, y: 1 } });
   game.world.relations.add(game.relations.ChildOf, child, parent);
   game.world.relations.add(game.relations.Targets, child, parent, { weight: 2 });
   assertStrictEquals(game.world.relations.getTarget(game.relations.ChildOf, child), parent, "typed relation works");

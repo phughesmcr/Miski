@@ -35,7 +35,7 @@ Runtime tests live in `*.test.ts` files and run via `deno test` (see `deno.json`
 | `randomized_model.test.ts` | Seeded random operations checked against a plain model, with a twin control world proving rollback leaves no trace |
 | `spawn_scratch_reuse.test.ts` | `EcsWorld.spawn` scratch reuse: no leaked components or data, undefined-skip and tag validation, re-entrant spawns from getters |
 | `system_lifecycle_regressions.test.ts` | Init and destroy hooks awaiting `systems.destroy` reject instead of deadlocking; teardown rejects instead of throwing |
-| `prefab.test.ts` | Prefab definition, `extends` flattening, instantiate / instantiateMany differential against `createWith`, atomicity, capped components, rollback, `EcsWorld` helpers |
+| `prefab.test.ts` | Prefab definition, `extends` flattening, instantiate / instantiateMany differential against `create(bundle)`, atomicity, capped components, rollback, `EcsWorld` helpers |
 | `prefab_field_types.test.ts` | Prefabs with `field.*` columns: logical defaults, null-only entity refs, per-instance `create()` / `clone`, rejection of shared objects, throwing hooks |
 | `relations_cross.test.ts` | Relations with prefabs and field types: relation entries rejected in prefabs and overrides, numeric-only pair data, rollback and checkpoints restoring side columns and pairs together |
 | `feature_review.test.ts` | Post-merge review regressions: save field-value and masked-generation checks, nested `instantiateMany` lists, relation checkpoint order and undefined pair data, command buffers rejecting relations when queued |

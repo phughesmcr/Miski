@@ -40,7 +40,7 @@ Deno.test("world enforces entity capacity and reuses destroyed entity slots with
   );
   assertEquals(ids(world.entities.query(new Query({ all: [position] }))), [], "Expected destroy to remove components");
   assertEquals(ids(world.components.getOwners(position)), [], "Expected destroy to clear component ownership");
-  assert(!world.archetypes.isEntityInRoot(second), "Expected destroyed entity to leave archetype membership");
+  assert(!world.entities.isEmpty(second), "Expected destroyed entity to leave archetype membership");
 
   const replacement = createEntity(world);
   assertStrictEquals(

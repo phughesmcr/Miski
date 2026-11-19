@@ -342,8 +342,7 @@
 - **Breaking:** remove `world.archetypes.queryComponents`, a duplicate of
   `world.components.query`.
 - **Breaking:** move `queryEntered` / `queryExited` from `world.archetypes` to
-  `world.entities`. `world.archetypes` keeps `getEntityArchetype` and
-  `isEntityInRoot`.
+  `world.entities`.
 - `world.entities.query(q)` and `world.entities.getActive()` return a separate
   pooled iterator per call instead of one shared cursor, so nested loops over
   the same query (or over `getActive()`, with any bounds) see every pair. A 4×4
@@ -352,6 +351,37 @@
   don't call `next()` on one after it reports `done`. `query()` iterates the
   query's retained result, so re-querying the same query after a mutation
   inside the loop still changes what the outer loop sees.
+- **Breaking:** `world.entities.createWith(bundle)` and
+  `createWithOrThrow(bundle)` fold into `create(bundle?)` and
+  `createOrThrow(bundle?)`. Without a bundle they behave as before; with one
+  they keep the all-or-nothing preflight (the bundle is validated before
+  capacity is checked) and place the entity straight into its final archetype.
+- **Breaking:** `EcsWorld.spawn`, `instantiate` and `instantiateMany` return
+  `undefined` when the world is full instead of throwing `CapacityError`. The
+  throwing forms are the new `spawnOrThrow`, `instantiateOrThrow` and
+  `instantiateManyOrThrow`, matching `world.entities`. Invalid input (unknown
+  names, tag values other than `true`, owner caps) still throws from both.
+- **Breaking:** remove `createEcsWorldFromSchema(capacity, schema)` and
+  `createEcsWorldWithSchema(config)`. Pass a precompiled schema to
+  `createEcsWorld({ capacity, schema })` instead; unlike the removed helpers it
+  also takes `relations`. `EcsWorldConfig` takes either `schema` or
+  `components`/`tags`, not both, and the `EcsWorld` constructor no longer takes
+  a second `definitions` argument.
+- **Breaking:** remove the `world.archetypes` namespace and the
+  `WorldArchetypeAPI` type. `world.archetypes.isEntityInRoot(e)` is now
+  `world.entities.isEmpty(e)` (active and has no components).
+  `world.archetypes.getEntityArchetype(e)`, which returned an opaque bitfield
+  string, is removed.
+- **Breaking:** remove `world.entities.isEntity`. It was a slot range check,
+  not a liveness check; use `isActive`.
+- Internal: remove the unexported `EntityManager.fromJSON` / `stringify` JSON
+  format (superseded by world saves), `EntityManager.requireSlot` and the
+  `EntityManagerSerialized` type.
+- **Breaking (types):** `world.entities.toArray` is typed to take any
+  `QueryEntityList` (it already accepted one at runtime), not only a
+  `BorrowedEntityList`.
+- Document that entity handle `0` is valid: compare optional results with
+  `=== undefined`, never truthiness.
 
 ## 1.0.0-beta.2 — 2026-11-18
 

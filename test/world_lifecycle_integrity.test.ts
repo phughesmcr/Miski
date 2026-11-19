@@ -321,7 +321,7 @@ Deno.test("rejected pending system callbacks leave borrowed query views untouche
   await world.init();
   const query = new Query({ all: [tag] });
   const borrowed = world.entities.queryList(query);
-  world.entities.createWithOrThrow([[tag]]);
+  world.entities.createOrThrow([[tag]]);
   const gate = Promise.withResolvers<void>();
   const run = world.systems.register(
     new System({

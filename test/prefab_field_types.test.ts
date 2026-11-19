@@ -50,17 +50,17 @@ Deno.test("Prefab field defaults: unset fields take each field type's default", 
   );
 });
 
-Deno.test("Prefab field defaults: bool, enum and string defaults round-trip and match createWith", async () => {
+Deno.test("Prefab field defaults: bool, enum and string defaults round-trip and match create(bundle)", async () => {
   const data = { hp: 7, alive: true, state: "run", label: "orc" } as const;
   const prefab = new Prefab({ components: [[unit, data]] });
   assertEquals(prefab.get(unit), { ...UNIT_DEFAULTS, ...data }, "Prefab.get returns logical values");
   const world = await createTestWorld(components);
   const a = world.entities.instantiateOrThrow(prefab);
-  const b = world.entities.createWithOrThrow([[unit, data]]);
+  const b = world.entities.createOrThrow([[unit, data]]);
   assertEquals(
     world.components.getEntityDataOrThrow(unit, a),
     world.components.getEntityDataOrThrow(unit, b),
-    "Matches createWith",
+    "Matches create(bundle)",
   );
   const list = world.entities.instantiateManyOrThrow(prefab, 3);
   for (let i = 0; i < list.count; i++) {
@@ -132,7 +132,7 @@ Deno.test("Prefab object fields: an object value without clone is rejected at de
   new Prefab({ components: [[bare, { mesh: 4 }]] });
 });
 
-Deno.test("Prefab object fields: overrides are stored by reference like createWith", async () => {
+Deno.test("Prefab object fields: overrides are stored by reference like create(bundle)", async () => {
   const prefab = new Prefab({ components: [[created_]] });
   const world = await createTestWorld(components);
   const given = new Mesh([9]);

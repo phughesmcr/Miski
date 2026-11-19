@@ -33,11 +33,15 @@ const game = createEcsWorld({
   tags: { Enemy: true },
 });
 const orc: Prefab = game.prefab({ Position: { x: 1 }, Enemy: true }, { name: "orc", extends: base });
-const spawned: Entity = game.instantiate(orc, { Position: { y: 2 } });
-const bulk: BorrowedEntityList = game.instantiateMany(orc, 2, { Enemy: true });
+const spawned: Entity = game.instantiateOrThrow(orc, { Position: { y: 2 } });
+const bulk: BorrowedEntityList = game.instantiateManyOrThrow(orc, 2, { Enemy: true });
+const maybeSpawned: Entity | undefined = game.instantiate(orc);
+const maybeBulk: BorrowedEntityList | undefined = game.instantiateMany(orc, 2);
+// @ts-expect-error - plain instantiate may return undefined at capacity
+const notSure: Entity = game.instantiate(orc);
 // @ts-expect-error - unknown named field
 game.prefab({ Position: { z: 1 } });
 // @ts-expect-error - tags take `true`
 game.instantiate(orc, { Enemy: false });
 
-void [one, sure, many, manySure, spawned, bulk];
+void [one, sure, many, manySure, spawned, bulk, maybeSpawned, maybeBulk, notSure];

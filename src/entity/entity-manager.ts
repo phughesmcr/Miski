@@ -6,14 +6,14 @@ import {
   ENTITY_GEN_MASK,
   entityGeneration,
   entityIndex,
+  isEntityInRange,
   MAX_WORLD_CAPACITY,
   packEntity,
   type SlotIndex,
 } from "@/entity/entity.ts";
 import { EntityIteratorPool } from "@/entity/pooled-entity-iterator.ts";
 import { SlotAllocator } from "@/entity/slot-allocator.ts";
-import type { EntityManagerSerialized } from "@/types/component.ts";
-import { isUint32, numberArrayFromString } from "@/utils.ts";
+import { isUint32 } from "@/utils.ts";
 
 /** An EntityManager is responsible for creating and destroying entities */
 export class EntityManager {
@@ -36,37 +36,6 @@ export class EntityManager {
   readonly #activeIterators = new EntityIteratorPool(true);
 
   readonly #capacity: number;
-
-  /**
-   * Create a new EntityManager from a JSON string
-   * @param json - The JSON string matching {@link EntityManager.stringify} format
-   * @returns A new EntityManager
-   * @throws {RangeError} - If the `MAX_CAPACITY` does not match {@link EntityManager.MAX_CAPACITY}
-   */
-  static fromJSON(json: string): EntityManager {
-    const parsed = JSON.parse(json) as EntityManagerSerialized;
-    const { MAX_CAPACITY, capacity, entities } = parsed;
-    if (MAX_CAPACITY !== EntityManager.MAX_CAPACITY) {
-      throw new RangeError(
-        `EntityManager.MAX_CAPACITY mismatch: ${MAX_CAPACITY} !== ${EntityManager.MAX_CAPACITY}`,
-      );
-    }
-    const manager = new EntityManager(capacity);
-    const slots = manager.#slots;
-    // A missing cursor (older format) meant "lowest free slot", which a search from slot 0 reproduces.
-    slots.restore(numberArrayFromString(entities), typeof parsed.cursor === "number" ? parsed.cursor : 0);
-    for (let slot = 0; slot < capacity; slot++) {
-      if (slots.isOccupied(slot)) manager.#nextGeneration[slot] = 1;
-    }
-    if (parsed.generations) {
-      const gens = numberArrayFromString(parsed.generations);
-      for (let i = 0; i < gens.length && i < capacity; i++) {
-        manager.#generation[i] = gens[i]!;
-        manager.#nextGeneration[i] = gens[i]! + (slots.isOccupied(i) ? 1 : 0);
-      }
-    }
-    return manager;
-  }
 
   /**
    * Create a new EntityManager
@@ -191,45 +160,10 @@ export class EntityManager {
    * @returns `true` if the entity exists, `false` otherwise
    */
   isActive(entity: Entity): boolean {
-    if (!this.isEntity(entity)) return false;
+    if (!isEntityInRange(entity, this.#capacity)) return false;
     const slot = entityIndex(entity);
-    if (slot >= this.#capacity) return false;
     if (!this.#slots.isOccupied(slot)) return false;
     return this.generationAt(slot) === entityGeneration(entity);
-  }
-
-  /**
-   * Check if a value could be a valid packed handle for this pool's capacity
-   * @param entity - The entity to check
-   * @returns `true` if the slot index is in range
-   */
-  isEntity(entity: Entity): entity is Entity {
-    if (!Number.isInteger(entity) || entity < 0 || entity > 0x7fffffff) return false;
-    return entityIndex(entity) < this.#capacity;
-  }
-
-  /** Resolve a packed handle to its slot after validating liveness. */
-  requireSlot(entity: Entity): SlotIndex {
-    if (!this.isActive(entity)) {
-      throw new EntityNotFoundError(formatEntityNotActive(entity));
-    }
-    return asSlotIndex(entityIndex(entity));
-  }
-
-  /**
-   * Serialize the entity manager to a JSON string
-   * @returns a JSON string representation of the entity manager
-   */
-  stringify(): string {
-    return JSON.stringify(
-      {
-        MAX_CAPACITY: EntityManager.MAX_CAPACITY,
-        capacity: this.#capacity,
-        entities: this.#slots.toUint32Array().toString(),
-        cursor: this.#slots.cursor,
-        generations: Array.from(this.#generation).toString(),
-      },
-    );
   }
 
   /** Allocation cursor: the slot where the next acquisition starts searching. @internal */

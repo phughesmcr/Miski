@@ -284,7 +284,7 @@ function spawnProjectileBatchRepeated(out: Entity[]): void {
 function spawnProjectileBatchWithCreateWith(out: Entity[]): void {
   for (let i = 0; i < out.length; i++) {
     setBundledProjectileData(i);
-    out[i] = bundledSpawnLifecycle.world.entities.createWithOrThrow(bundledProjectileBundle);
+    out[i] = bundledSpawnLifecycle.world.entities.createOrThrow(bundledProjectileBundle);
   }
 }
 
@@ -428,7 +428,7 @@ Deno.bench({
 });
 
 Deno.bench({
-  name: "spawn/despawn 128 projectiles - createWith bundle + refresh",
+  name: "spawn/despawn 128 projectiles - create(bundle) + refresh",
   group: "entity lifecycle",
   fn: () => {
     spawnProjectileBatchWithCreateWith(bundledSpawnEntities);
@@ -1000,7 +1000,7 @@ const fieldStates = ["idle", "run"] as const;
 const fieldEntities: Entity[] = [];
 for (let i = 0; i < 1024; i++) {
   fieldEntities.push(
-    fieldWorld.entities.createWithOrThrow([[fieldUnit, { hp: i, label: "x", mesh: fieldMeshes[0]! }]]),
+    fieldWorld.entities.createOrThrow([[fieldUnit, { hp: i, label: "x", mesh: fieldMeshes[0]! }]]),
   );
 }
 const fieldTarget = fieldEntities[0]!;

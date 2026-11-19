@@ -188,7 +188,7 @@ const pick = <T>(rng: Rng, items: readonly T[]): T => items[Math.floor(rng() * i
 
 type Op =
   | { kind: "create" }
-  | { kind: "createWith"; bundle: [string, Fields | undefined][] }
+  | { kind: "createBundle"; bundle: [string, Fields | undefined][] }
   | { kind: "destroy"; entity: Entity }
   | { kind: "add"; entity: Entity; name: string; data: Fields | undefined }
   | { kind: "remove"; entity: Entity; name: string }
@@ -217,7 +217,7 @@ function randomOp(rng: Rng, model: Model): Op {
   const live = [...model.live.keys()];
   const roll = rng();
   if (live.length === 0 || roll < 0.1) return { kind: "create" };
-  if (roll < 0.22) return { kind: "createWith", bundle: randomBundle(rng) };
+  if (roll < 0.22) return { kind: "createBundle", bundle: randomBundle(rng) };
   if (roll < 0.34) return { kind: "destroy", entity: pick(rng, live) };
   const name = pick(rng, components).name;
   const entity = pick(rng, live);
@@ -281,21 +281,21 @@ function apply(world: World, op: Op, model: Model | undefined, where: string): v
       model.live.set(entity, new Map());
       return;
     }
-    case "createWith": {
+    case "createBundle": {
       const entries = bundleEntries(op.bundle);
       const additions = new Map(op.bundle.map(([name]) => [name, 1]));
       if (model && exceedsCap(model, additions)) {
-        expectThrow(() => world.entities.createWith(entries as never));
+        expectThrow(() => world.entities.create(entries as never));
         return;
       }
-      const entity = world.entities.createWith(entries as never);
+      const entity = world.entities.create(entries as never);
       if (!model) return;
       if (model.live.size === model.capacity) {
-        assertStrictEquals(entity, undefined, `${where}: createWith on a full world`);
+        assertStrictEquals(entity, undefined, `${where}: create(bundle) on a full world`);
         return;
       }
-      assert(entity !== undefined && !model.live.has(entity), `${where}: createWith returns a fresh handle`);
-      assertStrictEquals(entityIndex(entity), allocateSlot(model), `${where}: createWith takes the next-fit slot`);
+      assert(entity !== undefined && !model.live.has(entity), `${where}: create(bundle) returns a fresh handle`);
+      assertStrictEquals(entityIndex(entity), allocateSlot(model), `${where}: create(bundle) takes the next-fit slot`);
       model.live.set(entity, new Map());
       for (const [name, data] of op.bundle) modelAdd(model, entity, name, data);
       return;

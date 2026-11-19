@@ -29,23 +29,6 @@ export function isObject<T extends Record<string, unknown>>(object: unknown): ob
 }
 
 /**
- * Convert a string representation of a number array to an array of numbers
- * @param str The string representation of the number array
- * @returns The array of numbers
- * @example
- * ```ts
- * numberArrayFromString("1,2,3") // [1, 2, 3]
- * numberArrayFromString("[1,2,3]") // [1, 2, 3]
- * ```
- */
-export function numberArrayFromString(str: string): number[] {
-  return str
-    .replaceAll(/[\[\]]/g, "")
-    .split(",")
-    .map((n) => parseInt(n, 10));
-}
-
-/**
  * A no-operation function
  * @returns {void}
  */

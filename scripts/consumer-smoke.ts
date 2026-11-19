@@ -102,7 +102,7 @@ console.log(${JSON.stringify(successMarker)});
 `;
   const types = `import { createEcsWorld, type Entity, entityIndex } from ${JSON.stringify(config.name)};
 const game = createEcsWorld({ capacity: 8, components: { Position: { x: Float32Array } } });
-const entity: Entity = game.spawn({ Position: { x: 1 } });
+const entity: Entity = game.spawnOrThrow({ Position: { x: 1 } });
 const column: Float32Array = game.storage.Position.partitions.x;
 game.world.entities.getActiveSnapshot(entityIndex(entity));
 // @ts-expect-error Unknown component fields must remain rejected by the packed declarations.

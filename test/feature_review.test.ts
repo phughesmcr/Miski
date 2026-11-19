@@ -40,7 +40,7 @@ async function savedUnitDocument(): Promise<SaveDocument> {
   const unit = unitOf();
   const world = await createTestWorld([unit], 16);
   const target = world.entities.createOrThrow();
-  world.entities.createWithOrThrow([[unit, { state: "b", alive: true, target }]]);
+  world.entities.createOrThrow([[unit, { state: "b", alive: true, target }]]);
   return worldSaveToDocument(saveWorld(world));
 }
 

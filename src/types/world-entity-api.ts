@@ -1,4 +1,10 @@
-import type { BorrowedEntityIterator, BorrowedEntityList, Entity, SlotIndex } from "@/entity/entity.ts";
+import type {
+  BorrowedEntityIterator,
+  BorrowedEntityList,
+  Entity,
+  QueryEntityList,
+  SlotIndex,
+} from "@/entity/entity.ts";
 import type { Prefab } from "@/prefab/prefab.ts";
 import type { Query } from "@/query/query.ts";
 import type { ComponentBundle, ComponentBundleEntryInput } from "@/types/component-bundle.ts";
@@ -7,23 +13,22 @@ import type { ComponentBundle, ComponentBundleEntryInput } from "@/types/compone
 export type WorldEntityAPI = {
   /** The capacity of the EntityManager */
   readonly capacity: number;
-  /** Create an entity, or return `undefined` if the world is at capacity */
-  create(): Entity | undefined;
-  /** Create an entity with a preflighted component bundle, or return `undefined` if the world is at capacity */
-  createWith<const TBundle extends readonly ComponentBundleEntryInput[]>(
-    bundle: TBundle & ComponentBundle<TBundle>,
+  /**
+   * Create an entity, optionally with a component bundle attached atomically. The bundle is validated before
+   * capacity is checked, and the entity goes straight into its final archetype.
+   * @returns the new entity, or `undefined` if the world is at capacity. Handle `0` is valid, so compare with
+   * `=== undefined`, not truthiness.
+   * @throws {NotRegisteredError | TypeError | RangeError | ComponentDataError} - If the bundle is invalid
+   */
+  create<const TBundle extends readonly ComponentBundleEntryInput[] = readonly []>(
+    bundle?: TBundle & ComponentBundle<TBundle>,
   ): Entity | undefined;
   /**
-   * Create an entity
+   * Create an entity, optionally with a component bundle attached atomically (see {@link WorldEntityAPI.create}).
    * @throws {CapacityError} - If the world's entity capacity is exhausted
    */
-  createOrThrow(): Entity;
-  /**
-   * Create an entity with a preflighted component bundle
-   * @throws {CapacityError} - If the world's entity capacity is exhausted
-   */
-  createWithOrThrow<const TBundle extends readonly ComponentBundleEntryInput[]>(
-    bundle: TBundle & ComponentBundle<TBundle>,
+  createOrThrow<const TBundle extends readonly ComponentBundleEntryInput[] = readonly []>(
+    bundle?: TBundle & ComponentBundle<TBundle>,
   ): Entity;
   /** Destroy an entity */
   destroy(entity: Entity): void;
@@ -38,10 +43,10 @@ export type WorldEntityAPI = {
   getActiveCount(): number;
   /** Get the number of available entities */
   getAvailableCount(): number;
-  /** Check if an entity is active */
+  /** Check if an entity is active (its slot is live and its generation matches) */
   isActive(entity: Entity): boolean;
-  /** Check if an entity is valid */
-  isEntity(entity: Entity): boolean;
+  /** Check if an entity is active and has no components */
+  isEmpty(entity: Entity): boolean;
   /**
    * Query for entities. Returns a pooled per-call iterator over the query's current result, so nested loops over
    * the same query are independent and destroying or moving the current entity skips nothing.
@@ -59,12 +64,13 @@ export type WorldEntityAPI = {
    * Reports the window-start handle, which may since have been destroyed. Returns a pooled live iterator.
    */
   queryExited(query: Query): IterableIterator<Entity>;
-  /** Query for entities as a stable allocating array snapshot */
+  /** Query for entities as a stable allocating array snapshot (`toArray(queryList(query))`) */
   querySnapshot(query: Query): Entity[];
-  /** Copy a borrowed entity list into a stable array */
-  toArray(list: BorrowedEntityList): Entity[];
+  /** Copy a borrowed entity list (such as a {@link queryList} or `instantiateMany` result) into a stable array */
+  toArray(list: QueryEntityList): Entity[];
   /**
    * Create an entity from a prefab, or return `undefined` if the world is at capacity.
+   * Every check finishes before allocation, so a rejected call creates nothing.
    * Override tuples merge field by field over the prefab defaults and may add components the prefab lacks.
    */
   instantiate<const TBundle extends readonly ComponentBundleEntryInput[] = readonly []>(

@@ -194,12 +194,12 @@ Deno.test("new ownership initializes every field to its default, dense and cappe
     const unit = unitComponent(maxEntities);
     const world = await createTestWorld([unit]);
     const instance = world.components.getInstanceOrThrow(unit);
-    const bundled = world.entities.createWithOrThrow([[unit]]);
+    const bundled = world.entities.createOrThrow([[unit]]);
     const single = createEntity(world);
     world.components.addToEntity(unit, single);
     const batched = createEntity(world);
     world.components.addToEntities(unit, { count: 1, entities: [batched], slots: [entityIndex(batched)] });
-    const partial = world.entities.createWithOrThrow([[unit, { hp: 5 }]]);
+    const partial = world.entities.createOrThrow([[unit, { hp: 5 }]]);
     for (const entity of [bundled, single, batched]) {
       assertEquals(world.components.getEntityDataOrThrow(unit, entity), DEFAULTS, "Defaults on attach");
       assertStrictEquals(instance.storage.partitions.target[entityIndex(entity)], -1, "Raw null ref is -1");
@@ -231,10 +231,10 @@ Deno.test("object create() runs once per new owner and never on update", async (
   let created = 0;
   const unit = unitComponent(undefined, () => new Mesh([created++]));
   const world = await createTestWorld([unit]);
-  const a = world.entities.createWithOrThrow([[unit]]);
-  const b = world.entities.createWithOrThrow([[unit, { hp: 1 }]]);
+  const a = world.entities.createOrThrow([[unit]]);
+  const b = world.entities.createOrThrow([[unit, { hp: 1 }]]);
   const given = new Mesh([42]);
-  const c = world.entities.createWithOrThrow([[unit, { mesh: given }]]);
+  const c = world.entities.createOrThrow([[unit, { mesh: given }]]);
   assertStrictEquals(created, 2, "create() runs only for owners without a provided value");
   const meshA = world.components.getEntityDataOrThrow(unit, a).mesh;
   const meshB = world.components.getEntityDataOrThrow(unit, b).mesh;
@@ -256,7 +256,7 @@ Deno.test("object create() runs once per new owner and never on update", async (
 Deno.test("guarded writes validate every field kind before any mutation", async () => {
   const unit = unitComponent();
   const world = await createTestWorld([unit]);
-  const entity = world.entities.createWithOrThrow([[unit, { label: "keep" }]]);
+  const entity = world.entities.createOrThrow([[unit, { label: "keep" }]]);
   const dead = createEntity(world);
   world.entities.destroy(dead);
 
@@ -284,7 +284,7 @@ Deno.test("guarded writes validate every field kind before any mutation", async 
       "Failed writes change nothing",
     );
     const before = world.entities.getActiveCount();
-    assertThrows(() => world.entities.createWithOrThrow([[unit, data as never]]), ErrorClass as never, message);
+    assertThrows(() => world.entities.createOrThrow([[unit, data as never]]), ErrorClass as never, message);
     assertStrictEquals(world.entities.getActiveCount(), before, "Failed spawns allocate nothing");
   }
   world.components.setEntityData(unit, entity, { target: null, mesh: null });
@@ -294,7 +294,7 @@ Deno.test("guarded writes accept every valid field value", async () => {
   const unit = unitComponent();
   const world = await createTestWorld([unit]);
   const target = createEntity(world);
-  const entity = world.entities.createWithOrThrow([[unit]]);
+  const entity = world.entities.createOrThrow([[unit]]);
   const mesh = new Mesh([1, 2, 3]);
   world.components.setEntityData(unit, entity, {
     hp: 7,
@@ -327,7 +327,7 @@ Deno.test("proxy and instance get/set decode and validate field values", async (
   const unit = unitComponent();
   const world = await createTestWorld([unit]);
   const target = createEntity(world);
-  const entity = world.entities.createWithOrThrow([[unit]]);
+  const entity = world.entities.createOrThrow([[unit]]);
   const instance = world.components.getInstanceOrThrow(unit);
   const proxy = instance.proxy;
   world.refresh();
@@ -386,7 +386,7 @@ Deno.test("entity refs read as null once the target is destroyed or its slot reu
   const unit = unitComponent();
   const world = await createTestWorld([unit], 8);
   const target = createEntity(world);
-  const entity = world.entities.createWithOrThrow([[unit, { target }]]);
+  const entity = world.entities.createOrThrow([[unit, { target }]]);
   const instance = world.components.getInstanceOrThrow(unit);
   assertStrictEquals(instance.get(entity, "target"), target, "Live ref reads the handle");
   world.entities.destroy(target);
@@ -417,9 +417,9 @@ Deno.test("removing a component or destroying its owner releases side-column ref
   const unit = unitComponent();
   const world = await createTestWorld([unit]);
   const partitions = world.components.getInstanceOrThrow(unit).storage.partitions;
-  const removed = world.entities.createWithOrThrow([[unit, { mesh: new Mesh(), label: "a" }]]);
-  const destroyed = world.entities.createWithOrThrow([[unit, { mesh: new Mesh(), label: "b" }]]);
-  const batch = world.entities.createWithOrThrow([[unit, { mesh: new Mesh(), label: "c" }]]);
+  const removed = world.entities.createOrThrow([[unit, { mesh: new Mesh(), label: "a" }]]);
+  const destroyed = world.entities.createOrThrow([[unit, { mesh: new Mesh(), label: "b" }]]);
+  const batch = world.entities.createOrThrow([[unit, { mesh: new Mesh(), label: "c" }]]);
   world.components.removeFromEntity(unit, removed);
   world.entities.destroy(destroyed);
   world.components.removeFromEntities(unit, { count: 1, entities: [batch], slots: [entityIndex(batch)] });
@@ -439,7 +439,7 @@ Deno.test("rollback restores every field kind for dense and capped components", 
     const world = await createTestWorld([unit]);
     const target = createEntity(world);
     const meshA = new Mesh([1]);
-    const a = world.entities.createWithOrThrow([[unit, {
+    const a = world.entities.createOrThrow([[unit, {
       hp: 1,
       alive: true,
       state: "run",
@@ -447,13 +447,13 @@ Deno.test("rollback restores every field kind for dense and capped components", 
       label: "a",
       mesh: meshA,
     }]]);
-    const b = world.entities.createWithOrThrow([[unit, { label: "b" }]]);
+    const b = world.entities.createOrThrow([[unit, { label: "b" }]]);
     const before = [world.components.getEntityDataOrThrow(unit, a), world.components.getEntityDataOrThrow(unit, b)];
 
     const point = new WorldRollbackScope(world);
     world.components.setEntityData(unit, a, { alive: false, state: "dead", target: null, label: "z", mesh: null });
     world.components.removeFromEntity(unit, b);
-    const spec = world.entities.createWithOrThrow([[unit, { mesh: new Mesh([9]), label: "spec" }]]);
+    const spec = world.entities.createOrThrow([[unit, { mesh: new Mesh([9]), label: "spec" }]]);
     const specSlot = entityIndex(spec);
     meshA.vertices.push(2); // in-place mutation is not undone without a clone hook
     point.restore();
@@ -477,7 +477,7 @@ Deno.test("object clone hooks give rollback and checkpoints value semantics", as
   const unit = unitComponent(undefined, undefined, clone);
   const world = await createTestWorld([unit]);
   const mesh = new Mesh([1]);
-  const entity = world.entities.createWithOrThrow([[unit, { mesh }]]);
+  const entity = world.entities.createOrThrow([[unit, { mesh }]]);
 
   const point = new WorldRollbackScope(world);
   assertStrictEquals(clones, 1, "Capture clones owned object cells once");
@@ -510,7 +510,7 @@ Deno.test("checkpoints round-trip every field kind and restore dead refs as null
   const world = await createTestWorld([unit]);
   const target = createEntity(world);
   const mesh = new Mesh();
-  const entity = world.entities.createWithOrThrow([[unit, {
+  const entity = world.entities.createOrThrow([[unit, {
     hp: 2,
     alive: true,
     state: "dead",
@@ -604,8 +604,8 @@ Deno.test("createEcsWorld and systems work with field types", async () => {
     tags: { Player: true },
   });
   await game.init();
-  const a = game.spawn({ Unit: { hp: 3, title: "a" }, Player: true });
-  const b = game.spawn({ Unit: { state: "run", target: a } });
+  const a = game.spawnOrThrow({ Unit: { hp: 3, title: "a" }, Player: true });
+  const b = game.spawnOrThrow({ Unit: { state: "run", target: a } });
   assertStrictEquals(game.storage.Unit.get(b, "target"), a, "Typed storage reads refs");
   assertStrictEquals(game.storage.Unit.get(a, "title"), "a", "Typed storage reads strings");
 
