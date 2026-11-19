@@ -126,11 +126,11 @@ Deno.test("query entity results retain their buffer across invalidation", async 
 
 Deno.test("schema hashing does not allocate component identities and merge preserves definitions", async () => {
   const before = new Component({ name: "before" })[$_COMPONENT_ID_KEY];
-  const hash = componentSchemaHash({ position: { y: Float32Array, x: Float32Array } }, { hero: { maxEntities: 1 } });
+  const hash = componentSchemaHash({ position: { y: Float32Array, x: Float32Array } }, { hero: { maxOwners: 1 } });
   const after = new Component({ name: "after" })[$_COMPONENT_ID_KEY];
   assertStrictEquals(after, before + 1, "metadata hashing leaves the global component id unchanged");
   const left = compileComponentSchema({ position: { x: Float32Array, y: Float32Array } });
-  const right = compileComponentSchema({}, { hero: { maxEntities: 1 } });
+  const right = compileComponentSchema({}, { hero: { maxOwners: 1 } });
   const merged = mergeComponentSchemas(left, right);
   assertStrictEquals(merged.schemaHash, hash, "merge and direct hash use the same canonical ordering");
   assertStrictEquals(merged.components.position, left.components.position, "merge retains data definition identity");
@@ -183,10 +183,10 @@ Deno.test("plain schema bootstrap and hashing share validation", () => {
   );
   assertThrows(() => mergeComponentSchemas(ordered, ordered), SpecError, "duplicate names");
   assertThrows(() => componentSchemaHash({ position: { x: Float32Array } }, { position: true }), SpecError, "collides");
-  for (const maxEntities of [0, -1, 1.5, Infinity]) {
-    assertThrows(() => componentSchemaHash({}, { hero: { maxEntities } }), SpecError, "positive integer");
+  for (const maxOwners of [0, -1, 1.5, Infinity]) {
+    assertThrows(() => componentSchemaHash({}, { hero: { maxOwners } }), SpecError, "positive integer");
     assertThrows(
-      () => createEcsWorld({ capacity: 8, components: {}, tags: { hero: { maxEntities } } }),
+      () => createEcsWorld({ capacity: 8, components: {}, tags: { hero: { maxOwners } } }),
       SpecError,
       "positive integer",
     );

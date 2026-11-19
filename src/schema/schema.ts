@@ -59,9 +59,9 @@ export type SchemaComponentMap = Record<string, Record<string, TypedArrayConstru
  * Tag declaration for {@link createEcsWorld} / schema compile.
  *
  * - `true` - uncapped tag
- * - `{ maxEntities }` - ownership cap (same rules as ComponentSpec)
+ * - `{ maxOwners }` - ownership cap (same rules as ComponentSpec)
  */
-export type TagSpec = true | { readonly maxEntities: number };
+export type TagSpec = true | { readonly maxOwners: number };
 
 /** Named tag map for typed ECS bootstrap. */
 export type TagMap = Record<string, TagSpec>;
@@ -77,7 +77,7 @@ export type CompiledComponentEntry = {
   readonly name: string;
   readonly properties: readonly CompiledComponentProperty[];
   /** Present for tag components with an ownership cap. */
-  readonly maxEntities?: number;
+  readonly maxOwners?: number;
   /** `true` when this entry is a tag (no data schema). */
   readonly isTag?: true;
 };
@@ -125,10 +125,10 @@ export function createTagFromSpec(name: string, spec: TagSpec): Component<null, 
   if (spec === true) {
     return new Component({ name });
   }
-  if (!isPositiveUint32(spec.maxEntities) || !Number.isInteger(spec.maxEntities)) {
-    throw new SpecError(`Tag "${name}" maxEntities must be a positive integer.`);
+  if (!isPositiveUint32(spec.maxOwners) || !Number.isInteger(spec.maxOwners)) {
+    throw new SpecError(`Tag "${name}" maxOwners must be a positive integer.`);
   }
-  return new Component({ name, maxEntities: spec.maxEntities });
+  return new Component({ name, maxOwners: spec.maxOwners });
 }
 
 type NormalizedSchema = {
@@ -184,19 +184,19 @@ function normalizeSchema(input: SchemaComponentMap, tags?: TagMap): NormalizedSc
   }
   for (const tagName of Object.keys(tags ?? {}).toSorted()) {
     const spec = tags![tagName]!;
-    if (spec !== true && (typeof spec !== "object" || spec === null || !Object.hasOwn(spec, "maxEntities"))) {
-      throw new SpecError(`Tag "${tagName}" must be true or { maxEntities }.`);
+    if (spec !== true && (typeof spec !== "object" || spec === null || !Object.hasOwn(spec, "maxOwners"))) {
+      throw new SpecError(`Tag "${tagName}" must be true or { maxOwners }.`);
     }
-    if (spec !== true && (!isPositiveUint32(spec.maxEntities) || !Number.isInteger(spec.maxEntities))) {
-      throw new SpecError(`Tag "${tagName}" maxEntities must be a positive integer.`);
+    if (spec !== true && (!isPositiveUint32(spec.maxOwners) || !Number.isInteger(spec.maxOwners))) {
+      throw new SpecError(`Tag "${tagName}" maxOwners must be a positive integer.`);
     }
     if (!isValidComponentSpec({ name: tagName })) {
       throw new SpecError("Invalid component specification.");
     }
-    tagMap[tagName] = spec === true ? true : Object.freeze({ maxEntities: spec.maxEntities });
+    tagMap[tagName] = spec === true ? true : Object.freeze({ maxOwners: spec.maxOwners });
     const entry: CompiledComponentEntry = spec === true ?
       { name: tagName, properties: Object.freeze([]), isTag: true } :
-      { name: tagName, properties: Object.freeze([]), isTag: true, maxEntities: spec.maxEntities };
+      { name: tagName, properties: Object.freeze([]), isTag: true, maxOwners: spec.maxOwners };
     entries.push(Object.freeze(entry));
   }
   return {
@@ -228,7 +228,7 @@ export function createComponentRegistry<M extends SchemaComponentMap, T extends 
  * Canonical schema, metadata, and component identities compiled as one immutable truth object.
  *
  * @param input - Data component schemas keyed by name
- * @param tags - Optional tag map (`true` or `{ maxEntities }`)
+ * @param tags - Optional tag map (`true` or `{ maxOwners }`)
  */
 export function compileComponentSchema<
   M extends SchemaComponentMap,
@@ -286,7 +286,7 @@ function hashEntries(entries: readonly CompiledComponentEntry[]): string {
     entry.name,
     entry.properties.map((property) => [property.name, property.tag]),
     entry.isTag === true ? "tag" : "data",
-    entry.maxEntities ?? null,
+    entry.maxOwners ?? null,
   ])));
 }
 

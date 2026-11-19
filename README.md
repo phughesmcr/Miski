@@ -149,7 +149,7 @@ const game = createEcsWorld({
   },
   tags: {
     Player: true,
-    Hero: { maxEntities: 1 },
+    Hero: { maxOwners: 1 },
   },
 });
 
@@ -171,7 +171,7 @@ Every failure Miski throws is a `MiskiError`, so `isMiskiError(error)` tells
 library failures apart from errors your own hooks throw. The subclasses name the
 cause: `SpecError` (a schema, field, component, prefab, relation or world
 definition), `ArgumentError` (a malformed call argument), `ComponentDataError`
-(a bad payload), `CapacityError` (the world or a component's `maxEntities` is
+(a bad payload), `CapacityError` (the world or a component's `maxOwners` is
 full), `EntityNotFoundError`, `NotRegisteredError`, `ComponentOwnershipError`,
 `RelationCycleError`, `AlreadyRegisteredError`, `WorldStateError` and
 `WorldSaveError`.
@@ -240,7 +240,7 @@ const Position = new Component({ name: "position", schema: vec2 });
 const Active = new Component({ name: "active" });
 
 // Owner cap — only one of these in the jar
-const Player = new Component({ name: "player", maxEntities: 1 });
+const Player = new Component({ name: "player", maxOwners: 1 });
 
 // Narrower public writes than storage
 type FacingValue = { dir: 0 | 1 | 2 | 3 };

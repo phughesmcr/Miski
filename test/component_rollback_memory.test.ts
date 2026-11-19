@@ -29,7 +29,7 @@ const position = vec2Component("position");
 const capped = new Component({
   name: "capped",
   schema: { hp: Float64Array, armor: Int16Array },
-  maxEntities: 48,
+  maxOwners: 48,
 });
 const marker = tagComponent("marker");
 const components: DynamicComponent[] = [position, capped, marker];
@@ -118,7 +118,7 @@ for (const seed of [3, 29, 777]) {
 }
 
 Deno.test("rollback restores capped owners even when stray raw writes exhausted the dense rows", async () => {
-  const health = new Component({ name: "health", schema: { hp: Float32Array }, maxEntities: 2 });
+  const health = new Component({ name: "health", schema: { hp: Float32Array }, maxOwners: 2 });
   const world = await createTestWorld([health], 16);
   const instance = world.components.getInstanceOrThrow(health);
   const [a, b, c, d] = [createEntity(world), createEntity(world), createEntity(world), createEntity(world)];
@@ -140,7 +140,7 @@ Deno.test("rollback restores capped owners even when stray raw writes exhausted 
 });
 
 Deno.test("removing a capped component frees its dense row for the next owner", async () => {
-  const health = new Component({ name: "health", schema: { hp: Float32Array, max: Float32Array }, maxEntities: 1 });
+  const health = new Component({ name: "health", schema: { hp: Float32Array, max: Float32Array }, maxOwners: 1 });
   const world = await createTestWorld([health], 16);
   const [a, b] = [createEntity(world), createEntity(world)];
   world.components.addToEntity(health, a, { hp: 1, max: 2 });

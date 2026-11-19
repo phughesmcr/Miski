@@ -1,4 +1,4 @@
-import type { SaveableComponentState } from "@/component/component-snapshot.ts";
+import type { ComponentState } from "@/component/component-state.ts";
 import { MIN_WORLD_CAPACITY } from "@/constants.ts";
 import { MAX_WORLD_CAPACITY } from "@/entity/entity.ts";
 import { isRelation, type Relation } from "@/relation/relation.ts";
@@ -34,7 +34,7 @@ export type WorldSaveRelationLayout = {
 export type WorldSaveComponentLayout = {
   readonly name: string;
   /** The component's owner cap, or `null` when uncapped. */
-  readonly maxEntities: number | null;
+  readonly maxOwners: number | null;
   /** Data fields in storage column order, or `null` for a tag component (and for a relation's presence tag). */
   readonly fields: readonly WorldSaveField[] | null;
   /** Present only for a relation: its options and pair data fields. */
@@ -102,7 +102,7 @@ function relationLayout(relation: Relation<never>): WorldSaveRelationLayout {
 }
 
 /** Describe the layout of a world's registered component states. */
-export function layoutOfStates(capacity: number, states: readonly SaveableComponentState[]): WorldSaveLayout {
+export function layoutOfStates(capacity: number, states: readonly ComponentState[]): WorldSaveLayout {
   const components: WorldSaveComponentLayout[] = new Array(states.length);
   for (let i = 0; i < states.length; i++) {
     const state = states[i]!;
@@ -143,11 +143,11 @@ export function layoutOfStates(capacity: number, states: readonly SaveableCompon
       }
       Object.freeze(fields);
     }
-    const maxEntities = type.maxEntities ?? null;
+    const maxOwners = type.maxOwners ?? null;
     components[i] = Object.freeze(
       isRelation(type) ?
-        { name: type.name, maxEntities, fields, relation: relationLayout(type as Relation<never>) } :
-        { name: type.name, maxEntities, fields },
+        { name: type.name, maxOwners, fields, relation: relationLayout(type as Relation<never>) } :
+        { name: type.name, maxOwners, fields },
     );
   }
   return Object.freeze({ capacity, components: Object.freeze(components) });
@@ -157,7 +157,7 @@ export function layoutInfo(layout: WorldSaveLayout): LayoutInfo {
   const codes = layout.components.map((component) =>
     component.fields === null ? null : component.fields.map((field) => fieldTypeCodeOfName(field.type))
   );
-  const caps = layout.components.map((component) => component.maxEntities ?? 0);
+  const caps = layout.components.map((component) => component.maxOwners ?? 0);
   const limits = layout.components.map((component) =>
     component.fields === null ? null : component.fields
       .filter((field) => !isSideCode(fieldTypeCodeOfName(field.type)))
@@ -213,7 +213,7 @@ export function encodeLayout(layout: WorldSaveLayout): Uint8Array {
   };
   for (const component of layout.components) {
     pushName(component.name);
-    const cap = component.maxEntities ?? 0;
+    const cap = component.maxOwners ?? 0;
     const relation = component.relation;
     push(
       new Uint8Array([
@@ -289,7 +289,7 @@ export function decodeLayout(block: Uint8Array, capacity: number, componentCount
     const kind = u8();
     const cap = (u8() | (u8() << 8) | (u8() << 16) | (u8() << 24)) >>> 0;
     if (kind > 2) throw new WorldSaveError(`World save layout component ${i} has an unknown kind ${kind}.`);
-    const maxEntities = cap === 0 ? null : cap;
+    const maxOwners = cap === 0 ? null : cap;
     if (kind === 2) {
       const flags = u8();
       if (flags > 15) throw new WorldSaveError(`World save layout relation ${componentName} has unknown flags.`);
@@ -299,11 +299,11 @@ export function decodeLayout(block: Uint8Array, capacity: number, componentCount
         onDeleteTarget: (flags & 4) !== 0 ? "cascade" : "remove",
         fields: (flags & 8) !== 0 ? readFields(componentName) : null,
       });
-      components.push(Object.freeze({ name: componentName, maxEntities, fields: null, relation }));
+      components.push(Object.freeze({ name: componentName, maxOwners, fields: null, relation }));
       continue;
     }
     const fields = kind === 1 ? readFields(componentName) : null;
-    components.push(Object.freeze({ name: componentName, maxEntities, fields }));
+    components.push(Object.freeze({ name: componentName, maxOwners, fields }));
   }
   for (; offset < block.length; offset++) {
     if (block[offset] !== 0) throw new WorldSaveError("World save layout has trailing data.");
@@ -329,9 +329,9 @@ export function layoutProblem(layout: unknown): string | undefined {
     if (typeof component.name !== "string" || component.name === "") return `component ${i} needs a name`;
     if (names.has(component.name)) return `component name "${component.name}" is repeated`;
     names.add(component.name);
-    const cap = component.maxEntities;
+    const cap = component.maxOwners;
     if (cap !== null && (!Number.isInteger(cap) || cap < 1 || cap > 0xffffffff)) {
-      return `component ${component.name} maxEntities must be null or a positive integer`;
+      return `component ${component.name} maxOwners must be null or a positive integer`;
     }
     if (component.relation !== undefined) {
       const problem = relationProblem(component);
@@ -431,8 +431,8 @@ export function compareLayouts(save: WorldSaveLayout, world: WorldSaveLayout): s
     const b = world.components[i]!;
     const at = `Save layout differs from the world at component ${i}`;
     if (a.name !== b.name) return `${at}: save "${a.name}", world "${b.name}".`;
-    if (a.maxEntities !== b.maxEntities) {
-      return `${at} (${a.name}): maxEntities save ${a.maxEntities}, world ${b.maxEntities}.`;
+    if (a.maxOwners !== b.maxOwners) {
+      return `${at} (${a.name}): maxOwners save ${a.maxOwners}, world ${b.maxOwners}.`;
     }
     if ((a.fields === null) !== (b.fields === null)) {
       return `${at} (${a.name}): save ${a.fields === null ? "tag" : "data"}, world ${

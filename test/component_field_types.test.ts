@@ -1,6 +1,7 @@
 /// <reference lib="deno.ns" />
 
 import {
+  CapacityError,
   cloneFieldValue,
   compileComponentSchema,
   Component,
@@ -13,16 +14,18 @@ import {
   field,
   isFieldDescriptor,
   isValidComponentSpec,
+  Prefab,
   Query,
   SpecError,
   System,
   WorldRollbackScope,
 } from "../mod.ts";
 import { ComponentManager } from "../src/component/component-manager.ts";
+import { type WorldSaveHost, worldSaveHost } from "../src/serialization/host.ts";
 import { createEntity, createTestWorld, Mesh } from "./fixtures.ts";
 import { assert, assertEquals, assertStrictEquals, assertThrows, ids } from "./helpers.ts";
 
-function unitComponent(maxEntities?: number, create?: () => Mesh, clone?: (mesh: Mesh) => Mesh) {
+function unitComponent(maxOwners?: number, create?: () => Mesh, clone?: (mesh: Mesh) => Mesh) {
   const mesh = create === undefined && clone === undefined ?
     field.object<Mesh>() :
     field.object<Mesh>({ ...(create ? { create } : {}), ...(clone ? { clone } : {}) });
@@ -36,7 +39,7 @@ function unitComponent(maxEntities?: number, create?: () => Mesh, clone?: (mesh:
       label: field.string(),
       mesh,
     },
-    maxEntities,
+    maxOwners,
   });
 }
 
@@ -69,7 +72,7 @@ Deno.test("existing numeric schema hashes are unchanged by field types", () => {
           g: Uint8Array,
         },
       },
-      { Player: true, Hero: { maxEntities: 1 } },
+      { Player: true, Hero: { maxOwners: 1 } },
     ),
     "9cb8dc9a1cad8884",
     "Every numeric tag keeps its hash",
@@ -191,8 +194,8 @@ Deno.test("field columns have the documented raw layout", async () => {
 });
 
 Deno.test("new ownership initializes every field to its default, dense and capped", async () => {
-  for (const maxEntities of [undefined, 4]) {
-    const unit = unitComponent(maxEntities);
+  for (const maxOwners of [undefined, 4]) {
+    const unit = unitComponent(maxOwners);
     const world = await createTestWorld([unit]);
     const instance = world.components.getInstanceOrThrow(unit);
     const bundled = world.entities.createOrThrow([[unit]]);
@@ -223,7 +226,7 @@ Deno.test("new ownership initializes every field to its default, dense and cappe
     assertEquals(
       world.components.getEntityDataOrThrow(unit, single),
       DEFAULTS,
-      `Reacquired row resets (cap ${maxEntities})`,
+      `Reacquired row resets (cap ${maxOwners})`,
     );
   }
 });
@@ -435,8 +438,8 @@ Deno.test("removing a component or destroying its owner releases side-column ref
 // ---------------------------------------------------------------------------
 
 Deno.test("rollback restores every field kind for dense and capped components", async () => {
-  for (const maxEntities of [undefined, 3]) {
-    const unit = unitComponent(maxEntities);
+  for (const maxOwners of [undefined, 3]) {
+    const unit = unitComponent(maxOwners);
     const world = await createTestWorld([unit]);
     const target = createEntity(world);
     const meshA = new Mesh([1]);
@@ -459,7 +462,7 @@ Deno.test("rollback restores every field kind for dense and capped components", 
     meshA.vertices.push(2); // in-place mutation is not undone without a clone hook
     point.restore();
 
-    assertEquals(world.components.getEntityDataOrThrow(unit, a), before[0], `Row a restored (cap ${maxEntities})`);
+    assertEquals(world.components.getEntityDataOrThrow(unit, a), before[0], `Row a restored (cap ${maxOwners})`);
     assertStrictEquals(world.components.getEntityDataOrThrow(unit, a).mesh, meshA, "Same reference restored");
     assertEquals(meshA.vertices, [1, 2], "Reference semantics: inner mutation persists");
     assertEquals(world.components.getEntityDataOrThrow(unit, b), before[1], "Removed row restored");
@@ -557,7 +560,7 @@ Deno.test("staged side values are released after single writes and shared across
   manager.addInstanceToEntity(instance, 2 as Entity, { label: "b", mesh } as never, 2, true);
   assertStrictEquals(manager.getInstanceEntityData(instance, 2 as Entity)!.mesh, mesh, "Second batch row is written");
   assert(staged(), "Batch staging survives between rows");
-  manager.releaseStagedData(instance);
+  manager.releaseStagedData(instance.id);
   assert(!staged(), "releaseStagedData drops staged values");
   manager.validateInstanceData(instance, { mesh });
   manager.refresh();
@@ -575,6 +578,62 @@ Deno.test("staged side values are released after single writes and shared across
     assertStrictEquals(data.mesh, mesh, "Every batched owner gets the object");
     assertStrictEquals(data.label, "many", "Every batched owner gets the string");
   }
+});
+
+Deno.test("world write paths release staged side values once committed or discarded", async () => {
+  const unit = unitComponent(2);
+  const other = new Component({ name: "other", schema: { note: field.string() } });
+  const world = await createTestWorld([unit, other]);
+  const host = (world as unknown as { [worldSaveHost](): WorldSaveHost })[worldSaveHost]();
+  const scratchOf = (index: number): unknown[] =>
+    (host.components.saveStates[index] as unknown as { sideScratch: unknown[] }).sideScratch;
+  const staged = (): boolean => [0, 1].some((index) => scratchOf(index).some((value) => value !== undefined));
+  const mesh = new Mesh([1]);
+  const first = createEntity(world);
+  const second = createEntity(world);
+  const third = createEntity(world);
+
+  world.components.addToEntity(unit, first, { label: "a", mesh });
+  assert(!staged(), "A world add releases its staged values");
+
+  world.components.addToEntities(unit, { count: 1, entities: [second], slots: [entityIndex(second)] }, { mesh });
+  assert(!staged(), "A batch add releases after its last row");
+
+  assertThrows(() => world.components.addToEntity(unit, third, { mesh }), CapacityError, "can only be added");
+  assert(!staged(), "An add rejected by the owner cap releases its staged values");
+
+  assertThrows(
+    () => world.components.addToEntities(unit, { count: 1, entities: [999 as Entity], slots: [999] }, { mesh }),
+    EntityNotFoundError,
+    "",
+  );
+  assert(!staged(), "A batch rejected before its first row releases its staged values");
+
+  assertThrows(
+    () => world.components.addToEntity(unit, first, { label: "b", mesh: undefined as never }),
+    ComponentDataError,
+    "cannot be undefined",
+  );
+  assert(!staged(), "A payload with an invalid side field stages nothing");
+
+  assertThrows(
+    () => world.entities.create([[other, { note: "n" }], [unit, { mesh, label: 5 as never }]]),
+    ComponentDataError,
+    "",
+  );
+  assert(!staged(), "A bundle that fails validation releases the entries already staged");
+
+  world.entities.create([[other, { note: "n" }]]);
+  assert(!staged(), "A committed bundle releases its staged values");
+
+  world.components.removeFromEntity(unit, second);
+  const prefab = new Prefab({ components: [[other]] });
+  world.entities.instantiateOrThrow(prefab, [[unit, { mesh }]]);
+  assert(!staged(), "A prefab spawn releases its staged overrides");
+
+  const checkpoint = world.captureCheckpoint([first], unit);
+  world.applyCheckpoint(checkpoint);
+  assert(!staged(), "A checkpoint apply leaves nothing staged");
 });
 
 Deno.test("cloneFieldValue applies object clone hooks and passes other values through", () => {

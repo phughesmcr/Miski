@@ -857,7 +857,7 @@ Deno.test("captured lifecycle API methods observe the current world state", asyn
 });
 
 Deno.test("a component definition can back independent worlds without shared ownership or changed state", async () => {
-  const player = tagComponent("player", { maxEntities: 1 });
+  const player = tagComponent("player", { maxOwners: 1 });
   const health = new Component<Health>({ name: "health", schema: { current: Uint16Array, max: Uint16Array } });
   const firstWorld = new World({ capacity: 8, components: [player, health] });
   const secondWorld = new World({ capacity: 8, components: [player, health] });

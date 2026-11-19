@@ -15,7 +15,7 @@ export type Vec2 = ComponentSchema<typeof vec2Schema>;
 
 export function vec2Component(
   name = "position",
-  options?: Pick<ComponentSpec<Vec2>, "maxEntities">,
+  options?: Pick<ComponentSpec<Vec2>, "maxOwners">,
 ): Component<Vec2> {
   return new Component<Vec2>({
     name,
@@ -26,7 +26,7 @@ export function vec2Component(
 
 export function tagComponent(
   name: string,
-  options?: Pick<ComponentSpec<null>, "maxEntities">,
+  options?: Pick<ComponentSpec<null>, "maxOwners">,
 ): Component<null> {
   return new Component<null>({ name, ...options });
 }

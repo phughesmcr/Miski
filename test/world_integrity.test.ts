@@ -121,7 +121,7 @@ Deno.test("batch mutations reject mismatched and malformed slot entries before c
 
 Deno.test("checkpoint restores tags and capped memberships atomically, including outside owners", async () => {
   const position = vec2Component();
-  const capped = vec2Component("capped", { maxEntities: 1 });
+  const capped = vec2Component("capped", { maxOwners: 1 });
   const tag = tagComponent("tag");
   const world = await createTestWorld([position, capped, tag]);
   const a = createEntity(world);
@@ -191,7 +191,7 @@ Deno.test("same-handle leave, reenter, and leave records one historical exit", a
 
 Deno.test("failed spawn preflight preserves lifecycle windows, revisions, and handle allocation", async () => {
   const position = vec2Component();
-  const capped = vec2Component("capped", { maxEntities: 1 });
+  const capped = vec2Component("capped", { maxOwners: 1 });
   const world = await createTestWorld([position, capped]);
   const owner = world.entities.createOrThrow([[capped]]);
   const query = new Query({ none: [position] });

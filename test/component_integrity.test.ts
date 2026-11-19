@@ -6,6 +6,7 @@ import {
   Component,
   ComponentDataError,
   ComponentOwnershipError,
+  type DynamicComponent,
   entityIndex,
   NotRegisteredError,
   SpecError,
@@ -23,8 +24,8 @@ Deno.test("component schemas reject proxy cursor fields at every constructor bou
 });
 
 Deno.test("dense and capped storage initialize every new owner with zero defaults", async () => {
-  for (const maxEntities of [undefined, 4]) {
-    const position = vec2Component("position", { maxEntities });
+  for (const maxOwners of [undefined, 4]) {
+    const position = vec2Component("position", { maxOwners });
     const world = await createTestWorld([position]);
     const instance = world.components.getInstanceOrThrow(position);
     const bundled = world.entities.createOrThrow([[position]]);
@@ -126,8 +127,8 @@ Deno.test("slot cursor marks the actual slot and every real write advances revis
 });
 
 Deno.test("dense and capped sparse storage share atomic canonical numeric writes", async () => {
-  for (const maxEntities of [undefined, 2]) {
-    const position = vec2Component("position", { maxEntities });
+  for (const maxOwners of [undefined, 2]) {
+    const position = vec2Component("position", { maxOwners });
     const world = await createTestWorld([position]);
     const entity = world.entities.createOrThrow([[position, { x: 1, y: 1 }]]);
     const instance = world.components.getInstanceOrThrow(position);
@@ -163,7 +164,7 @@ Deno.test("dense and capped sparse storage share atomic canonical numeric writes
 });
 
 Deno.test("rollback restores capped mappings and pre-scope changes with fresh revision tokens", async () => {
-  const position = new Component({ name: "position", schema: { x: Float32Array, y: Float32Array }, maxEntities: 2 });
+  const position = new Component({ name: "position", schema: { x: Float32Array, y: Float32Array }, maxOwners: 2 });
   const world = await createTestWorld([position]);
   const first = world.entities.createOrThrow([[position, { x: 1, y: 2 }]]);
   const second = world.entities.createOrThrow([[position, { x: 3, y: 4 }]]);
@@ -221,5 +222,25 @@ Deno.test("bundle and batch commits keep canonical scratch values isolated by co
       { x: Math.fround(4.4), y: Math.fround(5.5) },
       "Batch repeats staged canonical payload",
     );
+  }
+});
+
+Deno.test("component lookup works whether the world's definition ids are compact or spread out", async () => {
+  const first = vec2Component("spreadFirst");
+  const unregistered = tagComponent("spreadUnregistered");
+  // Definition ids are process-global: many definitions between two components spread a world's ids out.
+  for (let i = 0; i < 500; i++) tagComponent(`spreadFiller${i}`);
+  const last = vec2Component("spreadLast");
+  for (const components of [[first, unregistered], [first, last]] as DynamicComponent[][]) {
+    const world = await createTestWorld(components, 8);
+    const entity = createEntity(world);
+    for (const component of components) {
+      assert(world.components.isRegistered(component), `${component.name} is registered`);
+      world.components.addToEntity(component as never, entity);
+      assert(world.components.entityHas(component, entity), `${component.name} is found by definition`);
+    }
+    const missing = components.includes(last) ? unregistered : last;
+    assert(!world.components.isRegistered(missing), `${missing.name} is not registered`);
+    assertEquals(world.components.getInstance(missing), undefined, "an unregistered lookup is undefined");
   }
 });

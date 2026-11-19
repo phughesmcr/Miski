@@ -250,7 +250,7 @@ Deno.test("command buffer spawn reports capacity errors", async () => {
 });
 
 Deno.test("command buffer spawn respects component owner caps atomically", async () => {
-  const hero = new Component({ name: "hero", schema: defineComponentSchema({ hp: Uint8Array }), maxEntities: 1 });
+  const hero = new Component({ name: "hero", schema: defineComponentSchema({ hp: Uint8Array }), maxOwners: 1 });
   const world = await createTestWorld([hero, tag]);
   const commands = new CommandBuffer(world);
   commands.spawn([[hero, { hp: 1 }]]);
@@ -266,7 +266,7 @@ Deno.test("command buffer spawn respects component owner caps atomically", async
 });
 
 Deno.test("command buffer works with capped sparse components", async () => {
-  const capped = vec2Component("capped", { maxEntities: 2 });
+  const capped = vec2Component("capped", { maxOwners: 2 });
   const world = await createTestWorld([capped], 16);
   const commands = new CommandBuffer(world);
   const entities = [createEntity(world), createEntity(world), createEntity(world)];

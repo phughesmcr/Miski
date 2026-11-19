@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- **Breaking:** the per-world owner cap is named `maxOwners` everywhere, matching
+  what it limits (a world's own size stays `capacity`). Rename
+  `new Component({ maxEntities })`, `Component#maxEntities`, the schema tag
+  form `{ maxEntities }` and `WorldSaveComponentLayout.maxEntities` to
+  `maxOwners`. There is no deprecated alias. Save bytes and schema hashes are
+  unchanged.
+- Staged string / object values no longer stay referenced until the next
+  `refresh()`: every write path releases them once they are committed or
+  discarded, including failed adds, bundles, prefab spawns and checkpoint
+  applies.
+- Component lookup by definition indexes a compact per-world array instead of
+  a sparse array keyed by the process-wide definition id, so it stays fast
+  however many components were defined before the world's.
+- Component specs are validated and lowered to their storage schema in one
+  pass over the schema instead of about five.
+- Internal: component ownership and changed lists share one `SlotSet` sparse
+  set, and rollback snapshots, saves and writes read one `ComponentState`
+  type.
 - **Breaking:** every failure the library throws is now a `MiskiError`, so
   `isMiskiError(error)` catches them all. Code that caught `TypeError`,
   `RangeError` or `Error` from Miski must catch the new class instead; messages
@@ -14,7 +32,7 @@
     `RelationCycleError` (an acyclic relation would form a cycle).
   - Schema, `field.*`, `Component`, `Prefab` and `createEcsWorld` config errors
     throw `SpecError`; non-object payloads and data reads on tags throw
-    `ComponentDataError`; `maxEntities` owner caps throw `CapacityError`;
+    `ComponentDataError`; `maxOwners` owner caps throw `CapacityError`;
     `relations.setData` on a missing pair throws `ComponentOwnershipError`; an
     unknown name in `EcsWorld.spawn` throws `NotRegisteredError`.
   - `NoComponentsFoundError` is removed; nothing threw it.
@@ -153,10 +171,6 @@
 - `getEntityData` / `readEntityDataInto` no longer fall back to `NaN` for an
   unmapped cell (which would decode a bool as `true`); they use the field's
   default.
-- `setEntityData`, `addBundle` / `createWith` and checkpoint apply release
-  staged string / object values right after the write, instead of keeping
-  them alive until the next `refresh()`. `addToEntity`, `addToEntities` and
-  prefab instantiation still release them at `refresh()`.
 - Rollback capture resolves each object field's `clone` hook once per column
   instead of once per owner.
 - Internal: removed `ComponentManager.copyInstanceEntityData` (test-only) and

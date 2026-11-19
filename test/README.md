@@ -12,7 +12,7 @@ Runtime tests live in `*.test.ts` files and run via `deno test` (see `deno.json`
 | `system_call_forwarding.test.ts` | System call args: exact arity, rest params, defaults, return values, `argCount` fixed-arity forwarding and validation |
 | `game_oriented_api_evidence.test.ts` | `include`, bundles/spawn preflight, changed marking |
 | `world_api_conveniences.test.ts` | Soft reads, upserts, `createOrThrow`, iterable `queryList` |
-| `world_regressions.test.ts` | Edge cases: maxEntities, entered/exited, cache freshness, batch atomicity |
+| `world_regressions.test.ts` | Edge cases: maxOwners, entered/exited, cache freshness, batch atomicity |
 | `learnings.test.ts` | Newer APIs: frame, revision, createEcsWorld, schema hash, checkpoint, rollback |
 | `module_graph.test.ts` | Forbidden import coupling edges |
 | `component_integrity.test.ts` | Guarded identities, numeric writes, reserved schema fields, capped defaults |

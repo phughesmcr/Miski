@@ -29,10 +29,10 @@ const position = vec2Component("position");
 const velocity = vec2Component("velocity");
 const health = new Component({ name: "health", schema: healthSchema });
 const stats = new Component({ name: "stats", schema: statsSchema });
-const boss = new Component({ name: "bossStats", schema: statsSchema, maxEntities: 2 });
+const boss = new Component({ name: "bossStats", schema: statsSchema, maxOwners: 2 });
 const enemy = tagComponent("enemy");
 const flying = tagComponent("flying");
-const leader = tagComponent("leader", { maxEntities: 1 });
+const leader = tagComponent("leader", { maxOwners: 1 });
 
 const allComponents: DynamicComponent[] = [position, velocity, health, stats, boss, enemy, flying, leader];
 

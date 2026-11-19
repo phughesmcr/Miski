@@ -416,8 +416,12 @@ export class World {
       entityHasComponent: (entity, component) => this.#componentManager.entityHas(component, entity),
       getComponentInstance: (component) => this.#componentManager.getInstanceOrThrow(component),
       getOwnerCount: (component) => this.#componentManager.getOwnerCount(component),
-      validateComponentData: (component, properties) =>
-        this.#mutations.validateComponentData(this.#componentManager.getInstanceOrThrow(component), properties),
+      validateComponentData: (component, properties) => {
+        // A checkpoint only checks payloads here; the writes that apply them validate again.
+        const instance = this.#componentManager.getInstanceOrThrow(component);
+        this.#mutations.validateComponentData(instance, properties);
+        this.#componentManager.releaseStagedData(instance.id);
+      },
       setComponentEntityData: (entity, component, properties) =>
         this.#setComponentEntityData(component, entity, properties),
       addComponentToEntity: (entity, component, properties) =>

@@ -169,6 +169,7 @@ export class PrefabSpawner {
     for (let i = 0; i < staging.idCount; i++) {
       const id = staging.ids[i]!;
       staging.seen[id] = 0;
+      if (staging.data[id] !== undefined) this.#componentManager.releaseStagedData(id);
       staging.data[id] = undefined;
     }
     staging.idCount = 0;
@@ -198,7 +199,7 @@ export class PrefabSpawner {
       rows.push(values === null ? null : this.#componentManager.compileTemplateRow(instance, values));
       indexById[instance.id] = i;
       instances.push(instance);
-      if ((component.maxEntities ?? 0) !== 0) capped.push(instance);
+      if ((component.maxOwners ?? 0) !== 0) capped.push(instance);
     }
     const plan: PrefabPlan = { instances, rows, indexById, capped };
     this.#plans.set(prefab, plan);
@@ -223,7 +224,7 @@ export class PrefabSpawner {
     for (let i = 0; i < capped.length; i++) this.#preflightCap(capped[i]!, count);
     for (let i = 0; i < staging.extraCount; i++) {
       const extra = staging.extras[i]!;
-      if ((extra.type.maxEntities ?? 0) !== 0) this.#preflightCap(extra, count);
+      if ((extra.type.maxOwners ?? 0) !== 0) this.#preflightCap(extra, count);
     }
 
     const available = this.#entityManager.getAvailableCount();
@@ -240,9 +241,9 @@ export class PrefabSpawner {
   }
 
   #preflightCap(instance: DynamicComponentInstance, count: number): void {
-    const maxEntities = instance.type.maxEntities ?? 0;
-    if (this.#componentManager.getOwnerCount(instance.type) + count > maxEntities) {
-      throw maxOwnersError(instance.type.name, maxEntities);
+    const maxOwners = instance.type.maxOwners ?? 0;
+    if (this.#componentManager.getOwnerCount(instance.type) + count > maxOwners) {
+      throw maxOwnersError(instance.type.name, maxOwners);
     }
   }
 

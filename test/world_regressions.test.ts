@@ -20,15 +20,15 @@ import { createEntity, createTestWorld, tagComponent, vec2Component } from "./fi
 
 type MixedWidth = { flag: number; value: number };
 
-Deno.test("tag components with maxEntities: 1 can be registered in a world", async () => {
-  const player = tagComponent("player", { maxEntities: 1 });
+Deno.test("tag components with maxOwners: 1 can be registered in a world", async () => {
+  const player = tagComponent("player", { maxOwners: 1 });
   const world = await createTestWorld([player]);
 
   assert(world.components.isRegistered(player), "Expected tag component to be registered");
 });
 
-Deno.test("component maxEntities limits the number of owners", async () => {
-  const player = tagComponent("player", { maxEntities: 1 });
+Deno.test("component maxOwners limits the number of owners", async () => {
+  const player = tagComponent("player", { maxOwners: 1 });
   const world = await createTestWorld([player], 8);
 
   const first = createEntity(world);
@@ -44,8 +44,8 @@ Deno.test("component maxEntities limits the number of owners", async () => {
   assertEquals(ids(world.components.getOwners(player)), [first], "Expected only the first entity to own player");
 });
 
-Deno.test("component maxEntities slots can be reused after removal", async () => {
-  const position = vec2Component("position", { maxEntities: 1 });
+Deno.test("component maxOwners slots can be reused after removal", async () => {
+  const position = vec2Component("position", { maxOwners: 1 });
   const world = await createTestWorld([position], 8);
 
   const first = createEntity(world);
@@ -470,7 +470,7 @@ Deno.test("batch component removal rejects inactive entities without partial mut
 });
 
 Deno.test("batch component add capacity failures leave all state unchanged", async () => {
-  const player = tagComponent("player", { maxEntities: 1 });
+  const player = tagComponent("player", { maxOwners: 1 });
   const world = await createTestWorld([player], 8);
 
   const first = createEntity(world);

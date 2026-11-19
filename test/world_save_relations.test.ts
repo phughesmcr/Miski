@@ -259,7 +259,7 @@ Deno.test("relations: the layout records relation options and pair data types", 
   const layout = worldSaveLayout(world);
   assertEquals(layout.components[1], {
     name: "childOf",
-    maxEntities: null,
+    maxOwners: null,
     fields: null,
     relation: {
       exclusive: true,

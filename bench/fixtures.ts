@@ -33,7 +33,7 @@ export function createBenchmarkComponents() {
   const lifetime = new Component<Lifetime>({ name: "lifetime", schema: { ttl: Float32Array } });
   const parent = new Component<Parent>({ name: "parent", schema: { parentEntity: Uint32Array } });
   const renderable = new Component<null>({ name: "renderable" });
-  const player = new Component<null>({ name: "player", maxEntities: 1 });
+  const player = new Component<null>({ name: "player", maxOwners: 1 });
   const enemy = new Component<null>({ name: "enemy" });
   const projectile = new Component<null>({ name: "projectile" });
   const sleeping = new Component<null>({ name: "sleeping" });

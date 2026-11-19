@@ -59,7 +59,7 @@ export class ComponentInstance<
    * are JS arrays.
    *
    * Direct access is an unguarded escape hatch: writes are not validated, ownership-checked or change-tracked, and
-   * writes to non-owner slots are never reported by `getChanged`. For components with `maxEntities`, a non-owner write
+   * writes to non-owner slots are never reported by `getChanged`. For components with `maxOwners`, a non-owner write
    * may temporarily occupy one of the capped dense rows; those rows are reclaimed (and their data discarded) the next
    * time an add needs them, so stray writes can never block an owner from being added.
    */

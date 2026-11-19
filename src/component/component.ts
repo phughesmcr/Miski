@@ -1,4 +1,4 @@
-import { isSchema, Partition, type PartitionSpec } from "@phughesmcr/partitionedbuffer";
+import { isValidName as isValidPartitionName, Partition, type PartitionSpec } from "@phughesmcr/partitionedbuffer";
 import { $_COMPONENT_ID_KEY, $_PARTITION_KEY } from "@/constants.ts";
 import type {
   ComponentConstructor,
@@ -6,7 +6,7 @@ import type {
   ComponentSpec,
   DynamicComponent,
 } from "@/types/component.ts";
-import { type FieldDescriptor, fieldStorageConstructor, isFieldDescriptor } from "@/schema/field.ts";
+import { fieldStorageConstructor, isFieldDescriptor } from "@/schema/field.ts";
 import type { FieldSchema, SchemaOrNull } from "@/types/partitions.ts";
 import { SpecError } from "@/errors.ts";
 import { isPositiveUint32, isValidName } from "@/utils.ts";
@@ -14,7 +14,7 @@ import { isPositiveUint32, isValidName } from "@/utils.ts";
 type ComponentSpecRuntime<TStorage extends SchemaOrNull> = {
   name: string;
   schema?: FieldSchema<TStorage> | null;
-  maxEntities?: number | null;
+  maxOwners?: number | null;
 };
 
 /**
@@ -57,77 +57,83 @@ export function isSupportedColumnConstructor(constructor: unknown): boolean {
   return SUPPORTED_COLUMN_CONSTRUCTORS.has(constructor);
 }
 
-/** @returns the first schema key whose column constructor is unsupported, or `undefined` */
-function findUnsupportedColumn(schema: Record<string, unknown>): string | undefined {
-  for (const key of Object.keys(schema)) {
-    const property = schema[key];
-    if (isFieldDescriptor(property)) continue;
-    if (!isSupportedColumnConstructor(property)) return key;
-  }
-  return undefined;
-}
+/** What one walk over a declared schema finds; see {@link analyzeSchema}. */
+type SchemaAnalysis = {
+  /**
+   * `true` when the schema is a non-empty object whose entries are well-named typed-array constructors or
+   * `field.*` descriptors. A well-formed schema can still be invalid through {@link unsupportedKey}.
+   */
+  readonly wellFormed: boolean;
+  /** The first column whose typed-array constructor Miski does not support (e.g. BigInt64Array), if any. */
+  readonly unsupportedKey: string | undefined;
+  /**
+   * The schema handed to the partitioned buffer: the declared schema when it has no `field.*` entries; otherwise the
+   * numeric columns plus the typed column backing each lowered field (bool / enum / entity), in declaration order,
+   * or `null` when no typed column remains. String and object fields are stored outside the buffer.
+   */
+  readonly physical: unknown;
+};
+
+const MALFORMED_SCHEMA: SchemaAnalysis = { wellFormed: false, unsupportedKey: undefined, physical: null };
 
 /**
- * Split a logical schema into its numeric entries and its `field.*` entries.
- * @returns `undefined` when the schema is not a non-empty object with valid field names
+ * Validate a declared schema and build its physical schema in one walk over its entries.
+ * Numeric column names follow PartitionedBuffer's naming rule, `field.*` names Miski's stricter one.
+ * @param schema - The declared schema (any value)
  */
-function splitSchema(
-  schema: unknown,
-): { numeric: Record<string, unknown>; fields: Record<string, FieldDescriptor> } | undefined {
-  if (typeof schema !== "object" || schema === null || Array.isArray(schema)) return undefined;
-  const keys = Object.keys(schema);
-  if (keys.length === 0) return undefined;
-  const numeric: Record<string, unknown> = {};
-  const fields: Record<string, FieldDescriptor> = {};
-  for (const key of keys) {
-    const property = (schema as Record<string, unknown>)[key];
-    if (isFieldDescriptor(property)) {
-      if (!isValidName(key)) return undefined;
-      fields[key] = property;
-    } else {
-      numeric[key] = property;
-    }
-  }
-  return { numeric, fields };
-}
-
-/** @returns `true` if any own entry of `schema` is a `field.*` descriptor */
-function hasFieldDescriptor(schema: object): boolean {
-  for (const key in schema) {
-    if (Object.hasOwn(schema, key) && isFieldDescriptor((schema as Record<string, unknown>)[key])) return true;
-  }
-  return false;
-}
-
-/** @returns `true` if `schema` is a non-empty map of numeric columns and / or `field.*` descriptors */
-function isValidFieldSchema(schema: unknown): boolean {
-  // Numeric-only schemas take the original validation path, so they never pay for a split copy.
-  if (typeof schema === "object" && schema !== null && !hasFieldDescriptor(schema)) return isSchema(schema);
-  const split = splitSchema(schema);
-  if (split === undefined) return false;
-  return Object.keys(split.numeric).length === 0 || isSchema(split.numeric);
-}
-
-/**
- * Physical schema handed to the partitioned buffer: numeric columns as declared plus the typed column backing each
- * lowered field (bool / enum / entity), in declaration order. String and object fields are stored outside the
- * buffer. `null` when no typed column remains.
- */
-function physicalSchema(schema: Record<string, unknown>): Record<string, unknown> | null {
+function analyzeSchema(schema: unknown): SchemaAnalysis {
+  if (typeof schema !== "object" || schema === null || Array.isArray(schema)) return MALFORMED_SCHEMA;
+  const declared = schema as Record<string, unknown>;
+  const keys = Object.keys(declared);
+  if (keys.length === 0) return MALFORMED_SCHEMA;
   const physical: Record<string, unknown> = {};
-  let count = 0;
-  for (const key of Object.keys(schema)) {
-    const property = schema[key];
+  let physicalCount = 0;
+  let hasFields = false;
+  let unsupportedKey: string | undefined;
+  for (let i = 0; i < keys.length; i++) {
+    const key = keys[i]!;
+    const property = declared[key];
     if (isFieldDescriptor(property)) {
+      if (!isValidName(key)) return MALFORMED_SCHEMA;
+      hasFields = true;
       const Ctor = fieldStorageConstructor(property);
       if (Ctor === null) continue;
       physical[key] = Ctor;
     } else {
+      // A typed-array constructor owns `BYTES_PER_ELEMENT`; Miski supports only the number-valued ones.
+      if (
+        !isValidPartitionName(key) || typeof property !== "function" || !Object.hasOwn(property, "BYTES_PER_ELEMENT")
+      ) {
+        return MALFORMED_SCHEMA;
+      }
+      if (!isSupportedColumnConstructor(property)) unsupportedKey ??= key;
       physical[key] = property;
     }
-    count++;
+    physicalCount++;
   }
-  return count === 0 ? null : physical;
+  return {
+    wellFormed: true,
+    unsupportedKey,
+    physical: !hasFields ? schema : physicalCount === 0 ? null : physical,
+  };
+}
+
+/** `true` if `spec` is an object with a valid name and owner cap; its schema is checked separately. */
+function hasValidSpecHeader(spec: unknown): boolean {
+  if (!spec || typeof spec !== "object") return false;
+  const s = spec as ComponentSpecRuntime<SchemaOrNull>;
+  return isValidName(s.name) && (s.maxOwners == null || isPositiveUint32(s.maxOwners));
+}
+
+/**
+ * `true` if an analyzed, truthy `spec.schema` is valid for a component.
+ * @param schema - The declared schema
+ * @param analysis - {@link analyzeSchema} of `schema`
+ */
+function isValidAnalyzedSchema(schema: object, analysis: SchemaAnalysis): boolean {
+  if (!analysis.wellFormed || analysis.unsupportedKey !== undefined) return false;
+  // Proxy cursor names cannot also be numeric storage columns.
+  return !Object.hasOwn(schema, "entity") && !Object.hasOwn(schema, "slot");
 }
 
 /**
@@ -139,15 +145,9 @@ export function isValidComponentSpec<
   TValue extends SchemaOrNull,
   TStorage extends SchemaOrNull = TValue,
 >(spec: unknown): spec is ComponentSpec<TValue, TStorage> {
-  if (!spec || typeof spec !== "object") return false;
-  const s = spec as ComponentSpec<TValue, TStorage>;
-  if (!isValidName(s.name)) return false;
-  if (s.maxEntities != null && !isPositiveUint32(s.maxEntities)) return false;
-  if (s.schema && !isValidFieldSchema(s.schema)) return false;
-  if (s.schema && findUnsupportedColumn(s.schema as Record<string, unknown>) !== undefined) return false;
-  // Proxy cursor names cannot also be numeric storage columns.
-  if (s.schema && (Object.hasOwn(s.schema, "entity") || Object.hasOwn(s.schema, "slot"))) return false;
-  return true;
+  if (!hasValidSpecHeader(spec)) return false;
+  const schema = (spec as ComponentSpecRuntime<SchemaOrNull>).schema;
+  return !schema || isValidAnalyzedSchema(schema, analyzeSchema(schema));
 }
 
 /** Component type guard */
@@ -196,18 +196,20 @@ class ComponentRuntime<
    * @throws {SpecError} - If the spec is otherwise invalid
    */
   constructor(spec: ComponentSpec<TValue, TStorage>) {
-    if (!isValidComponentSpec(spec)) {
-      const { name, schema } = (spec ?? {}) as { name?: unknown; schema?: unknown };
-      assertNoTupleColumns(`component "${String(name)}"`, schema);
-      if (schema && typeof schema === "object" && isValidFieldSchema(schema)) {
-        const key = findUnsupportedColumn(schema as Record<string, unknown>);
-        if (key !== undefined) {
-          throw new SpecError(
-            `Invalid component specification: column "${key}" must use a number-valued typed array ` +
-              "(Int8Array, Uint8Array, Uint8ClampedArray, Int16Array, Uint16Array, Int32Array, Uint32Array, " +
-              "Float16Array, Float32Array, Float64Array).",
-          );
-        }
+    const declared = (spec ?? {}) as { name?: unknown; schema?: unknown };
+    const declaredSchema = declared.schema;
+    const analysis = declaredSchema ? analyzeSchema(declaredSchema) : undefined;
+    if (
+      !hasValidSpecHeader(spec) ||
+      (analysis !== undefined && !isValidAnalyzedSchema(declaredSchema as object, analysis))
+    ) {
+      assertNoTupleColumns(`component "${String(declared.name)}"`, declaredSchema);
+      if (analysis?.wellFormed && analysis.unsupportedKey !== undefined) {
+        throw new SpecError(
+          `Invalid component specification: column "${analysis.unsupportedKey}" must use a number-valued typed array ` +
+            "(Int8Array, Uint8Array, Uint8ClampedArray, Int16Array, Uint16Array, Int32Array, Uint32Array, " +
+            "Float16Array, Float32Array, Float64Array).",
+        );
       }
       throw new SpecError("Invalid component specification.");
     }
@@ -217,10 +219,8 @@ class ComponentRuntime<
     const schema = runtimeSpec.schema ?? null;
     this.#partition = new Partition<TStorage>({
       name: runtimeSpec.name,
-      schema: schema === null || !hasFieldDescriptor(schema) ?
-        schema :
-        physicalSchema(schema as Record<string, unknown>),
-      maxOwners: runtimeSpec.maxEntities ?? null,
+      schema: analysis === undefined ? schema : analysis.physical,
+      maxOwners: runtimeSpec.maxOwners ?? null,
     } as unknown as PartitionSpec<TStorage>);
 
     this.#schema = schema;
@@ -228,7 +228,7 @@ class ComponentRuntime<
   }
 
   /** The maximum number of entities able to equip this component per world */
-  get maxEntities(): number | null {
+  get maxOwners(): number | null {
     return this.#partition.maxOwners;
   }
 
@@ -279,7 +279,7 @@ export interface Component<
   TStorage extends SchemaOrNull = TValue,
 > extends ComponentPrivateMethods<TStorage> {
   /** The maximum number of owners allowed in each world. */
-  readonly maxEntities: number | null;
+  readonly maxOwners: number | null;
   /** The component's label. */
   readonly name: string;
   /** The declared columns: typed-array constructors and `field.*` descriptors. */
