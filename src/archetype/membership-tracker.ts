@@ -8,6 +8,7 @@ import type { Archetype } from "./archetype.ts";
  * - `emptied`: went from non-empty to empty and may need pruning from matching query lists.
  *
  * Both lists are deduplicated through flags on the archetype and keep their capacity across calls.
+ * {@link rebuildRequired} replaces both when the registry itself was rewritten (first use, rollback, load).
  */
 export class MembershipTracker {
   readonly populated: Archetype[] = [];
@@ -15,6 +16,9 @@ export class MembershipTracker {
 
   readonly emptied: Archetype[] = [];
   emptiedCount = 0;
+
+  /** Whether every query's archetype list must be rebuilt from scratch rather than patched. */
+  rebuildRequired = true;
 
   /** Record that an archetype just received its first entity. */
   markPopulated(archetype: Archetype): void {
@@ -44,5 +48,18 @@ export class MembershipTracker {
       this.emptied[i]!.emptiedPending = false;
     }
     this.emptiedCount = 0;
+  }
+
+  /** Drop pending entries and ask for a full rebuild (the archetype registry was rewritten). */
+  requireRebuild(): void {
+    this.clear();
+    this.rebuildRequired = true;
+  }
+
+  /** Drop pending entries and the rebuild request (membership is current). */
+  clear(): void {
+    this.clearPopulated();
+    this.clearEmptied();
+    this.rebuildRequired = false;
   }
 }

@@ -311,7 +311,7 @@ class WorldSource extends SaveSource {
 
   writePopulation(views: Views, offset: number, width: number, i: number): number {
     const archetype = this.host.archetypes.archetypeAt(i);
-    return writeSlots(views, offset, width, archetype.populationSlots, archetype.getPopulationCount());
+    return writeSlots(views, offset, width, archetype.slotList, archetype.getPopulationCount());
   }
 
   writeOwners(views: Views, offset: number, width: number, c: number): number {

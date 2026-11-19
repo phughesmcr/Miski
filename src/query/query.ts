@@ -101,58 +101,71 @@ function hasDuplicateCallbackKeys(entries: NormalizedQueryEntrySpec): boolean {
 }
 
 /**
- * Type guard for QuerySpec
- * @param spec The specification object to check
- * @returns `true` if the spec is valid, `false` otherwise
+ * Validate a query spec and normalize it in one pass.
+ * @returns The normalized entries, or `undefined` if the spec is invalid
  */
-export const isValidQuerySpec = (spec: unknown): spec is QueryInputSpec => {
-  if (isObject(spec) === false) return false;
+function validateQuerySpec(spec: unknown): NormalizedQueryEntrySpec | undefined {
+  if (isObject(spec) === false) return undefined;
   const { all, any, include, none } = spec as QueryInputSpec;
-  if (all == undefined && any == undefined && none == undefined && include == undefined) return false;
+  if (all == undefined && any == undefined && none == undefined && include == undefined) return undefined;
   if (all !== undefined) {
     if (Array.isArray(all)) {
-      if (isValidComponentArray(all) === false) return false;
+      if (isValidComponentArray(all) === false) return undefined;
     } else if (isComponentMap(all) === false) {
-      return false;
+      return undefined;
     }
   }
   if (any !== undefined) {
     if (Array.isArray(any)) {
-      if (isValidComponentArray(any) === false) return false;
+      if (isValidComponentArray(any) === false) return undefined;
     } else if (isComponentMap(any) === false) {
-      return false;
+      return undefined;
     }
   }
   if (none !== undefined) {
     if (Array.isArray(none)) {
-      if (isValidComponentArray(none) === false) return false;
+      if (isValidComponentArray(none) === false) return undefined;
     } else if (isComponentMap(none) === false) {
-      return false;
+      return undefined;
     }
   }
   if (include !== undefined) {
     if (Array.isArray(include)) {
-      if (isValidComponentArray(include) === false) return false;
+      if (isValidComponentArray(include) === false) return undefined;
     } else if (isComponentMap(include) === false) {
-      return false;
+      return undefined;
     }
   }
 
   const entries = normalizeQueryEntries(spec as QueryInputSpec);
   if (
     entries.all.length === 0 && entries.any.length === 0 && entries.none.length === 0
-  ) return false;
-  if (hasComponentOverlap(entries.all, entries.any)) return false;
-  if (hasComponentOverlap(entries.all, entries.none)) return false;
-  if (hasComponentOverlap(entries.all, entries.include)) return false;
-  if (hasComponentOverlap(entries.any, entries.none)) return false;
-  if (hasComponentOverlap(entries.any, entries.include)) return false;
-  if (hasComponentOverlap(entries.none, entries.include)) return false;
-  if (hasDuplicateCallbackKeys(entries)) return false;
-  return true;
-};
+  ) return undefined;
+  if (hasComponentOverlap(entries.all, entries.any)) return undefined;
+  if (hasComponentOverlap(entries.all, entries.none)) return undefined;
+  if (hasComponentOverlap(entries.all, entries.include)) return undefined;
+  if (hasComponentOverlap(entries.any, entries.none)) return undefined;
+  if (hasComponentOverlap(entries.any, entries.include)) return undefined;
+  if (hasComponentOverlap(entries.none, entries.include)) return undefined;
+  if (hasDuplicateCallbackKeys(entries)) return undefined;
+  return entries;
+}
 
-/** A Query is a collection of Components that can be used to find Entities. */
+/**
+ * Type guard for QuerySpec
+ * @param spec The specification object to check
+ * @returns `true` if the spec is valid, `false` otherwise
+ */
+export const isValidQuerySpec = (spec: unknown): spec is QueryInputSpec => validateQuerySpec(spec) !== undefined;
+
+/**
+ * A Query is a collection of Components that can be used to find Entities.
+ *
+ * Create queries once, at startup, and reuse them: a query lives as long as the world. The first time a world
+ * sees a query it builds an internal instance for it, and that instance stays registered, and is kept current on
+ * every refresh, until the world is destroyed; there is no way to unregister it. Creating a query inside a system
+ * or a loop repeats that setup work, and every distinct filter adds to the cost of each refresh.
+ */
 export interface Query<TComponents extends ComponentMap = UntypedQueryComponents> {
   /** Carries the typed component map through to {@link System} inference. */
   readonly $inferComponents: ComponentInstances<TComponents>;
@@ -274,10 +287,10 @@ class QueryRuntime<TComponents extends ComponentMap = UntypedQueryComponents> im
    * @throws {SpecError} if the spec is invalid
    */
   constructor(spec: QueryInputSpec) {
-    if (isValidQuerySpec(spec) === false) {
+    const entries = validateQuerySpec(spec);
+    if (entries === undefined) {
       throw new SpecError("Query specification object is invalid.");
     }
-    const entries = normalizeQueryEntries(spec);
     this.all = uniqueEntryComponents(entries.all);
     this.any = uniqueEntryComponents(entries.any);
     this.none = uniqueEntryComponents(entries.none);
@@ -330,5 +343,5 @@ export interface QueryConstructor {
   ): Query<ComposedQueryComponents<TQueries>>;
 }
 
-/** A Query is a collection of Components that can be used to find Entities */
+/** A Query is a collection of Components that can be used to find Entities. Create queries once; they live as long as the world. */
 export const Query: QueryConstructor = QueryRuntime;

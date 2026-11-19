@@ -1,20 +1,19 @@
 import { BooleanArray } from "@phughesmcr/booleanarray";
 
-import { archetypeClock } from "@/archetype/archetype.ts";
+import type { ArchetypeClock } from "@/archetype/archetype.ts";
 import { ID_KEY } from "@/constants.ts";
 import { componentDisplayName, formatComponentNotRegistered, NotRegisteredError } from "@/errors.ts";
 import type { DynamicComponentInstance } from "@/types/component.ts";
 import type { Entity } from "@/entity/entity.ts";
-import type { QueryInstance, QueryInstanceList } from "@/types/query.ts";
+import type { QueryInstance } from "@/types/query.ts";
 import type { ComponentInstanceGetter, QueryManagerDependencies } from "@/types/world-api.ts";
 import { EntityIteratorPool } from "@/entity/pooled-entity-iterator.ts";
-import { QueryEntityResult } from "./query-pool.ts";
+import { QueryEntityResult } from "./query-result.ts";
 import type { NormalizedQueryComponentEntry, Query } from "./query.ts";
+import { type MembershipSource, QueryMembership } from "./query-membership.ts";
 
 type QueryComponent = Parameters<ComponentInstanceGetter>[0][number];
 type RegisteredComponentInstance = DynamicComponentInstance;
-
-export type { QueryInstanceList };
 
 function getRegisteredInstances(
   getInstances: ComponentInstanceGetter,
@@ -110,9 +109,9 @@ function createQueryInstance(getInstances: ComponentInstanceGetter, size: number
  * Whether a query's retained result still lists exactly the entities of its archetypes, in order.
  * The result is current when neither the archetype list nor any listed archetype changed after it was filled.
  */
-function isResultCurrent(instance: QueryInstance): boolean {
+function isResultCurrent(instance: QueryInstance, clock: ArchetypeClock): boolean {
   const filled = instance.resultStamp;
-  if (filled === archetypeClock()) return true;
+  if (filled === clock.tick) return true;
   if (instance.listStamp > filled) return false;
   const archetypes = instance.archetypes;
   const archetypeCount = instance.archetypeCount;
@@ -122,16 +121,13 @@ function isResultCurrent(instance: QueryInstance): boolean {
   return true;
 }
 
-/** The QueryManager is responsible for creating, registering, and destroying queries. */
+/** The QueryManager creates and registers queries; a registered query stays current until the world is destroyed. */
 export class QueryManager {
   /** Component registry accessors supplied by the owning World. */
   #dependencies: QueryManagerDependencies;
 
-  /** Callback for refreshing query-to-archetype membership. */
-  #ensureQueryMembership: (queries: QueryInstanceList) => void;
-
-  /** Callback for registering one query against existing archetypes. */
-  #registerQueryMembership: (query: QueryInstance) => void;
+  /** Keeps each query's archetype list current. */
+  readonly #membership: QueryMembership;
 
   /** Dense registered query instances (avoids Map.values() on the hot path). */
   readonly #queries: QueryInstance[] = [];
@@ -144,6 +140,9 @@ export class QueryManager {
 
   /** Capacity of each query's lazily allocated entity result. */
   readonly #capacity: number;
+
+  /** The world's structural change clock, which stamps retained results. */
+  readonly #clock: ArchetypeClock;
 
   /**
    * Whole-cache invalidation epoch. Ordinary structural changes are tracked per archetype (see
@@ -161,27 +160,16 @@ export class QueryManager {
    * Create a new QueryManager
    * @param dependencies - Component registry accessors and lifecycle hooks
    * @param capacity - The world's entity capacity
-   * @param ensureQueryMembership - Refreshes query-to-archetype membership
-   * @param registerQueryMembership - Registers one query against existing archetypes
+   * @param archetypes - The world's archetype state (its `ArchetypeManager`)
    */
-  constructor(
-    dependencies: QueryManagerDependencies,
-    capacity: number,
-    ensureQueryMembership: (queries: QueryInstanceList) => void,
-    registerQueryMembership: (query: QueryInstance) => void,
-  ) {
+  constructor(dependencies: QueryManagerDependencies, capacity: number, archetypes: MembershipSource) {
     this.#dependencies = dependencies;
-    this.#ensureQueryMembership = ensureQueryMembership;
-    this.#registerQueryMembership = registerQueryMembership;
+    this.#membership = new QueryMembership(archetypes);
+    this.#clock = archetypes.clock;
     this.#queryList = { queries: this.#queries, count: 0 };
     this.#capacity = capacity;
     this.instancesByID = new Map();
     this.#instancesByQuery = new WeakMap();
-  }
-
-  /** Dense registered queries for archetype membership rebuilds. */
-  get registeredQueries(): QueryInstanceList {
-    return this.#queryList;
   }
 
   /** Get components for a query */
@@ -205,7 +193,7 @@ export class QueryManager {
     this.ensureQueryMembership();
 
     const retained = instance.result;
-    if (retained !== undefined && instance.resultEpoch === this.#epoch && isResultCurrent(instance)) {
+    if (retained !== undefined && instance.resultEpoch === this.#epoch && isResultCurrent(instance, this.#clock)) {
       return retained;
     }
 
@@ -220,7 +208,7 @@ export class QueryManager {
       const archetype = archetypes[i]!;
       result.appendDense(archetype.slotList, archetype.handleList, archetype.getPopulationCount());
     }
-    instance.resultStamp = archetypeClock();
+    instance.resultStamp = this.#clock.tick;
     instance.resultEpoch = this.#epoch;
     return result;
   }
@@ -250,7 +238,7 @@ export class QueryManager {
 
     // Refresh archetypes after query registration to update mappings
     if (this.#dependencies.isInitialized()) {
-      this.#registerQueryMembership(instance);
+      this.#membership.register(instance);
     }
 
     return instance;
@@ -265,7 +253,7 @@ export class QueryManager {
 
   /** Ensures query-to-archetype membership is current before entity queries. */
   ensureQueryMembership(): void {
-    this.#ensureQueryMembership(this.registeredQueries);
+    this.#membership.reconcile(this.#queryList);
   }
 
   /**

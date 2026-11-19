@@ -354,12 +354,7 @@ export class World {
         isInitialized: () => this.#state === "initialized",
       },
       capacity,
-      (queries) => {
-        this.#archetypeManager.ensureQueryMembership(queries, true);
-      },
-      (query) => {
-        this.#archetypeManager.registerQuery(query, true);
-      },
+      this.#archetypeManager,
     );
     this.#archetypeQueryIterators = new ArchetypeQueryIterators({
       instanceWithMembership: (query) => this.#queryManager.instanceWithMembership(query),
@@ -491,7 +486,6 @@ export class World {
 
   async #runInit(): Promise<void> {
     try {
-      this.#archetypeManager.init();
       this.#state = "initialized";
       await this.#systemManager.init();
       // A late hook registered by an init hook may have failed; surface its error, not a generic one.
@@ -618,7 +612,8 @@ export class World {
   refresh(retainChanged: boolean = false, retainTransitions: boolean = false): void {
     this.#assertInitialized();
     try {
-      this.#archetypeManager.refresh(this.#queryManager.registeredQueries, retainTransitions);
+      this.#queryManager.ensureQueryMembership();
+      this.#archetypeManager.refresh(retainTransitions);
       if (!retainChanged) {
         this.#componentManager.refresh();
         this.#relationManager?.refresh();

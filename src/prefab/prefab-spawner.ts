@@ -17,7 +17,7 @@ import {
   maxOwnersError,
   NotRegisteredError,
 } from "@/errors.ts";
-import { QueryEntityResult } from "@/query/query-pool.ts";
+import { QueryEntityResult } from "@/query/query-result.ts";
 import type { ComponentBundleEntryInput } from "@/types/component-bundle.ts";
 import { isRelation } from "@/relation/relation.ts";
 import type { DynamicComponentInstance } from "@/types/component.ts";

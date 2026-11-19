@@ -423,6 +423,18 @@
   `BorrowedEntityList`.
 - Document that entity handle `0` is valid: compare optional results with
   `=== undefined`, never truthiness.
+- Document that queries should be created once: a world keeps every query it
+  has seen registered, and updates it on each refresh, until the world is
+  destroyed.
+- Each world has its own structural change clock, so structural changes in one
+  world no longer make another world's retained query results rebuild.
+- Internal: the archetype manager moves entities through one relocate step
+  (single moves, batch moves, `set` and destroy). Its transition-edge graph,
+  snapshot/restore and query membership are separate modules; query membership
+  now lives under `src/query/`. A `Query` normalizes its spec once instead of
+  twice. Remove dead entity-path archetype methods, `EntityResultSink`,
+  `ArchetypeManager.init` / `getWindowOrigin`, and the ignored capacity argument
+  of `createEntityArray`.
 
 ## 1.0.0-beta.2 — 2026-11-18
 

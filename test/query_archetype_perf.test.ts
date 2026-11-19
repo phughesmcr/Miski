@@ -12,8 +12,10 @@ import {
   WorldRollbackScope,
 } from "../mod.ts";
 import { ArchetypeManager } from "../src/archetype/archetype-manager.ts";
+import { ComponentManager } from "../src/component/component-manager.ts";
 import { EntityManager } from "../src/entity/entity-manager.ts";
-import { QueryEntityResult } from "../src/query/query-pool.ts";
+import { QueryManager } from "../src/query/query-manager.ts";
+import { QueryEntityResult } from "../src/query/query-result.ts";
 import { createEntity, createTestWorld, tagComponent, vec2Component } from "./fixtures.ts";
 import { assert, assertEquals, assertStrictEquals, assertThrows, listIds } from "./helpers.ts";
 
@@ -379,6 +381,45 @@ Deno.test("archetype query iterators are reused without sharing state", async ()
   world.components.removeFromEntity(a, entities[0]!);
   assertEquals([...lazy], [entities[0]], "Exited reads the window when iteration starts");
   await world.destroy();
+});
+
+/** One world's archetype and query state, wired the way `World` wires it. */
+function worldParts(components: DynamicComponent[], capacity: number) {
+  const componentManager = new ComponentManager(capacity, components);
+  const archetypes = new ArchetypeManager(capacity, components.length);
+  const queries = new QueryManager(
+    {
+      getInstances: (list) => componentManager.getInstances(list),
+      componentCount: components.length,
+      isInitialized: () => true,
+    },
+    capacity,
+    archetypes,
+  );
+  return { componentManager, archetypes, queries };
+}
+
+Deno.test("worlds keep separate structural clocks, so one world's changes keep another's results current", () => {
+  const a = tagComponent("a");
+  const b = tagComponent("b");
+  const first = worldParts([a, b], 8);
+  const second = worldParts([a, b], 8);
+  const withA = new Query({ all: [a] });
+  const instanceA = first.componentManager.getInstance(a)!;
+  const instanceB = second.componentManager.getInstance(b)!;
+
+  first.archetypes.addComponent(0 as Entity, instanceA);
+  assertStrictEquals(first.queries.entityList(withA).count, 1, "First world lists its entity");
+  const instance = first.queries.register(withA);
+  const tick = first.archetypes.clock.tick;
+  assertStrictEquals(instance.resultStamp, tick, "A freshly filled result is stamped with its world's tick");
+
+  for (let slot = 0; slot < 8; slot++) second.archetypes.addComponent(slot as Entity, instanceB);
+  second.queries.entityList(withA);
+  assertStrictEquals(first.archetypes.clock.tick, tick, "Changes in another world leave this world's clock alone");
+  assert(second.archetypes.clock.tick > 0, "The other world's clock advanced");
+  assertStrictEquals(instance.resultStamp, first.archetypes.clock.tick, "The fast path still applies");
+  assertStrictEquals(first.queries.entityList(withA).count, 1, "The retained result is unchanged");
 });
 
 Deno.test("archetype manager rejects archetypes it does not hold", () => {

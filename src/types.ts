@@ -5,7 +5,6 @@ export type {
   BorrowedEntityListEachFn,
   BorrowedSlotIndices,
   Entity,
-  EntityResultSink,
   QueryEntityList,
   SlotIndex,
 } from "@/entity/entity.ts";

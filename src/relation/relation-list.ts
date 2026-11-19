@@ -38,7 +38,7 @@ export class RelationList {
     this.#capacity = capacity;
     this.#withDepths = withDepths;
     const length = Math.min(capacity, INITIAL_LENGTH);
-    this.#entityBuffer = createEntityArray(capacity, length);
+    this.#entityBuffer = createEntityArray(length);
     this.#slotBuffer = createSlotArray(capacity, length);
     this.rows = new Int32Array(length);
     this.depths = new Uint32Array(withDepths ? length : 0);
@@ -49,7 +49,7 @@ export class RelationList {
 
   #grow(): void {
     const next = Math.min(Math.max(this.#entityBuffer.length * 2, 1), this.#capacity);
-    const entities = createEntityArray(this.#capacity, next);
+    const entities = createEntityArray(next);
     const slots = createSlotArray(this.#capacity, next);
     const rows = new Int32Array(next);
     entities.set(this.#entityBuffer);

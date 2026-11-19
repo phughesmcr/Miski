@@ -9,8 +9,9 @@ import { asEntity, asSlotIndex, ReusableEntityIterator } from "../src/entity/ent
 import { EntityManager } from "../src/entity/entity-manager.ts";
 import { EntityIteratorPool } from "../src/entity/pooled-entity-iterator.ts";
 import { QueryManager } from "../src/query/query-manager.ts";
+import { QueryMembership } from "../src/query/query-membership.ts";
 import { Query } from "../src/query/query.ts";
-import { QueryEntityResult } from "../src/query/query-pool.ts";
+import { QueryEntityResult } from "../src/query/query-result.ts";
 import type { DynamicComponentInstance, QueryInstance } from "../src/types.ts";
 import type { ComponentInstance } from "../mod.ts";
 import { createBenchmarkComponents, MEDIUM_CAPACITY, SMALL_CAPACITY, type Vec2 } from "./fixtures.ts";
@@ -82,11 +83,10 @@ const renderableQueryInstance = createQueryInstance(
 const archetypeBitfield = bitfieldFor(componentCount, positionInstance, velocityInstance);
 const movementArchetype = new Archetype(SMALL_CAPACITY, [positionInstance, velocityInstance], archetypeBitfield);
 for (let entity = 0; entity < SMALL_CAPACITY; entity++) {
-  movementArchetype.addEntity(asEntity(entity));
+  movementArchetype.addSlot(entity);
 }
 
 const archetypeResult = new QueryEntityResult(SMALL_CAPACITY);
-const visitedEntities = new BooleanArray(SMALL_CAPACITY);
 const transitionArchetype = new Archetype(
   SMALL_CAPACITY,
   [positionInstance, velocityInstance],
@@ -94,7 +94,6 @@ const transitionArchetype = new Archetype(
 );
 
 const archetypeManager = new ArchetypeManager(SMALL_CAPACITY, componentCount);
-archetypeManager.init();
 const archetypeQueryList = {
   queries: [movementQueryInstance, renderableQueryInstance],
   count: 2,
@@ -106,7 +105,8 @@ for (let entity = 0; entity < SMALL_CAPACITY; entity++) {
   if (entity % 4 === 0) archetypeManager.addComponent(e, renderableInstance);
   if (entity % 64 === 0) archetypeManager.addComponent(e, sleepingInstance);
 }
-archetypeManager.refresh(archetypeQueryList);
+const archetypeMembership = new QueryMembership(archetypeManager);
+archetypeMembership.reconcile(archetypeQueryList);
 
 const queryResult = new QueryEntityResult(MEDIUM_CAPACITY);
 for (let i = 0; i < MEDIUM_CAPACITY; i++) {
@@ -126,8 +126,7 @@ const queryManager = new QueryManager(
     isInitialized: () => true,
   },
   MEDIUM_CAPACITY,
-  (queries) => archetypeManager.ensureQueryMembership(queries),
-  (query) => archetypeManager.registerQuery(query),
+  archetypeManager,
 );
 queryManager.entityList(cachedQuery);
 
@@ -340,33 +339,25 @@ Deno.bench({
 });
 
 Deno.bench({
-  name: "Archetype add/remove entity bookkeeping",
+  name: "Archetype add/remove slot bookkeeping",
   group: "internal archetypes",
   fn: () => {
-    transitionArchetype.addEntity(asEntity(17));
-    transitionArchetype.removeEntity(asEntity(17));
+    transitionArchetype.addSlot(17);
+    transitionArchetype.removeSlot(17);
   },
 });
 
 Deno.bench({
-  name: "Archetype writeEntitiesIntoResult",
+  name: "QueryEntityResult appendDense archetype population",
   group: "internal archetypes",
   fn: () => {
     archetypeResult.clear();
-    movementArchetype.writeEntitiesIntoResult(archetypeResult);
+    archetypeResult.appendDense(
+      movementArchetype.slotList,
+      movementArchetype.handleList,
+      movementArchetype.getPopulationCount(),
+    );
     entitySink ^= archetypeResult.count;
-  },
-});
-
-Deno.bench({
-  name: "Archetype writeEntitiesIntoResult with dedupe",
-  group: "internal archetypes",
-  fn: () => {
-    archetypeResult.clear();
-    visitedEntities.clear();
-    movementArchetype.writeEntitiesIntoResult(archetypeResult, visitedEntities);
-    entitySink ^= archetypeResult.count;
-    visitedEntities.clear();
   },
 });
 
@@ -398,18 +389,19 @@ Deno.bench({
 });
 
 Deno.bench({
-  name: "ArchetypeManager registerQuery",
+  name: "QueryMembership register query",
   group: "internal archetype manager",
   fn: () => {
-    archetypeManager.registerQuery(movementQueryInstance);
+    archetypeMembership.register(movementQueryInstance);
   },
 });
 
 Deno.bench({
-  name: "ArchetypeManager refresh query membership",
+  name: "QueryMembership reconcile + ArchetypeManager refresh",
   group: "internal archetype manager",
   fn: () => {
-    archetypeManager.refresh(archetypeQueryList);
+    archetypeMembership.reconcile(archetypeQueryList);
+    archetypeManager.refresh();
   },
 });
 
