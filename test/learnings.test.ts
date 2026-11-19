@@ -96,7 +96,7 @@ Deno.test("createEcsWorld tags spawn, ownership, and collisions", async () => {
     },
     tags: {
       Player: true,
-      Hero: { maxEntities: 1 },
+      Hero: { maxOwners: 1 },
     },
   });
   await ecs.init();
@@ -136,14 +136,14 @@ Deno.test("compileComponentSchema hash is stable for equivalent maps", () => {
   assertStrictEquals(left.schemaHash, right, "schema hash ignores key order");
 });
 
-Deno.test("compileComponentSchema hash includes tags and maxEntities", () => {
+Deno.test("compileComponentSchema hash includes tags and maxOwners", () => {
   const withPlayer = compileComponentSchema(
     { Position: { x: Float32Array, y: Float32Array } },
-    { Player: true, Hero: { maxEntities: 1 } },
+    { Player: true, Hero: { maxOwners: 1 } },
   );
   const reordered = componentSchemaHash(
     { Position: { x: Float32Array, y: Float32Array } },
-    { Hero: { maxEntities: 1 }, Player: true },
+    { Hero: { maxOwners: 1 }, Player: true },
   );
   assertStrictEquals(withPlayer.schemaHash, reordered, "tag key order does not change hash");
 
@@ -153,7 +153,7 @@ Deno.test("compileComponentSchema hash includes tags and maxEntities", () => {
   );
   assert(
     withPlayer.schemaHash !== uncappedHero,
-    "maxEntities changes the schema hash",
+    "maxOwners changes the schema hash",
   );
 
   const noTags = componentSchemaHash({ Position: { x: Float32Array, y: Float32Array } });
@@ -161,8 +161,8 @@ Deno.test("compileComponentSchema hash includes tags and maxEntities", () => {
   assertStrictEquals(withPlayer.tagMap.Player, true, "compiled tagMap preserves true");
   assertEquals(
     withPlayer.tagMap.Hero,
-    { maxEntities: 1 },
-    "compiled tagMap preserves maxEntities",
+    { maxOwners: 1 },
+    "compiled tagMap preserves maxOwners",
   );
 });
 

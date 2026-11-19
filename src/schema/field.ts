@@ -54,7 +54,7 @@ export interface EntityField {
 }
 
 /**
- * A string field. Stored as a slot-indexed JS array sized to world capacity (also under `maxEntities`); new owners
+ * A string field. Stored as a slot-indexed JS array sized to world capacity (also under `maxOwners`); new owners
  * start at `""`.
  */
 export interface StringField {
@@ -95,7 +95,7 @@ export type ObjectFieldEncoded = string | number | null;
 
 /**
  * A field holding any JS value by reference (meshes, class instances, ...), or `null`. Stored as a slot-indexed JS
- * array sized to world capacity (also under `maxEntities`). New owners start at `create()` when given, otherwise `null`.
+ * array sized to world capacity (also under `maxOwners`). New owners start at `create()` when given, otherwise `null`.
  * Removing the component releases the reference.
  */
 export interface ObjectField<T = unknown> extends ObjectFieldOptions<T> {

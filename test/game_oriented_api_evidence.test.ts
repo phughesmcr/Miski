@@ -344,7 +344,7 @@ Deno.test("bundle validation rejects duplicate, unregistered, inactive, tag-data
   const limited = new Component<{ value: number }, { value: Uint8ArrayConstructor }>({
     name: "limited",
     schema: { value: Uint8Array },
-    maxEntities: 1,
+    maxOwners: 1,
   });
   const cappedWorld = await createTestWorld([limited], 8);
   const first = createEntity(cappedWorld);

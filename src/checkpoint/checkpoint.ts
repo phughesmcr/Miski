@@ -218,7 +218,7 @@ export function applyComponentCheckpoint(world: CheckpointWorld, checkpoint: Com
       world.validateComponentData(component, payload as Record<string, unknown> | undefined);
       payloads[e]![index] = payload;
     }
-    const cap = component.maxEntities;
+    const cap = component.maxOwners;
     if (cap !== null && cap !== undefined && finalOwners > cap) {
       throw new CapacityError(`Component ${component.name} exceeds its maximum owner count.`);
     }

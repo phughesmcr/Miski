@@ -14,7 +14,7 @@ import { isPositiveUint32, isValidName } from "@/utils.ts";
 type ComponentSpecRuntime<TStorage extends SchemaOrNull> = {
   name: string;
   schema?: FieldSchema<TStorage> | null;
-  maxEntities?: number | null;
+  maxOwners?: number | null;
 };
 
 /**
@@ -122,7 +122,7 @@ function analyzeSchema(schema: unknown): SchemaAnalysis {
 function hasValidSpecHeader(spec: unknown): boolean {
   if (!spec || typeof spec !== "object") return false;
   const s = spec as ComponentSpecRuntime<SchemaOrNull>;
-  return isValidName(s.name) && (s.maxEntities == null || isPositiveUint32(s.maxEntities));
+  return isValidName(s.name) && (s.maxOwners == null || isPositiveUint32(s.maxOwners));
 }
 
 /**
@@ -220,7 +220,7 @@ class ComponentRuntime<
     this.#partition = new Partition<TStorage>({
       name: runtimeSpec.name,
       schema: analysis === undefined ? schema : analysis.physical,
-      maxOwners: runtimeSpec.maxEntities ?? null,
+      maxOwners: runtimeSpec.maxOwners ?? null,
     } as unknown as PartitionSpec<TStorage>);
 
     this.#schema = schema;
@@ -228,7 +228,7 @@ class ComponentRuntime<
   }
 
   /** The maximum number of entities able to equip this component per world */
-  get maxEntities(): number | null {
+  get maxOwners(): number | null {
     return this.#partition.maxOwners;
   }
 
@@ -279,7 +279,7 @@ export interface Component<
   TStorage extends SchemaOrNull = TValue,
 > extends ComponentPrivateMethods<TStorage> {
   /** The maximum number of owners allowed in each world. */
-  readonly maxEntities: number | null;
+  readonly maxOwners: number | null;
   /** The component's label. */
   readonly name: string;
   /** The declared columns: typed-array constructors and `field.*` descriptors. */

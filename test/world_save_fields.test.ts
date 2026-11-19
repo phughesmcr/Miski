@@ -88,7 +88,7 @@ function components(log: HookLog, cap = 4): DynamicComponent[] {
       },
     }),
     new Component({ name: "named", schema: { text: field.string() } }),
-    new Component({ name: "boss", schema: { title: field.string(), box: boxed() }, maxEntities: cap }),
+    new Component({ name: "boss", schema: { title: field.string(), box: boxed() }, maxOwners: cap }),
     new Component({ name: "flag" }),
   ];
 }

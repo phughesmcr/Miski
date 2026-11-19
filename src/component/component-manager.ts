@@ -223,11 +223,11 @@ export class ComponentManager {
     data: Record<string, unknown> | undefined,
     template: readonly unknown[] | undefined,
   ): void {
-    const maxEntities = state.maxEntities;
-    if (maxEntities !== 0 && state.owners.count >= maxEntities) {
+    const maxOwners = state.maxOwners;
+    if (maxOwners !== 0 && state.owners.count >= maxOwners) {
       // The add is discarded, and so is the data staged for it.
       this.#releaseSideScratch(state);
-      throw maxOwnersError(state.instance.type.name, maxEntities);
+      throw maxOwnersError(state.instance.type.name, maxOwners);
     }
     if (state.sideKeys.length > 0) this.#stageSideInitial(state, data, template);
     if (state.usesSparseStorage) this.#reserveSparseSlot(state, flags, slot);
@@ -257,7 +257,7 @@ export class ComponentManager {
    * Map a capped component's dense row for `slot` before ownership changes, so a storage failure can never leave a
    * half-committed add. Raw writes to non-owner slots (direct partitions, proxy slot cursor) map rows too and
    * are never released by removal; when the dense rows run out they are reclaimed here, after which at most
-   * `owners.count` rows are mapped and `owners.count < maxEntities` guarantees room.
+   * `owners.count` rows are mapped and `owners.count < maxOwners` guarantees room.
    */
   #reserveSparseSlot(state: ComponentState, flags: Uint8Array, slot: number): void {
     const column = state.storageColumns[0] as SparseColumn;
@@ -647,13 +647,13 @@ export class ComponentManager {
     for (let i = 0; i < count; i++) {
       const instance = entries[i]!.instance;
       const state = this.#states[instance.id];
-      const maxEntities = state?.maxEntities ?? 0;
+      const maxOwners = state?.maxOwners ?? 0;
       if (
-        state === undefined || maxEntities === 0 ||
+        state === undefined || maxOwners === 0 ||
         (entity !== undefined && state.ownerFlags?.[entityIndex(entity)] === 1)
       ) continue;
-      if (state.owners.count >= maxEntities) {
-        throw maxOwnersError(instance.type.name, maxEntities);
+      if (state.owners.count >= maxOwners) {
+        throw maxOwnersError(instance.type.name, maxOwners);
       }
     }
   }
@@ -664,15 +664,15 @@ export class ComponentManager {
     TStorage extends SchemaOrNull = TValue,
   >(instance: ComponentInstance<TValue, TStorage>, entities: EntityArray, count: number): void {
     const state = this.#states[instance.id];
-    const maxEntities = state?.maxEntities ?? 0;
-    if (state === undefined || maxEntities === 0) return;
+    const maxOwners = state?.maxOwners ?? 0;
+    if (state === undefined || maxOwners === 0) return;
 
     let newOwners = 0;
     for (let i = 0; i < count; i++) {
       if (state.ownerFlags?.[entityIndex(entities[i]! as Entity)] !== 1) newOwners++;
     }
-    if (state.owners.count + newOwners > maxEntities) {
-      throw maxOwnersError(instance.type.name, maxEntities);
+    if (state.owners.count + newOwners > maxOwners) {
+      throw maxOwnersError(instance.type.name, maxOwners);
     }
   }
 

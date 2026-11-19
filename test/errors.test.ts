@@ -50,7 +50,7 @@ Deno.test("isMiskiError catches failures across the library", async () => {
   assertMiskiThrows(() => new Prefab({ components: [[position, 5 as never]] }), ComponentDataError, "prefab payload");
 
   // Component data and capacity
-  const hero = new Component({ name: "hero", maxEntities: 1 });
+  const hero = new Component({ name: "hero", maxOwners: 1 });
   const linked = new Relation({ name: "linked", exclusive: true, acyclic: true, schema: { weight: Float32Array } });
   const world = await createTestWorld([position, hero, linked]);
   const a = createEntity(world);

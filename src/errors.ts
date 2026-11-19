@@ -87,7 +87,7 @@ export const ComponentDataError: typeof MiskiError = createErrorClass(
 /** An error thrown when something is not registered */
 export const NotRegisteredError: typeof MiskiError = createErrorClass("NotRegisteredError", "Not registered");
 
-/** An error thrown when the world's entity capacity, or a component's `maxEntities` owner cap, is exhausted */
+/** An error thrown when the world's entity capacity, or a component's `maxOwners` cap, is exhausted */
 export const CapacityError: typeof MiskiError = createErrorClass("CapacityError", "World is at capacity");
 
 /** An error thrown when a call argument is malformed, such as a bundle, a batch list, a delta time or a handle */
@@ -99,7 +99,7 @@ export const RelationCycleError: typeof MiskiError = createErrorClass(
   "Relation pair would form a cycle",
 );
 
-/** Build the {@link CapacityError} for a component whose `maxEntities` owner cap would be exceeded */
-export function maxOwnersError(componentName: string, maxEntities: number): MiskiError {
-  return new CapacityError(`Component "${componentName}" can only be added to ${maxEntities} entities.`);
+/** Build the {@link CapacityError} for a component whose `maxOwners` cap would be exceeded */
+export function maxOwnersError(componentName: string, maxOwners: number): MiskiError {
+  return new CapacityError(`Component "${componentName}" can only be added to ${maxOwners} entities.`);
 }

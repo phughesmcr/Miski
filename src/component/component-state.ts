@@ -35,7 +35,7 @@ export type SparseColumn = TypedArray & {
 export type ComponentState = {
   readonly instance: DynamicComponentInstance;
   /** Owner cap for this world, or `0` when uncapped. */
-  readonly maxEntities: number;
+  readonly maxOwners: number;
   /** Owner slots in iteration order. */
   readonly owners: SlotSet;
   /** Slot -> `1` when owned; `null` until the first owner. The fast membership test for ownership. */
@@ -103,8 +103,8 @@ export type ComponentStateLinks = {
  * and cannot be starved by stray raw writes.
  */
 function getSparseRowCount(component: DynamicComponent, capacity: number): number | null {
-  const maxEntities = component.maxEntities;
-  return maxEntities === null || maxEntities >= capacity ? null : maxEntities;
+  const maxOwners = component.maxOwners;
+  return maxOwners === null || maxOwners >= capacity ? null : maxOwners;
 }
 
 /** Bytes a component's typed columns take in a world of `capacity`. */
@@ -174,7 +174,7 @@ export function createComponentState(
   buffer: PartitionedBuffer,
   links: ComponentStateLinks,
 ): ComponentState {
-  const maxEntities = component.maxEntities ?? 0;
+  const maxOwners = component.maxOwners ?? 0;
   const partition = getWorldPartition(component, capacity);
   const bufferStorage = buffer.addPartition(partition);
   const coercionScratch: Record<string, TypedArray> = Object.create(null);
@@ -254,10 +254,10 @@ export function createComponentState(
     decode,
   } as never) as DynamicComponentInstance;
   // Owner and changed lists hold at most the cap (or world capacity when uncapped).
-  const listCapacity = maxEntities === 0 ? capacity : Math.min(maxEntities, capacity);
+  const listCapacity = maxOwners === 0 ? capacity : Math.min(maxOwners, capacity);
   return {
     instance,
-    maxEntities,
+    maxOwners,
     owners: new SlotSet(capacity, listCapacity, packSlot),
     ownerFlags: null,
     changed: new SlotSet(capacity, listCapacity, packSlot),

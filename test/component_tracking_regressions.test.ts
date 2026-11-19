@@ -8,9 +8,9 @@ import { assert, assertEquals, assertStrictEquals, ids } from "./helpers.ts";
 const sorted = (values: number[]): number[] => [...values].sort((a, b) => a - b);
 
 Deno.test("a newly owned data component is changed whether or not a payload was passed", async () => {
-  for (const maxEntities of [undefined, 8]) {
-    const label = maxEntities === undefined ? "dense" : "capped";
-    const position = vec2Component("position", { maxEntities });
+  for (const maxOwners of [undefined, 8]) {
+    const label = maxOwners === undefined ? "dense" : "capped";
+    const position = vec2Component("position", { maxOwners });
     const marker = tagComponent("marker");
     const world = await createTestWorld([position, marker], 12);
     const { components, entities } = world;
@@ -78,7 +78,7 @@ Deno.test("applyCheckpoint does not truncate an in-progress getOwners iteration"
 });
 
 Deno.test("a bundle spawn that fails mid-commit strips already-committed components", async () => {
-  const capped = vec2Component("capped", { maxEntities: 2 });
+  const capped = vec2Component("capped", { maxOwners: 2 });
   const position = vec2Component("position");
   const world = await createTestWorld([capped, position], 8);
   const cappedInstance = world.components.getInstanceOrThrow(capped);

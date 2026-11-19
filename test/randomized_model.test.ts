@@ -32,7 +32,7 @@ type Fields = Record<string, number>;
 
 const position = new Component({ name: "position", schema: { x: Float32Array, y: Float32Array } });
 const health = new Component({ name: "health", schema: { hp: Uint16Array } });
-const boss = new Component({ name: "boss", schema: { level: Uint8Array }, maxEntities: BOSS_CAP });
+const boss = new Component({ name: "boss", schema: { level: Uint8Array }, maxOwners: BOSS_CAP });
 const tagA = new Component({ name: "tagA" });
 const tagB = new Component({ name: "tagB" });
 const components: DynamicComponent[] = [position, health, boss, tagA, tagB];

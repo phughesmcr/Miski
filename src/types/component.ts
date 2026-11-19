@@ -44,7 +44,7 @@ export type TagComponentSpec = {
    *
    * __Warning__: use this only where memory use is a concern, performance will be worse.
    */
-  maxEntities?: number | null;
+  maxOwners?: number | null;
 };
 
 /**
@@ -66,7 +66,7 @@ export type InferredDataComponentSpec<TStorage extends Record<string, ComponentF
    *
    * __Warning__: use this only where memory use is a concern, performance will be worse.
    */
-  maxEntities?: number | null;
+  maxOwners?: number | null;
 };
 
 /** The Component's constructor specification */
@@ -95,7 +95,7 @@ export type ComponentSpec<
      *
      * __Warning__: use this only where memory use is a concern, performance will be worse.
      */
-    maxEntities?: number | null;
+    maxOwners?: number | null;
   }
   & (TStorage extends null ? {
       /** No schema for tag components */

@@ -25,7 +25,7 @@ import { type WorldSaveHost, worldSaveHost } from "../src/serialization/host.ts"
 import { createEntity, createTestWorld, Mesh } from "./fixtures.ts";
 import { assert, assertEquals, assertStrictEquals, assertThrows, ids } from "./helpers.ts";
 
-function unitComponent(maxEntities?: number, create?: () => Mesh, clone?: (mesh: Mesh) => Mesh) {
+function unitComponent(maxOwners?: number, create?: () => Mesh, clone?: (mesh: Mesh) => Mesh) {
   const mesh = create === undefined && clone === undefined ?
     field.object<Mesh>() :
     field.object<Mesh>({ ...(create ? { create } : {}), ...(clone ? { clone } : {}) });
@@ -39,7 +39,7 @@ function unitComponent(maxEntities?: number, create?: () => Mesh, clone?: (mesh:
       label: field.string(),
       mesh,
     },
-    maxEntities,
+    maxOwners,
   });
 }
 
@@ -72,7 +72,7 @@ Deno.test("existing numeric schema hashes are unchanged by field types", () => {
           g: Uint8Array,
         },
       },
-      { Player: true, Hero: { maxEntities: 1 } },
+      { Player: true, Hero: { maxOwners: 1 } },
     ),
     "9cb8dc9a1cad8884",
     "Every numeric tag keeps its hash",
@@ -194,8 +194,8 @@ Deno.test("field columns have the documented raw layout", async () => {
 });
 
 Deno.test("new ownership initializes every field to its default, dense and capped", async () => {
-  for (const maxEntities of [undefined, 4]) {
-    const unit = unitComponent(maxEntities);
+  for (const maxOwners of [undefined, 4]) {
+    const unit = unitComponent(maxOwners);
     const world = await createTestWorld([unit]);
     const instance = world.components.getInstanceOrThrow(unit);
     const bundled = world.entities.createOrThrow([[unit]]);
@@ -226,7 +226,7 @@ Deno.test("new ownership initializes every field to its default, dense and cappe
     assertEquals(
       world.components.getEntityDataOrThrow(unit, single),
       DEFAULTS,
-      `Reacquired row resets (cap ${maxEntities})`,
+      `Reacquired row resets (cap ${maxOwners})`,
     );
   }
 });
@@ -438,8 +438,8 @@ Deno.test("removing a component or destroying its owner releases side-column ref
 // ---------------------------------------------------------------------------
 
 Deno.test("rollback restores every field kind for dense and capped components", async () => {
-  for (const maxEntities of [undefined, 3]) {
-    const unit = unitComponent(maxEntities);
+  for (const maxOwners of [undefined, 3]) {
+    const unit = unitComponent(maxOwners);
     const world = await createTestWorld([unit]);
     const target = createEntity(world);
     const meshA = new Mesh([1]);
@@ -462,7 +462,7 @@ Deno.test("rollback restores every field kind for dense and capped components", 
     meshA.vertices.push(2); // in-place mutation is not undone without a clone hook
     point.restore();
 
-    assertEquals(world.components.getEntityDataOrThrow(unit, a), before[0], `Row a restored (cap ${maxEntities})`);
+    assertEquals(world.components.getEntityDataOrThrow(unit, a), before[0], `Row a restored (cap ${maxOwners})`);
     assertStrictEquals(world.components.getEntityDataOrThrow(unit, a).mesh, meshA, "Same reference restored");
     assertEquals(meshA.vertices, [1, 2], "Reference semantics: inner mutation persists");
     assertEquals(world.components.getEntityDataOrThrow(unit, b), before[1], "Removed row restored");

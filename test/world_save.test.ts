@@ -43,8 +43,8 @@ const BOSS_CAP = 3;
 const position = new Component({ name: "position", schema: { x: Float32Array, y: Float32Array } });
 const health = new Component({ name: "health", schema: { hp: Uint16Array } });
 const mass = new Component({ name: "mass", schema: { kg: Float64Array, flags: Int8Array } });
-const boss = new Component({ name: "boss", schema: { level: Uint8Array }, maxEntities: BOSS_CAP });
-const leader = new Component({ name: "leader", maxEntities: 1 });
+const boss = new Component({ name: "boss", schema: { level: Uint8Array }, maxOwners: BOSS_CAP });
+const leader = new Component({ name: "leader", maxOwners: 1 });
 const tagA = new Component({ name: "tagA" });
 const tagB = new Component({ name: "tagB" });
 const tagC = new Component({ name: "tagC" });
@@ -101,7 +101,7 @@ function step(h: Harness, random: Rng): void {
     case 2:
     case 3: {
       if (
-        component.maxEntities !== null && world.components.getOwnersSnapshot(component)!.length >= component.maxEntities
+        component.maxOwners !== null && world.components.getOwnersSnapshot(component)!.length >= component.maxOwners
       ) {
         return;
       }
@@ -330,10 +330,10 @@ Deno.test("readWorldSaveHeader describes a save without a world", async () => {
   );
   assertEquals(
     header.layout.components[0],
-    { name: "position", maxEntities: null, fields: [{ name: "x", type: "f32" }, { name: "y", type: "f32" }] },
+    { name: "position", maxOwners: null, fields: [{ name: "x", type: "f32" }, { name: "y", type: "f32" }] },
     "data component layout",
   );
-  assertEquals(header.layout.components[4], { name: "leader", maxEntities: 1, fields: null }, "tag layout");
+  assertEquals(header.layout.components[4], { name: "leader", maxOwners: 1, fields: null }, "tag layout");
   assertStrictEquals(typeof header.layoutHash, "string", "hash is a hex string");
   assertStrictEquals(header.layoutHash.length, 16, "hash is 64-bit");
 });

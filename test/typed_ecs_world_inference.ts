@@ -8,7 +8,7 @@ const game = createEcsWorld({
   },
   tags: {
     Player: true,
-    Hero: { maxEntities: 1 },
+    Hero: { maxOwners: 1 },
   },
 });
 

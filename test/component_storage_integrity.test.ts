@@ -35,7 +35,7 @@ function strayWrite(
 
 for (const how of ["partitions", "proxy-slot"] as const) {
   Deno.test(`capped add survives stray non-owner writes (${how}) without half-committing`, async () => {
-    const position = vec2Component("position", { maxEntities: 2 });
+    const position = vec2Component("position", { maxOwners: 2 });
     const world = await createTestWorld([position], 8);
     const instance = world.components.getInstanceOrThrow(position);
     const [a, b, c, d] = [createEntity(world), createEntity(world), createEntity(world), createEntity(world)];
@@ -64,7 +64,7 @@ for (const how of ["partitions", "proxy-slot"] as const) {
 }
 
 Deno.test("capped bundle, create(bundle) and addToEntities survive stray non-owner writes", async () => {
-  const position = vec2Component("position", { maxEntities: 2 });
+  const position = vec2Component("position", { maxOwners: 2 });
   const world = await createTestWorld([position], 8);
   const instance = world.components.getInstanceOrThrow(position);
   const strays = [createEntity(world), createEntity(world)];
@@ -85,8 +85,8 @@ Deno.test("capped bundle, create(bundle) and addToEntities survive stray non-own
 });
 
 Deno.test("stray non-owner writes are discarded when ownership is acquired", async () => {
-  for (const maxEntities of [undefined, 2]) {
-    const position = vec2Component("position", { maxEntities });
+  for (const maxOwners of [undefined, 2]) {
+    const position = vec2Component("position", { maxOwners });
     const world = await createTestWorld([position], 8);
     const instance = world.components.getInstanceOrThrow(position);
     const entity = createEntity(world);
@@ -101,9 +101,9 @@ Deno.test("stray non-owner writes are discarded when ownership is acquired", asy
 });
 
 Deno.test("acquiring ownership with data marks changed identically in dense and capped storage", async () => {
-  for (const maxEntities of [undefined, 4]) {
-    const label = maxEntities === undefined ? "dense" : "capped";
-    const position = vec2Component("position", { maxEntities });
+  for (const maxOwners of [undefined, 4]) {
+    const label = maxOwners === undefined ? "dense" : "capped";
+    const position = vec2Component("position", { maxOwners });
     const world = await createTestWorld([position], 8);
 
     // Zero payload on fresh storage.
@@ -132,8 +132,8 @@ Deno.test("acquiring ownership with data marks changed identically in dense and 
 });
 
 Deno.test("owner caps above world capacity are clamped to capacity", async () => {
-  const huge = vec2Component("huge", { maxEntities: 50_000_000 });
-  const beyondArray = vec2Component("beyond", { maxEntities: 2 ** 31 });
+  const huge = vec2Component("huge", { maxOwners: 50_000_000 });
+  const beyondArray = vec2Component("beyond", { maxOwners: 2 ** 31 });
   const before = performance.now();
   const world = await createTestWorld([huge, beyondArray], 8);
   assert(performance.now() - before < 5_000, "Capacity-8 world must not allocate cap-sized storage");
@@ -146,15 +146,15 @@ Deno.test("owner caps above world capacity are clamped to capacity", async () =>
     { x: 1, y: 0 },
     "Clamped storage reads and writes normally",
   );
-  assertEquals(huge.maxEntities, 50_000_000, "The declared cap is unchanged on the component");
+  assertEquals(huge.maxOwners, 50_000_000, "The declared cap is unchanged on the component");
 });
 
-Deno.test("fractional maxEntities is rejected with SpecError", () => {
-  for (const maxEntities of [1.5, 0.5, Number.NaN, -1, 0, Infinity]) {
-    assert(!isValidComponentSpec({ name: "capped", maxEntities }), `Expected ${maxEntities} to be invalid`);
-    assertThrows(() => new Component({ name: "capped", maxEntities }), SpecError, "Invalid component specification");
+Deno.test("fractional maxOwners is rejected with SpecError", () => {
+  for (const maxOwners of [1.5, 0.5, Number.NaN, -1, 0, Infinity]) {
+    assert(!isValidComponentSpec({ name: "capped", maxOwners }), `Expected ${maxOwners} to be invalid`);
+    assertThrows(() => new Component({ name: "capped", maxOwners }), SpecError, "Invalid component specification");
   }
-  assertEquals(new Component({ name: "capped", maxEntities: 3 }).maxEntities, 3, "Integers remain valid");
+  assertEquals(new Component({ name: "capped", maxOwners: 3 }).maxOwners, 3, "Integers remain valid");
 });
 
 Deno.test("column constructors are consistent across Component and compileComponentSchema", () => {

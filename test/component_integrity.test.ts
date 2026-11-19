@@ -24,8 +24,8 @@ Deno.test("component schemas reject proxy cursor fields at every constructor bou
 });
 
 Deno.test("dense and capped storage initialize every new owner with zero defaults", async () => {
-  for (const maxEntities of [undefined, 4]) {
-    const position = vec2Component("position", { maxEntities });
+  for (const maxOwners of [undefined, 4]) {
+    const position = vec2Component("position", { maxOwners });
     const world = await createTestWorld([position]);
     const instance = world.components.getInstanceOrThrow(position);
     const bundled = world.entities.createOrThrow([[position]]);
@@ -127,8 +127,8 @@ Deno.test("slot cursor marks the actual slot and every real write advances revis
 });
 
 Deno.test("dense and capped sparse storage share atomic canonical numeric writes", async () => {
-  for (const maxEntities of [undefined, 2]) {
-    const position = vec2Component("position", { maxEntities });
+  for (const maxOwners of [undefined, 2]) {
+    const position = vec2Component("position", { maxOwners });
     const world = await createTestWorld([position]);
     const entity = world.entities.createOrThrow([[position, { x: 1, y: 1 }]]);
     const instance = world.components.getInstanceOrThrow(position);
@@ -164,7 +164,7 @@ Deno.test("dense and capped sparse storage share atomic canonical numeric writes
 });
 
 Deno.test("rollback restores capped mappings and pre-scope changes with fresh revision tokens", async () => {
-  const position = new Component({ name: "position", schema: { x: Float32Array, y: Float32Array }, maxEntities: 2 });
+  const position = new Component({ name: "position", schema: { x: Float32Array, y: Float32Array }, maxOwners: 2 });
   const world = await createTestWorld([position]);
   const first = world.entities.createOrThrow([[position, { x: 1, y: 2 }]]);
   const second = world.entities.createOrThrow([[position, { x: 3, y: 4 }]]);
