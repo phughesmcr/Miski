@@ -239,8 +239,7 @@ export class World {
     value: ComponentDataInput<TValue>,
   ): void {
     const instance = this.#getGuardedDataComponent(component, entity);
-    this.#mutations.validateComponentData(instance, value);
-    this.#componentManager.setInstanceEntityData(instance, entity, value);
+    this.#componentManager.setInstanceEntityData(instance, entity, value); // validates before any write
   }
 
   /** Mark guarded component data changed for an active owning entity. */

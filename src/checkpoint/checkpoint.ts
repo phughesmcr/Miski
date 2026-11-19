@@ -1,6 +1,6 @@
 import type { Entity } from "@/entity/entity.ts";
 import { ArgumentError, CapacityError, EntityNotFoundError } from "@/errors.ts";
-import { cloneFieldValue, isFieldDescriptor } from "@/schema/field.ts";
+import { isFieldDescriptor } from "@/schema/field.ts";
 import type { DynamicComponent } from "@/types/component.ts";
 
 /** Entity collection accepted by {@link World.captureCheckpoint}. */
@@ -65,20 +65,38 @@ export interface CheckpointWorld {
 type ApplyFixups = {
   readonly entityKeys: readonly string[];
   readonly cloneKeys: readonly string[];
+  /** The clone hook of each {@link ApplyFixups.cloneKeys} entry, resolved once per component. */
+  readonly clones: readonly CloneHook[];
 };
+
+type CloneHook = (value: unknown) => unknown;
+
+/** @returns each key's object-field clone hook (`undefined` when the value is copied as is), resolved once per schema */
+function getCloneHooks(schema: Record<string, unknown>, keys: readonly string[]): (CloneHook | undefined)[] {
+  return keys.map((key) => {
+    const property = schema[key];
+    return isFieldDescriptor(property) && property.kind === "object" ?
+      property.clone as CloneHook | undefined :
+      undefined;
+  });
+}
 
 /** @returns the apply-time fixups for a component, or `null` when its captured values apply as is */
 function getApplyFixups(schema: Record<string, unknown> | null): ApplyFixups | null {
   if (schema === null) return null;
   const entityKeys: string[] = [];
   const cloneKeys: string[] = [];
+  const clones: CloneHook[] = [];
   for (const key of Object.keys(schema)) {
     const property = schema[key];
     if (!isFieldDescriptor(property)) continue;
     if (property.kind === "entity") entityKeys.push(key);
-    else if (property.kind === "object" && property.clone !== undefined) cloneKeys.push(key);
+    else if (property.kind === "object" && property.clone !== undefined) {
+      cloneKeys.push(key);
+      clones.push(property.clone as CloneHook);
+    }
   }
-  return entityKeys.length === 0 && cloneKeys.length === 0 ? null : { entityKeys, cloneKeys };
+  return entityKeys.length === 0 && cloneKeys.length === 0 ? null : { entityKeys, cloneKeys, clones };
 }
 
 /**
@@ -87,7 +105,6 @@ function getApplyFixups(schema: Record<string, unknown> | null): ApplyFixups | n
  */
 function preparePayload(
   world: CheckpointWorld,
-  schema: Record<string, unknown>,
   fixups: ApplyFixups,
   properties: Readonly<Record<string, unknown>>,
 ): Record<string, unknown> {
@@ -96,7 +113,12 @@ function preparePayload(
     const target = payload[key];
     if (target !== null && !world.isEntityAlive(target as Entity)) payload[key] = null;
   }
-  for (const key of fixups.cloneKeys) payload[key] = cloneFieldValue(schema[key], payload[key]);
+  const { cloneKeys, clones } = fixups;
+  for (let i = 0; i < cloneKeys.length; i++) {
+    const key = cloneKeys[i]!;
+    const value = payload[key];
+    if (value !== null) payload[key] = clones[i]!(value);
+  }
   return payload;
 }
 
@@ -146,6 +168,10 @@ export function captureComponentCheckpoint(
     const schema = instance.type.schema;
     return schema === null ? [] : Object.keys(schema);
   });
+  const cloneHooks = components.map((component, index) => {
+    const schema = world.getComponentInstance(component).type.schema;
+    return schema === null ? [] : getCloneHooks(schema, keys[index]!);
+  });
   const entities: CapturedEntity[] = [];
   const seen = new Set<Entity>();
 
@@ -162,9 +188,15 @@ export function captureComponentCheckpoint(
       if (!world.entityHasComponent(entity, component)) return { present: false };
       const storage = world.getComponentInstance(component);
       if (storage.type.schema === null) return { present: true };
-      const schema = storage.type.schema;
       const properties: Record<string, unknown> = {};
-      for (const key of keys[index]!) properties[key] = cloneFieldValue(schema[key], storage.get(entity, key));
+      const componentKeys = keys[index]!;
+      const componentClones = cloneHooks[index]!;
+      for (let k = 0; k < componentKeys.length; k++) {
+        const key = componentKeys[k]!;
+        const value = storage.get(entity, key);
+        const clone = componentClones[k];
+        properties[key] = clone === undefined || value === null ? value : clone(value);
+      }
       return { present: true, properties: Object.freeze(properties) };
     });
     entities.push({ entity, components: Object.freeze(captured) });
@@ -214,7 +246,7 @@ export function applyComponentCheckpoint(world: CheckpointWorld, checkpoint: Com
       const properties = captured.properties;
       const payload = fixups === null || properties === undefined ?
         properties :
-        preparePayload(world, schema!, fixups, properties);
+        preparePayload(world, fixups, properties);
       world.validateComponentData(component, payload as Record<string, unknown> | undefined);
       payloads[e]![index] = payload;
     }
