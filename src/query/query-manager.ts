@@ -121,7 +121,7 @@ function isResultCurrent(instance: QueryInstance, clock: ArchetypeClock): boolea
   return true;
 }
 
-/** The QueryManager is responsible for creating, registering, and destroying queries. */
+/** The QueryManager creates and registers queries; a registered query stays current until the world is destroyed. */
 export class QueryManager {
   /** Component registry accessors supplied by the owning World. */
   #dependencies: QueryManagerDependencies;
