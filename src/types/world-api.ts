@@ -1,6 +1,5 @@
 import type { Query } from "@/query/query.ts";
 import type { DynamicComponent } from "@/types/component.ts";
-import type { WorldArchetypeAPI } from "@/types/world-archetype-api.ts";
 import type { WorldComponentAPI } from "@/types/world-component-api.ts";
 import type { WorldEntityAPI } from "@/types/world-entity-api.ts";
 import type { WorldRelationAPI } from "@/types/world-relation-api.ts";
@@ -14,7 +13,6 @@ export type {
 } from "@/types/world-component-api.ts";
 export type { WorldEntityAPI } from "@/types/world-entity-api.ts";
 export type { WorldSystemAPI } from "@/types/world-system-api.ts";
-export type { WorldArchetypeAPI } from "@/types/world-archetype-api.ts";
 
 /** The specification for a World */
 export type WorldSpec = {
@@ -33,7 +31,6 @@ export type WorldContext = {
   readonly components: WorldComponentAPI;
   readonly entities: WorldEntityAPI;
   readonly systems: WorldSystemAPI;
-  readonly archetypes: WorldArchetypeAPI;
   readonly relations: WorldRelationAPI;
   init(): Promise<void>;
   destroy(): Promise<void>;
@@ -44,8 +41,6 @@ export type WorldContext = {
 
 /** The result of a World API constructor */
 export type WorldAPIResult = {
-  /** The Archetype API */
-  archetypes: WorldArchetypeAPI;
   /** The Component API */
   components: WorldComponentAPI;
   /** The Entity API */

@@ -13,7 +13,6 @@ import type {
   ComponentBundle,
   ComponentBundleEntryInput,
   WorldAPIResult,
-  WorldArchetypeAPI,
   WorldComponentAPI,
   WorldEntityAPI,
   WorldSystemAPI,
@@ -87,20 +86,12 @@ export type WorldApiHost = {
   queryArchetypeExited(query: Query): IterableIterator<Entity>;
 };
 
-/** Build the four public World API objects from a host. */
+/** Build the public World API objects from a host. */
 export function constructWorldAPIs(host: WorldApiHost): WorldAPIResult {
   return {
-    archetypes: constructArchetypeAPI(host),
     components: constructComponentAPI(host),
     entities: constructEntityAPI(host),
     systems: constructSystemAPI(host),
-  };
-}
-
-function constructArchetypeAPI(host: WorldApiHost): WorldArchetypeAPI {
-  return {
-    getEntityArchetype: (entity: Entity) => host.archetypeManager.getEntityArchetype(entity)?.id,
-    isEntityInRoot: (entity: Entity) => host.archetypeManager.isEntityInRoot(entity),
   };
 }
 
@@ -217,29 +208,20 @@ function constructComponentAPI(host: WorldApiHost): WorldComponentAPI {
 function constructEntityAPI(host: WorldApiHost): WorldEntityAPI {
   return {
     capacity: host.entityManager.capacity,
-    create: () => {
+    create: (bundle?: readonly ComponentBundleEntryInput[]) => {
       host.assertInitialized();
-      return host.mutations.createEntity();
+      return bundle === undefined ?
+        host.mutations.createEntity() :
+        host.mutations.createEntityWithBundle(bundle, false);
     },
-    createWith: <const TBundle extends readonly ComponentBundleEntryInput[]>(
-      bundle: TBundle & ComponentBundle<TBundle>,
-    ) => {
+    createOrThrow: (bundle?: readonly ComponentBundleEntryInput[]) => {
       host.assertInitialized();
-      return host.mutations.createEntityWithBundle(bundle, false);
-    },
-    createOrThrow: () => {
-      host.assertInitialized();
+      if (bundle !== undefined) return host.mutations.createEntityWithBundle(bundle, true)!;
       const entity = host.mutations.createEntity();
       if (entity === undefined) {
         throw new CapacityError(`World is at capacity (${host.entityManager.capacity} entities).`);
       }
       return entity;
-    },
-    createWithOrThrow: <const TBundle extends readonly ComponentBundleEntryInput[]>(
-      bundle: TBundle & ComponentBundle<TBundle>,
-    ) => {
-      host.assertInitialized();
-      return host.mutations.createEntityWithBundle(bundle, true)!;
     },
     instantiate: (prefab: Prefab, overrides?: readonly ComponentBundleEntryInput[]) => {
       host.assertInitialized();
@@ -267,7 +249,7 @@ function constructEntityAPI(host: WorldApiHost): WorldEntityAPI {
     getActiveCount: () => host.entityManager.getActiveCount(),
     getAvailableCount: () => host.entityManager.getAvailableCount(),
     isActive: (entity: Entity) => host.entityManager.isActive(entity),
-    isEntity: (entity: Entity) => host.entityManager.isEntity(entity),
+    isEmpty: (entity: Entity) => host.archetypeManager.isEntityInRoot(entity),
     query: (query: Query) => {
       host.assertInitialized();
       return host.queryManager.entities(query);

@@ -82,7 +82,7 @@ Deno.test("createEcsWorld spawn and storage access", async () => {
     },
   });
   await ecs.init();
-  const entity = ecs.spawn({ Position: { x: 4, y: 5 } });
+  const entity = ecs.spawnOrThrow({ Position: { x: 4, y: 5 } });
   assertEquals(ecs.storage.Position.get(entity, "x"), 4, "spawn writes x");
   assertEquals(ecs.storage.Position.get(entity, "y"), 5, "spawn writes y");
 });
@@ -100,7 +100,7 @@ Deno.test("createEcsWorld tags spawn, ownership, and collisions", async () => {
   });
   await ecs.init();
 
-  const player = ecs.spawn({ Position: { x: 1, y: 2 }, Player: true, Hero: true });
+  const player = ecs.spawnOrThrow({ Position: { x: 1, y: 2 }, Player: true, Hero: true });
   assert(ecs.world.components.entityHas(ecs.components.Player, player), "Player tag attached");
   assert(ecs.world.components.entityHas(ecs.components.Hero, player), "Hero tag attached");
   assertStrictEquals(ecs.storage.Player.partitions, null, "tag storage has no partitions");

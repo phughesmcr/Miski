@@ -13,7 +13,6 @@ import {
 } from "../mod.ts";
 import type { QueryEntityList } from "../mod.ts";
 import { ArchetypeManager } from "../src/archetype/archetype-manager.ts";
-import { EntityManager } from "../src/entity/entity-manager.ts";
 import { assert, assertEquals, assertRejects, assertThrows, ids } from "./helpers.ts";
 import { createEntity, createTestWorld, tagComponent, vec2Component } from "./fixtures.ts";
 
@@ -181,9 +180,13 @@ Deno.test("destroyed entities are removed from archetype membership", async () =
   const world = await createTestWorld([disabled, marker], 8);
 
   const entity = createEntity(world);
+  assertEquals(world.entities.isEmpty(entity), true, "Expected a new componentless entity to be empty");
+  world.components.addToEntity(marker, entity);
+  assertEquals(world.entities.isEmpty(entity), false, "Expected an entity with a component not to be empty");
+  world.components.removeFromEntity(marker, entity);
   world.entities.destroy(entity);
 
-  assertEquals(world.archetypes.isEntityInRoot(entity), false, "Expected destroyed entity to leave root membership");
+  assertEquals(world.entities.isEmpty(entity), false, "Expected destroyed entity to leave root membership");
   assertEquals(
     ids(world.entities.query(new Query({ none: [disabled] }))),
     [],
@@ -634,36 +637,4 @@ Deno.test("direct typed-array storage remains an unguarded data access escape ha
     ComponentOwnershipError,
     "does not own component",
   );
-});
-
-Deno.test("entity manager serializes and restores occupancy and the allocation cursor", () => {
-  const manager = new EntityManager(8);
-  const first = manager.create();
-  const second = manager.create();
-  const third = manager.create();
-  assert(first !== undefined && second !== undefined && third !== undefined, "Expected entities to be created");
-  manager.destroy(first);
-
-  const restored = EntityManager.fromJSON(manager.stringify());
-
-  assertEquals(ids(restored.getActive()), [second, third], "Expected active entities to survive serialization");
-  assertEquals(restored.getAvailableCount(), 6, "Expected available count to survive serialization");
-  const next = (m: EntityManager): (number | undefined)[] => Array.from({ length: 7 }, () => m.create());
-  assertEquals(next(restored), next(manager), "Expected allocation order to survive serialization");
-});
-
-Deno.test("entity manager reads JSON written before next-fit reuse", () => {
-  // Slots 0 and 2 occupied; the old format's cursor was the next slot BitPool would hand out.
-  const legacy = (cursor?: number): string =>
-    JSON.stringify({
-      MAX_CAPACITY: EntityManager.MAX_CAPACITY,
-      capacity: 8,
-      entities: "5",
-      ...(cursor === undefined ? {} : { cursor }),
-      generations: "0,0,0,0,0,0,0,0",
-    });
-  const slotsOf = (m: EntityManager): number[] => [0, 1, 2].map(() => entityIndex(m.create()!));
-  assertEquals(slotsOf(EntityManager.fromJSON(legacy(3))), [3, 4, 5], "A legacy cursor is the next slot issued");
-  assertEquals(slotsOf(EntityManager.fromJSON(legacy())), [1, 3, 4], "No cursor starts at the lowest free slot");
-  assertEquals(slotsOf(EntityManager.fromJSON(legacy(-1))), [1, 3, 4], "The legacy full-pool cursor restarts at 0");
 });

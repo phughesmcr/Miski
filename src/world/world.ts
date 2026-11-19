@@ -22,7 +22,6 @@ import type { DynamicComponent } from "@/types/component.ts";
 import type { ComponentData, SchemaOrNull } from "@/types/partitions.ts";
 import type {
   WorldAPIResult,
-  WorldArchetypeAPI,
   WorldComponentAPI,
   WorldEntityAPI,
   WorldSpec,
@@ -124,9 +123,6 @@ export class World {
 
   /** Settles with the final state once the World is ready (or failed) */
   readonly #init: PromiseWithResolvers<WorldState> = Promise.withResolvers<WorldState>();
-
-  /** Archetype Management API */
-  readonly archetypes: WorldArchetypeAPI;
 
   /** Entity Management API */
   readonly entities: WorldEntityAPI;
@@ -470,7 +466,6 @@ export class World {
       queryArchetypeEntered: (query) => this.#queryArchetypeEntered(query),
       queryArchetypeExited: (query) => this.#queryArchetypeExited(query),
     });
-    this.archetypes = APIs.archetypes;
     this.components = APIs.components;
     this.entities = APIs.entities;
     this.systems = APIs.systems;

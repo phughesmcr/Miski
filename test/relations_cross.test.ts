@@ -48,8 +48,8 @@ Deno.test("relations x prefabs: instantiate overrides reject relation components
 
 Deno.test("relations x field types: one rollback restores side columns and relation pairs together", async () => {
   const world = await createTestWorld(components);
-  const parent = world.entities.createWithOrThrow([[unit, { hp: 1, label: "parent" }]]);
-  const child = world.entities.createWithOrThrow([[unit, { hp: 2, label: "child", target: parent, alive: true }]]);
+  const parent = world.entities.createOrThrow([[unit, { hp: 1, label: "parent" }]]);
+  const child = world.entities.createOrThrow([[unit, { hp: 2, label: "child", target: parent, alive: true }]]);
   world.relations.add(childOf, child, parent);
   world.refresh();
 
@@ -75,7 +75,7 @@ Deno.test("relations x field types: an entity field reads null after its target 
   const root = world.entities.createOrThrow();
   const leaf = world.entities.createOrThrow();
   world.relations.add(childOf, leaf, root);
-  const watcher = world.entities.createWithOrThrow([[unit, { target: leaf }]]);
+  const watcher = world.entities.createOrThrow([[unit, { target: leaf }]]);
   world.entities.destroy(root);
   world.refresh();
   assertEquals(world.entities.isActive(leaf), false, "Cascade destroyed the child");
@@ -85,7 +85,7 @@ Deno.test("relations x field types: an entity field reads null after its target 
 Deno.test("relations x field types: a checkpoint restores field columns and relation pairs together", async () => {
   const world = await createTestWorld(components);
   const parent = world.entities.createOrThrow();
-  const child = world.entities.createWithOrThrow([[unit, { label: "a", target: parent }]]);
+  const child = world.entities.createOrThrow([[unit, { label: "a", target: parent }]]);
   world.relations.add(childOf, child, parent);
   const checkpoint = world.captureCheckpoint([child], unit, childOf);
   world.components.setEntityData(unit, child, { label: "b", target: null });

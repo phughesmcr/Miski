@@ -86,8 +86,7 @@ Deno.test("historical exits retain each departed generation and reject stale arc
     departed.push(entity);
   }
   assertEquals(new Set(departed).size, 20, "Every recycled generation must produce a distinct handle");
-  assertEquals(world.archetypes.getEntityArchetype(departed[0]!), undefined, "Stale handle has no archetype");
-  assertEquals(world.archetypes.isEntityInRoot(departed[0]!), false, "Stale handle cannot identify replacement");
+  assertEquals(world.entities.isEmpty(departed[0]!), false, "Stale handle cannot identify replacement");
   world.refresh();
   assertEquals(ids(world.entities.queryExited(query)), [], "Refresh clears historical exits");
   await world.destroy();
@@ -188,25 +187,25 @@ Deno.test("failed spawn preflight preserves lifecycle windows, revisions, and ha
   const position = vec2Component();
   const capped = vec2Component("capped", { maxEntities: 1 });
   const world = await createTestWorld([position, capped]);
-  const owner = world.entities.createWithOrThrow([[capped]]);
+  const owner = world.entities.createOrThrow([[capped]]);
   const query = new Query({ none: [position] });
   world.entities.queryList(query);
   world.refresh();
   const revision = world.queryRevision(query);
 
   assertThrows(
-    () => world.entities.createWithOrThrow([[position, { x: Number.MAX_VALUE }]]),
+    () => world.entities.createOrThrow([[position, { x: Number.MAX_VALUE }]]),
     TypeError,
     "outside its storage range",
   );
-  assertThrows(() => world.entities.createWith([[capped]]), RangeError, "can only be added");
-  assertThrows(() => world.entities.createWith([[position], [position]]), RangeError, "Duplicate component");
+  assertThrows(() => world.entities.create([[capped]]), RangeError, "can only be added");
+  assertThrows(() => world.entities.create([[position], [position]]), RangeError, "Duplicate component");
   assertEquals(world.entities.getActiveSnapshot(), [owner], "Failed spawn must preserve active handles");
   assertEquals(ids(world.entities.queryEntered(query)), [], "Failed spawn must not publish entries");
   assertEquals(ids(world.entities.queryExited(query)), [], "Failed spawn must not publish phantom exits");
   assertEquals(world.queryRevision(query), revision, "Failed spawn must not advance query revisions");
   assertEquals(
-    world.entities.createWithOrThrow([[position, { x: 2 }]]),
+    world.entities.createOrThrow([[position, { x: 2 }]]),
     asEntity(1),
     "No handles are allocated on failure",
   );
@@ -218,22 +217,22 @@ Deno.test("full-world bundle creation reports payload errors before capacity err
   const world = await createTestWorld([position]);
   const entities = Array.from({ length: world.entities.capacity }, () => world.entities.createOrThrow());
   assertThrows(
-    () => world.entities.createWith([[position, { x: Number.MAX_VALUE }]]),
+    () => world.entities.create([[position, { x: Number.MAX_VALUE }]]),
     TypeError,
     "outside its storage range",
   );
   assertThrows(
-    () => world.entities.createWithOrThrow([[position, { x: Number.MAX_VALUE }]]),
+    () => world.entities.createOrThrow([[position, { x: Number.MAX_VALUE }]]),
     TypeError,
     "outside its storage range",
   );
   assertEquals(
-    world.entities.createWith([[position, { x: 1 }]]),
+    world.entities.create([[position, { x: 1 }]]),
     undefined,
     "Soft capacity failure must return undefined for a valid payload",
   );
   assertThrows(
-    () => world.entities.createWithOrThrow([[position, { x: 1 }]]),
+    () => world.entities.createOrThrow([[position, { x: 1 }]]),
     CapacityError,
     "capacity",
   );

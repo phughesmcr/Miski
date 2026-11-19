@@ -264,19 +264,23 @@ Deno.test("bundles and spawn APIs preflight before mutation and move once to the
   assertEquals(world.components.getEntityData(GridPos, entity), { x: 5, y: 2 }, "Expected bundle upsert");
   assertEquals(ids(world.components.getChanged(GridPos)), [entity], "Expected upsert data to mark changed");
 
-  const spawned = world.entities.createWith([
+  const spawned = world.entities.create([
     [GridPos, { x: 9, y: 10 }],
     [Facing, { dir: 2 }],
     [Drawable],
   ]);
-  assert(spawned !== undefined, "Expected createWith to return an entity");
-  assertEquals(world.components.getEntityData(Facing, spawned), { dir: 2 }, "Expected createWith bundle data");
+  assert(spawned !== undefined, "Expected create(bundle) to return an entity");
+  assertEquals(world.components.getEntityData(Facing, spawned), { dir: 2 }, "Expected create(bundle) bundle data");
 
-  const spawnedOrThrow = world.entities.createWithOrThrow([
+  const spawnedOrThrow = world.entities.createOrThrow([
     [GridPos, { x: 11, y: 12 }],
     [Health, { hp: 100 }],
   ]);
-  assertEquals(world.components.getEntityData(Health, spawnedOrThrow), { hp: 100 }, "Expected createWithOrThrow data");
+  assertEquals(
+    world.components.getEntityData(Health, spawnedOrThrow),
+    { hp: 100 },
+    "Expected createOrThrow(bundle) data",
+  );
 });
 
 Deno.test("bundle validation rejects duplicate, unregistered, inactive, tag-data, capped, and full-world cases atomically", async () => {
@@ -342,23 +346,23 @@ Deno.test("bundle validation rejects duplicate, unregistered, inactive, tag-data
   const beforeActive = cappedWorld.entities.getActiveCount();
   cappedWorld.components.addBundle(first, [[limited, { value: 1 }]]);
   assertThrows(
-    () => cappedWorld.entities.createWith([[limited, { value: 2 }]]),
+    () => cappedWorld.entities.create([[limited, { value: 2 }]]),
     RangeError,
     "can only be added",
   );
   assertStrictEquals(
     cappedWorld.entities.getActiveCount(),
     beforeActive,
-    "Expected failed createWith to roll back the new entity",
+    "Expected failed create(bundle) to roll back the new entity",
   );
 
   const fullWorld = await createTestWorld([GridPos], 8);
   for (let i = 0; i < 8; i++) {
     fullWorld.entities.createOrThrow();
   }
-  assertStrictEquals(fullWorld.entities.createWith([[GridPos, { x: 1, y: 1 }]]), undefined, "Expected soft cap");
+  assertStrictEquals(fullWorld.entities.create([[GridPos, { x: 1, y: 1 }]]), undefined, "Expected soft cap");
   assertThrows(
-    () => fullWorld.entities.createWithOrThrow([[GridPos, { x: 1, y: 1 }]]),
+    () => fullWorld.entities.createOrThrow([[GridPos, { x: 1, y: 1 }]]),
     CapacityError,
     "capacity",
   );

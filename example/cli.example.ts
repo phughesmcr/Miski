@@ -245,9 +245,9 @@ const randomVelocity = (): { x: number; y: number } => ({
   y: (Math.random() - 0.5) * VELOCITY_SCALAR * 2,
 });
 
-// Atomic spawn: one archetype move via createWith instead of repeated addToEntity.
+// Atomic spawn: one archetype move via create(bundle) instead of repeated addToEntity.
 const predatorSpawner = (x: number, y: number): Entity | undefined => {
-  const entity = world.entities.createWith([
+  const entity = world.entities.create([
     [position, { x, y }],
     [previousPosition, { x, y }],
     [velocity, randomVelocity()],
@@ -265,7 +265,7 @@ const predatorSpawner = (x: number, y: number): Entity | undefined => {
 };
 
 const preySpawner = (x: number, y: number): Entity | undefined => {
-  const entity = world.entities.createWith([
+  const entity = world.entities.create([
     [position, { x, y }],
     [previousPosition, { x, y }],
     [velocity, randomVelocity()],

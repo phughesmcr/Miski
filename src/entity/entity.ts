@@ -2,6 +2,9 @@
  * Packed slot index + generation. Always non-negative and <= `0x7fffffff` so V8
  * can keep handles as SMIs (signed 31-bit ints).
  *
+ * `0` is a valid handle (slot 0, generation 0), so test optional results with
+ * `=== undefined`, never truthiness.
+ *
  * Use {@link entityIndex} / {@link entityGeneration} / {@link packEntity} to
  * inspect or construct handles. Prefer {@link SlotIndex} values from query
  * lists for SoA partition access.
@@ -122,6 +125,16 @@ export function entityGeneration(entity: Entity | number): number {
 /** Pack a slot index and generation into an entity handle (gen is masked to GEN_BITS). */
 export function packEntity(index: number, gen: number): Entity {
   return (((gen & GEN_MASK) << INDEX_BITS) | (index & INDEX_MASK)) as Entity;
+}
+
+/**
+ * Whether `value` is a well-formed packed handle whose slot is below `capacity`.
+ * A range check only: it says nothing about liveness (use `isActive` for that).
+ * @internal
+ */
+export function isEntityInRange(value: number, capacity: number): value is Entity {
+  if (!Number.isInteger(value) || value < 0 || value > 0x7fffffff) return false;
+  return entityIndex(value) < capacity;
 }
 
 /** Brand a raw slot index for APIs that require {@link SlotIndex}. */

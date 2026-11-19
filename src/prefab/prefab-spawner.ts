@@ -22,7 +22,7 @@ export type PrefabSpawnerDeps = {
   readonly componentManager: ComponentManager;
   readonly archetypeManager: ArchetypeManager;
   readonly componentCount: number;
-  /** Bump the world's entity lifecycle revision (once per created entity, as `createWith` does). */
+  /** Bump the world's entity lifecycle revision (once per created entity, as `create(bundle)` does). */
   readonly notifyEntityLifecycle: () => void;
   /** Invalidate query caches after a committed structural change. */
   readonly invalidateCommittedTransition: (changed: boolean) => void;
@@ -62,7 +62,7 @@ type OverrideStaging = {
 /**
  * Instantiates {@link Prefab} templates in one world.
  *
- * Instantiation is observationally identical to `createWith` with the prefab's flattened bundle followed by the
+ * Instantiation is observationally identical to `create(bundle)` with the prefab's flattened bundle followed by the
  * overrides the prefab lacks: same handles, ownership and changed order, values, archetype path, entered order and
  * revision sequence. Every check (payloads, owner caps, capacity) finishes before the first allocation, so a rejected
  * call allocates nothing, consumes no generation and publishes no transition.

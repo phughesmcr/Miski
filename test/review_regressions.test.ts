@@ -50,7 +50,7 @@ async function rollbackCost(capacity: number): Promise<RollbackCost> {
   const velocity = vec2Component("velocity");
   const world = await createTestWorld([position, velocity], capacity);
   for (let i = 0; i < 1000; i++) {
-    world.entities.createWithOrThrow([[position, { x: i, y: i }], [velocity, { x: 1, y: 1 }]]);
+    world.entities.createOrThrow([[position, { x: i, y: i }], [velocity, { x: 1, y: 1 }]]);
   }
   const commit = medianMs(() => commitWorldRollbackPoint(world, captureWorldRollbackPoint(world)));
   const restore = medianMs(() => restoreWorldRollbackPoint(world, captureWorldRollbackPoint(world)));
@@ -75,7 +75,7 @@ Deno.test("rollback cost does not scale with world capacity", async () => {
 Deno.test("rollback restore keeps query iteration order for reordered archetypes", async () => {
   const a = tagComponent("a");
   const world = await createTestWorld([a], 16);
-  const entities = [0, 1, 2].map(() => world.entities.createWithOrThrow([[a]]));
+  const entities = [0, 1, 2].map(() => world.entities.createOrThrow([[a]]));
   world.components.removeFromEntity(a, entities[0]!);
   world.components.addToEntity(a, entities[0]!);
   world.refresh();

@@ -1,6 +1,6 @@
 /**
  * Shape checks and error messages shared by every path that takes `[component]` / `[component, data]` tuples:
- * `createWith`, prefab instantiate overrides and `CommandBuffer.spawn`.
+ * `create(bundle)`, prefab instantiate overrides and `CommandBuffer.spawn`.
  * @module
  */
 

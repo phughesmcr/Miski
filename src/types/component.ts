@@ -13,20 +13,6 @@ import type {
   StorageProxyWithProperties,
 } from "@/types/partitions.ts";
 
-/** The stringified JSON format of an EntityManager */
-export type EntityManagerSerialized = {
-  /** The maximum capacity of any EntityManager */
-  MAX_CAPACITY: number;
-  /** The capacity of the EntityManager */
-  capacity: number;
-  /** The entities in the EntityManager */
-  entities: string;
-  /** Optional per-slot generation counters */
-  generations?: string;
-  /** Optional pool allocation cursor (next slot to acquire) */
-  cursor?: number;
-};
-
 /** A component definition whose value/storage shape is only known dynamically. */
 export type DynamicComponent = Component<SchemaOrNull, SchemaOrNull>;
 

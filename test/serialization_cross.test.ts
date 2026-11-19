@@ -39,8 +39,8 @@ Deno.test("saves x field types: bool, enum and entity fields round-trip into a f
   const source = await worldOf([unit]);
   const target = source.entities.createOrThrow();
   const doomed = source.entities.createOrThrow();
-  const a = source.entities.createWithOrThrow([[unit, { hp: 3, alive: true, state: "run", target }]]);
-  const b = source.entities.createWithOrThrow([[unit, { state: "dead", target: doomed }]]);
+  const a = source.entities.createOrThrow([[unit, { hp: 3, alive: true, state: "run", target }]]);
+  const b = source.entities.createOrThrow([[unit, { state: "dead", target: doomed }]]);
   source.entities.destroy(doomed);
   source.refresh();
   const bytes = saveWorld(source);
@@ -70,7 +70,7 @@ Deno.test("saves x field types: the layout records field tags", async () => {
 Deno.test("saves x field types: enum label order and bool-vs-u8 mismatches are rejected, world untouched", async () => {
   const sourceUnit = unitOf();
   const source = await worldOf([sourceUnit]);
-  source.entities.createWithOrThrow([[sourceUnit, { state: "run" }]]);
+  source.entities.createOrThrow([[sourceUnit, { state: "run" }]]);
   const bytes = saveWorld(source);
 
   const reordered = await worldOf([unitOf(["run", "idle", "dead"])]);
@@ -85,7 +85,7 @@ Deno.test("saves x field types: enum label order and bool-vs-u8 mismatches are r
 Deno.test("saves x field types: the JSON view round-trips field tags", async () => {
   const unit = unitOf();
   const source = await worldOf([unit]);
-  source.entities.createWithOrThrow([[unit, { alive: true, state: "dead" }]]);
+  source.entities.createOrThrow([[unit, { alive: true, state: "dead" }]]);
   const bytes = saveWorld(source);
   const document = worldSaveToJSON(bytes);
   const again = worldSaveFromJSON(JSON.parse(JSON.stringify(document)));

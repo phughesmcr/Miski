@@ -270,7 +270,7 @@ const spawnDrone = (x: number, y: number, team: number): void => {
   const speed = random(35, 130);
   const angle = random(0, Math.PI * 2);
   const hue = TEAM_HUES[team] ?? TEAM_HUES[0];
-  const entity = world.entities.createWith([
+  const entity = world.entities.create([
     [position, { x, y }],
     [velocity, { x: Math.cos(angle) * speed, y: Math.sin(angle) * speed }],
     [visual, {
@@ -297,7 +297,7 @@ const spawnSpark = (x: number, y: number, hue: number, strength: number, ttl: nu
   if (sim.liveSparks >= MAX_SPARKS) return;
   const angle = random(0, Math.PI * 2);
   const speed = random(115, 520) * strength;
-  const entity = world.entities.createWith([
+  const entity = world.entities.create([
     [position, { x, y }],
     [velocity, { x: Math.cos(angle) * speed, y: Math.sin(angle) * speed }],
     [visual, {

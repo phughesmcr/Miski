@@ -152,6 +152,16 @@ Deno.test("command buffer rejects pending handles from an earlier flush or anoth
   await world.destroy();
 });
 
+Deno.test("command buffer rejects real handles outside the world's slot range", async () => {
+  const { world, commands } = await setup(16);
+  for (const handle of [16, 0x10010, 0x80000000, 1.5]) {
+    assertThrows(() => commands.destroy(handle as Entity), SpecError, "Invalid entity handle");
+  }
+  commands.destroy(15 as Entity); // in range: accepted at queue time, skipped at flush if inactive
+  commands.clear();
+  await world.destroy();
+});
+
 Deno.test("command buffer skips commands whose target is no longer active", async () => {
   const { world, commands } = await setup();
   const entity = createEntity(world);

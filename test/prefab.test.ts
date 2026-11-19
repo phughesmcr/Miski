@@ -52,7 +52,7 @@ const goblin = new Prefab({
   ],
 });
 
-/** The bundle that `createWith` must receive to match `goblin` exactly. */
+/** The bundle that `create(bundle)` must receive to match `goblin` exactly. */
 const goblinBundle = [
   [position, { x: 1.5, y: -2 }],
   [health, { hp: 10, maxHp: 10 }],
@@ -105,9 +105,9 @@ async function twinWorlds(capacity = 32): Promise<[World, World]> {
 
 /** Churn a world identically so allocation is not trivially sequential. */
 function churn(world: World): void {
-  const a = world.entities.createWithOrThrow([[position, { x: 9, y: 9 }]]);
-  const b = world.entities.createWithOrThrow([[enemy], [flying]]);
-  world.entities.createWithOrThrow([[velocity, { x: 1, y: 1 }]]);
+  const a = world.entities.createOrThrow([[position, { x: 9, y: 9 }]]);
+  const b = world.entities.createOrThrow([[enemy], [flying]]);
+  world.entities.createOrThrow([[velocity, { x: 1, y: 1 }]]);
   world.refresh();
   world.entities.destroy(a);
   world.entities.destroy(b);
@@ -180,13 +180,13 @@ Deno.test("Prefab rejects invalid definitions", () => {
 
 // --- Single instantiate ---
 
-Deno.test("instantiate matches an equivalent createWith in every observable", async () => {
+Deno.test("instantiate matches an equivalent create(bundle) in every observable", async () => {
   const [a, b] = await twinWorlds();
   churn(a);
   churn(b);
   for (let i = 0; i < 3; i++) {
     const viaPrefab = a.entities.instantiate(goblin);
-    const viaBundle = b.entities.createWith(goblinBundle);
+    const viaBundle = b.entities.create(goblinBundle);
     assertStrictEquals(viaPrefab, viaBundle, `handle ${i}`);
   }
   assertEquals(observe(a), observe(b), "worlds diverged after instantiate");
@@ -200,7 +200,7 @@ Deno.test("instantiate merges per-field overrides over prefab defaults and may a
   const [a, b] = await twinWorlds();
   const overrides = [[position, { x: 7 }], [velocity, { y: 3 }], [flying]] as const;
   const e = a.entities.instantiateOrThrow(goblin, overrides);
-  const twin = b.entities.createWithOrThrow([
+  const twin = b.entities.createOrThrow([
     [position, { x: 7, y: -2 }],
     [health, { hp: 10, maxHp: 10 }],
     [stats, { level: 3 }],
@@ -212,7 +212,7 @@ Deno.test("instantiate merges per-field overrides over prefab defaults and may a
   assertEquals(a.components.getEntityData(position, e), { x: 7, y: -2 }, "unspecified field keeps prefab default");
   assertEquals(a.components.getEntityData(velocity, e), { x: 0, y: 3 }, "extra component zero-fills");
   assert(a.components.entityHas(flying, e), "extra tag");
-  assertEquals(observe(a), observe(b), "override instantiate matches createWith");
+  assertEquals(observe(a), observe(b), "override instantiate matches create(bundle)");
 
   // Overrides are per call: the next instance gets plain prefab defaults.
   const plain = a.entities.instantiateOrThrow(goblin);
@@ -243,7 +243,7 @@ Deno.test("instantiate is atomic: rejected calls allocate nothing and publish no
 
   const lonely = new Prefab({ components: [[leader]] });
   a.entities.instantiateOrThrow(lonely);
-  b.entities.createWithOrThrow([[leader]]);
+  b.entities.createOrThrow([[leader]]);
   const afterLeader = observe(a);
   assertThrows(() => a.entities.instantiate(lonely), RangeError, "leader");
   assertThrows(() => a.entities.instantiate(goblin, [[leader]]), RangeError, "leader");
@@ -295,7 +295,7 @@ Deno.test("prefabs are world-independent and never occupy slots", async () => {
 
 // --- Bulk instantiate ---
 
-Deno.test("instantiateMany matches N createWith calls and returns a borrowed list", async () => {
+Deno.test("instantiateMany matches N create(bundle) calls and returns a borrowed list", async () => {
   const [a, b] = await twinWorlds();
   churn(a);
   churn(b);
@@ -303,7 +303,7 @@ Deno.test("instantiateMany matches N createWith calls and returns a borrowed lis
   const expected: Entity[] = [];
   const twinBundle = [...goblinBundle, [velocity, { x: 4 }]] as const;
   for (let i = 0; i < 10; i++) {
-    expected.push(b.entities.createWithOrThrow(twinBundle));
+    expected.push(b.entities.createOrThrow(twinBundle));
   }
   assertStrictEquals(list.count, 10, "count");
   const handles: Entity[] = [];
@@ -315,7 +315,7 @@ Deno.test("instantiateMany matches N createWith calls and returns a borrowed lis
   assertEquals(handles, expected, "handles in allocation order");
   assertEquals([...list], expected, "iterable");
   assertEquals(a.entities.toArray(list), expected, "toArray");
-  assertEquals(observe(a), observe(b), "bulk instantiate matches repeated createWith");
+  assertEquals(observe(a), observe(b), "bulk instantiate matches repeated create(bundle)");
   a.refresh();
   b.refresh();
   assertEquals(observe(a), observe(b), "after refresh");
@@ -371,21 +371,21 @@ Deno.test("instantiate inside a rollback scope is undone; instantiate after rest
   a.entities.instantiateOrThrow(scout);
   a.entities.instantiateMany(goblin, 5);
   restoreWorldRollbackPoint(a, pointA);
-  // The twin speculates the same way through createWith, so retired generations match too.
+  // The twin speculates the same way through create(bundle), so retired generations match too.
   const pointB = captureWorldRollbackPoint(b);
-  b.entities.createWithOrThrow(scoutBundle);
-  for (let i = 0; i < 5; i++) b.entities.createWithOrThrow(goblinBundle);
+  b.entities.createOrThrow(scoutBundle);
+  for (let i = 0; i < 5; i++) b.entities.createOrThrow(goblinBundle);
   restoreWorldRollbackPoint(b, pointB);
 
   assertEquals(observe(a, false), untouched, "restore removes every speculative instance");
   assertEquals(observe(a, false), observe(b, false), "restore is neutral");
   const viaPrefab = a.entities.instantiateOrThrow(scout);
-  const viaBundle = b.entities.createWithOrThrow(scoutBundle);
+  const viaBundle = b.entities.createOrThrow(scoutBundle);
   assertStrictEquals(viaPrefab, viaBundle, "same handle after restore");
   const manyA = a.entities.toArray(a.entities.instantiateManyOrThrow(goblin, 3));
-  const manyB = [0, 1, 2].map(() => b.entities.createWithOrThrow(goblinBundle));
+  const manyB = [0, 1, 2].map(() => b.entities.createOrThrow(goblinBundle));
   assertEquals(manyA, manyB, "bulk handles after restore");
-  assertEquals(observe(a, false), observe(b, false), "instantiate after restore matches createWith");
+  assertEquals(observe(a, false), observe(b, false), "instantiate after restore matches create(bundle)");
 });
 
 // --- Typed named-map world ---
@@ -402,20 +402,20 @@ Deno.test("EcsWorld.prefab and instantiate use named specs", async () => {
   assertStrictEquals(orc.name, "orc", "name");
   assertEquals(bat.components.map((c) => c.name), ["Position", "Health", "Enemy", "Flying"], "extends");
 
-  const e = game.instantiate(orc, { Position: { y: 5 } });
+  const e = game.instantiateOrThrow(orc, { Position: { y: 5 } });
   assertEquals(game.world.components.getEntityData("Position", e), { x: 1, y: 5 }, "named override merges");
-  const flyer = game.instantiate(bat);
+  const flyer = game.instantiateOrThrow(bat);
   assertEquals(game.world.components.getEntityData("Health", flyer), { hp: 2 }, "child default");
   assert(game.world.components.entityHas("Enemy", flyer), "inherited tag");
 
-  const list = game.instantiateMany(orc, 3, { Flying: true });
+  const list = game.instantiateManyOrThrow(orc, 3, { Flying: true });
   assertStrictEquals(list.count, 3, "bulk");
   assert(game.world.components.entityHas("Flying", list.entities[2]!), "bulk override tag");
 
   assertThrows(() => game.prefab({ Unknown: true } as never), Error, "Unknown component");
   assertThrows(() => game.prefab({ Enemy: false } as never), TypeError, "must be spawned with true");
   assertThrows(() => game.instantiate(orc, { Nope: { x: 1 } } as never), Error, "Unknown component");
-  const plain = game.instantiate(orc);
+  const plain = game.instantiateOrThrow(orc);
   assertEquals(game.world.components.getEntityData("Position", plain), { x: 1, y: 0 }, "no stale override");
 });
 
@@ -436,6 +436,6 @@ Deno.test("instantiate called from an override getter does not clobber the outer
   assertEquals(world.components.getEntityData(position, inner), { x: 1.5, y: -2 }, "inner defaults");
 });
 
-// Keep the bundle type exercised so the prefab and createWith inputs stay structurally identical.
+// Keep the bundle type exercised so the prefab and create(bundle) inputs stay structurally identical.
 const _bundleShape: readonly ComponentBundleEntryInput[] = goblinBundle;
 void _bundleShape;

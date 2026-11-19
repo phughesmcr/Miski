@@ -113,12 +113,12 @@ const commandSpawnBundle = [
 const commandSpawnQuery = new Query({ all: [commandSpawnWorld.components.lifetime] });
 
 Deno.bench({
-  name: "direct createWith/destroy 128 bundles + refresh",
+  name: "direct create(bundle)/destroy 128 bundles + refresh",
   group: "command buffer",
   fn: () => {
     for (let i = 0; i < 128; i++) {
       spawnPositionData.x = i;
-      directSpawned[i] = directSpawnWorld.world.entities.createWithOrThrow(directSpawnBundle);
+      directSpawned[i] = directSpawnWorld.world.entities.createOrThrow(directSpawnBundle);
     }
     for (let i = 0; i < 128; i++) directSpawnWorld.world.entities.destroy(directSpawned[i]!);
     directSpawnWorld.world.refresh();

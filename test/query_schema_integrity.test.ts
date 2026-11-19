@@ -5,7 +5,6 @@ import {
   Component,
   componentSchemaHash,
   createEcsWorld,
-  createEcsWorldFromSchema,
   mergeComponentSchemas,
   Query,
   System,
@@ -133,13 +132,28 @@ Deno.test("schema hashing does not allocate component identities and merge prese
     assertStrictEquals(Object.getPrototypeOf(map), null, "schema registries have no inherited keys");
     assert(Object.isFrozen(map), "schema registries are frozen");
   }
-  const ecs = createEcsWorldFromSchema(8, merged);
+  const ecs = createEcsWorld({ capacity: 8, schema: merged });
   await ecs.init();
   assertStrictEquals(ecs.components.position, left.components.position, "world keeps compiled component identities");
   ecs.spawn({ position: { x: 1 }, hero: true });
   assertThrows(() => ecs.spawn({ hero: true }), Error, "can only be added to 1");
   assertThrows(() => ecs.spawn({ constructor: {} } as never), Error, "Unknown component");
   await ecs.world.destroy();
+
+  const related = createEcsWorld({ capacity: 8, schema: merged, relations: { ChildOf: { exclusive: true } } });
+  await related.init();
+  assertStrictEquals(related.components.hero, right.components.hero, "schema worlds keep tag identities");
+  const parent = related.spawnOrThrow({ position: { x: 0 } });
+  const child = related.spawnOrThrow({ position: { x: 1 } });
+  related.world.relations.add(related.relations.ChildOf, child, parent);
+  assertStrictEquals(related.world.relations.getTarget(related.relations.ChildOf, child), parent, "schema + relations");
+  await related.world.destroy();
+
+  assertThrows(
+    () => createEcsWorld({ capacity: 8, schema: merged, components: merged.componentMap } as never),
+    TypeError,
+    "either `schema` or `components`",
+  );
 });
 
 Deno.test("plain schema bootstrap and hashing share validation", () => {

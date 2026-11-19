@@ -5,7 +5,7 @@ import {
   relationComponentError,
 } from "@/component/bundle-entry.ts";
 import { type Component, isSupportedColumnConstructor } from "@/component/component.ts";
-import type { Entity } from "@/entity/entity.ts";
+import { type Entity, isEntityInRange } from "@/entity/entity.ts";
 import {
   CapacityError,
   ComponentDataError,
@@ -161,7 +161,7 @@ export class CommandBuffer {
   }
 
   /**
-   * Queue the creation of an entity, optionally with a component bundle applied atomically (as `createWith`).
+   * Queue the creation of an entity, optionally with a component bundle applied atomically (as `entities.create`).
    * @param bundle Unique `[component]` or `[component, data]` tuples
    * @returns A placeholder handle usable as the target of later commands on this buffer until it flushes
    * @throws {CapacityError} If more entities are queued than the world can ever hold
@@ -525,7 +525,7 @@ export class CommandBuffer {
     const value = entity as number;
     if (!Number.isInteger(value)) throw new SpecError(`Invalid entity handle ${String(entity)}`);
     if (value >= 0) {
-      if (!this.#world.entities.isEntity(value as Entity)) {
+      if (!isEntityInRange(value, this.#world.entities.capacity)) {
         throw new SpecError(`Invalid entity handle ${value} for this world`);
       }
       return value;
@@ -623,7 +623,7 @@ export class CommandBuffer {
         bundle[i] = tuple;
       }
     }
-    const entity = this.#world.entities.createWith(bundle as unknown as readonly []);
+    const entity = this.#world.entities.create(bundle as unknown as readonly []);
     if (entity === undefined) {
       throw new CapacityError(`World is at capacity (${this.#world.entities.capacity} entities).`);
     }

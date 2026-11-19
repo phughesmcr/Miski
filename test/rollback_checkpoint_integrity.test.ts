@@ -53,8 +53,8 @@ Deno.test("component checkpoints cannot be applied to a different world", async 
   const position = vec2Component();
   const source = await createTestWorld([position]);
   const target = await createTestWorld([position]);
-  const sourceEntity = source.entities.createWithOrThrow([[position, { x: 1, y: 2 }]]);
-  const targetEntity = target.entities.createWithOrThrow([[position, { x: 7, y: 8 }]]);
+  const sourceEntity = source.entities.createOrThrow([[position, { x: 1, y: 2 }]]);
+  const targetEntity = target.entities.createOrThrow([[position, { x: 7, y: 8 }]]);
   assertEquals(sourceEntity, targetEntity, "Both worlds issue the same first handle");
 
   const checkpoint = source.captureCheckpoint([sourceEntity], position);
