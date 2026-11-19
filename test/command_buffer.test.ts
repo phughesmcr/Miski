@@ -1,6 +1,7 @@
 /// <reference lib="deno.ns" />
 
 import {
+  ArgumentError,
   CapacityError,
   CommandBuffer,
   Component,
@@ -198,7 +199,7 @@ Deno.test("command buffer validates components and data when queued", async () =
   assertThrows(() => commands.add(position, entity, { x: "1" as unknown as number }), ComponentDataError, "finite");
   assertThrows(() => commands.set(tag as never, entity, {}), ComponentDataError, "tag");
   assertThrows(() => commands.spawn([[unregistered]]), NotRegisteredError, "unregistered");
-  assertThrows(() => commands.spawn([[position], [position]] as never), RangeError, "position");
+  assertThrows(() => commands.spawn([[position], [position]] as never), ArgumentError, "position");
   assertThrows(() => commands.destroy(1.5 as Entity), SpecError, "entity");
   assertStrictEquals(commands.pendingCount, 0, "rejected commands are not queued");
   await world.destroy();
@@ -257,7 +258,7 @@ Deno.test("command buffer spawn respects component owner caps atomically", async
   commands.add(tag, failed);
   commands.destroy(failed);
   commands.spawn([[tag]]);
-  assertThrows(() => commands.flush(), RangeError, "hero");
+  assertThrows(() => commands.flush(), CapacityError, "hero");
   assertStrictEquals(world.entities.getActiveCount(), 2, "failed spawns leave no half-built entity; later ones run");
   assertStrictEquals(world.components.getOwnersSnapshot(hero)!.length, 1, "one hero");
   assertStrictEquals(world.components.getOwnersSnapshot(tag)!.length, 1, "commands on a failed spawn are skipped");

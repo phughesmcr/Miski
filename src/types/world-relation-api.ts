@@ -45,7 +45,7 @@ export type WorldRelationAPI = {
    * adding an existing pair keeps its position and merges `data`.
    * @throws {EntityNotFoundError} - If either entity is not active
    * @throws {NotRegisteredError} - If the relation is not registered
-   * @throws {RangeError} - If an acyclic relation would form a cycle
+   * @throws {RelationCycleError} - If an acyclic relation would form a cycle
    * @throws {ComponentDataError} - If `data` is invalid
    */
   add<TSchema extends SchemaOrNull>(
@@ -90,7 +90,7 @@ export type WorldRelationAPI = {
   ): boolean;
   /**
    * Write some or all of a pair's data and mark the source changed.
-   * @throws {RangeError} - If there is no such pair
+   * @throws {ComponentOwnershipError} - If there is no such pair
    * @throws {ComponentDataError} - If `data` is invalid
    */
   setData<TSchema extends SchemaOrNull>(

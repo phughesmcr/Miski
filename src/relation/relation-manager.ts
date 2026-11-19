@@ -4,6 +4,7 @@ import {
   formatComponentNotRegistered,
   formatEntityNotActive,
   NotRegisteredError,
+  RelationCycleError,
 } from "@/errors.ts";
 import type { Query } from "@/query/query.ts";
 import type { DynamicComponent, DynamicComponentInstance } from "@/types/component.ts";
@@ -177,7 +178,7 @@ export class RelationManager {
     };
     for (const { entity, pairs } of entries) {
       if (chainReaches(pairs.targets[0], entity, parentOf, this.#host.capacity)) {
-        throw new RangeError(`Relation "${store.name}" checkpoint would form a cycle through ${entity}.`);
+        throw new RelationCycleError(`Relation "${store.name}" checkpoint would form a cycle through ${entity}.`);
       }
     }
   }

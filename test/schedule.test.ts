@@ -2,6 +2,7 @@
 
 import {
   AlreadyRegisteredError,
+  ArgumentError,
   type ComponentInstance,
   Query,
   Schedule,
@@ -364,7 +365,7 @@ Deno.test("schedule rejects invalid dt without touching its clock", async () => 
   const schedule = new Schedule(world, { phases: [{ name: "fixed", fixed: true }], fixedStep: 0.5 });
   schedule.run(0.25);
   for (const dt of [Number.NaN, Number.POSITIVE_INFINITY, -1, "1" as unknown as number]) {
-    assertThrows(() => schedule.run(dt), RangeError, "dt");
+    assertThrows(() => schedule.run(dt), ArgumentError, "dt");
   }
   assertStrictEquals(schedule.accumulator, 0.25, "accumulator unchanged");
   assertStrictEquals(schedule.context.tick, 1, "tick unchanged");
@@ -855,7 +856,7 @@ Deno.test("schedule clock round-trips through getClock and setClock", async () =
       { tick: 0, fixedTick: 0, elapsed: 0, accumulator: -0.5 },
     ]
   ) {
-    assertThrows(() => schedule.setClock(bad), RangeError, "clock");
+    assertThrows(() => schedule.setClock(bad), ArgumentError, "clock");
   }
   assertEquals(
     schedule.getClock(),

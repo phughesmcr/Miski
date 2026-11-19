@@ -193,7 +193,7 @@ class ComponentRuntime<
    * Create a new component.
    * @param spec - The component's specification.
    * @throws {SpecError} - If a column uses the unsupported `[Ctor, initial]` tuple form
-   * @throws {TypeError} - If the spec is otherwise invalid
+   * @throws {SpecError} - If the spec is otherwise invalid
    */
   constructor(spec: ComponentSpec<TValue, TStorage>) {
     if (!isValidComponentSpec(spec)) {
@@ -202,14 +202,14 @@ class ComponentRuntime<
       if (schema && typeof schema === "object" && isValidFieldSchema(schema)) {
         const key = findUnsupportedColumn(schema as Record<string, unknown>);
         if (key !== undefined) {
-          throw new TypeError(
+          throw new SpecError(
             `Invalid component specification: column "${key}" must use a number-valued typed array ` +
               "(Int8Array, Uint8Array, Uint8ClampedArray, Int16Array, Uint16Array, Int32Array, Uint32Array, " +
               "Float16Array, Float32Array, Float64Array).",
           );
         }
       }
-      throw new TypeError("Invalid component specification.");
+      throw new SpecError("Invalid component specification.");
     }
     const runtimeSpec = spec as ComponentSpecRuntime<TStorage>;
 

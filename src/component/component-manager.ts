@@ -6,7 +6,9 @@ import { ReusableEntityIterator, ReusableSlotPackIterator } from "@/entity/entit
 import {
   ComponentDataError,
   componentDisplayName,
+  EntityNotFoundError,
   formatComponentNotRegistered,
+  maxOwnersError,
   NotRegisteredError,
 } from "@/errors.ts";
 import type { DynamicComponent, DynamicComponentInstance } from "@/types/component.ts";
@@ -637,7 +639,7 @@ export class ComponentManager {
   ): boolean {
     const id = instance.id;
     if (slot >= this.#capacity) {
-      throw new RangeError(`Entity ${entity} is outside component capacity.`);
+      throw new EntityNotFoundError(`Entity ${entity} is outside component capacity.`);
     }
     const state = this.#states[id];
     if (state === undefined) return false;
@@ -647,7 +649,7 @@ export class ComponentManager {
     const alreadyOwned = owners[slot] === 1;
     const maxEntities = state.maxEntities;
     if (!alreadyOwned && maxEntities !== 0 && state.ownerCount >= maxEntities) {
-      throw new RangeError(`Component "${instance.type.name}" can only be added to ${maxEntities} entities.`);
+      throw maxOwnersError(instance.type.name, maxEntities);
     }
     const stagesSide = !alreadyOwned && state.sideKeys.length > 0;
     if (stagesSide) this.#stageSideInitial(state, data as Record<string, unknown> | undefined);
@@ -699,7 +701,7 @@ export class ComponentManager {
     if (owners[slot] === 1) return false;
     const maxEntities = state.maxEntities;
     if (maxEntities !== 0 && state.ownerCount >= maxEntities) {
-      throw new RangeError(`Component "${instance.type.name}" can only be added to ${maxEntities} entities.`);
+      throw maxOwnersError(instance.type.name, maxEntities);
     }
     const sideKeys = state.sideKeys;
     const stagesSide = row !== null && sideKeys.length > 0;
@@ -943,7 +945,8 @@ export class ComponentManager {
    * Preflight capacity for adding a set of registered component instances to one entity.
    * @param entries - Unique registered component instances and optional data
    * @param entity - The target entity, or undefined to preflight a fresh owner before entity creation
-   * @throws {RangeError} If the entity is out of component capacity or any max owner count would overflow
+   * @throws {EntityNotFoundError} If the entity is out of component capacity
+   * @throws {CapacityError} If any max owner count would overflow
    * @internal
    */
   preflightAddBundleToEntity(
@@ -952,7 +955,7 @@ export class ComponentManager {
     count: number = entries.length,
   ): void {
     if (entity !== undefined && entityIndex(entity) >= this.#capacity) {
-      throw new RangeError(`Entity ${entity} is outside component capacity.`);
+      throw new EntityNotFoundError(`Entity ${entity} is outside component capacity.`);
     }
     for (let i = 0; i < count; i++) {
       const instance = entries[i]!.instance;
@@ -963,9 +966,7 @@ export class ComponentManager {
         (entity !== undefined && state.owners?.[entityIndex(entity)] === 1)
       ) continue;
       if (state.ownerCount >= maxEntities) {
-        throw new RangeError(
-          `Component "${instance.type.name}" can only be added to ${maxEntities} entities.`,
-        );
+        throw maxOwnersError(instance.type.name, maxEntities);
       }
     }
   }
@@ -984,9 +985,7 @@ export class ComponentManager {
       if (state.owners?.[entityIndex(entities[i]! as Entity)] !== 1) newOwners++;
     }
     if (state.ownerCount + newOwners > maxEntities) {
-      throw new RangeError(
-        `Component "${instance.type.name}" can only be added to ${maxEntities} entities.`,
-      );
+      throw maxOwnersError(instance.type.name, maxEntities);
     }
   }
 

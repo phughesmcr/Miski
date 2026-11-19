@@ -1,6 +1,6 @@
 /// <reference lib="deno.ns" />
 
-import { CapacityError, createEcsWorld } from "../mod.ts";
+import { CapacityError, ComponentDataError, createEcsWorld } from "../mod.ts";
 import { assert, assertEquals, assertStrictEquals, assertThrows } from "./helpers.ts";
 
 Deno.test("EcsWorld.spawn reuses scratch without leaking components or data between calls", async () => {
@@ -37,7 +37,11 @@ Deno.test("EcsWorld.spawn keeps undefined-skip and tag validation semantics acro
   });
   await ecs.init();
 
-  assertThrows(() => ecs.spawn({ Position: { x: 1 }, Player: false as never }), TypeError, "must be spawned with true");
+  assertThrows(
+    () => ecs.spawn({ Position: { x: 1 }, Player: false as never }),
+    ComponentDataError,
+    "must be spawned with true",
+  );
   const clean = ecs.spawnOrThrow({ Position: undefined, Player: undefined });
   assert(!ecs.world.components.entityHas("Position", clean), "undefined data skips the component after a throw");
   assert(!ecs.world.components.entityHas("Player", clean), "undefined tag skips the tag after a throw");
@@ -91,7 +95,7 @@ Deno.test("EcsWorld plain spawn/instantiate return undefined at capacity; OrThro
   assertStrictEquals(ecs.instantiateMany(orc, 1), undefined, "instantiateMany at capacity");
   assertThrows(() => ecs.spawnOrThrow({ Position: { x: 9 } }), CapacityError, "capacity");
   assertThrows(() => ecs.instantiateOrThrow(orc), CapacityError, "capacity");
-  assertThrows(() => ecs.spawn({ Player: false as never }), TypeError, "must be spawned with true");
+  assertThrows(() => ecs.spawn({ Player: false as never }), ComponentDataError, "must be spawned with true");
   assertStrictEquals(ecs.world.entities.getActiveCount(), 8, "rejected calls create nothing");
 
   ecs.world.entities.destroy(first!);

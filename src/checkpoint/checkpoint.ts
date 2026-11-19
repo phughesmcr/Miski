@@ -1,5 +1,5 @@
 import type { Entity } from "@/entity/entity.ts";
-import { CapacityError, EntityNotFoundError } from "@/errors.ts";
+import { ArgumentError, CapacityError, EntityNotFoundError } from "@/errors.ts";
 import { cloneFieldValue, isFieldDescriptor } from "@/schema/field.ts";
 import type { DynamicComponent } from "@/types/component.ts";
 
@@ -128,7 +128,7 @@ class ComponentCheckpointImpl implements ComponentCheckpoint {
 
   /** @returns the captured data of a checkpoint made by {@link captureComponentCheckpoint} */
   static dataOf(checkpoint: ComponentCheckpoint): CheckpointData {
-    if (!(#data in (checkpoint as object))) throw new TypeError("Invalid ComponentCheckpoint.");
+    if (!(#data in (checkpoint as object))) throw new ArgumentError("Invalid ComponentCheckpoint.");
     return (checkpoint as ComponentCheckpointImpl).#data;
   }
 }
@@ -182,7 +182,7 @@ export function captureComponentCheckpoint(
 export function applyComponentCheckpoint(world: CheckpointWorld, checkpoint: ComponentCheckpoint): void {
   const data = ComponentCheckpointImpl.dataOf(checkpoint);
   if (data.owner !== world) {
-    throw new Error("Cannot apply a component checkpoint to a different world.");
+    throw new ArgumentError("Cannot apply a component checkpoint to a different world.");
   }
 
   for (const { entity } of data.entities) {

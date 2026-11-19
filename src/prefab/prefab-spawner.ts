@@ -9,7 +9,14 @@ import {
 import type { ComponentManager, ComponentTemplateRow } from "@/component/component-manager.ts";
 import { asSlotIndex, type BorrowedEntityList, type Entity, entityIndex } from "@/entity/entity.ts";
 import type { EntityManager } from "@/entity/entity-manager.ts";
-import { CapacityError, componentDisplayName, formatComponentNotRegistered, NotRegisteredError } from "@/errors.ts";
+import {
+  ArgumentError,
+  CapacityError,
+  componentDisplayName,
+  formatComponentNotRegistered,
+  maxOwnersError,
+  NotRegisteredError,
+} from "@/errors.ts";
 import { QueryEntityResult } from "@/query/query-pool.ts";
 import type { ComponentBundleEntryInput } from "@/types/component-bundle.ts";
 import { isRelation } from "@/relation/relation.ts";
@@ -122,7 +129,7 @@ export class PrefabSpawner {
     throwOnCapacity: boolean,
   ): BorrowedEntityList | undefined {
     if (!Number.isInteger(count) || count < 0) {
-      throw new RangeError(`Prefab instance count ${count} must be a non-negative integer.`);
+      throw new ArgumentError(`Prefab instance count ${count} must be a non-negative integer.`);
     }
     const staging = this.#enter();
     try {
@@ -171,7 +178,7 @@ export class PrefabSpawner {
 
   /** Resolve (and cache) a prefab's plan for this world. */
   #getPlan(prefab: Prefab): PrefabPlan {
-    if (!(prefab instanceof Prefab)) throw new TypeError("Expected a Prefab.");
+    if (!(prefab instanceof Prefab)) throw new ArgumentError("Expected a Prefab.");
     const cached = this.#plans.get(prefab);
     if (cached !== undefined) return cached;
     const components = prefab.components;
@@ -235,7 +242,7 @@ export class PrefabSpawner {
   #preflightCap(instance: DynamicComponentInstance, count: number): void {
     const maxEntities = instance.type.maxEntities ?? 0;
     if (this.#componentManager.getOwnerCount(instance.type) + count > maxEntities) {
-      throw new RangeError(`Component "${instance.type.name}" can only be added to ${maxEntities} entities.`);
+      throw maxOwnersError(instance.type.name, maxEntities);
     }
   }
 

@@ -9,12 +9,12 @@ Deno.test("component, world, query, and system specifications reject invalid sha
 
   assertThrows(
     () => new Component<null>({ name: "bad component name" }),
-    TypeError,
+    SpecError,
     "Invalid component specification",
   );
   assertThrows(
     () => new Component<null>({ name: "player", maxEntities: 0 }),
-    TypeError,
+    SpecError,
     "Invalid component specification",
   );
   assertThrows(

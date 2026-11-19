@@ -71,7 +71,6 @@ export class ComponentInstance<
   /**
    * Create a new ComponentInstance
    * @param spec The ComponentInstance's specification
-   * @throws {TypeError} If the spec is invalid
    */
   constructor(spec: ComponentInstanceSpec<TValue, TStorage>) {
     const { has, id, markChanged, proxy, storage, type, getRevision, decode, writers, capacity } = spec;
@@ -117,7 +116,7 @@ export class ComponentInstance<
    * `field.*` columns.
    * @throws {ComponentOwnershipError} If the entity is inactive or does not own this component
    * @throws {ComponentDataError} If the component does not define `key`
-   * @throws {TypeError} If this is a tag component
+   * @throws {ComponentDataError} If this is a tag component
    */
   get<K extends keyof ComponentData<TValue> & string>(entity: Entity, key: K): ComponentData<TValue>[K];
   /** Read a property by untyped key; cast the result for `field.*` columns. */
@@ -125,7 +124,7 @@ export class ComponentInstance<
   get(entity: Entity, key: string): unknown {
     const partitions = this.storage?.partitions as Record<string, ArrayLike<unknown>> | undefined;
     if (partitions === undefined) {
-      throw new TypeError(`Component ${this.name} has no data storage.`);
+      throw new ComponentDataError(`Component ${this.name} has no data storage.`);
     }
     if (!this.#has(entity)) {
       throw new ComponentOwnershipError(`Entity ${entity} does not own component ${this.name}.`);
@@ -144,7 +143,7 @@ export class ComponentInstance<
    * @throws {EntityNotFoundError} If the entity is outside world capacity
    * @throws {ComponentOwnershipError} If the entity is inactive or does not own this component
    * @throws {ComponentDataError} If the component does not define `key`, or `value` is invalid for the field
-   * @throws {TypeError} If this is a tag component
+   * @throws {ComponentDataError} If this is a tag component
    */
   set<K extends keyof ComponentValue<TValue> & string>(entity: Entity, key: K, value: ComponentValue<TValue>[K]): void;
   /** Write a property by untyped key; the value is validated at runtime. */
@@ -163,7 +162,7 @@ export class ComponentInstance<
   #writer(key: string): ColumnWriter {
     const writers = this.#writers;
     if (writers === null) {
-      throw new TypeError(`Component ${this.name} has no data storage.`);
+      throw new ComponentDataError(`Component ${this.name} has no data storage.`);
     }
     const write = writers[key];
     if (write === undefined) {

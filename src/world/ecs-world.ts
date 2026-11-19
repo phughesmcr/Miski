@@ -1,3 +1,4 @@
+import { ComponentDataError, NotRegisteredError, SpecError } from "@/errors.ts";
 import type { ComponentInstance } from "@/component/component-instance.ts";
 import type { BorrowedEntityList, Entity } from "@/entity/entity.ts";
 import { Prefab } from "@/prefab/prefab.ts";
@@ -152,14 +153,14 @@ export class EcsWorld<
 
   /**
    * Create a typed world from inline component maps or a precompiled schema.
-   * @throws {TypeError} - If the config passes both `schema` and `components`/`tags`
+   * @throws {SpecError} - If the config passes both `schema` and `components`/`tags`
    */
   constructor(config: EcsWorldConfig<M, T, R>) {
     let definitions: RegistryFromMaps<M, T>;
     let tags: T | undefined;
     if (config.schema !== undefined) {
       if (config.components !== undefined || config.tags !== undefined) {
-        throw new TypeError("EcsWorldConfig takes either `schema` or `components`/`tags`, not both.");
+        throw new SpecError("EcsWorldConfig takes either `schema` or `components`/`tags`, not both.");
       }
       definitions = config.schema.components;
       tags = config.schema.tagMap;
@@ -176,7 +177,7 @@ export class EcsWorld<
     for (const name of keysOf(definitions)) {
       const component = definitions[name];
       if (component === undefined) {
-        throw new Error(`Compiled schema is missing component "${String(name)}".`);
+        throw new SpecError(`Compiled schema is missing component "${String(name)}".`);
       }
       (this.components as Record<string, DynamicComponent>)[String(name)] = component;
       componentList.push(component);
@@ -216,7 +217,8 @@ export class EcsWorld<
    * Create an entity with the named components/tags and initial values in `spec`, all or nothing.
    * @returns the new entity (handle `0` is valid; compare with `=== undefined`), or `undefined` if the world is at
    * capacity
-   * @throws {Error} - If `spec` names an unknown component, a tag value is not `true`, or a value fails validation
+   * @throws {NotRegisteredError} - If `spec` names an unknown component
+   * @throws {ComponentDataError} - If a tag value is not `true` or a value fails validation
    */
   spawn(spec: SpawnSpec<M, T>): Entity | undefined {
     return this.#spawn(spec, false);
@@ -225,7 +227,8 @@ export class EcsWorld<
   /**
    * Create an entity with the named components/tags and initial values in `spec`, all or nothing.
    * @throws {CapacityError} - If the world's entity capacity is exhausted
-   * @throws {Error} - If `spec` names an unknown component, a tag value is not `true`, or a value fails validation
+   * @throws {NotRegisteredError} - If `spec` names an unknown component
+   * @throws {ComponentDataError} - If a tag value is not `true` or a value fails validation
    */
   spawnOrThrow(spec: SpawnSpec<M, T>): Entity {
     return this.#spawn(spec, true)!;
@@ -341,14 +344,14 @@ export class EcsWorld<
       if (!Object.hasOwn(spec, key)) continue;
       const component = (this.components as Record<string, DynamicComponent | undefined>)[key];
       if (component === undefined) {
-        throw new Error(`Unknown component "${key}" in spawn spec.`);
+        throw new NotRegisteredError(`Unknown component "${key}" in spawn spec.`);
       }
       const value = (spec as Record<string, unknown>)[key];
       if (value === undefined) continue;
       let tuple = tuples[key];
       if (this.#tagNames.has(key)) {
         if (value !== true) {
-          throw new TypeError(`Tag "${key}" must be spawned with true.`);
+          throw new ComponentDataError(`Tag "${key}" must be spawned with true.`);
         }
         tuple ??= tuples[key] = [component];
       } else {

@@ -7,6 +7,7 @@ import {
 import { type Component, isSupportedColumnConstructor } from "@/component/component.ts";
 import { type Entity, isEntityInRange } from "@/entity/entity.ts";
 import {
+  ArgumentError,
   CapacityError,
   ComponentDataError,
   componentDisplayName,
@@ -205,8 +206,7 @@ export class CommandBuffer {
    * @returns A placeholder handle usable as the target of later commands on this buffer until it flushes
    * @throws {CapacityError} If more entities are queued than the world can ever hold
    * @throws {NotRegisteredError} If a component is not registered in the world
-   * @throws {TypeError} If a component is a relation
-   * @throws {RangeError} If a component appears twice in the bundle
+   * @throws {ArgumentError} If a component is a relation or appears twice in the bundle
    * @throws {ComponentDataError} If data names an unknown field or a numeric field value is not a finite number
    * @throws {SpecError} If a `field.entity()` value is a pending entity this buffer did not spawn since its last flush
    */
@@ -280,7 +280,7 @@ export class CommandBuffer {
    * @param entity The entity, or a pending entity from {@link spawn}
    * @param data Field values; omitted fields keep their values, or start at zero on new ownership
    * @throws {NotRegisteredError} If the component is not registered in the world
-   * @throws {TypeError} If the component is a relation
+   * @throws {ArgumentError} If the component is a relation
    * @throws {ComponentDataError} If data names an unknown field or a numeric field value is not a finite number
    * @throws {SpecError} If `entity`, or a pending `field.entity()` value, is not a valid handle for this world or buffer
    */
@@ -306,7 +306,7 @@ export class CommandBuffer {
    * @param entity The entity, or a pending entity from {@link spawn}
    * @param data Field values; omitted fields keep their values
    * @throws {NotRegisteredError} If the component is not registered in the world
-   * @throws {TypeError} If the component is a relation
+   * @throws {ArgumentError} If the component is a relation
    * @throws {ComponentDataError} If the component is a tag, data names an unknown field, or a numeric value is not finite
    * @throws {SpecError} If `entity`, or a pending `field.entity()` value, is not a valid handle for this world or buffer
    */
@@ -323,7 +323,7 @@ export class CommandBuffer {
    * @param component The component to remove
    * @param entity The entity, or a pending entity from {@link spawn}
    * @throws {NotRegisteredError} If the component is not registered in the world
-   * @throws {TypeError} If the component is a relation
+   * @throws {ArgumentError} If the component is a relation
    * @throws {SpecError} If `entity` is not a valid handle for this world or buffer
    */
   remove<TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
@@ -344,7 +344,8 @@ export class CommandBuffer {
    * @param target The target entity, or a pending entity from {@link spawn}
    * @param data Pair data; omitted fields keep their values, or start at zero on a new pair
    * @throws {NotRegisteredError} If the relation is not registered in the world
-   * @throws {TypeError} If `relation` is not a relation, or `data` is not an object
+   * @throws {ArgumentError} If `relation` is not a relation
+   * @throws {ComponentDataError} If `data` is not an object
    * @throws {ComponentDataError} If data names an unknown field or a value is not a finite number
    * @throws {SpecError} If `source` or `target` is not a valid handle for this world or buffer
    */
@@ -363,7 +364,7 @@ export class CommandBuffer {
    * @param source The source entity, or a pending entity from {@link spawn}
    * @param target The target entity, or a pending entity from {@link spawn}
    * @throws {NotRegisteredError} If the relation is not registered in the world
-   * @throws {TypeError} If `relation` is not a relation
+   * @throws {ArgumentError} If `relation` is not a relation
    * @throws {SpecError} If `source` or `target` is not a valid handle for this world or buffer
    */
   unrelate(relation: AnyRelation, source: Entity | PendingEntity, target: Entity | PendingEntity): void {
@@ -519,7 +520,9 @@ export class CommandBuffer {
     let mask = 0;
     if (data !== undefined) {
       if (data === null || typeof data !== "object") {
-        throw new TypeError(`${info.isRelation ? "Relation" : "Component"} data for "${info.name}" must be an object.`);
+        throw new ComponentDataError(
+          `${info.isRelation ? "Relation" : "Component"} data for "${info.name}" must be an object.`,
+        );
       }
       const values = data as Record<string, unknown>;
       for (const key in values) {
@@ -568,7 +571,7 @@ export class CommandBuffer {
   #relationInfoFor(relation: AnyRelation): number {
     const index = this.#cachedInfoFor(relation as unknown as DynamicComponent);
     const info = this.#infos[index]!;
-    if (!info.isRelation) throw new TypeError(`Component "${info.name}" is not a relation.`);
+    if (!info.isRelation) throw new ArgumentError(`Component "${info.name}" is not a relation.`);
     return index;
   }
 

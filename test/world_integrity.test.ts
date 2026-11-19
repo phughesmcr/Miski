@@ -1,12 +1,14 @@
 /// <reference lib="deno.ns" />
 
 import {
+  ArgumentError,
   asEntity,
   asSlotIndex,
   CapacityError,
   ComponentDataError,
   type Entity,
   entityIndex,
+  EntityNotFoundError,
   Query,
   World,
   WorldRollbackScope,
@@ -99,11 +101,11 @@ Deno.test("batch mutations reject mismatched and malformed slot entries before c
   world.components.addToEntity(position, a);
   world.components.addToEntity(position, b);
   const forged = { count: 1, entities: [a], slots: [entityIndex(b)] };
-  assertThrows(() => world.components.removeFromEntities(position, forged), RangeError, "invalid storage slot");
-  assertThrows(() => world.components.addToEntities(position, forged), RangeError, "invalid storage slot");
+  assertThrows(() => world.components.removeFromEntities(position, forged), ArgumentError, "invalid storage slot");
+  assertThrows(() => world.components.addToEntities(position, forged), ArgumentError, "invalid storage slot");
   assertThrows(
     () => world.components.removeFromEntities(position, { count: 2, entities: [a], slots: [entityIndex(a)] }),
-    Error,
+    EntityNotFoundError,
     "not active",
   );
   const query = new Query({ all: [position] });
@@ -141,7 +143,7 @@ Deno.test("checkpoint restores tags and capped memberships atomically, including
   world.components.removeFromEntity(capped, a);
   world.components.addToEntity(capped, outside);
   world.components.setEntityData(position, a, { x: 9 });
-  assertThrows(() => world.applyCheckpoint(checkpoint), Error, "maximum owner count");
+  assertThrows(() => world.applyCheckpoint(checkpoint), CapacityError, "maximum owner count");
   assertEquals(
     world.components.getEntityDataOrThrow(position, a).x,
     9,
@@ -202,8 +204,8 @@ Deno.test("failed spawn preflight preserves lifecycle windows, revisions, and ha
     ComponentDataError,
     "outside its storage range",
   );
-  assertThrows(() => world.entities.create([[capped]]), RangeError, "can only be added");
-  assertThrows(() => world.entities.create([[position], [position]]), RangeError, "Duplicate component");
+  assertThrows(() => world.entities.create([[capped]]), CapacityError, "can only be added");
+  assertThrows(() => world.entities.create([[position], [position]]), ArgumentError, "Duplicate component");
   assertEquals(world.entities.getActiveSnapshot(), [owner], "Failed spawn must preserve active handles");
   assertEquals(ids(world.entities.queryEntered(query)), [], "Failed spawn must not publish entries");
   assertEquals(ids(world.entities.queryExited(query)), [], "Failed spawn must not publish phantom exits");

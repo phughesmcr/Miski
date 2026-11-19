@@ -588,7 +588,7 @@ export class ArchetypeManager {
     const slot = entityIndex(entity);
     this.#requireEntitySlot(entity, slot);
     if (slot >= this.entityArchetypes.length || slot < 0) {
-      throw new RangeError("Invalid entity.");
+      throw new EntityNotFoundError("Invalid entity.");
     }
 
     const currentArchetype = this.entityArchetypes[slot];

@@ -5,7 +5,14 @@ import {
   entityIndex,
   ReusableSlotPackIterator,
 } from "@/entity/entity.ts";
-import { ComponentDataError, EntityNotFoundError, formatEntityNotActive } from "@/errors.ts";
+import {
+  ComponentDataError,
+  ComponentOwnershipError,
+  EntityNotFoundError,
+  formatEntityNotActive,
+  RelationCycleError,
+  SpecError,
+} from "@/errors.ts";
 import type { DynamicComponentInstance } from "@/types/component.ts";
 import type { QueryInstance } from "@/types/query.ts";
 import type { RelationInstance } from "@/types/world-relation-api.ts";
@@ -161,7 +168,7 @@ export class RelationStore {
     this.acyclic = relation.acyclic;
     this.cascade = relation.onDeleteTarget === "cascade";
     // `#assertNoCycle` and `parentOf` read one target per source, which holds only for exclusive relations.
-    if (this.acyclic && !this.exclusive) throw new Error(`Relation "${this.name}" is acyclic but not exclusive.`);
+    if (this.acyclic && !this.exclusive) throw new SpecError(`Relation "${this.name}" is acyclic but not exclusive.`);
     this.#host = host;
     this.#capacity = capacity;
 
@@ -392,7 +399,7 @@ export class RelationStore {
    */
   #assertNoCycle(source: Entity, target: Entity): void {
     if (chainReaches(target, source, this.#parentOfEntity, this.#capacity)) {
-      throw new RangeError(`Relation "${this.name}" pair ${source} -> ${target} would form a cycle.`);
+      throw new RelationCycleError(`Relation "${this.name}" pair ${source} -> ${target} would form a cycle.`);
     }
   }
 
@@ -461,7 +468,7 @@ export class RelationStore {
 
   setData(source: Entity, target: Entity, data: Readonly<Record<string, number | undefined>>): void {
     const row = this.rowOf(source, target);
-    if (row === NONE) throw new RangeError(`No "${this.name}" pair from ${source} to ${target}.`);
+    if (row === NONE) throw new ComponentOwnershipError(`No "${this.name}" pair from ${source} to ${target}.`);
     this.#prepareData(data);
     if (this.#writeData(data, row, false)) {
       this.#markChanged(entityIndex(source));
@@ -474,7 +481,7 @@ export class RelationStore {
    * Kept separate from the component write helpers so relation writes never widen their type feedback.
    */
   #prepareData(data: unknown): void {
-    if (!isObject(data)) throw new TypeError(`Relation "${this.name}" data must be an object.`);
+    if (!isObject(data)) throw new ComponentDataError(`Relation "${this.name}" data must be an object.`);
     const values = data as Record<string, unknown>;
     for (const key in values) {
       if (hasOwnProperty(values, key) && this.#scratch[key] === undefined) {

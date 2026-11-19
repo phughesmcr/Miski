@@ -42,7 +42,7 @@ export function prepareEntityStorageData(
   data: unknown,
 ): void {
   if (!isObject(data)) {
-    throw new TypeError(`Component data for "${componentName}" must be an object.`);
+    throw new ComponentDataError(`Component data for "${componentName}" must be an object.`);
   }
   const values = data as Record<string, unknown>;
   for (const key in values) {

@@ -1,6 +1,7 @@
 /// <reference lib="deno.ns" />
 
 import {
+  ArgumentError,
   CapacityError,
   CommandBuffer,
   Component,
@@ -10,6 +11,7 @@ import {
   NotRegisteredError,
   type PendingEntity,
   Relation,
+  RelationCycleError,
   SpecError,
   World,
 } from "../mod.ts";
@@ -85,18 +87,18 @@ Deno.test("command buffer validates relation commands when queued", async () => 
   const a = world.entities.createOrThrow();
   const b = world.entities.createOrThrow();
   assertThrows(() => commands.relate(unregisteredRelation, a, b), NotRegisteredError, "unregistered");
-  assertThrows(() => commands.relate(node as never, a, b), TypeError, "not a relation");
+  assertThrows(() => commands.relate(node as never, a, b), ArgumentError, "not a relation");
   assertThrows(() => commands.relate(likes, a, b, { strength: 1 } as never), ComponentDataError, "strength");
   assertThrows(() => commands.relate(likes, a, b, { weight: Number.NaN }), ComponentDataError, "finite");
-  assertThrows(() => commands.relate(likes, a, b, 5 as never), TypeError, "object");
+  assertThrows(() => commands.relate(likes, a, b, 5 as never), ComponentDataError, "object");
   assertThrows(() => commands.relate(likes, a, -1 as PendingEntity), SpecError, "pending");
   assertThrows(() => commands.unrelate(likes, -1 as PendingEntity, b), SpecError, "pending");
-  assertThrows(() => commands.add(likes as never, a), TypeError, "relate and unrelate");
+  assertThrows(() => commands.add(likes as never, a), ArgumentError, "relate and unrelate");
   assertStrictEquals(commands.pendingCount, 0, "rejected commands queue nothing");
   // A relation first seen (and cached) through a rejected component command still works with relate.
   const fresh = new CommandBuffer(world);
-  assertThrows(() => fresh.spawn([[likes]] as never), TypeError, "relate and unrelate");
-  assertThrows(() => fresh.add(likes as never, a), TypeError, "relate and unrelate");
+  assertThrows(() => fresh.spawn([[likes]] as never), ArgumentError, "relate and unrelate");
+  assertThrows(() => fresh.add(likes as never, a), ArgumentError, "relate and unrelate");
   fresh.relate(likes, b, a, { rank: 2 });
   fresh.flush();
   assertEquals(world.relations.getData(likes, b, a), { weight: 0, rank: 2 }, "cached relation info is reused");
@@ -129,7 +131,11 @@ Deno.test("command buffer relation failures drain the queue and name the pair", 
   world.relations.add(childOf, b, a);
   commands.relate(childOf, a, b); // closes a cycle
   commands.relate(likes, a, b);
-  assertThrows(() => commands.flush(), RangeError, `CommandBuffer relate childOf on entity ${a} -> entity ${b} failed`);
+  assertThrows(
+    () => commands.flush(),
+    RelationCycleError,
+    `CommandBuffer relate childOf on entity ${a} -> entity ${b} failed`,
+  );
   assertStrictEquals(world.relations.has(likes, a, b), true, "later commands still applied");
   assertStrictEquals(world.relations.hasAny(childOf, a), false, "the failing pair was not added");
   await world.destroy();

@@ -14,6 +14,7 @@ import {
   isFieldDescriptor,
   isValidComponentSpec,
   Query,
+  SpecError,
   System,
   WorldRollbackScope,
 } from "../mod.ts";
@@ -129,24 +130,24 @@ Deno.test("field descriptors are frozen, branded and carry stable hash tags", ()
 });
 
 Deno.test("invalid field declarations are rejected", () => {
-  assertThrows(() => field.enum([]), TypeError, "at least one label");
-  assertThrows(() => field.enum(["a", "a"]), TypeError, "duplicate");
-  assertThrows(() => field.enum([1 as unknown as string]), TypeError, "string");
-  assertThrows(() => field.enum(Array.from({ length: 65_537 }, (_, i) => `l${i}`)), RangeError, "65536");
-  assertThrows(() => field.object({ create: 1 as never }), TypeError, "create");
-  assertThrows(() => field.object({ clone: "x" as never }), TypeError, "clone");
-  assertThrows(() => field.object({ encode: 1 as never, decode: () => 1 }), TypeError, "encode");
-  assertThrows(() => field.object({ encode: () => 1 }), TypeError, "both encode and decode");
+  assertThrows(() => field.enum([]), SpecError, "at least one label");
+  assertThrows(() => field.enum(["a", "a"]), SpecError, "duplicate");
+  assertThrows(() => field.enum([1 as unknown as string]), SpecError, "string");
+  assertThrows(() => field.enum(Array.from({ length: 65_537 }, (_, i) => `l${i}`)), SpecError, "65536");
+  assertThrows(() => field.object({ create: 1 as never }), SpecError, "create");
+  assertThrows(() => field.object({ clone: "x" as never }), SpecError, "clone");
+  assertThrows(() => field.object({ encode: 1 as never, decode: () => 1 }), SpecError, "encode");
+  assertThrows(() => field.object({ encode: () => 1 }), SpecError, "both encode and decode");
   for (const key of ["entity", "slot"]) {
     assertThrows(
       () => new Component({ name: "c", schema: { [key]: field.bool() } }),
-      TypeError,
+      SpecError,
       "Invalid component specification",
     );
   }
   assertThrows(
     () => new Component({ name: "c", schema: { v: { kind: "bool" } } as never }),
-    TypeError,
+    SpecError,
     "Invalid component specification",
   );
   assert(isValidComponentSpec({ name: "c", schema: { v: field.string() } }), "Side-only schemas are valid");

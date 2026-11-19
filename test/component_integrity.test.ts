@@ -8,6 +8,7 @@ import {
   ComponentOwnershipError,
   entityIndex,
   NotRegisteredError,
+  SpecError,
   WorldRollbackScope,
 } from "../mod.ts";
 import { createEntity, createTestWorld, tagComponent, vec2Component } from "./fixtures.ts";
@@ -16,8 +17,8 @@ import { assert, assertEquals, assertThrows, ids } from "./helpers.ts";
 Deno.test("component schemas reject proxy cursor fields at every constructor boundary", () => {
   for (const key of ["entity", "slot"]) {
     const schema = { [key]: Float32Array, x: Float32Array };
-    assertThrows(() => new Component({ name: "position", schema }), TypeError, "Invalid component specification");
-    assertThrows(() => compileComponentSchema({ position: schema }), TypeError, "Invalid component specification");
+    assertThrows(() => new Component({ name: "position", schema }), SpecError, "Invalid component specification");
+    assertThrows(() => compileComponentSchema({ position: schema }), SpecError, "Invalid component specification");
   }
 });
 

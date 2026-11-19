@@ -1,6 +1,7 @@
 /// <reference lib="deno.ns" />
 
 import {
+  ArgumentError,
   CapacityError,
   ComponentDataError,
   type Entity,
@@ -241,7 +242,7 @@ Deno.test("full-world bundle creation reports payload errors before capacity err
   const world = await createTestWorld([position]);
   const created = Array.from({ length: world.entities.capacity }, () => world.entities.createOrThrow());
 
-  assertThrows(() => world.entities.create(42 as never), TypeError, "Bundle");
+  assertThrows(() => world.entities.create(42 as never), ArgumentError, "Bundle");
   assertThrows(
     () => world.entities.create([[position, { x: Number.MAX_VALUE }]]),
     ComponentDataError,
@@ -249,7 +250,7 @@ Deno.test("full-world bundle creation reports payload errors before capacity err
   );
   assertThrows(
     () => world.entities.createOrThrow([[position, { nope: 1 } as never]]),
-    Error,
+    ComponentDataError,
     "nope",
   );
   assertEquals(world.entities.create([[position, { x: 1 }]]), undefined, "Valid bundle on full world is undefined");

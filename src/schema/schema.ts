@@ -1,3 +1,4 @@
+import { SpecError } from "@/errors.ts";
 import { assertNoTupleColumns, Component, isValidComponentSpec } from "@/component/component.ts";
 import type { ComponentSpec, DynamicComponent } from "@/types/component.ts";
 import type { ComponentFieldSpec, ComponentValue, TypedArrayConstructor } from "@/types/partitions.ts";
@@ -125,7 +126,7 @@ export function createTagFromSpec(name: string, spec: TagSpec): Component<null, 
     return new Component({ name });
   }
   if (!isPositiveUint32(spec.maxEntities) || !Number.isInteger(spec.maxEntities)) {
-    throw new TypeError(`Tag "${name}" maxEntities must be a positive integer.`);
+    throw new SpecError(`Tag "${name}" maxEntities must be a positive integer.`);
   }
   return new Component({ name, maxEntities: spec.maxEntities });
 }
@@ -143,21 +144,21 @@ function compareEntryNames(a: CompiledComponentEntry, b: CompiledComponentEntry)
 /** Validate and capture schema metadata without allocating component identities. */
 function normalizeSchema(input: SchemaComponentMap, tags?: TagMap): NormalizedSchema {
   if (typeof input !== "object" || input === null || Array.isArray(input)) {
-    throw new TypeError("Component schema must be an object.");
+    throw new SpecError("Component schema must be an object.");
   }
   if (tags !== undefined && (typeof tags !== "object" || tags === null || Array.isArray(tags))) {
-    throw new TypeError("Tag schema must be an object.");
+    throw new SpecError("Tag schema must be an object.");
   }
   const componentMap: NormalizedSchema["componentMap"] = Object.create(null);
   const tagMap: NormalizedSchema["tagMap"] = Object.create(null);
   const entries: CompiledComponentEntry[] = [];
   for (const componentName of Object.keys(input).toSorted()) {
     if (tags !== undefined && Object.hasOwn(tags, componentName)) {
-      throw new Error(`Tag "${componentName}" collides with a component name.`);
+      throw new SpecError(`Tag "${componentName}" collides with a component name.`);
     }
     const inputProperties = input[componentName];
     if (typeof inputProperties !== "object" || inputProperties === null || Array.isArray(inputProperties)) {
-      throw new TypeError(`Component ${componentName} must be an object.`);
+      throw new SpecError(`Component ${componentName} must be an object.`);
     }
     assertNoTupleColumns(`component "${componentName}"`, inputProperties);
     const properties: Record<string, TypedArrayConstructor | FieldDescriptor> = Object.create(null);
@@ -169,14 +170,14 @@ function normalizeSchema(input: SchemaComponentMap, tags?: TagMap): NormalizedSc
         constructor.tag :
         CONSTRUCTOR_TAGS.get(constructor as TypedArrayConstructor);
       if (tag === undefined) {
-        throw new TypeError(`Unsupported typed-array constructor for ${componentName}.${propertyName}.`);
+        throw new SpecError(`Unsupported typed-array constructor for ${componentName}.${propertyName}.`);
       }
       properties[propertyName] = constructor;
       compiledProperties.push(Object.freeze({ name: propertyName, tag }));
     }
     const frozenProperties = Object.freeze(properties);
     if (!isValidComponentSpec({ name: componentName, schema: frozenProperties })) {
-      throw new TypeError("Invalid component specification.");
+      throw new SpecError("Invalid component specification.");
     }
     componentMap[componentName] = frozenProperties;
     entries.push(Object.freeze({ name: componentName, properties: Object.freeze(compiledProperties) }));
@@ -184,13 +185,13 @@ function normalizeSchema(input: SchemaComponentMap, tags?: TagMap): NormalizedSc
   for (const tagName of Object.keys(tags ?? {}).toSorted()) {
     const spec = tags![tagName]!;
     if (spec !== true && (typeof spec !== "object" || spec === null || !Object.hasOwn(spec, "maxEntities"))) {
-      throw new TypeError(`Tag "${tagName}" must be true or { maxEntities }.`);
+      throw new SpecError(`Tag "${tagName}" must be true or { maxEntities }.`);
     }
     if (spec !== true && (!isPositiveUint32(spec.maxEntities) || !Number.isInteger(spec.maxEntities))) {
-      throw new TypeError(`Tag "${tagName}" maxEntities must be a positive integer.`);
+      throw new SpecError(`Tag "${tagName}" maxEntities must be a positive integer.`);
     }
     if (!isValidComponentSpec({ name: tagName })) {
-      throw new TypeError("Invalid component specification.");
+      throw new SpecError("Invalid component specification.");
     }
     tagMap[tagName] = spec === true ? true : Object.freeze({ maxEntities: spec.maxEntities });
     const entry: CompiledComponentEntry = spec === true ?
@@ -255,7 +256,7 @@ export function mergeComponentSchemas<
 ): CompiledComponentSchema<A & B, TA & TB> {
   const names = [...left.entries.map((entry) => entry.name), ...right.entries.map((entry) => entry.name)];
   if (new Set(names).size !== names.length) {
-    throw new Error("Cannot merge component schemas with duplicate names.");
+    throw new SpecError("Cannot merge component schemas with duplicate names.");
   }
   const entries = Object.freeze(
     [...left.entries, ...right.entries].toSorted(compareEntryNames),

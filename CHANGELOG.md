@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- **Breaking:** every failure the library throws is now a `MiskiError`, so
+  `isMiskiError(error)` catches them all. Code that caught `TypeError`,
+  `RangeError` or `Error` from Miski must catch the new class instead; messages
+  are unchanged.
+  - Two new classes: `ArgumentError` (a malformed call argument: bundle shape, a
+    component repeated or a relation passed in a bundle, batch entity lists,
+    `Schedule.run(dt)` / `setClock`, prefab counts, foreign checkpoints) and
+    `RelationCycleError` (an acyclic relation would form a cycle).
+  - Schema, `field.*`, `Component`, `Prefab` and `createEcsWorld` config errors
+    throw `SpecError`; non-object payloads and data reads on tags throw
+    `ComponentDataError`; `maxEntities` owner caps throw `CapacityError`;
+    `relations.setData` on a missing pair throws `ComponentOwnershipError`; an
+    unknown name in `EcsWorld.spawn` throws `NotRegisteredError`.
+  - `NoComponentsFoundError` is removed; nothing threw it.
 - **Breaking:** the world-save API is consolidated (these names only existed
   on the unreleased branch, but code written against it must change):
   - `saveWorldInto(world, target): number` and `measureWorldSave(world)` are

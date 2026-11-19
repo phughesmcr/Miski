@@ -2,6 +2,7 @@
 
 import {
   canonicalizeStoredValue,
+  CapacityError,
   compileComponentSchema,
   ComponentDataError,
   componentSchemaHash,
@@ -10,6 +11,7 @@ import {
   entityIndex,
   packEntity,
   Query,
+  SpecError,
   WorldRollbackScope,
 } from "../mod.ts";
 import { assert, assertEquals, assertStrictEquals, assertThrows } from "./helpers.ts";
@@ -106,7 +108,7 @@ Deno.test("createEcsWorld tags spawn, ownership, and collisions", async () => {
 
   assertThrows(
     () => ecs.spawn({ Position: { x: 0, y: 0 }, Hero: true }),
-    RangeError,
+    CapacityError,
     "can only be added to 1",
   );
 
@@ -117,7 +119,7 @@ Deno.test("createEcsWorld tags spawn, ownership, and collisions", async () => {
         components: { Player: { x: Float32Array } },
         tags: { Player: true },
       }),
-    Error,
+    SpecError,
     "collides with a component name",
   );
 });

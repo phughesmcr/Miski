@@ -1,5 +1,5 @@
 import { Component } from "@/component/component.ts";
-import { ComponentDataError } from "@/errors.ts";
+import { ComponentDataError, SpecError } from "@/errors.ts";
 import { isRelation } from "@/relation/relation.ts";
 import { type FieldDescriptor, isFieldDescriptor } from "@/schema/field.ts";
 import type { ComponentBundle, ComponentBundleEntryInput } from "@/types/component-bundle.ts";
@@ -84,7 +84,7 @@ function definitionFieldValue(name: string, key: string, property: FieldDescript
 function mergeDefinitionData(component: DynamicComponent, row: Record<string, unknown>, data: unknown): void {
   const name = component.name;
   if (!isObject(data)) {
-    throw new TypeError(`Component data for "${name}" must be an object.`);
+    throw new ComponentDataError(`Component data for "${name}" must be an object.`);
   }
   const schema = component.schema as Record<string, unknown>;
   const values = data as Record<string, unknown>;
@@ -168,20 +168,20 @@ export class Prefab<
   /**
    * Create a prefab.
    * @param spec - The prefab specification
-   * @throws {TypeError} - If the spec, an entry, or a payload is malformed
-   * @throws {RangeError} - If a component appears twice in `spec.components`
-   * @throws {ComponentDataError} - If a payload names an unknown field, holds a non-finite value or one that overflows
-   * its column, or targets a tag
+   * @throws {SpecError} - If the spec or an entry is malformed, an entry is a relation, or a component appears twice in
+   * `spec.components`
+   * @throws {ComponentDataError} - If a payload is not an object, names an unknown field, holds a non-finite value or
+   * one that overflows its column, or targets a tag
    */
   constructor(spec: PrefabSpec<TBundle>) {
-    if (!isObject(spec)) throw new TypeError("Prefab spec must be an object.");
+    if (!isObject(spec)) throw new SpecError("Prefab spec must be an object.");
     const { name = "prefab", extends: parent, components: entries } = spec as PrefabSpec;
-    if (typeof name !== "string") throw new TypeError("Prefab name must be a string.");
+    if (typeof name !== "string") throw new SpecError("Prefab name must be a string.");
     if (parent !== undefined && !(parent instanceof Prefab)) {
-      throw new TypeError("Prefab extends must be a Prefab.");
+      throw new SpecError("Prefab extends must be a Prefab.");
     }
     if (!Array.isArray(entries)) {
-      throw new TypeError("Prefab components must be an array of [component] or [component, data] tuples.");
+      throw new SpecError("Prefab components must be an array of [component] or [component, data] tuples.");
     }
 
     const components: DynamicComponent[] = parent === undefined ? [] : [...parent.components];
@@ -189,20 +189,20 @@ export class Prefab<
     const own = new Set<DynamicComponent>();
     for (const entry of entries as readonly unknown[]) {
       if (!Array.isArray(entry) || (entry.length !== 1 && entry.length !== 2)) {
-        throw new TypeError("Prefab entries must be [component] or [component, data] tuples.");
+        throw new SpecError("Prefab entries must be [component] or [component, data] tuples.");
       }
       const component = entry[0] as DynamicComponent;
       if (!(component instanceof (Component as unknown as abstract new (...args: never[]) => DynamicComponent))) {
-        throw new TypeError("Prefab entries must reference a Component.");
+        throw new SpecError("Prefab entries must reference a Component.");
       }
       if (isRelation(component)) {
         // Pairs need a target in a specific world; attach them with world.relations after instantiation.
-        throw new TypeError(
+        throw new SpecError(
           `Component "${component.name}" is a relation; add its pairs with world.relations after instantiating.`,
         );
       }
       if (own.has(component)) {
-        throw new RangeError(`Duplicate component "${component.name}" in prefab.`);
+        throw new SpecError(`Duplicate component "${component.name}" in prefab.`);
       }
       own.add(component);
       const isTag = component.schema === null;

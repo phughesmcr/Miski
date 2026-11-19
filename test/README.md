@@ -8,6 +8,7 @@ Runtime tests live in `*.test.ts` files and run via `deno test` (see `deno.json`
 | --- | --- |
 | `ecs_gameplay_contracts.test.ts` | Happy-path gameplay: capacity, systems, queries, batch transitions, multi-world |
 | `ecs_validation_contracts.test.ts` | Spec rejection and registry consistency |
+| `errors.test.ts` | `isMiskiError` holds for schema, field, prefab, component data, capacity, relation and schedule failures |
 | `system_call_forwarding.test.ts` | System call args: exact arity, rest params, defaults, return values, `argCount` fixed-arity forwarding and validation |
 | `game_oriented_api_evidence.test.ts` | `include`, bundles/spawn preflight, changed marking |
 | `world_api_conveniences.test.ts` | Soft reads, upserts, `createOrThrow`, iterable `queryList` |

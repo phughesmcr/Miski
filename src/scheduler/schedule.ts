@@ -1,4 +1,4 @@
-import { AlreadyRegisteredError, SpecError, WorldStateError } from "@/errors.ts";
+import { AlreadyRegisteredError, ArgumentError, SpecError, WorldStateError } from "@/errors.ts";
 import { System } from "@/system/system.ts";
 import type { ComponentMap } from "@/types/component.ts";
 import type {
@@ -232,24 +232,24 @@ export class Schedule {
    * An `accumulator` of a whole `fixedStep` or more (which `getClock()` never returns, but a clock saved from a
    * schedule with a larger step can hold) is reduced to its remainder: the whole steps are dropped, as `run()` drops
    * steps beyond `maxFixedSteps`. `accumulator` then reads back the reduced value.
-   * @throws {RangeError} If a value is negative or not finite, or `tick` / `fixedTick` is not an integer
+   * @throws {ArgumentError} If a value is negative or not finite, or `tick` / `fixedTick` is not an integer
    * @throws {WorldStateError} If called during `run()`
    */
   setClock(clock: ScheduleClock): void {
     if (this.#running) throw new WorldStateError("Schedule.setClock() cannot be called while the schedule is running");
-    if (!isObject(clock)) throw new RangeError("Schedule clock must be an object");
+    if (!isObject(clock)) throw new ArgumentError("Schedule clock must be an object");
     const { tick, fixedTick, elapsed, accumulator } = clock;
     if (!Number.isSafeInteger(tick) || tick < 0) {
-      throw new RangeError(`Schedule clock tick must be an integer >= 0, got ${String(tick)}`);
+      throw new ArgumentError(`Schedule clock tick must be an integer >= 0, got ${String(tick)}`);
     }
     if (!Number.isSafeInteger(fixedTick) || fixedTick < 0) {
-      throw new RangeError(`Schedule clock fixedTick must be an integer >= 0, got ${String(fixedTick)}`);
+      throw new ArgumentError(`Schedule clock fixedTick must be an integer >= 0, got ${String(fixedTick)}`);
     }
     if (typeof elapsed !== "number" || !Number.isFinite(elapsed) || elapsed < 0) {
-      throw new RangeError(`Schedule clock elapsed must be a finite number >= 0, got ${String(elapsed)}`);
+      throw new ArgumentError(`Schedule clock elapsed must be a finite number >= 0, got ${String(elapsed)}`);
     }
     if (typeof accumulator !== "number" || !Number.isFinite(accumulator) || accumulator < 0) {
-      throw new RangeError(`Schedule clock accumulator must be a finite number >= 0, got ${String(accumulator)}`);
+      throw new ArgumentError(`Schedule clock accumulator must be a finite number >= 0, got ${String(accumulator)}`);
     }
     const step = this.#fixedStep;
     const reduced = dropWholeSteps(accumulator, step, this.#stepThreshold);
@@ -383,14 +383,14 @@ export class Schedule {
    *
    * Systems unregistered from the world since the last call are dropped first (see {@link add}).
    * @param dt Seconds since the previous run (finite, >= 0)
-   * @throws {RangeError} If `dt` is not a finite number >= 0
+   * @throws {ArgumentError} If `dt` is not a finite number >= 0
    * @throws {WorldStateError} If the world is not initialized, or `run()` is called from inside a run
    * @throws {SpecError} If the ordering constraints are invalid, including a constraint on a dropped system
    * @throws {WorldStateError} If a system's async init is still pending, or its destruction has started
    */
   run(dt: number): void {
     if (typeof dt !== "number" || !Number.isFinite(dt) || dt < 0) {
-      throw new RangeError(`Schedule dt must be a finite number >= 0, got ${String(dt)}`);
+      throw new ArgumentError(`Schedule dt must be a finite number >= 0, got ${String(dt)}`);
     }
     if (this.#running) throw new WorldStateError("Schedule.run() is already running");
     const state = this.#world.state;

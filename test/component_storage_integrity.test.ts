@@ -2,8 +2,10 @@
 
 import {
   asSlotIndex,
+  CapacityError,
   compileComponentSchema,
   Component,
+  ComponentDataError,
   createEcsWorld,
   entityIndex,
   isValidComponentSpec,
@@ -54,7 +56,7 @@ for (const how of ["partitions", "proxy-slot"] as const) {
     world.components.addToEntity(position, d);
     assertThrows(
       () => world.components.addToEntity(position, a),
-      RangeError,
+      CapacityError,
       "can only be added to 2 entities",
     );
     assert(!world.components.entityHas(position, a), "Rejected add must not grant ownership");
@@ -147,10 +149,10 @@ Deno.test("owner caps above world capacity are clamped to capacity", async () =>
   assertEquals(huge.maxEntities, 50_000_000, "The declared cap is unchanged on the component");
 });
 
-Deno.test("fractional maxEntities is rejected with TypeError", () => {
+Deno.test("fractional maxEntities is rejected with SpecError", () => {
   for (const maxEntities of [1.5, 0.5, Number.NaN, -1, 0, Infinity]) {
     assert(!isValidComponentSpec({ name: "capped", maxEntities }), `Expected ${maxEntities} to be invalid`);
-    assertThrows(() => new Component({ name: "capped", maxEntities }), TypeError, "Invalid component specification");
+    assertThrows(() => new Component({ name: "capped", maxEntities }), SpecError, "Invalid component specification");
   }
   assertEquals(new Component({ name: "capped", maxEntities: 3 }).maxEntities, 3, "Integers remain valid");
 });
@@ -178,8 +180,8 @@ Deno.test("column constructors are consistent across Component and compileCompon
   for (const Ctor of unsupported) {
     const schema = { v: Ctor } as never;
     assert(!isValidComponentSpec({ name: "c", schema }), `${(Ctor as { name: string }).name} invalid for Component`);
-    assertThrows(() => new Component({ name: "c", schema }), TypeError, 'column "v"');
-    assertThrows(() => compileComponentSchema({ c: schema }), TypeError, "typed-array");
+    assertThrows(() => new Component({ name: "c", schema }), SpecError, 'column "v"');
+    assertThrows(() => compileComponentSchema({ c: schema }), SpecError, "typed-array");
     assertThrows(() => new Component({ name: "c", schema: { v: [Ctor, 0] } as never }), SpecError, "tuple form");
   }
 });
@@ -211,5 +213,5 @@ Deno.test("EcsWorld.spawn treats undefined tag values as absent", async () => {
   assert(!ecs.world.components.entityHas("Player", entity), "Undefined tag spawns without the tag");
   const tagged = ecs.spawnOrThrow({ Position: { x: 1 }, Player: true });
   assert(ecs.world.components.entityHas("Player", tagged), "true still adds the tag");
-  assertThrows(() => ecs.spawn({ Player: false as never }), TypeError, "must be spawned with true");
+  assertThrows(() => ecs.spawn({ Player: false as never }), ComponentDataError, "must be spawned with true");
 });

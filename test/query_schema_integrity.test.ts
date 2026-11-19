@@ -1,12 +1,15 @@
 /// <reference lib="deno.ns" />
 
 import {
+  CapacityError,
   compileComponentSchema,
   Component,
   componentSchemaHash,
   createEcsWorld,
   mergeComponentSchemas,
+  NotRegisteredError,
   Query,
+  SpecError,
   System,
 } from "../mod.ts";
 import { $_COMPONENT_ID_KEY } from "../src/constants.ts";
@@ -140,8 +143,8 @@ Deno.test("schema hashing does not allocate component identities and merge prese
   await ecs.init();
   assertStrictEquals(ecs.components.position, left.components.position, "world keeps compiled component identities");
   ecs.spawn({ position: { x: 1 }, hero: true });
-  assertThrows(() => ecs.spawn({ hero: true }), Error, "can only be added to 1");
-  assertThrows(() => ecs.spawn({ constructor: {} } as never), Error, "Unknown component");
+  assertThrows(() => ecs.spawn({ hero: true }), CapacityError, "can only be added to 1");
+  assertThrows(() => ecs.spawn({ constructor: {} } as never), NotRegisteredError, "Unknown component");
   await ecs.world.destroy();
 
   const related = createEcsWorld({ capacity: 8, schema: merged, relations: { ChildOf: { exclusive: true } } });
@@ -155,7 +158,7 @@ Deno.test("schema hashing does not allocate component identities and merge prese
 
   assertThrows(
     () => createEcsWorld({ capacity: 8, schema: merged, components: merged.componentMap } as never),
-    TypeError,
+    SpecError,
     "either `schema` or `components`",
   );
 });
@@ -163,11 +166,11 @@ Deno.test("schema hashing does not allocate component identities and merge prese
 Deno.test("plain schema bootstrap and hashing share validation", () => {
   for (const name of ["constructor", "__proto__", "toString", "éclair", "🚀"]) {
     const input = { [name]: { x: Float32Array } };
-    assertThrows(() => componentSchemaHash(input), TypeError, "Invalid component specification");
-    assertThrows(() => compileComponentSchema(input), TypeError, "Invalid component specification");
+    assertThrows(() => componentSchemaHash(input), SpecError, "Invalid component specification");
+    assertThrows(() => compileComponentSchema(input), SpecError, "Invalid component specification");
     assertThrows(
       () => createEcsWorld({ capacity: 8, components: input }),
-      TypeError,
+      SpecError,
       "Invalid component specification",
     );
   }
@@ -178,13 +181,13 @@ Deno.test("plain schema bootstrap and hashing share validation", () => {
     componentSchemaHash({ Zebra: { x: Float32Array }, apple: { x: Float32Array } }),
     "ordering ignores authored order",
   );
-  assertThrows(() => mergeComponentSchemas(ordered, ordered), Error, "duplicate names");
-  assertThrows(() => componentSchemaHash({ position: { x: Float32Array } }, { position: true }), Error, "collides");
+  assertThrows(() => mergeComponentSchemas(ordered, ordered), SpecError, "duplicate names");
+  assertThrows(() => componentSchemaHash({ position: { x: Float32Array } }, { position: true }), SpecError, "collides");
   for (const maxEntities of [0, -1, 1.5, Infinity]) {
-    assertThrows(() => componentSchemaHash({}, { hero: { maxEntities } }), TypeError, "positive integer");
+    assertThrows(() => componentSchemaHash({}, { hero: { maxEntities } }), SpecError, "positive integer");
     assertThrows(
       () => createEcsWorld({ capacity: 8, components: {}, tags: { hero: { maxEntities } } }),
-      TypeError,
+      SpecError,
       "positive integer",
     );
   }
