@@ -167,18 +167,54 @@ export function writeStringCells(
   slots: ArrayLike<number> | null,
   count: number,
 ): number {
-  const u32 = views.u32;
   const w = offset >>> 2;
   const heap = offset + (count + 1) * 4;
-  let q = heap;
-  for (let j = 0; j < count; j++) {
-    u32[w + j] = q - heap;
-    q = writeUtf8(views.u8, q, (slots === null ? values[j] : values[slots[j]!]) as string);
-  }
-  u32[w + count] = q - heap;
+  const q = slots === null ?
+    writeDenseStrings(views.u32, views.u8, w, heap, values, count) :
+    writeSlottedStrings(views.u32, views.u8, w, heap, values, slots, count);
+  views.u32[w + count] = q - heap;
   const end = align8(q);
   zeroPad(views, q, end);
   return end;
+}
+
+// The cell loops live in their own functions, ending in a bare return. The first save of a big column optimizes a
+// loop on-stack mid-call, before any code after it has run; code after the loop in the same function would have no
+// type feedback, and the optimized loop would deoptimize there on every call until the whole function is optimized.
+
+/** Write cells `values[0..count)`; @returns the heap end offset. */
+function writeDenseStrings(
+  u32: Uint32Array,
+  u8: Uint8Array,
+  w: number,
+  heap: number,
+  values: ArrayLike<unknown>,
+  count: number,
+): number {
+  let q = heap;
+  for (let j = 0; j < count; j++) {
+    u32[w + j] = q - heap;
+    q = writeUtf8(u8, q, values[j] as string);
+  }
+  return q;
+}
+
+/** Write cells `values[slots[0..count)]`; @returns the heap end offset. */
+function writeSlottedStrings(
+  u32: Uint32Array,
+  u8: Uint8Array,
+  w: number,
+  heap: number,
+  values: ArrayLike<unknown>,
+  slots: ArrayLike<number>,
+  count: number,
+): number {
+  let q = heap;
+  for (let j = 0; j < count; j++) {
+    u32[w + j] = q - heap;
+    q = writeUtf8(u8, q, values[slots[j]!] as string);
+  }
+  return q;
 }
 
 /**

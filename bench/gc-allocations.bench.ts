@@ -92,6 +92,8 @@ const WORLD_LOAD_BUDGET_BYTES_PER_ITER = 1_000;
 // stored string, so the budget covers Miski's own cost: none, measured 0 B/iter on 1,024 objects.
 const OBJECT_SAVE_BUDGET_BYTES_PER_ITER = ZERO_ALLOC_BUDGET_BYTES_PER_ITER;
 const checkMode = Deno.args.includes("--check");
+// `--only=<text>` runs just the scenarios whose name contains <text>, to check one without the others warming it up.
+const onlyFilter = Deno.args.find((arg) => arg.startsWith("--only="))?.slice("--only=".length);
 
 const gc = (globalThis as { gc?: GcFn }).gc;
 
@@ -100,6 +102,10 @@ if (typeof gc !== "function") {
 }
 
 const forceGc: GcFn = gc;
+
+// Deno.memoryUsage is JavaScript and runs inside each measured window; let it reach its optimized tiers first, or its
+// compiled code lands in whichever round happens to make the call that tiers it up.
+for (let i = 0; i < 10_000; i++) Deno.memoryUsage();
 
 function collect(): void {
   for (let i = 0; i < 3; i++) {
@@ -148,11 +154,7 @@ function printRow(label: string, delta: MemorySnapshot, iterations: number): voi
 function measureRound(scenario: Scenario): RoundMeasurement {
   collect();
   const before = Deno.memoryUsage();
-
-  for (let i = 0; i < scenario.iterations; i++) {
-    scenario.fn();
-  }
-
+  repeat(scenario.fn, scenario.iterations);
   const beforeCollection = Deno.memoryUsage();
   collect();
   const afterCollection = Deno.memoryUsage();
@@ -163,12 +165,17 @@ function measureRound(scenario: Scenario): RoundMeasurement {
   };
 }
 
+/** The measured loop. Warmup runs through it too, so a round never pays for compiling the harness itself. */
+function repeat(fn: () => void, iterations: number): void {
+  for (let i = 0; i < iterations; i++) fn();
+}
+
 function warmupScenario(scenario: Scenario): void {
   // An explicit warmup may exceed the measured iterations; the default is capped by them.
   const iterations = scenario.warmupIterations ?? Math.min(scenario.iterations, DEFAULT_WARMUP_ITERATIONS);
-  for (let i = 0; i < iterations; i++) {
-    scenario.fn();
-  }
+  // One iteration per call: many calls optimize `repeat` as a whole. A few long calls would only optimize its loop
+  // on-stack, and its regular compile would then land in a measured round.
+  for (let i = 0; i < iterations; i++) repeat(scenario.fn, 1);
   collect();
 }
 
@@ -1084,9 +1091,10 @@ const scenarios: Scenario[] = [
   {
     name: "saveWorldInto 8K world with strings + objects - reused buffer",
     iterations: 2_000,
-    // With 5_000, the full run measured ~25 B/iter while writeStringCells was still deopting and reoptimizing.
-    // Run alone, this scenario allocates whatever the warmup; it relies on the scenarios before it.
-    warmupIterations: 20_000,
+    // Like the saves above: writeSave and measure run once per save and only reach TurboFan after ~7.5K and ~10K
+    // calls (again after the first object-column save deoptimizes them). With less warmup their compiled code lands
+    // in rounds 2-3 and counts as tens of KiB.
+    warmupIterations: 30_000,
     maxSteadyStateBeforeGcBytesPerIter: OBJECT_SAVE_BUDGET_BYTES_PER_ITER,
     fn: () => {
       numericSink ^= saveWorldInto(meshed.world, meshedSaveTarget);
@@ -1108,7 +1116,12 @@ console.log("Measures memory growth during tight loops, forcing GC between each 
 
 const summaries: ScenarioSummary[] = [];
 for (const scenario of scenarios) {
+  if (onlyFilter !== undefined && !scenario.name.includes(onlyFilter)) continue;
   summaries.push(runScenario(scenario));
+}
+if (summaries.length === 0) {
+  console.error(`No scenario name contains "${onlyFilter}".`);
+  Deno.exit(1);
 }
 
 if (checkMode && !checkBudgets(summaries)) {
