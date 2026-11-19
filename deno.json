@@ -82,15 +82,6 @@
       "LICENSE",
       "mod.ts",
       "src/**/*.ts"
-    ],
-    "exclude": [
-      "example/**",
-      "bench/**",
-      "test/**",
-      ".github/**",
-      ".vscode/**",
-      ".cursor/**",
-      ".claude/**"
     ]
   },
   "tasks": {
@@ -121,6 +112,10 @@
     "bench:memory": {
       "description": "Measure retained heap and ArrayBuffer memory budgets",
       "command": "deno run --v8-flags=--expose-gc bench/memory.bench.ts --check"
+    },
+    "bench:query-archetype": {
+      "description": "Run the query/archetype performance probes (timings and allocation, no budgets)",
+      "command": "deno run --v8-flags=--expose-gc,--max-semi-space-size=256,--min-semi-space-size=256 bench/query-archetype-perf.ts"
     },
     "bench:gc": {
       "description": "Measure GC allocation pressure and enforce zero-allocation budgets",
@@ -159,8 +154,8 @@
       "command": "deno run -A scripts/consumer-smoke.ts"
     },
     "ci": {
-      "description": "Run formatting, linting, type-checking, doc examples, tests, GC budgets, and publish validation",
-      "command": "deno task fmt:check && deno lint && deno task check && deno task check:docs && deno task test && deno task bench:gc && deno doc --lint mod.ts && deno task publish:dry-run"
+      "description": "Run formatting, linting, type-checking, doc examples, tests, memory and GC budgets, and publish validation",
+      "command": "deno task fmt:check && deno lint && deno task check && deno task check:docs && deno task test && deno task bench:memory && deno task bench:gc && deno doc --lint mod.ts && deno task publish:dry-run"
     }
   },
   "test": {

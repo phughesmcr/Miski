@@ -70,9 +70,9 @@ Borrowed vs snapshot iterators:
 - `query` and `getActive` return a pooled iterator per call, so nested loops are independent; it returns to its pool when the loop ends or breaks. `getActive` copies its handles; `query` reads the query's retained result, which re-querying after a mutation refills
 - `*Snapshot` / `querySnapshot` / `toArray` helpers allocate stable copies for tools, tests, and non-frame-critical code
 
-Layout sketch: `src/{world,component,entity,query,system,archetype,checkpoint,rollback,schema,value}/`. Demos live in `example/`; throughput and GC budgets in `bench/`. See [`test/README.md`](test/README.md) for how tests map to API domains.
+Layout sketch: `src/{archetype,checkpoint,component,entity,prefab,query,relation,rollback,scheduler,schema,serialization,system,types,value,world}/`. Demos live in `example/`; throughput and GC budgets in `bench/`. See [`test/README.md`](test/README.md) for how tests map to API domains.
 
-Validation: `deno task ci` before every PR (includes the GC allocation gate). For performance-sensitive changes also run `deno task bench` and ideally `deno task bench:all` (throughput + retained memory).
+Validation: `deno task ci` before every PR (includes the retained-memory and GC allocation gates). For performance-sensitive changes also run `deno task bench` and ideally `deno task bench:all` (throughput + retained memory).
 
 CI and tag publishing also run `deno task smoke:consumers`: clean Node 24 and
 Bun 1.3 package installs, consumer declaration checks, and a Chromium browser

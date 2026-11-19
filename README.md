@@ -940,19 +940,21 @@ Sweet doesn't mean soft. Miski is tuned for Deno game-loop workloads where
 **frame time** and **GC pressure** matter more than winning a synthetic
 leaderboard.
 
-Local tasting notes — measured on Deno 2.9.4, aarch64 macOS (the repository
-toolchain is now pinned to Deno 2.9.7; figures have not been re-measured):
+Local tasting notes — measured on Deno 2.9.7 (the pinned toolchain), aarch64
+macOS, `deno task bench:user`; each figure is the mean of three runs, which
+agreed within about 3%:
 
 | Path | Result |
 | --- | ---: |
-| `isActive` / `entityHas` | ~6.5 ns |
-| Direct typed-array write + `markChanged` | ~9.6 ns |
-| Cached dense `queryList` | ~946 ns |
-| Add/remove data component | ~121 ns |
-| Archetype move (common gameplay) | ~334 ns |
-| Bulk add/remove data — 7,168 entities | ~93 ns/entity |
-| Spawn/despawn 128 via `create(bundle)` | ~60 µs |
-| Game frame (move + query + refresh) | ~6.8 µs |
+| `isActive` | ~5.7 ns |
+| `entityHas` | ~9.1 ns |
+| Direct typed-array write + `markChanged` | ~11.5 ns |
+| Cached dense `queryList` | ~1.0 µs |
+| Add/remove data component | ~167 ns |
+| Archetype move (common gameplay) | ~408 ns |
+| Bulk add/remove data — 7,168 entities | ~86 ns/entity |
+| Spawn/despawn 128 via `create(bundle)` | ~77 µs |
+| Game frame (move + query + refresh) | ~6.9 µs |
 
 Hot entity, ownership, direct-write, cached query, changed/owner iteration,
 bulk transition, and game-frame (move + query + refresh) paths are
@@ -969,8 +971,9 @@ explicitly **not** a project goal. We'd rather be consistently delicious.
 
 ```bash
 deno task bench          # throughput
-deno task bench:memory   # retained heap / ArrayBuffer
+deno task bench:memory   # retained heap / ArrayBuffer budgets (also in CI)
 deno task bench:gc       # allocation budgets (also in CI)
+deno task bench:query-archetype # query/archetype timing and allocation probes
 deno task bench:all
 ```
 
@@ -982,7 +985,7 @@ Miski uses **Deno 2.9.7** for local validation and CI. Kitchen rules and floor
 plans live in [`CONTRIBUTING.md`](./CONTRIBUTING.md).
 
 ```bash
-deno task ci      # fmt · lint · types · doc examples · tests · GC budgets · docs · publish dry-run
+deno task ci      # fmt · lint · types · doc examples · tests · memory + GC budgets · docs · publish dry-run
 deno task prep    # format + lint + typecheck
 deno task test
 deno task bundle  # dist/miski.mjs, including dependencies
@@ -1010,7 +1013,7 @@ Pull requests, issues, and feature ideas are all welcome — bring your appetite
 The performance bar is **speed and GC pressure** on real gameplay paths; see
 `bench/` for the tasting suite.
 
-Please run `deno task ci` before a PR (`bench:gc` is part of CI). For
+Please run `deno task ci` before a PR (`bench:memory` and `bench:gc` are part of CI). For
 performance-sensitive changes, also run `deno task bench` and ideally
 `deno task bench:all`.
 
