@@ -483,12 +483,18 @@ export function saveWorld(world: World): Uint8Array {
   }
 }
 
+/** Whether any side column is an object field. A loop, not `some`: a callback here costs a closure per component per load. */
+function hasObjectColumn(columns: readonly SideColumn[]): boolean {
+  for (let s = 0; s < columns.length; s++) if (columns[s]!.code === CODE_OBJECT) return true;
+  return false;
+}
+
 /** Copy the components whose object columns hold encoded cells, with each cell decoded through its field's hook. */
 function decodeObjects(context: SaveContext, components: readonly ComponentImage[]): readonly ComponentImage[] {
   let out: ComponentImage[] | undefined;
   for (let c = 0; c < components.length; c++) {
     const columns = context.side[c]!;
-    if (!columns.some((side) => side.code === CODE_OBJECT)) continue;
+    if (!hasObjectColumn(columns)) continue;
     const component = components[c]!;
     const sideRows = component.sideRows.map((cells, s) => {
       const side = columns[s]!;

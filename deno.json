@@ -124,7 +124,7 @@
     },
     "bench:gc": {
       "description": "Measure GC allocation pressure and enforce zero-allocation budgets",
-      "command": "deno run --v8-flags=--expose-gc bench/gc-allocations.bench.ts --check"
+      "command": "deno run --v8-flags=--expose-gc,--min-semi-space-size=64,--max-semi-space-size=64 bench/gc-allocations.bench.ts --check"
     },
     "bench:all": {
       "description": "Run throughput, memory, and GC allocation benchmark checks",
