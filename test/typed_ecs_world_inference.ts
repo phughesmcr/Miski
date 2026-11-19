@@ -43,7 +43,7 @@ const fromSchema = createEcsWorld({
   schema,
   relations: { ChildOf: { exclusive: true }, Likes: { schema: { weight: Float32Array } } },
 });
-const schemaX: Float32Array = fromSchema.storage.Position.partitions.x;
+const schemaX: Float32Array = fromSchema.storage.Position.storage.partitions.x;
 const childOf: Relation<null> = fromSchema.relations.ChildOf;
 const likes: Relation<{ weight: Float32ArrayConstructor }> = fromSchema.relations.Likes;
 fromSchema.spawn({ Position: { x: 1 }, Player: true });

@@ -143,12 +143,20 @@ Deno.test("command buffer resolves pending entities in field.entity() values", a
   commands.add(node, sibling, { parent: child });
   commands.flush();
   const owners = world.components.getOwnersSnapshot(node)!;
-  const byHp = new Map(owners.map((entity) => [world.components.getEntityData(node, entity).hp, entity]));
+  const byHp = new Map(owners.map((entity) => [world.components.getEntityDataOrThrow(node, entity).hp, entity]));
   const spawnedParent = byHp.get(1)!;
   const spawnedChild = byHp.get(2)!;
-  assertStrictEquals(world.components.getEntityData(node, spawnedChild).parent, spawnedParent, "spawn bundle ref");
+  assertStrictEquals(
+    world.components.getEntityDataOrThrow(node, spawnedChild).parent,
+    spawnedParent,
+    "spawn bundle ref",
+  );
   const spawnedSibling = owners.find((entity) => entity !== spawnedParent && entity !== spawnedChild)!;
-  assertStrictEquals(world.components.getEntityData(node, spawnedSibling).parent, spawnedChild, "add payload ref");
+  assertStrictEquals(
+    world.components.getEntityDataOrThrow(node, spawnedSibling).parent,
+    spawnedChild,
+    "add payload ref",
+  );
 
   const existing = world.entities.createOrThrow();
   const later = commands.spawn();
@@ -156,14 +164,17 @@ Deno.test("command buffer resolves pending entities in field.entity() values", a
   commands.add(node, existing, { parent: later });
   commands.flush();
   assertStrictEquals(
-    world.components.getEntityData(node, spawnedChild).parent,
-    world.components.getEntityData(
+    world.components.getEntityDataOrThrow(node, spawnedChild).parent,
+    world.components.getEntityDataOrThrow(
       node,
       existing,
     ).parent,
     "set and add on live entities resolve the same pending ref",
   );
-  assert(world.entities.isActive(world.components.getEntityData(node, existing).parent!), "resolved to the spawn");
+  assert(
+    world.entities.isActive(world.components.getEntityDataOrThrow(node, existing).parent!),
+    "resolved to the spawn",
+  );
   await world.destroy();
 });
 
@@ -175,7 +186,7 @@ Deno.test("command buffer writes null for pending field refs whose spawn died or
   commands.destroy(killed);
   commands.add(node, holder, { hp: 1, parent: killed });
   commands.flush();
-  assertStrictEquals(world.components.getEntityData(node, holder).parent, null, "spawn destroyed before use");
+  assertStrictEquals(world.components.getEntityDataOrThrow(node, holder).parent, null, "spawn destroyed before use");
   assertThrows(() => commands.add(node, holder, { parent: killed }), SpecError, "pending");
   assertThrows(() => commands.add(node, holder, { parent: -1 as never }), SpecError, "pending");
   commands.spawn(); // the new epoch has a spawn at the stale handle's index; only the epoch check rejects it
@@ -186,6 +197,10 @@ Deno.test("command buffer writes null for pending field refs whose spawn died or
   const failed = commands.spawn(); // the world is full at flush
   commands.add(node, holder, { hp: 2, parent: failed });
   assertThrows(() => commands.flush(), CapacityError, "capacity");
-  assertEquals(world.components.getEntityData(node, holder), { hp: 2, parent: null }, "failed spawn ref is null");
+  assertEquals(
+    world.components.getEntityDataOrThrow(node, holder),
+    { hp: 2, parent: null },
+    "failed spawn ref is null",
+  );
   await world.destroy();
 });

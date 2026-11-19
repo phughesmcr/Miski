@@ -270,7 +270,11 @@ Deno.test("bundles and spawn APIs preflight before mutation and move once to the
     [Drawable],
   ]);
   assert(spawned !== undefined, "Expected create(bundle) to return an entity");
-  assertEquals(world.components.getEntityDataOrThrow(Facing, spawned), { dir: 2 }, "Expected create(bundle) bundle data");
+  assertEquals(
+    world.components.getEntityDataOrThrow(Facing, spawned),
+    { dir: 2 },
+    "Expected create(bundle) bundle data",
+  );
 
   const spawnedOrThrow = world.entities.createOrThrow([
     [GridPos, { x: 11, y: 12 }],

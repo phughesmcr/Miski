@@ -1,6 +1,14 @@
 /// <reference lib="deno.ns" />
 
-import { CapacityError, ComponentDataError, type Entity, Query, SpecError, type World, WorldRollbackScope } from "../mod.ts";
+import {
+  CapacityError,
+  ComponentDataError,
+  type Entity,
+  Query,
+  SpecError,
+  type World,
+  WorldRollbackScope,
+} from "../mod.ts";
 import { Archetype } from "../src/archetype/archetype.ts";
 import { createEntity, createTestWorld, tagComponent, vec2Component } from "./fixtures.ts";
 import { assert, assertEquals, assertThrows, ids } from "./helpers.ts";

@@ -70,7 +70,11 @@ Deno.test("capped bundle, create(bundle) and addToEntities survive stray non-own
   strayWrite("partitions", instance, entityIndex(strays[1]!), 6);
 
   const created = world.entities.createOrThrow([[position, { x: 3, y: 4 }]]);
-  assertEquals(world.components.getEntityDataOrThrow(position, created), { x: 3, y: 4 }, "create(bundle) commits fully");
+  assertEquals(
+    world.components.getEntityDataOrThrow(position, created),
+    { x: 3, y: 4 },
+    "create(bundle) commits fully",
+  );
 
   const bundled = createEntity(world);
   world.components.addBundle(bundled, [[position, { x: 9, y: 9 }]]);
