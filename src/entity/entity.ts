@@ -10,7 +10,7 @@ export type Entity = number & { readonly __entityBrand: unique symbol };
 
 /**
  * Raw entity slot index in `[0, capacity)`. Use with partition access and
- * {@link ComponentInstance.getAt} / `setAt` in hot loops.
+ * `instance.storage.partitions[key][slot]` in hot loops.
  */
 export type SlotIndex = number & { readonly __slotBrand: unique symbol };
 

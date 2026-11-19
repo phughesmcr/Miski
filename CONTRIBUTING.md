@@ -84,7 +84,7 @@ release validation to match CI.
 
 ## Naming and comments
 
-- Prefer `.storage.partitions` in new docs and examples (`.partitions` is an alias)
+- Use `instance.storage.partitions` for raw SoA access in docs and examples (there is no `.partitions` alias)
 - Prefer `entityIndex` / `queryList` `slots` for SoA writes; packed `entities` handles for identity APIs (`isActive`, ownership). Do not index partitions with a packed handle — brands catch swaps at function APIs only; `TypedArray` indexing still accepts either number.
 - Document the layered query pattern (`query` / `queryList` / `querySnapshot`) rather than renaming methods
 - Comment *why* on preflight, atomicity, and borrowed lifetimes; avoid comments that only restate the identifier

@@ -5,6 +5,7 @@ import {
   captureWorldRollbackPoint,
   compileComponentSchema,
   Component,
+  ComponentDataError,
   ComponentOwnershipError,
   entityIndex,
   NotRegisteredError,
@@ -25,7 +26,7 @@ Deno.test("dense and capped storage initialize every new owner with zero default
   for (const maxEntities of [undefined, 4]) {
     const position = vec2Component("position", { maxEntities });
     const world = await createTestWorld([position]);
-    const instance = world.components.require(position);
+    const instance = world.components.getInstanceOrThrow(position);
     const bundled = world.entities.createWithOrThrow([[position]]);
     const single = createEntity(world);
     world.components.addToEntity(position, single);
@@ -37,7 +38,11 @@ Deno.test("dense and capped storage initialize every new owner with zero default
     });
     const emptyPayload = world.entities.createWithOrThrow([[position, {}]]);
     for (const entity of [bundled, single, batched, emptyPayload]) {
-      assertEquals(world.components.getEntityData(position, entity), { x: 0, y: 0 }, "New ownership defaults to zero");
+      assertEquals(
+        world.components.getEntityDataOrThrow(position, entity),
+        { x: 0, y: 0 },
+        "New ownership defaults to zero",
+      );
       assertEquals(instance.get(entity, "x"), 0, "Guarded reads agree with copied data");
       instance.proxy!.entity = entity;
       assertEquals(instance.proxy!.y, 0, "Proxy reads agree with copied data");
@@ -50,7 +55,7 @@ Deno.test("dense and capped storage initialize every new owner with zero default
     world.components.removeFromEntity(position, single);
     world.components.addToEntity(position, single);
     assertEquals(
-      world.components.getEntityData(position, single),
+      world.components.getEntityDataOrThrow(position, single),
       { x: 0, y: 0 },
       "Reacquired storage clears prior values",
     );
@@ -71,7 +76,7 @@ Deno.test("component entity access rejects stale, malformed and unowned identiti
   const position = vec2Component();
   const world = await createTestWorld([position]);
   const old = world.entities.createWithOrThrow([[position, { x: 1 }]]);
-  const instance = world.components.require(position);
+  const instance = world.components.getInstanceOrThrow(position);
   instance.proxy!.entity = old;
   world.entities.destroy(old);
   const replacement = world.entities.createWithOrThrow([[position, { x: 2 }]]);
@@ -100,21 +105,21 @@ Deno.test("slot cursor marks the actual slot and every real write advances revis
   const world = await createTestWorld([position, tag]);
   const a = world.entities.createWithOrThrow([[position, { x: 1 }]]);
   const b = world.entities.createWithOrThrow([[position, { x: 2 }]]);
-  const instance = world.components.require(position);
+  const instance = world.components.getInstanceOrThrow(position);
   instance.set(a, "x", 3);
   world.refresh();
   let revision = instance.revision;
-  instance.setAt(entityIndex(b), "x", 4);
-  assertEquals(ids(world.components.getChanged(position)), [b], "setAt must not reuse a prior entity cursor");
+  instance.set(b, "x", 4);
+  assertEquals(ids(world.components.getChanged(position)), [b], "instance.set must not reuse a prior entity cursor");
   assert(instance.revision > revision, "First write advances revision");
   revision = instance.revision;
-  instance.setAt(entityIndex(b), "y", 5);
+  instance.set(b, "y", 5);
   assert(instance.revision > revision, "Dirty-list dedup must not suppress later revision advances");
   revision = instance.revision;
-  instance.setAt(entityIndex(b), "y", 5);
+  instance.set(b, "y", 5);
   assertEquals(instance.revision, revision, "Idempotent writes preserve revision");
   assertEquals(ids(world.components.getChanged(position)), [b], "Changed list remains deduplicated");
-  const tagInstance = world.components.require(tag);
+  const tagInstance = world.components.getInstanceOrThrow(tag);
   revision = tagInstance.revision;
   world.components.addToEntity(tag, a);
   assert(tagInstance.revision > revision, "Uncapped tag membership advances revision");
@@ -125,7 +130,7 @@ Deno.test("dense and capped sparse storage share atomic canonical numeric writes
     const position = vec2Component("position", { maxEntities });
     const world = await createTestWorld([position]);
     const entity = world.entities.createWithOrThrow([[position, { x: 1, y: 1 }]]);
-    const instance = world.components.require(position);
+    const instance = world.components.getInstanceOrThrow(position);
     world.refresh();
     const revision = instance.revision;
     for (
@@ -133,10 +138,13 @@ Deno.test("dense and capped sparse storage share atomic canonical numeric writes
         () => world.components.setEntityData(position, entity, { x: 2, y: Number.MAX_VALUE }),
         () => world.components.addToEntity(position, entity, { x: 2, y: Number.MAX_VALUE }),
         () => instance.set(entity, "x", Number.MAX_VALUE),
-        () => instance.setAt(entityIndex(entity), "x", Number.MAX_VALUE),
       ]
-    ) assertThrows(write, TypeError, "outside its storage range");
-    assertEquals(world.components.getEntityData(position, entity), { x: 1, y: 1 }, "Preflight rejects partial writes");
+    ) assertThrows(write, ComponentDataError, "outside its storage range");
+    assertEquals(
+      world.components.getEntityDataOrThrow(position, entity),
+      { x: 1, y: 1 },
+      "Preflight rejects partial writes",
+    );
     assertEquals(instance.revision, revision, "Rejected writes preserve revision");
     assertEquals(ids(world.components.getChanged(position)), [], "Rejected writes preserve dirty state");
     world.components.addToEntity(position, entity, Object.create({ x: 99 }));
@@ -147,7 +155,7 @@ Deno.test("dense and capped sparse storage share atomic canonical numeric writes
     const next = createEntity(world);
     assertThrows(
       () => world.components.addToEntity(position, next, { x: Number.MAX_VALUE }),
-      TypeError,
+      ComponentDataError,
       "outside its storage range",
     );
     assert(!instance.has(next), "Failed additions never acquire ownership");
@@ -160,7 +168,7 @@ Deno.test("rollback restores capped mappings and pre-scope changes with fresh re
   const first = world.entities.createWithOrThrow([[position, { x: 1, y: 2 }]]);
   const second = world.entities.createWithOrThrow([[position, { x: 3, y: 4 }]]);
   world.refresh();
-  const instance = world.components.require(position);
+  const instance = world.components.getInstanceOrThrow(position);
   instance.set(first, "x", 5);
   const point = captureWorldRollbackPoint(world);
   world.components.removeFromEntity(position, first);
@@ -168,8 +176,8 @@ Deno.test("rollback restores capped mappings and pre-scope changes with fresh re
   const third = world.entities.createWithOrThrow([[position, { x: 10, y: 11 }]]);
   const revision = instance.revision;
   restoreWorldRollbackPoint(world, point);
-  assertEquals(world.components.getEntityData(position, first), { x: 5, y: 2 }, "Restore first sparse mapping");
-  assertEquals(world.components.getEntityData(position, second), { x: 3, y: 4 }, "Restore other shared columns");
+  assertEquals(world.components.getEntityDataOrThrow(position, first), { x: 5, y: 2 }, "Restore first sparse mapping");
+  assertEquals(world.components.getEntityDataOrThrow(position, second), { x: 3, y: 4 }, "Restore other shared columns");
   assert(!instance.has(third), "Discard speculative owner");
   assertEquals(ids(world.components.getChanged(position)), [first], "Restore original changed window");
   assert(instance.revision > revision, "Rollback never reuses component revision tokens");
@@ -178,10 +186,10 @@ Deno.test("rollback restores capped mappings and pre-scope changes with fresh re
 Deno.test("component string lookup only resolves registered own names", async () => {
   const component = tagComponent("tag");
   const world = await createTestWorld([component]);
-  assertEquals(world.components.require("tag").name, "tag", "Registered own name is valid");
+  assertEquals(world.components.getInstanceOrThrow("tag").name, "tag", "Registered own name is valid");
   for (const name of ["constructor", "toString", "__proto__", "valueOf"]) {
     assert(!world.components.isRegistered(name), "Inherited object properties are not registered components");
-    assertThrows(() => world.components.require(name), NotRegisteredError, "not registered");
+    assertThrows(() => world.components.getInstanceOrThrow(name), NotRegisteredError, "not registered");
   }
 });
 
@@ -192,12 +200,12 @@ Deno.test("bundle and batch commits keep canonical scratch values isolated by co
   const a = world.entities.createWithOrThrow([[first, { x: 1.1 }], [second, { x: 2.2 }]]);
   const b = world.entities.createWithOrThrow([[second, { x: 3.3 }]]);
   assertEquals(
-    world.components.require(first).get(a, "x"),
+    world.components.getInstanceOrThrow(first).get(a, "x"),
     Math.fround(1.1),
     "Each bundle member keeps its own canonical data",
   );
   assertEquals(
-    world.components.require(second).get(a, "x"),
+    world.components.getInstanceOrThrow(second).get(a, "x"),
     Math.fround(2.2),
     "Second member does not overwrite first scratch",
   );
@@ -209,7 +217,7 @@ Deno.test("bundle and batch commits keep canonical scratch values isolated by co
   world.components.addToEntities(first, entities, { x: 4.4, y: 5.5 });
   for (const entity of [a, b]) {
     assertEquals(
-      world.components.getEntityData(first, entity),
+      world.components.getEntityDataOrThrow(first, entity),
       { x: Math.fround(4.4), y: Math.fround(5.5) },
       "Batch repeats staged canonical payload",
     );

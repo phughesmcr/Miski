@@ -54,7 +54,7 @@ Deno.test("component maxEntities slots can be reused after removal", async () =>
   world.components.removeFromEntity(position, first);
   world.components.addToEntity(position, second, { x: 3, y: 4 });
 
-  assertEquals(world.components.getEntityData(position, second), { x: 3, y: 4 }, "Expected sparse slot reuse");
+  assertEquals(world.components.getEntityDataOrThrow(position, second), { x: 3, y: 4 }, "Expected sparse slot reuse");
   assertEquals(ids(world.components.getOwners(position)), [second], "Expected only the second entity to own position");
 });
 
@@ -69,7 +69,11 @@ Deno.test("world storage accounts for aligned mixed-width component schemas", as
 
   world.components.addToEntity(mixed, entity, { flag: 1, value: 2 });
 
-  assertEquals(world.components.getEntityData(mixed, entity), { flag: 1, value: 2 }, "Expected mixed-width data");
+  assertEquals(
+    world.components.getEntityDataOrThrow(mixed, entity),
+    { flag: 1, value: 2 },
+    "Expected mixed-width data",
+  );
 });
 
 Deno.test("query entered and exited entities remain visible until explicit refresh", async () => {
@@ -239,7 +243,7 @@ Deno.test("public component writes reject invalid data instead of silently disca
     "has no data storage",
   );
   assertEquals(
-    world.components.getEntityData(position, entity),
+    world.components.getEntityDataOrThrow(position, entity),
     { x: 1, y: 2 },
     "Expected failed and inherited-property writes to be inert",
   );
@@ -357,7 +361,7 @@ Deno.test("setEntityData marks the component changed when storage is updated", a
 
   world.components.setEntityData(position, entity, { x: 3, y: 4 });
 
-  assertEquals(world.components.getEntityData(position, entity), { x: 3, y: 4 }, "Expected storage to update");
+  assertEquals(world.components.getEntityDataOrThrow(position, entity), { x: 3, y: 4 }, "Expected storage to update");
   assertEquals(ids(world.components.getChanged(position)), [entity], "Expected setEntityData to mark changed");
 });
 
@@ -520,7 +524,7 @@ Deno.test("public component data APIs reject inactive, unregistered, tag, and no
   world.components.addToEntity(tag, owner);
 
   assertThrows(
-    () => world.components.getEntityData(position, asEntity(7)),
+    () => world.components.getEntityDataOrThrow(position, asEntity(7)),
     EntityNotFoundError,
     "Entity 7 is not active.",
   );
@@ -530,7 +534,7 @@ Deno.test("public component data APIs reject inactive, unregistered, tag, and no
     "Entity 7 is not active.",
   );
   assertThrows(
-    () => world.components.getEntityData(unregistered, owner),
+    () => world.components.getEntityDataOrThrow(unregistered, owner),
     NotRegisteredError,
     "not registered",
   );
@@ -540,7 +544,7 @@ Deno.test("public component data APIs reject inactive, unregistered, tag, and no
     "not registered",
   );
   assertThrows(
-    () => world.components.getEntityData(tag, owner),
+    () => world.components.getEntityDataOrThrow(tag, owner),
     ComponentDataError,
     "has no data storage",
   );
@@ -550,7 +554,7 @@ Deno.test("public component data APIs reject inactive, unregistered, tag, and no
     "has no data storage",
   );
   assertThrows(
-    () => world.components.getEntityData(velocity, nonOwner),
+    () => world.components.getEntityDataOrThrow(velocity, nonOwner),
     ComponentOwnershipError,
     "does not own component",
   );
@@ -581,11 +585,15 @@ Deno.test("failed guarded data access does not mark changed state or mutate stor
     "does not own component",
   );
   assertThrows(
-    () => world.components.getEntityData(position, nonOwner),
+    () => world.components.getEntityDataOrThrow(position, nonOwner),
     ComponentOwnershipError,
     "does not own component",
   );
-  assertEquals(world.components.getEntityData(position, owner), { x: 1, y: 2 }, "Expected owner data to be intact");
+  assertEquals(
+    world.components.getEntityDataOrThrow(position, owner),
+    { x: 1, y: 2 },
+    "Expected owner data to be intact",
+  );
   assertEquals(
     { x: storage.x[nonOwner], y: storage.y[nonOwner] },
     { x: 9, y: 10 },
@@ -594,21 +602,20 @@ Deno.test("failed guarded data access does not mark changed state or mutate stor
   assertEquals(ids(world.components.getChanged(position)), [], "Expected failed guarded access to stay untracked");
 });
 
-Deno.test("components.require returns registered instances and exposes partitions", async () => {
+Deno.test("components.getInstanceOrThrow returns registered instances and exposes storage", async () => {
   const position = vec2Component();
   const tag = tagComponent("tag");
   const world = await createTestWorld([position, tag], 8);
 
-  const instance = world.components.require(position);
-  assert(instance === world.components.getInstance(position), "Expected require to match getInstance");
-  assert(instance.partitions !== null, "Expected schema component partitions");
-  assert(instance.partitions === instance.storage?.partitions, "Expected partitions getter to forward storage");
+  const instance = world.components.getInstanceOrThrow(position);
+  assert(instance === world.components.getInstance(position), "Expected getInstanceOrThrow to match getInstance");
+  assert(instance.storage?.partitions != null, "Expected schema component partitions");
 
-  const tagInstance = world.components.require(tag);
-  assertEquals(tagInstance.partitions, null, "Expected tag component partitions to be null");
+  const tagInstance = world.components.getInstanceOrThrow(tag);
+  assertEquals(tagInstance.storage, null, "Expected tag component storage to be null");
 
   assertThrows(
-    () => world.components.require("missing"),
+    () => world.components.getInstanceOrThrow("missing"),
     NotRegisteredError,
     'Component "missing" is not registered in this world.',
   );
@@ -630,7 +637,7 @@ Deno.test("direct typed-array storage remains an unguarded data access escape ha
     "Expected raw storage writes to work without ownership checks",
   );
   assertThrows(
-    () => world.components.getEntityData(position, entity),
+    () => world.components.getEntityDataOrThrow(position, entity),
     ComponentOwnershipError,
     "does not own component",
   );

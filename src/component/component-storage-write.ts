@@ -23,7 +23,11 @@ export type ComponentStorageWriteState = {
   readonly sideFields: readonly SideField[];
   /** Side key -> position in `sideKeys`. */
   readonly sideIndex: Readonly<Record<string, number>>;
-  /** Validated side values staged for the next write, parallel to `sideKeys`. */
+  /**
+   * Validated side values staged for the next write, parallel to `sideKeys`. `setInstanceEntityData`, unvalidated
+   * `addInstanceToEntity` and `addBundleToEntity` clear it after committing. Paths that validate first and pass
+   * `dataValidated` (including world `addToEntity`) leave it for `releaseStagedData` or `ComponentManager.refresh()`.
+   */
   readonly sideScratch: unknown[];
   /** Values for absent side fields of a new owner (default or `create()`), parallel to `sideKeys`. */
   readonly sideInitial: unknown[];
@@ -60,10 +64,7 @@ export function prepareEntityStorageData(
       state.coercionScratchColumns[i]![0] = encodeFieldValue(codec, componentName, key, value, state.isEntityActive);
       continue;
     }
-    if (typeof value !== "number" || !Number.isFinite(value)) {
-      throw new ComponentDataError(`Component ${componentName} data field "${key}" must be a finite number.`);
-    }
-    canonicalizeStoredValue(componentName, key, value, state.coercionScratchColumns[i]!);
+    canonicalizeStoredValue(componentName, key, value as number, state.coercionScratchColumns[i]!);
   }
   for (let i = 0; i < state.sideKeys.length; i++) {
     const key = state.sideKeys[i]!;

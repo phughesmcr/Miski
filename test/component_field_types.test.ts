@@ -172,7 +172,7 @@ Deno.test("components expose the logical schema and are not tags", () => {
 Deno.test("field columns have the documented raw layout", async () => {
   const unit = unitComponent();
   const world = await createTestWorld([unit]);
-  const partitions = world.components.require(unit).storage.partitions;
+  const partitions = world.components.getInstanceOrThrow(unit).storage.partitions;
   assert(partitions.alive instanceof Uint8Array, "bool is a Uint8Array");
   assert(partitions.state instanceof Uint8Array, "small enum is a Uint8Array");
   assert(partitions.target instanceof Int32Array, "entity is an Int32Array");
@@ -185,14 +185,17 @@ Deno.test("field columns have the documented raw layout", async () => {
     schema: { e: field.enum(Array.from({ length: 300 }, (_, i) => `l${i}`)) },
   });
   const bigWorld = await createTestWorld([big]);
-  assert(bigWorld.components.require(big).storage.partitions.e instanceof Uint16Array, "Large enum is a Uint16Array");
+  assert(
+    bigWorld.components.getInstanceOrThrow(big).storage.partitions.e instanceof Uint16Array,
+    "Large enum is a Uint16Array",
+  );
 });
 
 Deno.test("new ownership initializes every field to its default, dense and capped", async () => {
   for (const maxEntities of [undefined, 4]) {
     const unit = unitComponent(maxEntities);
     const world = await createTestWorld([unit]);
-    const instance = world.components.require(unit);
+    const instance = world.components.getInstanceOrThrow(unit);
     const bundled = world.entities.createWithOrThrow([[unit]]);
     const single = createEntity(world);
     world.components.addToEntity(unit, single);
@@ -200,10 +203,14 @@ Deno.test("new ownership initializes every field to its default, dense and cappe
     world.components.addToEntities(unit, { count: 1, entities: [batched], slots: [entityIndex(batched)] });
     const partial = world.entities.createWithOrThrow([[unit, { hp: 5 }]]);
     for (const entity of [bundled, single, batched]) {
-      assertEquals(world.components.getEntityData(unit, entity), DEFAULTS, "Defaults on attach");
+      assertEquals(world.components.getEntityDataOrThrow(unit, entity), DEFAULTS, "Defaults on attach");
       assertStrictEquals(instance.storage.partitions.target[entityIndex(entity)], -1, "Raw null ref is -1");
     }
-    assertEquals(world.components.getEntityData(unit, partial), { ...DEFAULTS, hp: 5 }, "Partial payload defaults");
+    assertEquals(
+      world.components.getEntityDataOrThrow(unit, partial),
+      { ...DEFAULTS, hp: 5 },
+      "Partial payload defaults",
+    );
 
     world.components.setEntityData(unit, single, {
       alive: true,
@@ -214,7 +221,11 @@ Deno.test("new ownership initializes every field to its default, dense and cappe
     });
     world.components.removeFromEntity(unit, single);
     world.components.addToEntity(unit, single);
-    assertEquals(world.components.getEntityData(unit, single), DEFAULTS, `Reacquired row resets (cap ${maxEntities})`);
+    assertEquals(
+      world.components.getEntityDataOrThrow(unit, single),
+      DEFAULTS,
+      `Reacquired row resets (cap ${maxEntities})`,
+    );
   }
 });
 
@@ -227,10 +238,14 @@ Deno.test("object create() runs once per new owner and never on update", async (
   const given = new Mesh([42]);
   const c = world.entities.createWithOrThrow([[unit, { mesh: given }]]);
   assertStrictEquals(created, 2, "create() runs only for owners without a provided value");
-  const meshA = world.components.getEntityData(unit, a).mesh;
-  const meshB = world.components.getEntityData(unit, b).mesh;
+  const meshA = world.components.getEntityDataOrThrow(unit, a).mesh;
+  const meshB = world.components.getEntityDataOrThrow(unit, b).mesh;
   assert(meshA instanceof Mesh && meshB instanceof Mesh && meshA !== meshB, "Each owner gets its own object");
-  assertStrictEquals(world.components.getEntityData(unit, c).mesh, given, "Provided objects are stored by reference");
+  assertStrictEquals(
+    world.components.getEntityDataOrThrow(unit, c).mesh,
+    given,
+    "Provided objects are stored by reference",
+  );
   world.components.setEntityData(unit, a, { hp: 2 });
   world.components.addToEntity(unit, a, { hp: 3 });
   assertStrictEquals(created, 2, "Updates of existing owners never call create()");
@@ -265,7 +280,11 @@ Deno.test("guarded writes validate every field kind before any mutation", async 
       ErrorClass as never,
       message,
     );
-    assertStrictEquals(world.components.getEntityData(unit, entity).label, "keep", "Failed writes change nothing");
+    assertStrictEquals(
+      world.components.getEntityDataOrThrow(unit, entity).label,
+      "keep",
+      "Failed writes change nothing",
+    );
     const before = world.entities.getActiveCount();
     assertThrows(() => world.entities.createWithOrThrow([[unit, data as never]]), ErrorClass as never, message);
     assertStrictEquals(world.entities.getActiveCount(), before, "Failed spawns allocate nothing");
@@ -288,14 +307,14 @@ Deno.test("guarded writes accept every valid field value", async () => {
     mesh,
   });
   assertEquals(
-    world.components.getEntityData(unit, entity),
+    world.components.getEntityDataOrThrow(unit, entity),
     { hp: 7, alive: true, state: "dead", target, label: "orc", mesh },
     "Values round-trip",
   );
-  assertStrictEquals(world.components.getEntityData(unit, entity).mesh, mesh, "Object stored by reference");
+  assertStrictEquals(world.components.getEntityDataOrThrow(unit, entity).mesh, mesh, "Object stored by reference");
   world.components.setEntityData(unit, entity, { target: entity }); // self-reference is a live entity
-  assertStrictEquals(world.components.getEntityData(unit, entity).target, entity, "Self references are allowed");
-  const partitions = world.components.require(unit).storage.partitions;
+  assertStrictEquals(world.components.getEntityDataOrThrow(unit, entity).target, entity, "Self references are allowed");
+  const partitions = world.components.getInstanceOrThrow(unit).storage.partitions;
   const slot = entityIndex(entity);
   assertStrictEquals(partitions.alive[slot], 1, "bool stored as 1");
   assertStrictEquals(partitions.state[slot], 2, "enum stored as index");
@@ -306,12 +325,12 @@ Deno.test("guarded writes accept every valid field value", async () => {
 // Proxy, instance and read APIs
 // ---------------------------------------------------------------------------
 
-Deno.test("proxy, get/set and getAt/setAt decode and validate field values", async () => {
+Deno.test("proxy and instance get/set decode and validate field values", async () => {
   const unit = unitComponent();
   const world = await createTestWorld([unit]);
   const target = createEntity(world);
   const entity = world.entities.createWithOrThrow([[unit]]);
-  const instance = world.components.require(unit);
+  const instance = world.components.getInstanceOrThrow(unit);
   const proxy = instance.proxy;
   world.refresh();
 
@@ -346,8 +365,8 @@ Deno.test("proxy, get/set and getAt/setAt decode and validate field values", asy
 
   instance.set(entity, "target", target);
   assertStrictEquals(instance.get(entity, "target"), target, "instance.get decodes refs");
-  instance.setAt(entityIndex(entity), "alive", true);
-  assertStrictEquals(instance.getAt(entityIndex(entity), "alive"), true, "getAt decodes bools");
+  instance.set(entity, "alive", true);
+  assertStrictEquals(instance.get(entity, "alive"), true, "instance.get decodes bools");
   assertStrictEquals(instance.get(entity, "state"), "run", "instance.get decodes labels");
   assertStrictEquals(instance.get(entity, "mesh"), mesh, "instance.get returns object refs");
 
@@ -362,7 +381,7 @@ Deno.test("proxy, get/set and getAt/setAt decode and validate field values", asy
   assert(world.components.readEntityDataInto(unit, entity, out), "readEntityDataInto reads owners");
   assertEquals(out, { hp: 0, alive: true, state: "run", target, label: "", mesh }, "readEntityDataInto decodes");
   assertStrictEquals(out.mesh, mesh, "readEntityDataInto copies refs");
-  assertEquals(world.components.readEntityData(unit, entity), out, "readEntityData decodes");
+  assertEquals(world.components.getEntityData(unit, entity), out, "readEntityData decodes");
 });
 
 Deno.test("entity refs read as null once the target is destroyed or its slot reused", async () => {
@@ -370,7 +389,7 @@ Deno.test("entity refs read as null once the target is destroyed or its slot reu
   const world = await createTestWorld([unit], 8);
   const target = createEntity(world);
   const entity = world.entities.createWithOrThrow([[unit, { target }]]);
-  const instance = world.components.require(unit);
+  const instance = world.components.getInstanceOrThrow(unit);
   assertStrictEquals(instance.get(entity, "target"), target, "Live ref reads the handle");
   world.entities.destroy(target);
   assertStrictEquals(instance.get(entity, "target"), null, "Destroyed target reads null");
@@ -382,7 +401,11 @@ Deno.test("entity refs read as null once the target is destroyed or its slot reu
     if (created !== undefined) reused.push(created);
   }
   assert(reused.some((e) => entityIndex(e) === entityIndex(target)), "Target slot was reused");
-  assertStrictEquals(world.components.getEntityData(unit, entity).target, null, "Reused slot does not revive the ref");
+  assertStrictEquals(
+    world.components.getEntityDataOrThrow(unit, entity).target,
+    null,
+    "Reused slot does not revive the ref",
+  );
   instance.proxy.entity = entity;
   assertStrictEquals(instance.proxy.target, null, "Proxy agrees");
   assertThrows(() => (instance.proxy.target = target), EntityNotFoundError, "not active");
@@ -395,7 +418,7 @@ Deno.test("entity refs read as null once the target is destroyed or its slot reu
 Deno.test("removing a component or destroying its owner releases side-column references", async () => {
   const unit = unitComponent();
   const world = await createTestWorld([unit]);
-  const partitions = world.components.require(unit).storage.partitions;
+  const partitions = world.components.getInstanceOrThrow(unit).storage.partitions;
   const removed = world.entities.createWithOrThrow([[unit, { mesh: new Mesh(), label: "a" }]]);
   const destroyed = world.entities.createWithOrThrow([[unit, { mesh: new Mesh(), label: "b" }]]);
   const batch = world.entities.createWithOrThrow([[unit, { mesh: new Mesh(), label: "c" }]]);
@@ -427,7 +450,7 @@ Deno.test("rollback restores every field kind for dense and capped components", 
       mesh: meshA,
     }]]);
     const b = world.entities.createWithOrThrow([[unit, { label: "b" }]]);
-    const before = [world.components.getEntityData(unit, a), world.components.getEntityData(unit, b)];
+    const before = [world.components.getEntityDataOrThrow(unit, a), world.components.getEntityDataOrThrow(unit, b)];
 
     const point = captureWorldRollbackPoint(world);
     world.components.setEntityData(unit, a, { alive: false, state: "dead", target: null, label: "z", mesh: null });
@@ -437,11 +460,11 @@ Deno.test("rollback restores every field kind for dense and capped components", 
     meshA.vertices.push(2); // in-place mutation is not undone without a clone hook
     restoreWorldRollbackPoint(world, point);
 
-    assertEquals(world.components.getEntityData(unit, a), before[0], `Row a restored (cap ${maxEntities})`);
-    assertStrictEquals(world.components.getEntityData(unit, a).mesh, meshA, "Same reference restored");
+    assertEquals(world.components.getEntityDataOrThrow(unit, a), before[0], `Row a restored (cap ${maxEntities})`);
+    assertStrictEquals(world.components.getEntityDataOrThrow(unit, a).mesh, meshA, "Same reference restored");
     assertEquals(meshA.vertices, [1, 2], "Reference semantics: inner mutation persists");
-    assertEquals(world.components.getEntityData(unit, b), before[1], "Removed row restored");
-    const partitions = world.components.require(unit).storage.partitions;
+    assertEquals(world.components.getEntityDataOrThrow(unit, b), before[1], "Removed row restored");
+    const partitions = world.components.getInstanceOrThrow(unit).storage.partitions;
     assertStrictEquals(partitions.mesh[specSlot], null, "Speculative owner's object released on restore");
     assertStrictEquals(partitions.label[specSlot], "", "Speculative owner's string released on restore");
   }
@@ -462,7 +485,7 @@ Deno.test("object clone hooks give rollback and checkpoints value semantics", as
   assertStrictEquals(clones, 1, "Capture clones owned object cells once");
   mesh.vertices.push(2);
   restoreWorldRollbackPoint(world, point);
-  const restored = world.components.getEntityData(unit, entity).mesh!;
+  const restored = world.components.getEntityDataOrThrow(unit, entity).mesh!;
   assert(restored !== mesh, "Restore installs the captured clone");
   assertEquals(restored.vertices, [1], "Inner mutation is undone");
   assertStrictEquals(clones, 1, "Restore does not clone again");
@@ -475,11 +498,11 @@ Deno.test("object clone hooks give rollback and checkpoints value semantics", as
   assertStrictEquals(clones, 1, "Checkpoint capture clones");
   restored.vertices.push(5);
   world.applyCheckpoint(checkpoint);
-  const first = world.components.getEntityData(unit, entity).mesh!;
+  const first = world.components.getEntityDataOrThrow(unit, entity).mesh!;
   assertEquals(first.vertices, [1], "Checkpoint restores the captured value");
   first.vertices.push(6);
   world.applyCheckpoint(checkpoint);
-  const second = world.components.getEntityData(unit, entity).mesh!;
+  const second = world.components.getEntityDataOrThrow(unit, entity).mesh!;
   assert(second !== first, "Each apply installs a fresh clone");
   assertEquals(second.vertices, [1], "A reused checkpoint is not corrupted by later mutation");
 });
@@ -501,47 +524,57 @@ Deno.test("checkpoints round-trip every field kind and restore dead refs as null
   world.components.setEntityData(unit, entity, { alive: false, state: "idle", label: "y", mesh: null, target: null });
   world.applyCheckpoint(checkpoint);
   assertEquals(
-    world.components.getEntityData(unit, entity),
+    world.components.getEntityDataOrThrow(unit, entity),
     { hp: 2, alive: true, state: "dead", target, label: "x", mesh },
     "Checkpoint restores decoded values",
   );
   world.entities.destroy(target);
   world.components.setEntityData(unit, entity, { label: "z" });
   world.applyCheckpoint(checkpoint); // must not throw for the now-dead target
-  assertStrictEquals(world.components.getEntityData(unit, entity).target, null, "Dead ref restores as null");
-  assertStrictEquals(world.components.getEntityData(unit, entity).label, "x", "Other fields restored");
+  assertStrictEquals(world.components.getEntityDataOrThrow(unit, entity).target, null, "Dead ref restores as null");
+  assertStrictEquals(world.components.getEntityDataOrThrow(unit, entity).label, "x", "Other fields restored");
 });
 
 // ---------------------------------------------------------------------------
-// Copy path (prefabs) and helpers
+// Helpers
 // ---------------------------------------------------------------------------
 
-Deno.test("copyInstanceEntityData copies every field, cloning objects through the hook", () => {
-  const clone = (mesh: Mesh): Mesh => new Mesh([...mesh.vertices]);
-  for (const hook of [undefined, clone]) {
-    const unit = unitComponent(undefined, undefined, hook);
-    const manager = new ComponentManager(8, [unit]);
-    const instance = manager.require(unit);
-    const mesh = new Mesh([3]);
-    const source = 0 as Entity;
-    const target = 1 as Entity;
-    manager.addInstanceToEntity(instance, source, {
-      hp: 4,
-      alive: true,
-      state: "run",
-      target: 2 as Entity,
-      label: "copy",
-      mesh,
-    } as never);
-    manager.addInstanceToEntity(instance, target);
-    manager.refresh();
-    assert(manager.copyInstanceEntityData(instance, entityIndex(source), entityIndex(target)), "Copy reports a change");
-    const copied = manager.getInstanceEntityData(instance, target)!;
-    assertEquals(copied, manager.getInstanceEntityData(instance, source)!, "Every field copied");
-    if (hook === undefined) assertStrictEquals(copied.mesh, mesh, "Without a hook, objects are shared");
-    else assert(copied.mesh !== mesh, "With a hook, objects are cloned");
-    assertEquals(ids(manager.getChanged(unit)), [target], "Copy marks the owning target changed");
-    assert(!manager.copyInstanceEntityData(instance, entityIndex(source), entityIndex(source)), "Self copy is a no-op");
+Deno.test("staged side values are released after single writes and shared across batch writes", async () => {
+  const unit = unitComponent();
+  const manager = new ComponentManager(8, [unit]);
+  const instance = manager.getInstanceOrThrow(unit);
+  const scratch = (manager.saveStates[0] as unknown as { sideScratch: unknown[] }).sideScratch;
+  const staged = (): boolean => scratch.some((value) => value !== undefined);
+  const mesh = new Mesh([1]);
+
+  manager.addInstanceToEntity(instance, 0 as Entity, { label: "a", mesh } as never);
+  assert(!staged(), "A single validated add releases its staged values");
+  manager.setInstanceEntityData(instance, 0 as Entity, { mesh: new Mesh([2]) } as never);
+  assert(!staged(), "setInstanceEntityData releases its staged values");
+
+  // Batch paths stage once and write many rows; the values must survive until released.
+  manager.validateInstanceData(instance, { label: "b", mesh });
+  manager.addInstanceToEntity(instance, 1 as Entity, { label: "b", mesh } as never, 1, true);
+  manager.addInstanceToEntity(instance, 2 as Entity, { label: "b", mesh } as never, 2, true);
+  assertStrictEquals(manager.getInstanceEntityData(instance, 2 as Entity)!.mesh, mesh, "Second batch row is written");
+  assert(staged(), "Batch staging survives between rows");
+  manager.releaseStagedData(instance);
+  assert(!staged(), "releaseStagedData drops staged values");
+  manager.validateInstanceData(instance, { mesh });
+  manager.refresh();
+  assert(!staged(), "refresh drops staged values");
+
+  const world = await createTestWorld([unit]);
+  const entities = [createEntity(world), createEntity(world), createEntity(world)];
+  world.components.addToEntities(unit, {
+    count: entities.length,
+    entities,
+    slots: entities.map((entity) => entityIndex(entity)),
+  }, { label: "many", mesh });
+  for (const entity of entities) {
+    const data = world.components.getEntityDataOrThrow(unit, entity);
+    assertStrictEquals(data.mesh, mesh, "Every batched owner gets the object");
+    assertStrictEquals(data.label, "many", "Every batched owner gets the string");
   }
 });
 

@@ -63,7 +63,7 @@ function step(h: Harness, random: Rng): void {
   } else if (random() % 4 === 0) {
     world.refresh();
   } else if (world.components.entityHas(position, entity)) {
-    world.components.require(position).set(entity, "x", random() % 50);
+    world.components.getInstanceOrThrow(position).set(entity, "x", random() % 50);
   }
 }
 
@@ -81,10 +81,10 @@ function observe(world: World): unknown {
       slots(world.components.getChanged(component))
     ),
     position: slots(world.components.getOwners(position)).map((slot) =>
-      world.components.getEntityData(position, bySlot.get(slot)!)
+      world.components.getEntityDataOrThrow(position, bySlot.get(slot)!)
     ),
     capped: slots(world.components.getOwners(capped)).map((slot) =>
-      world.components.getEntityData(capped, bySlot.get(slot)!)
+      world.components.getEntityDataOrThrow(capped, bySlot.get(slot)!)
     ),
   };
 }
@@ -121,7 +121,7 @@ for (const seed of [3, 29, 777]) {
 Deno.test("rollback restores capped owners even when stray raw writes exhausted the dense rows", async () => {
   const health = new Component({ name: "health", schema: { hp: Float32Array }, maxEntities: 2 });
   const world = await createTestWorld([health], 16);
-  const instance = world.components.require(health);
+  const instance = world.components.getInstanceOrThrow(health);
   const [a, b, c, d] = [createEntity(world), createEntity(world), createEntity(world), createEntity(world)];
   world.components.addToEntity(health, a, { hp: 10 });
   world.components.addToEntity(health, b, { hp: 20 });
@@ -130,13 +130,13 @@ Deno.test("rollback restores capped owners even when stray raw writes exhausted 
   world.components.removeFromEntity(health, a);
   world.components.removeFromEntity(health, b);
   // Both dense rows now hold raw non-owner writes.
-  instance.setAt(asSlotIndex(entityIndex(c)), "hp", 7);
-  instance.setAt(asSlotIndex(entityIndex(d)), "hp", 8);
+  instance.storage.partitions.hp[entityIndex(c)] = 7;
+  instance.storage.partitions.hp[entityIndex(d)] = 8;
   restoreWorldRollbackPoint(world, point);
 
   assertEquals(ids(world.components.getOwners(health)), [a, b], "Owners restored in order");
-  assertEquals(world.components.getEntityData(health, a), { hp: 10 }, "First owner value restored");
-  assertEquals(world.components.getEntityData(health, b), { hp: 20 }, "Second owner value restored");
+  assertEquals(world.components.getEntityDataOrThrow(health, a), { hp: 10 }, "First owner value restored");
+  assertEquals(world.components.getEntityDataOrThrow(health, b), { hp: 20 }, "Second owner value restored");
   assert(!instance.has(c) && !instance.has(d), "Stray writes never grant ownership");
 });
 
@@ -147,12 +147,12 @@ Deno.test("removing a capped component frees its dense row for the next owner", 
   world.components.addToEntity(health, a, { hp: 1, max: 2 });
   world.components.removeFromEntity(health, a);
   assertEquals(
-    world.components.require(health).getAt(asSlotIndex(entityIndex(a)), "hp"),
+    world.components.getInstanceOrThrow(health).storage.partitions.hp[entityIndex(a)],
     undefined,
     "Removal unmaps the row",
   );
   world.components.addToEntity(health, b, { hp: 3 });
-  assertEquals(world.components.getEntityData(health, b), { hp: 3, max: 0 }, "New owner row starts zeroed");
+  assertEquals(world.components.getEntityDataOrThrow(health, b), { hp: 3, max: 0 }, "New owner row starts zeroed");
 });
 
 Deno.test("changed window is a sparse set: stale positions never count as membership", async () => {
@@ -163,7 +163,7 @@ Deno.test("changed window is a sparse set: stale positions never count as member
   world.refresh();
   assertEquals(ids(world.components.getChanged(position)), [], "Refresh empties the window");
 
-  const instance = world.components.require(position);
+  const instance = world.components.getInstanceOrThrow(position);
   const [first, second, last] = [entities[0]!, entities[1]!, entities[39]!];
   instance.set(last, "x", 2);
   instance.set(first, "x", 2);

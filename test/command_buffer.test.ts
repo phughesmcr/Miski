@@ -46,16 +46,20 @@ Deno.test("command buffer add, set and remove mirror the direct APIs", async () 
   commands.add(position, entity, { x: 1, y: 2 });
   commands.add(tag, entity);
   commands.flush();
-  assertEquals(world.components.getEntityData(position, entity), { x: 1, y: 2 }, "add with data");
+  assertEquals(world.components.getEntityDataOrThrow(position, entity), { x: 1, y: 2 }, "add with data");
   assert(world.components.entityHas(tag, entity), "add tag");
 
   commands.add(position, entity, { x: 5 });
   commands.flush();
-  assertEquals(world.components.getEntityData(position, entity), { x: 5, y: 2 }, "add upserts and keeps omitted");
+  assertEquals(
+    world.components.getEntityDataOrThrow(position, entity),
+    { x: 5, y: 2 },
+    "add upserts and keeps omitted",
+  );
 
   commands.set(position, entity, { y: 9 });
   commands.flush();
-  assertEquals(world.components.getEntityData(position, entity), { x: 5, y: 9 }, "set keeps omitted fields");
+  assertEquals(world.components.getEntityDataOrThrow(position, entity), { x: 5, y: 9 }, "set keeps omitted fields");
 
   commands.remove(position, entity);
   commands.remove(tag, entity);
@@ -75,9 +79,9 @@ Deno.test("command buffer new ownership zeroes omitted fields even after other p
   commands.add(position, b, { y: 2 });
   commands.add(position, c);
   commands.flush();
-  assertEquals(world.components.getEntityData(position, a), { x: 1, y: 0 }, "a");
-  assertEquals(world.components.getEntityData(position, b), { x: 0, y: 2 }, "b keeps no stale x");
-  assertEquals(world.components.getEntityData(position, c), { x: 0, y: 0 }, "c");
+  assertEquals(world.components.getEntityDataOrThrow(position, a), { x: 1, y: 0 }, "a");
+  assertEquals(world.components.getEntityDataOrThrow(position, b), { x: 0, y: 2 }, "b keeps no stale x");
+  assertEquals(world.components.getEntityDataOrThrow(position, c), { x: 0, y: 0 }, "c");
   await world.destroy();
 });
 
@@ -112,7 +116,7 @@ Deno.test("command buffer copies payloads when queued", async () => {
   commands.add(position, entity, data);
   data.x = 100;
   commands.flush();
-  assertEquals(world.components.getEntityData(position, entity), { x: 1, y: 2 }, "queued values are kept");
+  assertEquals(world.components.getEntityDataOrThrow(position, entity), { x: 1, y: 2 }, "queued values are kept");
   await world.destroy();
 });
 
@@ -129,7 +133,11 @@ Deno.test("command buffer spawn creates entities in order with bundles, and pend
   assertStrictEquals(world.entities.getActiveCount(), 2, "both spawned");
   const [first] = world.entities.querySnapshot(query) as Entity[];
   assert(first !== undefined, "bundle spawn matches its query");
-  assertEquals(world.components.getEntityData(position, first), { x: 1, y: 7 }, "later commands apply to the spawn");
+  assertEquals(
+    world.components.getEntityDataOrThrow(position, first),
+    { x: 1, y: 7 },
+    "later commands apply to the spawn",
+  );
   const velocityOwners = world.components.getOwnersSnapshot(velocity)!;
   assertStrictEquals(velocityOwners.length, 1, "the second spawn received velocity");
   assert(first < velocityOwners[0]!, "spawn order follows queue order");
@@ -209,13 +217,13 @@ Deno.test("command buffer flush failure applies the remaining commands, then ret
   const message = (caught as Error).message;
   assert(message.includes("set") && message.includes("position"), "message names the command and component");
   assert(message.includes(`entity ${nonOwner}`), "the first failure is the one rethrown");
-  assertStrictEquals(world.components.getEntityData(position, owner).x, 3, "commands after the failure applied");
+  assertStrictEquals(world.components.getEntityDataOrThrow(position, owner).x, 3, "commands after the failure applied");
   assert(world.components.entityHas(tag, owner), "later add applied");
   assert(!world.entities.isActive(doomed), "later destroy applied");
   assertStrictEquals(commands.pendingCount, 0, "buffer is empty");
   commands.set(position, owner, { x: 5 });
   commands.flush();
-  assertStrictEquals(world.components.getEntityData(position, owner).x, 5, "buffer is reusable");
+  assertStrictEquals(world.components.getEntityDataOrThrow(position, owner).x, 5, "buffer is reusable");
   await world.destroy();
 });
 
@@ -255,7 +263,7 @@ Deno.test("command buffer works with capped sparse components", async () => {
   commands.flush();
   commands.add(capped, entities[2]!, { y: 5 });
   commands.flush();
-  assertEquals(world.components.getEntityData(capped, entities[2]!), { x: 1, y: 5 }, "sparse upsert keeps x");
+  assertEquals(world.components.getEntityDataOrThrow(capped, entities[2]!), { x: 1, y: 5 }, "sparse upsert keeps x");
   await world.destroy();
 });
 
@@ -267,7 +275,11 @@ Deno.test("command buffer grows past its initial capacity", async () => {
   commands.flush();
   assertStrictEquals(world.entities.getActiveCount(), 3000, "all spawned");
   const owners = world.components.getOwnersSnapshot(position)!;
-  assertEquals(world.components.getEntityData(position, owners[2999]!), { x: 2999, y: -2999 }, "last payload kept");
+  assertEquals(
+    world.components.getEntityDataOrThrow(position, owners[2999]!),
+    { x: 2999, y: -2999 },
+    "last payload kept",
+  );
   await world.destroy();
 });
 
@@ -298,13 +310,17 @@ Deno.test("command buffer handles partial payloads on the widest masked and on w
 
     commands.add(wide, entity, { f0: 1, [`f${last}`]: 2 });
     commands.flush();
-    assertEquals(world.components.getEntityData(wide, entity), fields(count, { 0: 1, [last]: 2 }), `${count}: add`);
+    assertEquals(
+      world.components.getEntityDataOrThrow(wide, entity),
+      fields(count, { 0: 1, [last]: 2 }),
+      `${count}: add`,
+    );
 
     commands.set(wide, entity, { f1: 3 });
     commands.add(wide, entity, { [`f${last}`]: 4 });
     commands.flush();
     assertEquals(
-      world.components.getEntityData(wide, entity),
+      world.components.getEntityDataOrThrow(wide, entity),
       fields(count, { 0: 1, 1: 3, [last]: 4 }),
       `${count}: set and add keep omitted fields`,
     );
@@ -313,13 +329,21 @@ Deno.test("command buffer handles partial payloads on the widest masked and on w
     commands.add(wide, pending, { f2: 5 });
     commands.flush();
     const spawned = world.entities.querySnapshot(new Query({ all: [wide] })).find((e) => e !== entity)!;
-    assertEquals(world.components.getEntityData(wide, spawned), fields(count, { 2: 5 }), `${count}: spawned add`);
+    assertEquals(
+      world.components.getEntityDataOrThrow(wide, spawned),
+      fields(count, { 2: 5 }),
+      `${count}: spawned add`,
+    );
 
     commands.remove(wide, entity);
     commands.flush();
     commands.add(wide, entity, { f3: 6 });
     commands.flush();
-    assertEquals(world.components.getEntityData(wide, entity), fields(count, { 3: 6 }), `${count}: re-add zeroes`);
+    assertEquals(
+      world.components.getEntityDataOrThrow(wide, entity),
+      fields(count, { 3: 6 }),
+      `${count}: re-add zeroes`,
+    );
 
     const other = createEntity(world);
     commands.set(wide, other, { f0: 1 });
@@ -349,7 +373,7 @@ Deno.test("command buffer passes non-numeric schema fields through a side column
   commands.add(point, entity, { x: "eight" } as never);
   assertStrictEquals(commands.pendingCount, 2, "non-numeric values are not validated when queued");
   assertThrows(() => commands.flush(), ComponentDataError, "point");
-  assertEquals(world.components.getEntityData(point, entity), { x: 7, y: 2 }, "side value written by the world");
+  assertEquals(world.components.getEntityDataOrThrow(point, entity), { x: 7, y: 2 }, "side value written by the world");
   assertStrictEquals(passed.length, 2, "both commands reached the world");
   assertStrictEquals(passed[1]!["x"], undefined, "the reused data object releases side values after flush");
 
@@ -357,6 +381,6 @@ Deno.test("command buffer passes non-numeric schema fields through a side column
   commands.add(point, spawned, { x: 4 });
   commands.flush();
   const owners = world.components.getOwnersSnapshot(point)!;
-  assertEquals(world.components.getEntityData(point, owners[owners.length - 1]!), { x: 4, y: 0 }, "spawn path");
+  assertEquals(world.components.getEntityDataOrThrow(point, owners[owners.length - 1]!), { x: 4, y: 0 }, "spawn path");
   await world.destroy();
 });

@@ -91,7 +91,7 @@ function rowsOf(l: { count: number; rows: { readonly [i: number]: number } }): n
 /** Everything a program can read about the world's relations, as plain data. */
 function observe(world: World, defs: Defs): unknown {
   const live = world.entities.getActiveSnapshot();
-  const out: Record<string, unknown> = { live, pos: live.map((e) => world.components.readEntityData(defs.pos, e)) };
+  const out: Record<string, unknown> = { live, pos: live.map((e) => world.components.getEntityData(defs.pos, e)) };
   for (const def of relationsOf(defs)) {
     const r = world.relations;
     const perEntity = live.map((e) => {

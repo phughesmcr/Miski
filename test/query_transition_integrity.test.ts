@@ -3,6 +3,7 @@
 import {
   CapacityError,
   captureWorldRollbackPoint,
+  ComponentDataError,
   type Entity,
   Query,
   restoreWorldRollbackPoint,
@@ -242,7 +243,7 @@ Deno.test("full-world bundle creation reports payload errors before capacity err
   assertThrows(() => world.entities.createWith(42 as never), TypeError, "Bundle");
   assertThrows(
     () => world.entities.createWith([[position, { x: Number.MAX_VALUE }]]),
-    TypeError,
+    ComponentDataError,
     "outside its storage range",
   );
   assertThrows(

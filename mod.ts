@@ -6,11 +6,14 @@
  *
  * Public surface tiers:
  * - **Core** - World, Component, Query, System, entity handles, errors
- * - **Hot-path** - dense `queryList`, direct `.storage.partitions` writes, `frame`
+ * - **Hot-path** - dense `queryList`, direct `instance.storage.partitions` writes, `frame`
  * - **Tooling** - `createEcsWorld`, schema hash, checkpoints, rollback, world saves, canonicalize
  * - **Scheduling** - `Schedule` (phases, ordering, fixed timestep), `CommandBuffer`
  *
- * Prefer `.storage.partitions` for SoA access (`.partitions` is an alias).
+ * Component values have three access tiers: (a) the hot path
+ * `instance.storage.partitions[key][slot]`, (b) the guarded cursor `instance.proxy`
+ * (or `instance.get` / `instance.set`), and (c) world-level guarded calls
+ * (`components.getEntityData*`, `readEntityDataInto`, `setEntityData`).
  * House rule: `slots` for storage / partitions; `entities` for identity
  * (`destroy`, `isActive`, attach). Index typed arrays via `entityIndex(entity)`
  * or `queryList` `slots` - never with a packed handle. Brands catch swaps at
@@ -101,37 +104,33 @@
  * world.components.removeFromEntity(positionComponent, entity2);
  * ```
  *
- * @example Read and write Component data
+ * @example Read and write Component data (three access tiers)
  * ```ts
  * const positionComponent = new Component({ name: "position", schema: { x: Float32Array, y: Float32Array } });
  * const world = new World({ capacity: 1024, components: [positionComponent] });
  * const entity1 = world.entities.createWithOrThrow([[positionComponent, { x: 1, y: 2 }]]);
+ * const position = world.components.getInstanceOrThrow(positionComponent); // getInstance() -> undefined instead
  *
- * // Guarded public APIs (throw on inactive / non-owner / tag / unregistered):
- * const data = world.components.getEntityData(positionComponent, entity1);
+ * // (a) Hot path: raw SoA columns indexed by slot (entityIndex), never the packed handle.
+ * // No validation and no automatic change tracking.
+ * position.storage.partitions.x[entityIndex(entity1)] = 10;
+ * position.markChanged(entity1);
+ *
+ * // (b) Guarded cursor: ownership-checked, validated, change-tracked.
+ * position.proxy.entity = entity1;
+ * position.proxy.y = 20;
+ * position.set(entity1, "x", 12); // one field; leaves the proxy where it was
+ * const x = position.get(entity1, "x");
+ *
+ * // (c) World-level guarded calls. Plain names return undefined / false when absent;
+ * // OrThrow names throw on inactive / non-owner / tag. Unregistered components always throw.
+ * const soft = world.components.getEntityData(positionComponent, entity1); // { x, y } | undefined
+ * const data = world.components.getEntityDataOrThrow(positionComponent, entity1);
+ * const out = { x: 0, y: 0 };
+ * world.components.readEntityDataInto(positionComponent, entity1, out); // zero-alloc; false when absent
  * world.components.setEntityData(positionComponent, entity1, { x: 10, y: 20 });
  * world.components.setEntityData(positionComponent, entity1, { x: 15 }); // partial; y kept
- *
- * // Soft reads (undefined for inactive / non-owner / tag; only unregistered throws):
- * const soft = world.components.readEntityData(positionComponent, entity1);
- * const out = { x: 0, y: 0 };
- * world.components.readEntityDataInto(positionComponent, entity1, out);
- * console.log(data, soft, out);
- *
- * // Proxy: type-safe writes with change tracking
- * const positionInstance = world.components.getInstance(positionComponent);
- * if (positionInstance) {
- *   positionInstance.proxy.entity = entity1;
- *   positionInstance.proxy.x = 10;
- *   positionInstance.proxy.y = 20;
- * }
- *
- * // Direct SoA: index by slot (entityIndex), not the packed handle.
- * // Prefer .storage.partitions (.partitions is an alias). No automatic change tracking.
- * const required = world.components.require(positionComponent);
- * required.storage!.partitions.x[entityIndex(entity1)] = 10;
- * required.storage!.partitions.y[entityIndex(entity1)] = 20;
- * required.markChanged(entity1);
+ * console.log(x, soft, data, out);
  * ```
  *
  * @example Changed tracking and snapshots
@@ -519,7 +518,6 @@ export type {
   SchemaValues,
   SlotIndex,
   SpawnSpec,
-  StorageCell,
   StorageFromMap,
   StorageProxyWithProperties,
   SystemCallback,

@@ -2,18 +2,25 @@ import { ComponentDataError, ComponentOwnershipError, EntityNotFoundError, forma
 import type { ComponentInstanceSpec } from "@/types/component.ts";
 import type {
   ComponentData,
-  ComponentPartitions,
   ComponentStorage,
   ComponentValue,
   SchemaOrNull,
   StorageProxyWithProperties,
 } from "@/types/partitions.ts";
-import { type Entity, entityIndex, type SlotIndex } from "@/entity/entity.ts";
+import { type Entity, entityIndex } from "@/entity/entity.ts";
 import { hasOwnProperty } from "@/utils.ts";
 import type { ColumnWriter } from "./storage-proxy.ts";
 import type { Component } from "./component.ts";
 
-/** A ComponentInstance is the world-local representation of a component */
+/**
+ * A ComponentInstance is the world-local representation of a component.
+ *
+ * Values are read and written at one of three tiers:
+ * - (a) hot path: `instance.storage.partitions[key][slot]`, raw and unguarded;
+ * - (b) guarded cursor: `instance.proxy`, or `instance.get` / `instance.set` for one field by entity handle;
+ * - (c) world-level guarded calls: `world.components.getEntityData`, `getEntityDataOrThrow`, `readEntityDataInto` and
+ *   `setEntityData`.
+ */
 export class ComponentInstance<
   TValue extends SchemaOrNull,
   TStorage extends SchemaOrNull = TValue,
@@ -39,24 +46,24 @@ export class ComponentInstance<
   /** Raw cell decoder for `field.*` columns, or `undefined` when every column is numeric */
   readonly #decode: ((key: string, raw: unknown) => unknown) | undefined;
 
-  /** The ComponentInstance's proxy */
+  /**
+   * Tier (b), the guarded cursor: point `proxy.entity` at an owner, then read and write its fields as properties.
+   * Writes validate, encode and mark the entity changed. `null` for tag components.
+   */
   readonly proxy: TStorage extends null ? null : StorageProxyWithProperties<TValue>;
 
-  /** The ComponentInstance's storage */
-  readonly storage: TStorage extends null ? null : ComponentStorage<TStorage>;
-
   /**
-   * Raw columns for direct storage access, or `null` for tag components. Numeric and bool / enum / entity fields are
-   * typed arrays holding raw values (0 / 1, label index, packed handle or -1); string / object fields are JS arrays.
+   * Tier (a), the hot path: `storage.partitions[key][slot]` holds raw columns indexed by storage slot
+   * (`entityIndex(entity)` or a query's `slots`), or `storage` is `null` for tag components. Numeric and bool / enum /
+   * entity fields are typed arrays holding raw values (0 / 1, label index, packed handle or -1); string / object fields
+   * are JS arrays.
    *
-   * Direct access is an unguarded escape hatch: writes are not ownership-checked or change-tracked, and writes to
-   * non-owner slots are never reported by `getChanged`. For components with `maxEntities`, a non-owner write may
-   * temporarily occupy one of the capped dense rows; those rows are reclaimed (and their data discarded) the next
+   * Direct access is an unguarded escape hatch: writes are not validated, ownership-checked or change-tracked, and
+   * writes to non-owner slots are never reported by `getChanged`. For components with `maxEntities`, a non-owner write
+   * may temporarily occupy one of the capped dense rows; those rows are reclaimed (and their data discarded) the next
    * time an add needs them, so stray writes can never block an owner from being added.
    */
-  get partitions(): ComponentPartitions<TStorage> {
-    return (this.storage?.partitions ?? null) as ComponentPartitions<TStorage>;
-  }
+  readonly storage: TStorage extends null ? null : ComponentStorage<TStorage>;
 
   /** The ComponentInstance's prototype */
   readonly type: Component<TValue, TStorage>;
@@ -105,25 +112,40 @@ export class ComponentInstance<
   }
 
   /**
-   * Read a property for a packed entity handle (validates ownership via {@link has}). Field columns decode: bools to
-   * `boolean`, enums to their label, entity refs to the handle or `null` once stale. The untyped `string` key overload
-   * is typed `number`; cast its result for `field.*` columns.
+   * Read one field of an owning entity. Field columns decode: bools to `boolean`, enums to their label, entity refs to
+   * the handle or `null` once stale. The untyped `string` key overload is typed `number`; cast its result for
+   * `field.*` columns.
+   * @throws {ComponentOwnershipError} If the entity is inactive or does not own this component
+   * @throws {ComponentDataError} If the component does not define `key`
+   * @throws {TypeError} If this is a tag component
    */
   get<K extends keyof ComponentData<TValue> & string>(entity: Entity, key: K): ComponentData<TValue>[K];
   /** Read a property by untyped key; cast the result for `field.*` columns. */
   get(entity: Entity, key: string): number;
   get(entity: Entity, key: string): unknown {
-    const partitions = this.storage?.partitions as Record<string, unknown> | undefined;
+    const partitions = this.storage?.partitions as Record<string, ArrayLike<unknown>> | undefined;
     if (partitions === undefined) {
       throw new TypeError(`Component ${this.name} has no data storage.`);
     }
-    if (!this.has(entity)) {
+    if (!this.#has(entity)) {
       throw new ComponentOwnershipError(`Entity ${entity} does not own component ${this.name}.`);
     }
-    return this.getAt(entityIndex(entity), key);
+    if (!hasOwnProperty(partitions, key)) {
+      throw new ComponentDataError(`Component ${this.name} does not define data field "${key}".`);
+    }
+    const raw = partitions[key]![entityIndex(entity)];
+    const decode = this.#decode;
+    return decode === undefined ? raw : decode(key, raw);
   }
 
-  /** Write a property for a packed entity handle, validating it like the proxy does. Does not move {@link proxy}. */
+  /**
+   * Write one field of an owning entity, validating, encoding and marking it changed like the proxy does. Does not
+   * move {@link proxy}.
+   * @throws {EntityNotFoundError} If the entity is outside world capacity
+   * @throws {ComponentOwnershipError} If the entity is inactive or does not own this component
+   * @throws {ComponentDataError} If the component does not define `key`, or `value` is invalid for the field
+   * @throws {TypeError} If this is a tag component
+   */
   set<K extends keyof ComponentValue<TValue> & string>(entity: Entity, key: K, value: ComponentValue<TValue>[K]): void;
   /** Write a property by untyped key; the value is validated at runtime. */
   set(entity: Entity, key: string, value: unknown): void;
@@ -133,42 +155,6 @@ export class ComponentInstance<
     if (slot >= this.#capacity) throw new EntityNotFoundError(formatEntityOutOfRange(entity));
     if (!this.#has(entity)) {
       throw new ComponentOwnershipError(`Entity ${entity} does not own component ${this.name}.`);
-    }
-    write(slot, value);
-  }
-
-  /** Read a property by raw slot with no generation or membership check. Field columns decode like {@link get}. */
-  getAt<K extends keyof ComponentData<TValue> & string>(slot: SlotIndex, key: K): ComponentData<TValue>[K];
-  /** Read a property by raw slot and untyped key; cast the result for `field.*` columns. */
-  getAt(slot: SlotIndex, key: string): number;
-  getAt(slot: SlotIndex, key: string): unknown {
-    const partitions = this.storage?.partitions as Record<string, ArrayLike<unknown>> | undefined;
-    if (partitions === undefined) {
-      throw new TypeError(`Component ${this.name} has no data storage.`);
-    }
-    if (!hasOwnProperty(partitions, key)) {
-      throw new ComponentDataError(`Component ${this.name} does not define data field "${key}".`);
-    }
-    const raw = partitions[key]![slot];
-    const decode = this.#decode;
-    return decode === undefined ? raw : decode(key, raw);
-  }
-
-  /**
-   * Write a property by raw slot with no generation or membership check. Values are validated like {@link set}.
-   * Does not move {@link proxy}.
-   */
-  setAt<K extends keyof ComponentValue<TValue> & string>(
-    slot: SlotIndex,
-    key: K,
-    value: ComponentValue<TValue>[K],
-  ): void;
-  /** Write a property by raw slot and untyped key; the value is validated at runtime. */
-  setAt(slot: SlotIndex, key: string, value: unknown): void;
-  setAt(slot: SlotIndex, key: string, value: unknown): void {
-    const write = this.#writer(key);
-    if (!Number.isInteger(slot) || slot < 0 || slot >= this.#capacity) {
-      throw new EntityNotFoundError(formatEntityOutOfRange(slot as unknown as Entity));
     }
     write(slot, value);
   }

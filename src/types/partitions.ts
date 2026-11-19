@@ -85,16 +85,12 @@ export type ComponentStorage<T extends SchemaOrNull> = {
   readonly byteOffset: number;
   /** Byte length of the component's typed columns in the world buffer. */
   readonly byteLength: number;
-  /** Raw columns keyed by field name, indexed by storage slot. */
+  /**
+   * Raw columns keyed by field name, indexed by storage slot: the unguarded hot-path tier. Writes here skip
+   * validation, ownership checks and change tracking.
+   */
   readonly partitions: ComponentPartitions<T>;
-  /** Raw unchecked read of one cell. */
-  get<K extends keyof T>(partition: K, index: number): StorageCell<T[K]> | undefined;
-  /** Raw unchecked write of one cell. */
-  set<K extends keyof T>(partition: K, index: number, value: StorageCell<T[K]>): void;
 };
-
-/** Raw cell type of one column: `number` for typed columns, the element type for string / object columns. */
-export type StorageCell<P> = P extends FieldDescriptor ? FieldRaw<P>[number] : number;
 
 /** Compatibility alias for component write/proxy values. */
 export type SchemaValues<T> = ComponentValue<T>;

@@ -5,6 +5,7 @@ import {
   captureWorldRollbackPoint,
   commitWorldRollbackPoint,
   compileComponentSchema,
+  ComponentDataError,
   componentSchemaHash,
   createEcsWorld,
   entityGeneration,
@@ -103,7 +104,7 @@ Deno.test("createEcsWorld tags spawn, ownership, and collisions", async () => {
   const player = ecs.spawn({ Position: { x: 1, y: 2 }, Player: true, Hero: true });
   assert(ecs.world.components.entityHas(ecs.components.Player, player), "Player tag attached");
   assert(ecs.world.components.entityHas(ecs.components.Hero, player), "Hero tag attached");
-  assertStrictEquals(ecs.storage.Player.partitions, null, "tag storage has no partitions");
+  assertStrictEquals(ecs.storage.Player.storage, null, "tag instances have no storage");
 
   assertThrows(
     () => ecs.spawn({ Position: { x: 0, y: 0 }, Hero: true }),
@@ -175,13 +176,13 @@ Deno.test("canonicalizeStoredValue coerces through typed storage", () => {
   );
   assertThrows(
     () => canonicalizeStoredValue("Face", "dir", Number.NaN, scratch),
-    TypeError,
+    ComponentDataError,
     "finite number",
   );
   const floatScratch = new Float32Array(1);
   assertThrows(
     () => canonicalizeStoredValue("Pos", "x", Number.POSITIVE_INFINITY, floatScratch),
-    TypeError,
+    ComponentDataError,
     "finite number",
   );
 });
@@ -196,7 +197,7 @@ Deno.test("checkpoint capture and apply round-trip component subsets", async () 
   world.components.setEntityData(position, entity, { x: 9, y: 9 });
   world.applyCheckpoint(checkpoint);
   assertEquals(
-    world.components.getEntityData(position, entity),
+    world.components.getEntityDataOrThrow(position, entity),
     { x: 1, y: 2 },
     "checkpoint restore recovers values",
   );
@@ -212,7 +213,7 @@ Deno.test("rollback restore reverts speculative mutations", async () => {
   world.components.setEntityData(position, entity, { x: 8, y: 8 });
   restoreWorldRollbackPoint(world, point);
   assertEquals(
-    world.components.getEntityData(position, entity),
+    world.components.getEntityDataOrThrow(position, entity),
     { x: 1, y: 2 },
     "rollback restores prior values",
   );
@@ -221,7 +222,7 @@ Deno.test("rollback restore reverts speculative mutations", async () => {
   world.components.setEntityData(position, entity, { x: 3, y: 4 });
   commitWorldRollbackPoint(world, committed);
   assertEquals(
-    world.components.getEntityData(position, entity),
+    world.components.getEntityDataOrThrow(position, entity),
     { x: 3, y: 4 },
     "commit keeps speculative writes",
   );

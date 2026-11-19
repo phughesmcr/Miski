@@ -168,9 +168,10 @@ export class Prefab<
   /**
    * Create a prefab.
    * @param spec - The prefab specification
-   * @throws {TypeError} - If the spec, an entry, or a payload is malformed, or a value overflows its column
+   * @throws {TypeError} - If the spec, an entry, or a payload is malformed
    * @throws {RangeError} - If a component appears twice in `spec.components`
-   * @throws {ComponentDataError} - If a payload names an unknown field, holds a non-finite value, or targets a tag
+   * @throws {ComponentDataError} - If a payload names an unknown field, holds a non-finite value or one that overflows
+   * its column, or targets a tag
    */
   constructor(spec: PrefabSpec<TBundle>) {
     if (!isObject(spec)) throw new TypeError("Prefab spec must be an object.");

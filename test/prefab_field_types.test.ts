@@ -44,7 +44,7 @@ Deno.test("Prefab field defaults: unset fields take each field type's default", 
   const world = await createTestWorld(components);
   const entity = world.entities.instantiateOrThrow(prefab);
   assertEquals(
-    world.components.getEntityData(unit, entity),
+    world.components.getEntityDataOrThrow(unit, entity),
     { ...UNIT_DEFAULTS, hp: 3 },
     "Instance takes field defaults",
   );
@@ -57,11 +57,15 @@ Deno.test("Prefab field defaults: bool, enum and string defaults round-trip and 
   const world = await createTestWorld(components);
   const a = world.entities.instantiateOrThrow(prefab);
   const b = world.entities.createWithOrThrow([[unit, data]]);
-  assertEquals(world.components.getEntityData(unit, a), world.components.getEntityData(unit, b), "Matches createWith");
+  assertEquals(
+    world.components.getEntityDataOrThrow(unit, a),
+    world.components.getEntityDataOrThrow(unit, b),
+    "Matches createWith",
+  );
   const list = world.entities.instantiateManyOrThrow(prefab, 3);
   for (let i = 0; i < list.count; i++) {
     assertEquals(
-      world.components.getEntityData(unit, list.entities[i]! as Entity),
+      world.components.getEntityDataOrThrow(unit, list.entities[i]! as Entity),
       { ...UNIT_DEFAULTS, ...data },
       "Bulk instance values",
     );
@@ -88,9 +92,9 @@ Deno.test("Prefab entity-ref defaults must be null; live targets are instantiate
   assertThrows(() => new Prefab({ components: [[unit, { target: other }]] }), ComponentDataError, "override");
   const prefab = new Prefab({ components: [[unit, { target: null }]] });
   const entity = world.entities.instantiateOrThrow(prefab, [[unit, { target: other }]]);
-  assertEquals(world.components.getEntityData(unit, entity).target, other, "Override target is stored");
+  assertEquals(world.components.getEntityDataOrThrow(unit, entity).target, other, "Override target is stored");
   const plain = world.entities.instantiateOrThrow(prefab);
-  assertEquals(world.components.getEntityData(unit, plain).target, null, "Default target is null");
+  assertEquals(world.components.getEntityDataOrThrow(unit, plain).target, null, "Default target is null");
 });
 
 Deno.test("Prefab object fields: an absent value calls create() once per instance", async () => {
@@ -101,7 +105,7 @@ Deno.test("Prefab object fields: an absent value calls create() once per instanc
   assertEquals(created - before, 3, "create() runs once per instance");
   const meshes = new Set<unknown>();
   for (let i = 0; i < list.count; i++) {
-    meshes.add(world.components.getEntityData(created_, list.entities[i]! as Entity).mesh);
+    meshes.add(world.components.getEntityDataOrThrow(created_, list.entities[i]! as Entity).mesh);
   }
   assertEquals(meshes.size, 3, "Each instance owns its own created object");
 });
@@ -112,8 +116,8 @@ Deno.test("Prefab object fields: a given value is cloned per instance when clone
   const world = await createTestWorld(components);
   const a = world.entities.instantiateOrThrow(prefab);
   const b = world.entities.instantiateOrThrow(prefab);
-  const meshA = world.components.getEntityData(cloned, a).mesh!;
-  const meshB = world.components.getEntityData(cloned, b).mesh!;
+  const meshA = world.components.getEntityDataOrThrow(cloned, a).mesh!;
+  const meshB = world.components.getEntityDataOrThrow(cloned, b).mesh!;
   assert(meshA !== template && meshB !== template && meshA !== meshB, "Instances never share the template object");
   assertEquals(meshA.vertices, [1, 2, 3], "Clone copies the template");
   meshA.vertices.push(4);
@@ -134,7 +138,11 @@ Deno.test("Prefab object fields: overrides are stored by reference like createWi
   const given = new Mesh([9]);
   const before = created;
   const entity = world.entities.instantiateOrThrow(prefab, [[created_, { mesh: given }]]);
-  assertStrictEquals(world.components.getEntityData(created_, entity).mesh, given, "Override stored by reference");
+  assertStrictEquals(
+    world.components.getEntityDataOrThrow(created_, entity).mesh,
+    given,
+    "Override stored by reference",
+  );
   assertEquals(created, before, "create() is skipped when an override supplies the value");
 });
 

@@ -155,7 +155,7 @@ export class EcsWorld<
     this.world = new World({ capacity: config.capacity, components: componentList });
     for (const name of keysOf(this.components)) {
       const key = String(name);
-      (this.storage as Record<string, unknown>)[key] = this.world.components.require(
+      (this.storage as Record<string, unknown>)[key] = this.world.components.getInstanceOrThrow(
         (this.components as Record<string, DynamicComponent>)[key]!,
       );
     }

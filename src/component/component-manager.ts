@@ -167,12 +167,6 @@ function createSideOnlyStorage(partitions: Record<string, unknown[]>): Component
     byteOffset: 0,
     byteLength: 0,
     partitions: partitions as never,
-    get: (partition, index) => partitions[partition as string]?.[index] as never,
-    set: (partition, index, value) => {
-      const column = partitions[partition as string];
-      if (column === undefined) throw new Error(`Partition ${String(partition)} not found`);
-      column[index] = value;
-    },
   };
 }
 
@@ -540,7 +534,7 @@ export class ComponentManager {
 
   /**
    * Map a capped component's dense row for `slot` before ownership changes, so a storage failure can never leave a
-   * half-committed add. Raw writes to non-owner slots (direct partitions, proxy cursor, `setAt`) map rows too and
+   * half-committed add. Raw writes to non-owner slots (direct partitions, proxy slot cursor) map rows too and
    * are never released by removal; when the dense rows run out they are reclaimed here, after which at most
    * `ownerCount` rows are mapped and `ownerCount < maxEntities` guarantees room.
    */
@@ -593,6 +587,22 @@ export class ComponentManager {
   #clearSideInitial(state: ComponentState): void {
     const initial = state.sideInitial;
     for (let i = 0; i < initial.length; i++) initial[i] = undefined;
+  }
+
+  /** Drop staged side values once committed, so they do not keep objects alive until {@link refresh}. */
+  #releaseSideScratch(state: ComponentStorageWriteState): void {
+    const scratch = state.sideScratch;
+    for (let i = 0; i < scratch.length; i++) scratch[i] = undefined;
+  }
+
+  /**
+   * Release the side (string / object) values {@link validateInstanceData} staged for `instance`. Call after the last
+   * write of a path that stages once and writes several rows; {@link refresh} also releases them.
+   * @internal
+   */
+  releaseStagedData(instance: DynamicComponentInstance): void {
+    const state = this.#states[instance.id];
+    if (state !== undefined) this.#releaseSideScratch(state);
   }
 
   /** Reset an unowned slot's side cells so the component no longer holds its strings / objects. */
@@ -656,6 +666,8 @@ export class ComponentManager {
       }
     }
     if (stagesSide) this.#clearSideInitial(state);
+    // Data staged here is used once; batch callers stage once (`dataValidated`) and release after their last row.
+    if (data !== undefined && !dataValidated) this.#releaseSideScratch(state);
 
     return ownershipChanged;
   }
@@ -849,16 +861,16 @@ export class ComponentManager {
    * @returns The component instance
    * @throws {NotRegisteredError} If the component is not registered
    */
-  require(component: string): DynamicComponentInstance;
-  require<
+  getInstanceOrThrow(component: string): DynamicComponentInstance;
+  getInstanceOrThrow<
     TValue extends SchemaOrNull,
     TStorage extends SchemaOrNull = TValue,
   >(component: Component<TValue, TStorage>): ComponentInstance<TValue, TStorage>;
-  require<
+  getInstanceOrThrow<
     TValue extends SchemaOrNull,
     TStorage extends SchemaOrNull = TValue,
   >(component: Component<TValue, TStorage> | string): ComponentInstance<TValue, TStorage> | DynamicComponentInstance;
-  require(component: DynamicComponent | string): DynamicComponentInstance {
+  getInstanceOrThrow(component: DynamicComponent | string): DynamicComponentInstance {
     const instance = this.getInstance(component);
     if (!instance) {
       throw new NotRegisteredError(formatComponentNotRegistered(componentDisplayName(component)));
@@ -1008,25 +1020,11 @@ export class ComponentManager {
         addedOut[addedCount++] = instance;
       }
     }
-    return addedCount;
-  }
-
-  /**
-   * Get all components for an entity directly from ownership tracking
-   * This is used internally to avoid circular dependencies with the archetype system
-   * @param entity The entity to get components for
-   * @returns An array of component instances
-   */
-  getEntityComponents(entity: Entity): DynamicComponentInstance[] {
-    const components: DynamicComponentInstance[] = [];
-    if (!this.#isActive(entity)) return components;
-    for (let i = 0; i < this.#states.length; i++) {
-      const state = this.#states[i]!;
-      if (state.owners?.[entityIndex(entity)] === 1) {
-        components.push(state.instance);
-      }
+    for (let i = 0; i < count; i++) {
+      const entry = entries[i]!;
+      if (entry.data !== undefined) this.releaseStagedData(entry.instance);
     }
-    return components;
+    return addedCount;
   }
 
   /**
@@ -1057,8 +1055,10 @@ export class ComponentManager {
       this.#readFieldRow(state, slot, decoded);
       return decoded as ComponentData<TValue>;
     }
+    const defaults = state.storageDefaults;
     const result: Record<string, number> = {};
-    for (let i = 0; i < keys.length; i++) result[keys[i]!] = columns[i]![slot] ?? Number.NaN;
+    // Owned rows are always mapped; the default only guards an unmapped sparse row, never decoding as `true`.
+    for (let i = 0; i < keys.length; i++) result[keys[i]!] = columns[i]![slot] ?? defaults[i]!;
     return result as ComponentData<TValue>;
   }
 
@@ -1093,7 +1093,8 @@ export class ComponentManager {
     const target = out as Record<string, number>;
     const keys = state.storageKeys;
     const columns = state.storageColumns;
-    for (let i = 0; i < keys.length; i++) target[keys[i]!] = columns[i]![slot] ?? Number.NaN;
+    const defaults = state.storageDefaults;
+    for (let i = 0; i < keys.length; i++) target[keys[i]!] = columns[i]![slot] ?? defaults[i]!;
     return true;
   }
 
@@ -1102,57 +1103,16 @@ export class ComponentManager {
     const keys = state.storageKeys;
     const columns = state.storageColumns;
     const codecs = state.storageCodecs;
+    const defaults = state.storageDefaults;
     const isActive = state.isEntityActive;
     for (let i = 0; i < keys.length; i++) {
-      const raw = columns[i]![slot] ?? Number.NaN;
+      const raw = columns[i]![slot] ?? defaults[i]!;
       const codec = codecs[i]!;
       target[keys[i]!] = codec === null ? raw : decodeFieldValue(codec, raw, isActive);
     }
     const sideKeys = state.sideKeys;
     const sideColumns = state.sideColumns;
     for (let i = 0; i < sideKeys.length; i++) target[sideKeys[i]!] = sideColumns[i]![slot];
-  }
-
-  /**
-   * Copy one storage slot's values for a component into another slot: typed columns raw (entity refs keep their
-   * handle), string values as is, object values through the field's `clone` hook. Marks the target changed when it
-   * owns the component and a value changed. Ownership is not checked or changed.
-   *
-   * @param instance - The registered component instance
-   * @param fromSlot - Source storage slot
-   * @param toSlot - Target storage slot
-   * @returns `true` if any target cell changed
-   */
-  copyInstanceEntityData<
-    TValue extends SchemaOrNull,
-    TStorage extends SchemaOrNull = TValue,
-  >(instance: ComponentInstance<TValue, TStorage>, fromSlot: number, toSlot: number): boolean {
-    const state = this.#states[instance.id];
-    if (state === undefined || instance.storage === null || fromSlot === toSlot) return false;
-    if (fromSlot >= this.#capacity || toSlot >= this.#capacity) {
-      throw new RangeError(`Slot ${Math.max(fromSlot, toSlot)} is outside component capacity.`);
-    }
-    let changed = false;
-    const columns = state.storageColumns;
-    for (let i = 0; i < columns.length; i++) {
-      const column = columns[i]!;
-      const value = column[fromSlot]!;
-      if (!Object.is(column[toSlot], value)) {
-        column[toSlot] = value;
-        changed = true;
-      }
-    }
-    const sideColumns = state.sideColumns;
-    for (let i = 0; i < sideColumns.length; i++) {
-      const column = sideColumns[i]!;
-      const value = cloneFieldValue(state.sideFields[i]!, column[fromSlot]);
-      if (!Object.is(column[toSlot], value)) {
-        column[toSlot] = value;
-        changed = true;
-      }
-    }
-    if (changed && state.owners?.[toSlot] === 1) this.#markChanged(state, toSlot);
-    return changed;
   }
 
   /**
@@ -1171,7 +1131,7 @@ export class ComponentManager {
   refresh(): ComponentManager {
     // The changed window is a sparse set: resetting the count empties it without touching the lists.
     for (let i = 0; i < this.#states.length; i++) this.#states[i]!.changedCount = 0;
-    // Staged side values must survive a whole batch write; drop them here so they do not keep objects alive.
+    // Batch writes (one staging, many rows) leave staged side values behind; drop them so they do not keep objects alive.
     const sideStates = this.#sideStates;
     for (let i = 0; i < sideStates.length; i++) {
       const scratch = sideStates[i]!.sideScratch;
@@ -1241,6 +1201,7 @@ export class ComponentManager {
     const state = this.#states[instance.id]!;
     const slot = entityIndex(entity);
     const changed = writeEntityStorageData(state, value as Record<string, unknown>, slot, false);
+    this.#releaseSideScratch(state);
     if (changed && state.owners?.[slot] === 1) this.#markChanged(state, slot);
     return this;
   }

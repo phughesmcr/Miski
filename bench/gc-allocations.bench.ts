@@ -401,11 +401,11 @@ if (positionStorage === null || positionProxy === null) {
   throw new Error("GC benchmark expected position component storage");
 }
 const healthInstance = mixed.world.components.getInstance(mixed.components.health) as ComponentInstance<Health>;
-const healthPartitions = healthInstance.partitions;
+const healthPartitions = healthInstance.storage.partitions;
 const renderStateInstance = mixed.world.components.getInstance(mixed.components.renderState) as ComponentInstance<
   RenderState
 >;
-const renderStatePartitions = renderStateInstance.partitions;
+const renderStatePartitions = renderStateInstance.storage.partitions;
 const positionData = { x: 0, y: 0 };
 const positionReadOut = { x: 0, y: 0 };
 const transitionVelocityData = { x: 1, y: -1 };
@@ -489,8 +489,8 @@ function destroyPrefabBatch(entities: Entity[]): void {
 function spawnProjectileBatchWithInstantiateMany(): void {
   const world = prefabBulkLifecycle.world;
   const list = world.entities.instantiateManyOrThrow(projectilePrefab, 128);
-  const { x, y } = world.components.require(prefabComponents.position).storage.partitions;
-  const sprite = world.components.require(prefabComponents.renderState).storage.partitions.sprite;
+  const { x, y } = world.components.getInstanceOrThrow(prefabComponents.position).storage.partitions;
+  const sprite = world.components.getInstanceOrThrow(prefabComponents.renderState).storage.partitions.sprite;
   for (let i = 0; i < list.count; i++) {
     const slot = list.slots[i]!;
     x[slot] = i;
@@ -592,7 +592,7 @@ const fieldStates = ["idle", "run"] as const;
 const fieldTarget = mustCreateEntity(fieldWorld);
 const fieldEntity = fieldWorld.entities.createWithOrThrow([[fieldUnit, { label: "x" }]]);
 const fieldTransitionEntity = mustCreateEntity(fieldWorld);
-const fieldInstance = fieldWorld.components.require(fieldUnit);
+const fieldInstance = fieldWorld.components.getInstanceOrThrow(fieldUnit);
 const fieldProxy = fieldInstance.proxy;
 const fieldWriteData = {
   hp: 0,
@@ -776,9 +776,9 @@ const scenarios: Scenario[] = [
     positionProxy.x = numericSink++;
     positionProxy.y = -numericSink;
   }),
-  budgeted("instance.set / setAt numeric writes with changed tracking", 250_000, () => {
+  budgeted("instance.set numeric writes with changed tracking", 250_000, () => {
     positionInstance.set(mutationEntity, "x", numericSink++);
-    positionInstance.setAt(mutationSlot, "y", -numericSink);
+    positionInstance.set(mutationEntity, "y", -numericSink);
   }),
   budgeted("setEntityData with reused data object", 250_000, () => {
     positionData.x = numericSink++;
@@ -790,7 +790,7 @@ const scenarios: Scenario[] = [
     iterations: 100_000,
     maxSteadyStateBeforeGcBytesPerIter: GET_ENTITY_DATA_BUDGET_BYTES_PER_ITER,
     fn: () => {
-      objectSink = mixed.world.components.getEntityData(mixed.components.position, mutationEntity);
+      objectSink = mixed.world.components.getEntityDataOrThrow(mixed.components.position, mutationEntity);
     },
   },
   budgeted("readEntityDataInto reused output object", 250_000, () => {
@@ -1080,7 +1080,7 @@ const scenarios: Scenario[] = [
     iterations: 100_000,
     maxSteadyStateBeforeGcBytesPerIter: GET_FIELD_ENTITY_DATA_BUDGET_BYTES_PER_ITER,
     fn: () => {
-      objectSink = fieldWorld.components.getEntityData(fieldUnit, fieldEntity);
+      objectSink = fieldWorld.components.getEntityDataOrThrow(fieldUnit, fieldEntity);
     },
   },
   budgeted("add/remove component with all field kinds + refresh", 100_000, () => {

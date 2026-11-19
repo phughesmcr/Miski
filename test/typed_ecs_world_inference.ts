@@ -12,9 +12,9 @@ const game = createEcsWorld({
   },
 });
 
-const xColumn: Float32Array = game.storage.Position.partitions.x;
-const hpColumn: Uint16Array = game.storage.Health.partitions.hp;
-const playerPartitions: null = game.storage.Player.partitions;
+const xColumn: Float32Array = game.storage.Position.storage.partitions.x;
+const hpColumn: Uint16Array = game.storage.Health.storage.partitions.hp;
+const playerPartitions: null = game.storage.Player.storage;
 
 game.spawn({ Position: { x: 1 }, Health: { hp: 100 }, Player: true });
 game.spawn({ Position: { x: 2 }, Hero: true });

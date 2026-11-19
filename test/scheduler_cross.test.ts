@@ -36,7 +36,7 @@ Deno.test("command buffer x field types: every field kind applies at flush", asy
   const mesh = new Mesh([3]);
   commands.add(unit, entity, { hp: 4, alive: true, state: "run", target: other, label: "x", mesh });
   commands.flush();
-  const data = world.components.getEntityData(unit, entity);
+  const data = world.components.getEntityDataOrThrow(unit, entity);
   assertEquals(
     { ...data, mesh: undefined },
     { hp: 4, alive: true, state: "run", target: other, label: "x", mesh: undefined },
@@ -45,8 +45,8 @@ Deno.test("command buffer x field types: every field kind applies at flush", asy
   assertStrictEquals(data.mesh, mesh, "Object fields are passed by reference");
   commands.set(unit, entity, { label: "y", alive: false });
   commands.flush();
-  assertEquals(world.components.getEntityData(unit, entity).label, "y", "set applies side fields");
-  assertEquals(world.components.getEntityData(unit, entity).alive, false, "set applies bool fields");
+  assertEquals(world.components.getEntityDataOrThrow(unit, entity).label, "y", "set applies side fields");
+  assertEquals(world.components.getEntityDataOrThrow(unit, entity).alive, false, "set applies bool fields");
 });
 
 Deno.test("command buffer x field types: an entity ref whose target died before flush is written as null", async () => {
@@ -59,8 +59,12 @@ Deno.test("command buffer x field types: an entity ref whose target died before 
   commands.destroy(target);
   commands.add(unit, b, { hp: 2, target });
   commands.flush(); // must not throw
-  assertEquals(world.components.getEntityData(unit, a).target, null, "Ref killed later in the same flush reads null");
-  assertEquals(world.components.getEntityData(unit, b), {
+  assertEquals(
+    world.components.getEntityDataOrThrow(unit, a).target,
+    null,
+    "Ref killed later in the same flush reads null",
+  );
+  assertEquals(world.components.getEntityDataOrThrow(unit, b), {
     hp: 2,
     alive: false,
     state: "idle",
@@ -81,7 +85,7 @@ Deno.test("command buffer x field types: a bad field value drains the queue, the
   commands.add(unit, b, { label: "ok" });
   assertThrows(() => commands.flush(), ComponentDataError, "unit");
   assertEquals(world.components.entityHas(unit, a), false, "Failed command left its entity unchanged");
-  assertEquals(world.components.getEntityData(unit, b).label, "ok", "Later commands still applied");
+  assertEquals(world.components.getEntityDataOrThrow(unit, b).label, "ok", "Later commands still applied");
   assertStrictEquals(commands.pendingCount, 0, "Queue drained");
 });
 
@@ -93,7 +97,7 @@ Deno.test("command buffer x relations: relation presence tags are rejected when 
   commands.add(unit, a, { hp: 9 });
   commands.flush();
   assert(!world.components.entityHas(childOf, a), "Relation tag not added without a pair");
-  assertEquals(world.components.getEntityData(unit, a).hp, 9, "Later commands still applied");
+  assertEquals(world.components.getEntityDataOrThrow(unit, a).hp, 9, "Later commands still applied");
 });
 
 Deno.test("command buffer x prefabs: spawned bundles and prefab instances agree on field defaults", async () => {
@@ -105,8 +109,8 @@ Deno.test("command buffer x prefabs: spawned bundles and prefab instances agree 
   const spawned = world.components.getOwnersSnapshot(unit)![0]!;
   const instance = world.entities.instantiateOrThrow(prefab);
   assertEquals(
-    world.components.getEntityData(unit, spawned),
-    world.components.getEntityData(unit, instance),
+    world.components.getEntityDataOrThrow(unit, spawned),
+    world.components.getEntityDataOrThrow(unit, instance),
     "Same values either way",
   );
 });

@@ -176,7 +176,7 @@ export type ComponentInstanceSpec<
   getRevision?: () => number;
   /** Decode one raw cell for guarded reads; omitted when every column is numeric */
   decode?: (key: string, raw: unknown) => unknown;
-  /** Shared per-column writers used by `set` / `setAt` and the proxy; `null` for tag components */
+  /** Shared per-column writers used by `set` and the proxy; `null` for tag components */
   writers: TStorage extends null ? null : Readonly<Record<string, ColumnWriter>>;
   /** The world's entity capacity */
   capacity: number;

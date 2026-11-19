@@ -153,7 +153,7 @@ function observe(world: World): unknown {
     const rows: unknown[] = [];
     for (const e of world.components.getOwnersSnapshot(type)!) {
       const data = {
-        ...(world.components.getEntityData(type as Component<never>, e as Entity) as unknown as object),
+        ...(world.components.getEntityDataOrThrow(type as Component<never>, e as Entity) as unknown as object),
       } as Record<string, unknown>;
       if (data["mesh"] instanceof Mesh) data["mesh"] = ["mesh", ...(data["mesh"] as Mesh).vertices];
       const box = data["box"] as { value: number } | undefined;
@@ -199,10 +199,14 @@ Deno.test("decoded objects are fresh values, and null objects load as null witho
   loadWorld(loaded, bytes);
   assertStrictEquals(log.decoded, 1, "decode runs once per non-null object per load");
   const loadedUnit = component(loaded, "unit") as Component<never>;
-  const restored = (loaded.components.getEntityData(loadedUnit, a) as { mesh: Mesh }).mesh;
+  const restored = (loaded.components.getEntityDataOrThrow(loadedUnit, a) as { mesh: Mesh }).mesh;
   assert(restored instanceof Mesh && restored !== mesh, "a decoded object is a new instance");
   assertEquals(restored.vertices, [1, 2, 3], "decoded contents");
-  assertStrictEquals((loaded.components.getEntityData(loadedUnit, b) as { mesh: unknown }).mesh, null, "null kept");
+  assertStrictEquals(
+    (loaded.components.getEntityDataOrThrow(loadedUnit, b) as { mesh: unknown }).mesh,
+    null,
+    "null kept",
+  );
 });
 
 Deno.test("an encode result of null loads as null", async () => {
@@ -219,7 +223,8 @@ Deno.test("an encode result of null loads as null", async () => {
   const loaded = await worldOf(list());
   loadWorld(loaded, saveWorld(source));
   assertStrictEquals(
-    (loaded.components.getEntityData(component(loaded, "maybe") as Component<never>, e) as { value: unknown }).value,
+    (loaded.components.getEntityDataOrThrow(component(loaded, "maybe") as Component<never>, e) as { value: unknown })
+      .value,
     null,
     "decode is not called for an encoded null",
   );
@@ -257,10 +262,10 @@ Deno.test("a throwing decode hook leaves the world untouched", async () => {
   const before = saveWorld(target);
   const beforeValues = observe(target);
   targetLog.poison = JSON.stringify(
-    (source.components.getEntityData(
+    (source.components.getEntityDataOrThrow(
       component(source, "unit") as Component<never>,
       source.components.getOwnersSnapshot(component(source, "unit"))!.find((e) =>
-        (source.components.getEntityData(component(source, "unit") as Component<never>, e as Entity) as {
+        (source.components.getEntityDataOrThrow(component(source, "unit") as Component<never>, e as Entity) as {
           mesh: unknown;
         }).mesh !== null
       )! as Entity,

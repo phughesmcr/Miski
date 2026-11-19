@@ -12,7 +12,7 @@ Deno.test("readEntityData returns data for an owning entity", async () => {
 
   world.components.addToEntity(position, entity, { x: 3, y: 4 });
 
-  assertEquals(world.components.readEntityData(position, entity), { x: 3, y: 4 }, "Expected owner data");
+  assertEquals(world.components.getEntityData(position, entity), { x: 3, y: 4 }, "Expected owner data");
 });
 
 Deno.test("readEntityData returns undefined instead of throwing for non-owners", async () => {
@@ -20,7 +20,7 @@ Deno.test("readEntityData returns undefined instead of throwing for non-owners",
   const world = await createTestWorld([position]);
   const entity = createEntity(world);
 
-  assertStrictEquals(world.components.readEntityData(position, entity), undefined, "Expected undefined for non-owner");
+  assertStrictEquals(world.components.getEntityData(position, entity), undefined, "Expected undefined for non-owner");
 });
 
 Deno.test("readEntityData returns undefined for inactive entities", async () => {
@@ -32,7 +32,7 @@ Deno.test("readEntityData returns undefined for inactive entities", async () => 
   world.entities.destroy(entity);
 
   assertStrictEquals(
-    world.components.readEntityData(position, entity),
+    world.components.getEntityData(position, entity),
     undefined,
     "Expected undefined for inactive entity",
   );
@@ -46,7 +46,7 @@ Deno.test("readEntityData returns undefined for tag components", async () => {
   world.components.addToEntity(renderable, entity);
 
   assertStrictEquals(
-    world.components.readEntityData(renderable, entity),
+    world.components.getEntityData(renderable, entity),
     undefined,
     "Expected undefined for tag component",
   );
@@ -59,7 +59,7 @@ Deno.test("readEntityData still throws for unregistered components", async () =>
   const entity = createEntity(world);
 
   assertThrows(
-    () => world.components.readEntityData(unregistered, entity),
+    () => world.components.getEntityData(unregistered, entity),
     NotRegisteredError,
     "not registered",
   );
@@ -73,7 +73,7 @@ Deno.test("addToEntity upserts data for entities that already own the component"
   world.components.addToEntity(position, entity, { x: 1, y: 2 });
   world.components.addToEntity(position, entity, { y: 5 });
 
-  assertEquals(world.components.getEntityData(position, entity), { x: 1, y: 5 }, "Expected merged upsert data");
+  assertEquals(world.components.getEntityDataOrThrow(position, entity), { x: 1, y: 5 }, "Expected merged upsert data");
 });
 
 Deno.test("addToEntities reports zero ownership changes for a pure data upsert", async () => {
@@ -92,8 +92,12 @@ Deno.test("addToEntities reports zero ownership changes for a pure data upsert",
   }, { x: 9 });
 
   assertStrictEquals(changed, 0, "Expected no ownership changes");
-  assertEquals(world.components.getEntityData(position, first), { x: 9, y: 1 }, "Expected first entity upsert");
-  assertEquals(world.components.getEntityData(position, second), { x: 9, y: 2 }, "Expected second entity upsert");
+  assertEquals(world.components.getEntityDataOrThrow(position, first), { x: 9, y: 1 }, "Expected first entity upsert");
+  assertEquals(
+    world.components.getEntityDataOrThrow(position, second),
+    { x: 9, y: 2 },
+    "Expected second entity upsert",
+  );
 });
 
 Deno.test("setEntityData applies partial updates and keeps omitted keys", async () => {
@@ -104,7 +108,7 @@ Deno.test("setEntityData applies partial updates and keeps omitted keys", async 
   world.components.addToEntity(position, entity, { x: 3, y: 4 });
   world.components.setEntityData(position, entity, { x: 9 });
 
-  assertEquals(world.components.getEntityData(position, entity), { x: 9, y: 4 }, "Expected partial update");
+  assertEquals(world.components.getEntityDataOrThrow(position, entity), { x: 9, y: 4 }, "Expected partial update");
 });
 
 Deno.test("setEntityData rejects keys explicitly set to undefined", async () => {
@@ -119,7 +123,11 @@ Deno.test("setEntityData rejects keys explicitly set to undefined", async () => 
     'data field "x" cannot be undefined',
   );
 
-  assertEquals(world.components.getEntityData(position, entity), { x: 3, y: 4 }, "Expected rejected write to be inert");
+  assertEquals(
+    world.components.getEntityDataOrThrow(position, entity),
+    { x: 3, y: 4 },
+    "Expected rejected write to be inert",
+  );
 });
 
 Deno.test("createOrThrow creates active entities", async () => {
