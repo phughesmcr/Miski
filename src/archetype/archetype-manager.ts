@@ -11,7 +11,7 @@ import {
 import { EntityNotFoundError, formatEntityNotActive, NotRegisteredError } from "@/errors.ts";
 import type { DynamicComponentInstance } from "@/types/component.ts";
 import type { QueryInstance, QueryInstanceList } from "@/types/query.ts";
-import { Archetype, nextArchetypeStamp } from "./archetype.ts";
+import { Archetype, ArchetypeClock } from "./archetype.ts";
 import { ArchetypeBatchMove, type TransitionArchetypeGetter } from "./archetype-batch-move.ts";
 import { MembershipTracker } from "./membership-tracker.ts";
 import { TransitionWindow, type TransitionWindowSnapshot } from "./transition-window.ts";
@@ -42,7 +42,7 @@ function lowerBound(query: QueryInstance, index: number): number {
 }
 
 /** Insert an archetype into a query's sorted archetype list if it is not already listed. */
-function listArchetype(query: QueryInstance, archetype: Archetype): void {
+function listArchetype(query: QueryInstance, archetype: Archetype, clock: ArchetypeClock): void {
   const list = query.archetypes;
   const count = query.archetypeCount;
   const position = lowerBound(query, archetype.registryIndex);
@@ -50,18 +50,18 @@ function listArchetype(query: QueryInstance, archetype: Archetype): void {
   for (let i = count; i > position; i--) list[i] = list[i - 1]!;
   list[position] = archetype;
   query.archetypeCount = count + 1;
-  query.listStamp = nextArchetypeStamp();
+  query.listStamp = clock.next();
 }
 
 /** Remove an archetype from a query's sorted archetype list if it is listed. */
-function unlistArchetype(query: QueryInstance, archetype: Archetype): void {
+function unlistArchetype(query: QueryInstance, archetype: Archetype, clock: ArchetypeClock): void {
   const list = query.archetypes;
   const count = query.archetypeCount;
   const position = lowerBound(query, archetype.registryIndex);
   if (position >= count || list[position] !== archetype) return;
   for (let i = position; i < count - 1; i++) list[i] = list[i + 1]!;
   query.archetypeCount = count - 1;
-  query.listStamp = nextArchetypeStamp();
+  query.listStamp = clock.next();
 }
 
 /** ArchetypeManager handles creation and allocation of Archetypes */
@@ -74,6 +74,9 @@ export class ArchetypeManager {
 
   /** Entities in this archetype have no components */
   readonly root: Archetype;
+
+  /** This world's structural change clock, shared by its archetypes and query lists. */
+  readonly clock: ArchetypeClock = new ArchetypeClock();
 
   /** The maximum number of entities this manager can handle. */
   #capacity: number;
@@ -218,6 +221,7 @@ export class ArchetypeManager {
         this.#packSlot,
         this.#componentCount,
         this.#positions,
+        this.clock,
       );
       this.#registerArchetype(archetypeId, archetype);
     }
@@ -298,7 +302,7 @@ export class ArchetypeManager {
   #rebuildQueryMembership(queries: QueryInstanceList): void {
     const queryArray = queries.queries;
     const queryCount = queries.count;
-    const stamp = nextArchetypeStamp();
+    const stamp = this.clock.next();
     for (let q = 0; q < queryCount; q++) {
       const query = queryArray[q]!;
       query.archetypeCount = 0;
@@ -330,7 +334,7 @@ export class ArchetypeManager {
       if (archetype.getPopulationCount() === 0) continue;
       for (let q = 0; q < queryCount; q++) {
         const query = queryArray[q]!;
-        if (archetype.isCandidate(query)) listArchetype(query, archetype);
+        if (archetype.isCandidate(query)) listArchetype(query, archetype, this.clock);
       }
     }
     tracker.clearPopulated();
@@ -359,7 +363,7 @@ export class ArchetypeManager {
       if (archetype.getPopulationCount() !== 0) continue;
       for (let q = 0; q < queryCount; q++) {
         const query = queryArray[q]!;
-        if (archetype.isCandidate(query)) unlistArchetype(query, archetype);
+        if (archetype.isCandidate(query)) unlistArchetype(query, archetype, this.clock);
       }
     }
     tracker.clearEmptied();
@@ -390,7 +394,7 @@ export class ArchetypeManager {
 
     // Create root archetype with properly sized bitfield for components
     const rootBitfield = new BooleanArray(componentCount);
-    this.root = new Archetype(capacity, [], rootBitfield, packSlot, componentCount, this.#positions);
+    this.root = new Archetype(capacity, [], rootBitfield, packSlot, componentCount, this.#positions, this.clock);
     this.#registerArchetype(this.root.id, this.root);
   }
 
@@ -733,6 +737,7 @@ export class ArchetypeManager {
         this.#packSlot,
         componentCount,
         this.#positions,
+        this.clock,
       );
       this.#registerArchetype(archetype.id, archetype);
     }

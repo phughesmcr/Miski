@@ -17,26 +17,21 @@ function isQueryMatch(target: BooleanArray, query: QueryInstance): boolean {
 const INITIAL_LIST_LENGTH = 16;
 
 /**
- * Process-wide structural change clock. Every population change of any archetype takes the next tick, so a
- * value read from {@link archetypeClock} orders before every later change of every archetype. It is never
- * rewound, including by rollback, so a stamp can never be mistaken for an older one.
- */
-let clock = 0;
-
-/**
- * The latest structural change tick handed to any archetype.
+ * A world's structural change clock. Every population change of one of the world's archetypes, and every change
+ * to one of its query archetype lists, takes the next tick, so a value read from {@link tick} orders before every
+ * later change in that world. Worlds have separate clocks, so a change in one world never makes another world's
+ * retained query results look stale. It is never rewound, including by rollback or load, so a stamp can never be
+ * mistaken for an older one.
  * @internal
  */
-export function archetypeClock(): number {
-  return clock;
-}
+export class ArchetypeClock {
+  /** The latest tick handed out. */
+  tick: number = 0;
 
-/**
- * Take a new structural change tick (also used for query archetype-list changes).
- * @internal
- */
-export function nextArchetypeStamp(): number {
-  return ++clock;
+  /** Take a new tick. */
+  next(): number {
+    return ++this.tick;
+  }
 }
 
 /**
@@ -73,6 +68,9 @@ export class Archetype {
   /** Pack slot -> entity at public / query edges */
   #packSlot: PackSlot;
 
+  /** The owning world's structural change clock */
+  readonly #clock: ArchetypeClock;
+
   /** Number of entities currently associated with this archetype */
   #populationCount: number;
 
@@ -107,7 +105,7 @@ export class Archetype {
   emptiedPending: boolean = false;
 
   /**
-   * {@link archetypeClock} tick of the last change to this archetype's population or its order.
+   * {@link ArchetypeClock} tick of the last change to this archetype's population or its order.
    * Query results built after this tick still hold this archetype's entities in the right order.
    * @internal
    */
@@ -130,6 +128,7 @@ export class Archetype {
    * @param packSlot - Packs a live slot into an entity handle (defaults to generation 0)
    * @param transitionCapacity - Size of add/remove transition edge arrays (world component count)
    * @param positions - Slot-to-position table shared by a world's archetypes (allocated when omitted)
+   * @param clock - The owning world's structural change clock (a private clock when omitted)
    * @returns a new Archetype object
    */
   constructor(
@@ -139,8 +138,10 @@ export class Archetype {
     packSlot: PackSlot = (slot) => packEntity(slot, 0),
     transitionCapacity: number = 0,
     positions: EntityArray = createSlotArray(capacity),
+    clock: ArchetypeClock = new ArchetypeClock(),
   ) {
     this.#entityCapacity = capacity;
+    this.#clock = clock;
     this.#packSlot = packSlot;
     if (bitfield === undefined) {
       // Component ids are world-registry positions, so size by the highest id rather than the count.
@@ -189,7 +190,7 @@ export class Archetype {
     this.#handleList[position] = this.#packSlot(slot);
     this.#positions[slot] = position;
     this.#populationCount = position + 1;
-    this.stamp = ++clock;
+    this.stamp = ++this.#clock.tick;
     return true;
   }
 
@@ -204,7 +205,7 @@ export class Archetype {
       this.#positions[lastSlot] = removeIndex;
     }
     this.#populationCount = lastIndex;
-    this.stamp = ++clock;
+    this.stamp = ++this.#clock.tick;
     return true;
   }
 
@@ -367,7 +368,7 @@ export class Archetype {
       handles[i] = packSlot(slot);
     }
     this.#populationCount = slots.length;
-    this.stamp = ++clock;
+    this.stamp = ++this.#clock.tick;
   }
 
   /**
@@ -385,7 +386,7 @@ export class Archetype {
    */
   clearPopulation(): void {
     this.#populationCount = 0;
-    this.stamp = ++clock;
+    this.stamp = ++this.#clock.tick;
   }
 
   /**

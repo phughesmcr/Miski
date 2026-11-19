@@ -1,6 +1,6 @@
 import { BooleanArray } from "@phughesmcr/booleanarray";
 
-import { archetypeClock } from "@/archetype/archetype.ts";
+import type { ArchetypeClock } from "@/archetype/archetype.ts";
 import { ID_KEY } from "@/constants.ts";
 import { componentDisplayName, formatComponentNotRegistered, NotRegisteredError } from "@/errors.ts";
 import type { DynamicComponentInstance } from "@/types/component.ts";
@@ -110,9 +110,9 @@ function createQueryInstance(getInstances: ComponentInstanceGetter, size: number
  * Whether a query's retained result still lists exactly the entities of its archetypes, in order.
  * The result is current when neither the archetype list nor any listed archetype changed after it was filled.
  */
-function isResultCurrent(instance: QueryInstance): boolean {
+function isResultCurrent(instance: QueryInstance, clock: ArchetypeClock): boolean {
   const filled = instance.resultStamp;
-  if (filled === archetypeClock()) return true;
+  if (filled === clock.tick) return true;
   if (instance.listStamp > filled) return false;
   const archetypes = instance.archetypes;
   const archetypeCount = instance.archetypeCount;
@@ -145,6 +145,9 @@ export class QueryManager {
   /** Capacity of each query's lazily allocated entity result. */
   readonly #capacity: number;
 
+  /** The world's structural change clock, which stamps retained results. */
+  readonly #clock: ArchetypeClock;
+
   /**
    * Whole-cache invalidation epoch. Ordinary structural changes are tracked per archetype (see
    * {@link isResultCurrent}); this is only bumped by {@link invalidate}, e.g. after a rollback restore.
@@ -163,13 +166,16 @@ export class QueryManager {
    * @param capacity - The world's entity capacity
    * @param ensureQueryMembership - Refreshes query-to-archetype membership
    * @param registerQueryMembership - Registers one query against existing archetypes
+   * @param clock - The world's structural change clock
    */
   constructor(
     dependencies: QueryManagerDependencies,
     capacity: number,
     ensureQueryMembership: (queries: QueryInstanceList) => void,
     registerQueryMembership: (query: QueryInstance) => void,
+    clock: ArchetypeClock,
   ) {
+    this.#clock = clock;
     this.#dependencies = dependencies;
     this.#ensureQueryMembership = ensureQueryMembership;
     this.#registerQueryMembership = registerQueryMembership;
@@ -205,7 +211,7 @@ export class QueryManager {
     this.ensureQueryMembership();
 
     const retained = instance.result;
-    if (retained !== undefined && instance.resultEpoch === this.#epoch && isResultCurrent(instance)) {
+    if (retained !== undefined && instance.resultEpoch === this.#epoch && isResultCurrent(instance, this.#clock)) {
       return retained;
     }
 
@@ -220,7 +226,7 @@ export class QueryManager {
       const archetype = archetypes[i]!;
       result.appendDense(archetype.slotList, archetype.handleList, archetype.getPopulationCount());
     }
-    instance.resultStamp = archetypeClock();
+    instance.resultStamp = this.#clock.tick;
     instance.resultEpoch = this.#epoch;
     return result;
   }

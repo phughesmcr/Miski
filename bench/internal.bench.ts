@@ -128,6 +128,7 @@ const queryManager = new QueryManager(
   MEDIUM_CAPACITY,
   (queries) => archetypeManager.ensureQueryMembership(queries),
   (query) => archetypeManager.registerQuery(query),
+  archetypeManager.clock,
 );
 queryManager.entityList(cachedQuery);
 

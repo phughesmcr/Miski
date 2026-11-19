@@ -360,6 +360,7 @@ export class World {
       (query) => {
         this.#archetypeManager.registerQuery(query, true);
       },
+      this.#archetypeManager.clock,
     );
     this.#archetypeQueryIterators = new ArchetypeQueryIterators({
       instanceWithMembership: (query) => this.#queryManager.instanceWithMembership(query),
