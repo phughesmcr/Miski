@@ -86,6 +86,38 @@ Deno.test("set / setAt mark owners changed and bump the revision once per real c
   await world.destroy();
 });
 
+Deno.test("set / setAt cover enum, entity and object columns and skip tracking for non-owner slots", async () => {
+  const rich = new Component({
+    name: "rich",
+    schema: { state: field.enum(["idle", "run"]), target: field.entity(), mesh: field.object<{ id: number }>() },
+  });
+  const world = await createTestWorld([rich]);
+  const instance = world.components.require(rich);
+  const a = createEntity(world);
+  const t = createEntity(world);
+  const free = createEntity(world);
+  world.components.addToEntity(rich, a, { state: "idle", target: null, mesh: { id: 0 } });
+  instance.proxy!.entity = a;
+  const mesh = { id: 1 };
+  instance.set(a, "state", "run");
+  instance.set(a, "target", t);
+  instance.setAt(entityIndex(a) as SlotIndex, "mesh", mesh);
+  assertEquals(instance.proxy!.entity, a, "cursor unchanged");
+  assertEquals(instance.get(a, "state") as unknown, "run", "enum written");
+  assertEquals(instance.get(a, "target") as unknown, t, "entity written");
+  assert(instance.get(a, "mesh") as unknown === mesh, "object written");
+  assertThrows(() => instance.set(a, "state", "fly" as never), ComponentDataError, "");
+  assertThrows(() => instance.set(a, "target", asEntity(1_000)), EntityNotFoundError, "not active");
+  world.entities.destroy(t);
+  assertEquals(instance.get(a, "target") as unknown, null, "stale entity decodes to null");
+
+  const revision = instance.revision;
+  instance.setAt(entityIndex(free) as SlotIndex, "state", "run");
+  assertEquals(instance.revision, revision, "non-owner setAt does not bump the revision");
+  assert(!ids(world.components.getChanged(rich)).includes(free), "non-owner setAt is not marked changed");
+  await world.destroy();
+});
+
 Deno.test("[Ctor, initial] column tuples are rejected with a SpecError", () => {
   const tuple = [Float32Array, 5];
   assertThrows(

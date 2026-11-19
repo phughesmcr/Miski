@@ -17,13 +17,17 @@
   typed-array constructor instead.
 - **Breaking (types):** `ComponentFieldSpec` is now `TypedArrayConstructor |
   FieldDescriptor`, `SchemaPropertyArray` drops its tuple branch, and
-  `DataRelationSpec` schemas are `Record<string, TypedArrayConstructor>`. A
+  `DataRelationSpec` and `createEcsWorld` relation-option schemas are
+  `Record<string, TypedArrayConstructor>`. A
   schema annotated with PartitionedBuffer's `Schema<T>` (whose properties allow
   tuples) no longer type-checks as a component schema; use `FieldSchema<T>` or
   `defineComponentSchema`.
-- **Breaking (types):** `StorageProxySpec` no longer has `markChanged`, and
-  `ComponentInstanceSpec` gains required `writers` and `capacity`. Both only
-  matter if you construct `StorageProxy` or `ComponentInstance` yourself.
+- **Breaking (types):** `StorageProxySpec` no longer has `markChanged`; the
+  `StorageProxy` constructor now takes a required `writers` map (from the
+  internal column writers) instead of `coercionScratch`, `sideFields` and
+  `componentName`; and `ComponentInstanceSpec` gains required `writers` and
+  `capacity`. These only matter if you construct `StorageProxy` or
+  `ComponentInstance` yourself.
 - Add `WorldRollbackScope`: a rollback point for `using` blocks. Leaving the
   block without `commit()` restores the world, so a throw can't leave the
   world's one rollback scope open (which blocked every later capture and world

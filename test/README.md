@@ -24,6 +24,7 @@ Runtime tests live in `*.test.ts` files and run via `deno test` (see `deno.json`
 | `component_storage_integrity.test.ts` | Capped (dense-row) storage under stray non-owner writes, ownership acquisition, cap clamping, column constructors |
 | `component_rollback_memory.test.ts` | Capped owners and dense rows through rollback and removal, sparse changed window, `getActive` scratch growth, 16-bit-capacity rollback |
 | `component_tracking_regressions.test.ts` | Changed marking for newly owned components, `applyCheckpoint` during `getOwners` iteration, failed bundle spawns stripping committed components |
+| `component_write_regressions.test.ts` | `set` / `setAt` leave the shared proxy cursor alone across every field kind, changed marking and revision per real write, `[Ctor, initial]` tuples rejected with `SpecError` |
 | `entity_slot_reuse.test.ts` | Next-fit slot reissue, churn rotation, stale handles not reissued, generation wrap limit |
 | `query_archetype_perf.test.ts` | Query result order and generations through moves, batches and rollback; refills only for related changes, by copying handles |
 | `query_schema_integrity.test.ts` | System arity forwarding, query alias keys and immutable metadata, retained result buffers, schema hashing and bootstrap validation |
