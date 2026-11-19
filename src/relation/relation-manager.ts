@@ -8,7 +8,7 @@ import {
 import type { Query } from "@/query/query.ts";
 import type { DynamicComponent, DynamicComponentInstance } from "@/types/component.ts";
 import type { QueryInstance } from "@/types/query.ts";
-import type { ComponentPartitions, SchemaOrNull } from "@/types/partitions.ts";
+import type { SchemaOrNull } from "@/types/partitions.ts";
 import type {
   AnyRelation,
   BorrowedHierarchyList,
@@ -18,7 +18,13 @@ import type {
 } from "@/types/world-relation-api.ts";
 import type { Relation } from "./relation.ts";
 import { isRelation } from "./relation.ts";
-import { NONE, RelationStore, type RelationStoreHost, type RelationStoreSnapshot } from "./relation-store.ts";
+import {
+  chainReaches,
+  NONE,
+  RelationStore,
+  type RelationStoreHost,
+  type RelationStoreSnapshot,
+} from "./relation-store.ts";
 
 /** Rollback capture of every relation store, in registration order. */
 export type RelationManagerSnapshot = readonly RelationStoreSnapshot[];
@@ -78,13 +84,18 @@ export class RelationManager {
 
   /** @returns `true` if `component` is a relation registered in this world */
   isRegisteredRelation(component: DynamicComponent): boolean {
-    const instance = this.#host.getInstance(component);
-    return instance !== undefined && this.#byInstance[instance.id] !== undefined;
+    return this.#find(component) !== undefined;
   }
 
-  store(relation: AnyRelation | DynamicComponent): RelationStore {
+  /** @returns the store of a relation registered in this world, or `undefined` */
+  #find(relation: AnyRelation | DynamicComponent): RelationStore | undefined {
     const instance = this.#host.getInstance(relation);
-    const store = instance === undefined ? undefined : this.#byInstance[instance.id];
+    return instance === undefined ? undefined : this.#byInstance[instance.id];
+  }
+
+  /** @throws {NotRegisteredError} - If `relation` is not a relation registered in this world */
+  store(relation: AnyRelation | DynamicComponent): RelationStore {
+    const store = this.#find(relation);
     if (store === undefined) throw new NotRegisteredError(formatComponentNotRegistered(relation.name));
     return store;
   }
@@ -156,7 +167,8 @@ export class RelationManager {
       }
     }
     if (!store.acyclic) return;
-    // Parents after the restore: captured entries override the current hierarchy.
+    // Parents after the restore: captured entries override the current hierarchy. Acyclic implies exclusive, so
+    // each entry has at most one target.
     const overrides = new Map<number, Entity | undefined>();
     for (const { entity, pairs } of entries) overrides.set(entityIndex(entity), pairs.targets[0]);
     const parentOf = (entity: Entity): Entity | undefined => {
@@ -164,12 +176,8 @@ export class RelationManager {
       return overrides.has(slot) ? overrides.get(slot) : store.parentOf(slot);
     };
     for (const { entity, pairs } of entries) {
-      let current = pairs.targets[0];
-      for (let steps = 0; current !== undefined && steps <= this.#host.capacity; steps++) {
-        if (current === entity) {
-          throw new RangeError(`Relation "${store.name}" checkpoint would form a cycle through ${entity}.`);
-        }
-        current = parentOf(current);
+      if (chainReaches(pairs.targets[0], entity, parentOf, this.#host.capacity)) {
+        throw new RangeError(`Relation "${store.name}" checkpoint would form a cycle through ${entity}.`);
       }
     }
   }
@@ -191,8 +199,7 @@ export class RelationManager {
       },
       remove: (relation, source, target) => {
         assertInitialized();
-        const store = this.store(relation);
-        return target === undefined ? store.removeAll(source) > 0 : store.remove(source, target);
+        return this.store(relation).remove(source, target);
       },
       removeAll: (relation, source) => {
         assertInitialized();
@@ -200,9 +207,12 @@ export class RelationManager {
       },
       has: (relation, source, target) => {
         assertInitialized();
+        return this.store(relation).rowOf(source, target) !== NONE;
+      },
+      hasAny: (relation, source) => {
+        assertInitialized();
         const store = this.store(relation);
-        if (target === undefined) return host.isActive(source) && store.sourceCount[entityIndex(source)] !== 0;
-        return store.rowOf(source, target) !== NONE;
+        return host.isActive(source) && store.sourceCount[entityIndex(source)] !== 0;
       },
       getTarget: (relation, source) => {
         assertInitialized();
@@ -223,7 +233,7 @@ export class RelationManager {
         assertInitialized();
         return this.store(relation).fillAllTargets() as unknown as BorrowedRelationList;
       },
-      queryList: (query, relation, target) => {
+      queryList: (relation, target, query) => {
         assertInitialized();
         const store = this.store(relation);
         return store.fillQuery(host.registerQuery(query), target) as unknown as BorrowedRelationList;
@@ -257,16 +267,13 @@ export class RelationManager {
         assertInitialized();
         return this.store(relation).traverse(root, visited) as unknown as BorrowedHierarchyList;
       },
-      getInstance: <TSchema extends SchemaOrNull>(relation: Relation<TSchema>): RelationInstance<TSchema> => {
+      getInstance: <TSchema extends SchemaOrNull>(relation: Relation<TSchema>) => {
         assertInitialized();
-        const store = this.store(relation);
-        return {
-          type: relation,
-          get partitions(): ComponentPartitions<TSchema> {
-            return store.partitions as unknown as ComponentPartitions<TSchema>;
-          },
-          rowOf: (source: Entity, target: Entity): number => store.rowOf(source, target),
-        };
+        return this.#find(relation)?.view as RelationInstance<TSchema> | undefined;
+      },
+      getInstanceOrThrow: <TSchema extends SchemaOrNull>(relation: Relation<TSchema>) => {
+        assertInitialized();
+        return this.store(relation).view as RelationInstance<TSchema>;
       },
     };
     return Object.freeze(api);

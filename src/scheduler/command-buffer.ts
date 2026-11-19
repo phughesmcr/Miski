@@ -15,12 +15,13 @@ import {
   SpecError,
   WorldStateError,
 } from "@/errors.ts";
-import type { ComponentBundle, ComponentBundleEntryInput } from "@/types/component-bundle.ts";
+import type { ComponentBundleEntryInput } from "@/types/component-bundle.ts";
 import type { DynamicComponent } from "@/types/component.ts";
-import type { SchemaOrNull, SchemaValues } from "@/types/partitions.ts";
+import type { ComponentValue, SchemaOrNull } from "@/types/partitions.ts";
 import type { PendingEntity } from "@/types/scheduler.ts";
-import { isRelation } from "@/relation/relation.ts";
-import { isEntityField } from "@/schema/field.ts";
+import type { AnyRelation, RelationDataInput } from "@/types/world-relation-api.ts";
+import { isRelation, type Relation } from "@/relation/relation.ts";
+import { type EntityField, isEntityField } from "@/schema/field.ts";
 import { growTypedArray, hasOwnProperty } from "@/utils.ts";
 import { World } from "@/world/world.ts";
 
@@ -35,10 +36,15 @@ const OP_DESTROY = 3;
 const OP_ADD = 4;
 const OP_SET = 5;
 const OP_REMOVE = 6;
-const OP_NAMES: readonly string[] = ["", "spawn", "spawn", "destroy", "add", "set", "remove"];
+const OP_RELATE = 7;
+const OP_UNRELATE = 8;
+const OP_NAMES: readonly string[] = ["", "spawn", "spawn", "destroy", "add", "set", "remove", "relate", "unrelate"];
 
 /** Components with more fields than this cannot key their payload shape by a 32-bit field mask. */
 const MAX_MASK_FIELDS = 31;
+/** What to use instead when a relation is passed to a component command. */
+const RELATION_ADVICE = "queue its pairs with relate and unrelate";
+
 /** Mask value for payloads of components too wide for a field mask. */
 const WIDE_MASK = -1;
 
@@ -54,10 +60,35 @@ const INITIAL_PAYLOAD = 128;
 
 let nextEpochSeed = 0;
 
-/** Per-component data cached by a buffer on first use. */
+/**
+ * Component data accepted by a {@link CommandBuffer}: like the direct API's, except that `field.entity()` fields
+ * may also hold a pending entity from the same buffer.
+ */
+export type CommandData<TValue> = TValue extends null ? never : {
+  [K in keyof TValue]?: TValue[K] extends EntityField ? Entity | PendingEntity | null : ComponentValue<TValue>[K];
+};
+
+/** A `CommandBuffer.spawn` bundle tuple checked against one concrete component definition. */
+export type CommandBundleEntryFor<TComponent extends DynamicComponent> = TComponent extends
+  Component<infer TValue, infer TStorage> ? TStorage extends null ? readonly [TComponent] :
+  readonly [TComponent] | readonly [TComponent, CommandData<TValue>] :
+  never;
+
+/** A `CommandBuffer.spawn` bundle whose entries are checked component-by-component. */
+export type CommandBundle<TBundle extends readonly ComponentBundleEntryInput[]> = {
+  readonly [I in keyof TBundle]: TBundle[I] extends readonly [infer TComponent extends DynamicComponent] ?
+    CommandBundleEntryFor<TComponent> :
+    TBundle[I] extends readonly [infer TComponent extends DynamicComponent, unknown] ?
+      CommandBundleEntryFor<TComponent> :
+    never;
+};
+
+/** Per-component (or per-relation) data cached by a buffer on first use. */
 type ComponentInfo = {
   readonly component: DynamicComponent;
   readonly name: string;
+  /** `true` for a relation: its keys are pair data fields and it is only valid in relate / unrelate. */
+  readonly isRelation: boolean;
   /** Storage field names in schema order. */
   readonly keys: readonly string[];
   /** Field name to index in `keys`. */
@@ -69,16 +100,17 @@ type ComponentInfo = {
   /** Per field: 1 for `field.entity()` fields, whose dead targets are written as `null` at flush. */
   readonly entityRef: Uint8Array;
   readonly isTag: boolean;
-  /** Reusable data objects holding exactly the provided fields, keyed by field mask. */
+  /** Reusable data objects holding exactly the provided fields, keyed by field mask (unused for relations). */
   readonly byMask: Map<number, Record<string, unknown>>;
-  /** Reusable all-fields data object for components too wide for a field mask. */
+  /** Reusable all-fields data object for components too wide for a field mask, and for relation pair data. */
   readonly row: Record<string, unknown>;
   /** Every reusable data object above, so side values can be released after a flush. */
   readonly dataObjects: Record<string, unknown>[];
 };
 
 /**
- * A queue of structural changes (spawn, destroy, add, set, remove) applied to a world later, at `flush()`.
+ * A queue of structural changes (spawn, destroy, add, set, remove, relate, unrelate) applied to a world later, at
+ * `flush()`.
  *
  * Use it to change entities while iterating a borrowed query view, which direct mutation would invalidate. A
  * {@link Schedule} owns one and flushes it at the end of each phase.
@@ -88,11 +120,16 @@ type ComponentInfo = {
  * (one whose schema entry is not a typed-array constructor) is held by reference in a side column, validated by the
  * world at flush, and released after the flush. Steady-state queuing and flushing does not allocate.
  *
+ * Pending entities from {@link CommandBuffer.spawn} can be used wherever an entity is accepted: as a command target,
+ * as either end of a relation pair, and as a `field.entity()` value (including in a later spawn's bundle, so a parent
+ * and a child that points at it can be spawned in one buffer).
+ *
  * At flush, commands apply in queue order exactly as the direct world calls would, except that a command whose
- * target entity is no longer active is skipped, and a queued `field.entity()` value whose target is no longer active
- * is written as `null` (as a stale stored reference reads) instead of throwing. A flush never stops partway: if a command throws, the remaining
- * commands still apply, and the first error (prefixed with the failing command) is rethrown once the queue is drained.
- * Commands that target the entity of a failed spawn are skipped.
+ * target entity (for a relation command, either entity) is no longer active is skipped, and a queued `field.entity()`
+ * value whose target is no longer active (or whose spawn failed) is written as `null` (as a stale stored reference
+ * reads) instead of throwing. A flush never stops partway: if a command throws, the remaining commands still apply,
+ * and the first error (prefixed with the failing command) is rethrown once the queue is drained. Commands that target
+ * the entity of a failed spawn are skipped.
  */
 export class CommandBuffer {
   readonly #world: World;
@@ -100,8 +137,10 @@ export class CommandBuffer {
   #ops: Uint8Array = new Uint8Array(INITIAL_COMMANDS);
   /** Buffer-local component index of each command. */
   #components: Uint16Array = new Uint16Array(INITIAL_COMMANDS);
-  /** Target entity, or a negative pending handle. */
+  /** Target entity (for a relation command, the source), or a negative pending handle. */
   #targets: Int32Array = new Int32Array(INITIAL_COMMANDS);
+  /** Relation commands: the pair target entity, or a negative pending handle. */
+  #pairTargets: Int32Array = new Int32Array(INITIAL_COMMANDS);
   #payloadStarts: Uint32Array = new Uint32Array(INITIAL_COMMANDS);
   /** Payload field count; for a spawn record, its bundle entry count. */
   #payloadCounts: Uint32Array = new Uint32Array(INITIAL_COMMANDS);
@@ -169,9 +208,10 @@ export class CommandBuffer {
    * @throws {TypeError} If a component is a relation
    * @throws {RangeError} If a component appears twice in the bundle
    * @throws {ComponentDataError} If data names an unknown field or a numeric field value is not a finite number
+   * @throws {SpecError} If a `field.entity()` value is a pending entity this buffer did not spawn since its last flush
    */
   spawn<const TBundle extends readonly ComponentBundleEntryInput[]>(
-    bundle?: TBundle & ComponentBundle<TBundle>,
+    bundle?: TBundle & CommandBundle<TBundle>,
   ): PendingEntity {
     this.#assertNotFlushing();
     if (this.#spawnCount >= this.#world.entities.capacity) {
@@ -242,7 +282,7 @@ export class CommandBuffer {
    * @throws {NotRegisteredError} If the component is not registered in the world
    * @throws {TypeError} If the component is a relation
    * @throws {ComponentDataError} If data names an unknown field or a numeric field value is not a finite number
-   * @throws {SpecError} If `entity` is not a valid handle for this world or buffer
+   * @throws {SpecError} If `entity`, or a pending `field.entity()` value, is not a valid handle for this world or buffer
    */
   add(component: Component<null, null>, entity: Entity | PendingEntity): void;
   /**
@@ -254,7 +294,7 @@ export class CommandBuffer {
   add<TValue extends Exclude<SchemaOrNull, null>, TStorage extends Exclude<SchemaOrNull, null> = TValue>(
     component: Component<TValue, TStorage>,
     entity: Entity | PendingEntity,
-    data?: Partial<SchemaValues<TValue>>,
+    data?: CommandData<TValue>,
   ): void;
   add(component: DynamicComponent, entity: Entity | PendingEntity, data?: unknown): void {
     this.#queueData(OP_ADD, component, entity, data);
@@ -268,12 +308,12 @@ export class CommandBuffer {
    * @throws {NotRegisteredError} If the component is not registered in the world
    * @throws {TypeError} If the component is a relation
    * @throws {ComponentDataError} If the component is a tag, data names an unknown field, or a numeric value is not finite
-   * @throws {SpecError} If `entity` is not a valid handle for this world or buffer
+   * @throws {SpecError} If `entity`, or a pending `field.entity()` value, is not a valid handle for this world or buffer
    */
   set<TValue extends Exclude<SchemaOrNull, null>, TStorage extends Exclude<SchemaOrNull, null> = TValue>(
     component: Component<TValue, TStorage>,
     entity: Entity | PendingEntity,
-    data: Partial<SchemaValues<TValue>>,
+    data: CommandData<TValue>,
   ): void {
     this.#queueData(OP_SET, component as unknown as DynamicComponent, entity, data);
   }
@@ -295,6 +335,39 @@ export class CommandBuffer {
     const target = this.#validateTarget(entity);
     this.#reserveRecords(1);
     this.#commitSimple(OP_REMOVE, index, target);
+  }
+
+  /**
+   * Queue relating `source` to `target` (as `world.relations.add`).
+   * @param relation The relation
+   * @param source The source entity, or a pending entity from {@link spawn}
+   * @param target The target entity, or a pending entity from {@link spawn}
+   * @param data Pair data; omitted fields keep their values, or start at zero on a new pair
+   * @throws {NotRegisteredError} If the relation is not registered in the world
+   * @throws {TypeError} If `relation` is not a relation, or `data` is not an object
+   * @throws {ComponentDataError} If data names an unknown field or a value is not a finite number
+   * @throws {SpecError} If `source` or `target` is not a valid handle for this world or buffer
+   */
+  relate<TSchema extends SchemaOrNull>(
+    relation: Relation<TSchema>,
+    source: Entity | PendingEntity,
+    target: Entity | PendingEntity,
+    data?: RelationDataInput<TSchema>,
+  ): void {
+    this.#queuePair(OP_RELATE, relation, source, target, data);
+  }
+
+  /**
+   * Queue removing the pair `source -> target` (as `world.relations.remove`; a missing pair is skipped).
+   * @param relation The relation
+   * @param source The source entity, or a pending entity from {@link spawn}
+   * @param target The target entity, or a pending entity from {@link spawn}
+   * @throws {NotRegisteredError} If the relation is not registered in the world
+   * @throws {TypeError} If `relation` is not a relation
+   * @throws {SpecError} If `source` or `target` is not a valid handle for this world or buffer
+   */
+  unrelate(relation: AnyRelation, source: Entity | PendingEntity, target: Entity | PendingEntity): void {
+    this.#queuePair(OP_UNRELATE, relation, source, target, undefined);
   }
 
   /**
@@ -400,6 +473,24 @@ export class CommandBuffer {
     this.#commandCount++;
   }
 
+  #queuePair(op: number, relation: AnyRelation, source: unknown, target: unknown, data: unknown): void {
+    this.#assertNotFlushing();
+    const index = this.#relationInfoFor(relation);
+    const info = this.#infos[index]!;
+    const sourceHandle = this.#validateTarget(source as Entity);
+    const targetHandle = this.#validateTarget(target as Entity);
+    this.#reserveRecords(1);
+    const record = this.#recordCount;
+    this.#ops[record] = op;
+    this.#components[record] = index;
+    this.#targets[record] = sourceHandle;
+    this.#pairTargets[record] = targetHandle;
+    // Pair data is numeric only, so staging never touches the side column.
+    this.#payloadCount = this.#stagePayload(record, info, data, this.#payloadCount);
+    this.#recordCount++;
+    this.#commandCount++;
+  }
+
   /** Forget side values staged by a rejected command, so the buffer does not keep them alive. */
   #dropStagedSide(): void {
     const values = this.#sideValues;
@@ -428,26 +519,29 @@ export class CommandBuffer {
     let mask = 0;
     if (data !== undefined) {
       if (data === null || typeof data !== "object") {
-        throw new TypeError(`Component data for "${info.name}" must be an object.`);
+        throw new TypeError(`${info.isRelation ? "Relation" : "Component"} data for "${info.name}" must be an object.`);
       }
       const values = data as Record<string, unknown>;
       for (const key in values) {
         if (!hasOwnProperty(values, key)) continue;
         const field = info.keyIndex[key];
         if (field === undefined) {
-          throw new ComponentDataError(`Component ${info.name} does not define data field "${key}".`);
+          const kind = info.isRelation ? "Relation" : "Component";
+          throw new ComponentDataError(`${kind} ${info.name} does not define data field "${key}".`);
         }
         const value = values[key];
         if (position >= this.#payloadFields.length) this.#growPayload(position + 1);
         if (info.side[field] === 1) {
-          // Validated by the world at flush; queued by reference.
+          // Validated by the world at flush; queued by reference. A pending entity must come from this buffer.
+          if (info.entityRef[field] === 1 && typeof value === "number" && value < 0) this.#validateTarget(value);
           const slot = this.#sideStaged++;
           this.#sideValues[slot] = value;
           if (this.#sideStaged > this.#sideHigh) this.#sideHigh = this.#sideStaged;
           this.#payloadValues[position] = slot;
         } else {
           if (typeof value !== "number" || !Number.isFinite(value)) {
-            throw new ComponentDataError(`Component ${info.name} data field "${key}" must be a finite number.`);
+            const kind = info.isRelation ? "Relation" : "Component";
+            throw new ComponentDataError(`${kind} ${info.name} data field "${key}" must be a finite number.`);
           }
           this.#payloadValues[position] = value;
         }
@@ -464,14 +558,28 @@ export class CommandBuffer {
 
   /** Resolve (and on first use, validate and cache) a component's buffer-local index. */
   #infoFor(component: DynamicComponent): number {
+    const index = this.#cachedInfoFor(component);
+    // Rejected at enqueue, like the direct calls, so a spawn never applies half a bundle.
+    if (this.#infos[index]!.isRelation) throw relationComponentError(component.name, RELATION_ADVICE);
+    return index;
+  }
+
+  /** Resolve a relation's buffer-local index; its info describes the pair data fields. */
+  #relationInfoFor(relation: AnyRelation): number {
+    const index = this.#cachedInfoFor(relation as unknown as DynamicComponent);
+    const info = this.#infos[index]!;
+    if (!info.isRelation) throw new TypeError(`Component "${info.name}" is not a relation.`);
+    return index;
+  }
+
+  #cachedInfoFor(component: DynamicComponent): number {
     const cached = this.#infoIndex.get(component);
     if (cached !== undefined) return cached;
     if (!this.#world.components.isRegistered(component)) {
       throw new NotRegisteredError(formatComponentNotRegistered(componentDisplayName(component)));
     }
-    // Rejected at enqueue, like the direct calls, so a spawn never applies half a bundle.
-    if (isRelation(component)) throw relationComponentError(component.name);
-    const schema = component.schema as Readonly<Record<string, unknown>> | null;
+    const relation = isRelation(component);
+    const schema = (relation ? component.dataSchema : component.schema) as Readonly<Record<string, unknown>> | null;
     const keys = schema === null ? [] : Object.keys(schema);
     const keyIndex: Record<string, number> = Object.create(null);
     const side = new Uint8Array(keys.length);
@@ -492,6 +600,7 @@ export class CommandBuffer {
     this.#infos.push({
       component,
       name: component.name,
+      isRelation: relation,
       keys,
       keyIndex,
       side,
@@ -521,7 +630,7 @@ export class CommandBuffer {
   }
 
   /** Validate a target handle; real entities pass through, pending handles must belong to this buffer and epoch. */
-  #validateTarget(entity: Entity | PendingEntity): number {
+  #validateTarget(entity: Entity | PendingEntity | number): number {
     const value = entity as number;
     if (!Number.isInteger(value)) throw new SpecError(`Invalid entity handle ${String(entity)}`);
     if (value >= 0) {
@@ -548,6 +657,7 @@ export class CommandBuffer {
     this.#ops = growTypedArray(this.#ops, size);
     this.#components = growTypedArray(this.#components, size);
     this.#targets = growTypedArray(this.#targets, size);
+    this.#pairTargets = growTypedArray(this.#pairTargets, size);
     this.#payloadStarts = growTypedArray(this.#payloadStarts, size);
     this.#payloadCounts = growTypedArray(this.#payloadCounts, size);
     this.#masks = growTypedArray(this.#masks, size);
@@ -581,6 +691,10 @@ export class CommandBuffer {
       return;
     }
     const info = this.#infos[this.#components[record]!]!;
+    if (op === OP_RELATE || op === OP_UNRELATE) {
+      this.#applyPair(op, record, info, entity);
+      return;
+    }
     const component = info.component;
     if (op === OP_REMOVE) {
       world.components.removeFromEntity(component, entity);
@@ -599,6 +713,29 @@ export class CommandBuffer {
         this.#dataFor(record, info, entity, false) as never,
       );
     }
+  }
+
+  #applyPair(op: number, record: number, info: ComponentInfo, source: Entity): void {
+    const target = this.#resolve(this.#pairTargets[record]!) as Entity;
+    if ((target as number) < 0 || !this.#world.entities.isActive(target)) return;
+    const relation = info.component as unknown as AnyRelation;
+    if (op === OP_UNRELATE) {
+      this.#world.relations.remove(relation, source, target);
+    } else if (this.#payloadCounts[record] === 0) {
+      this.#world.relations.add(relation, source, target);
+    } else {
+      this.#world.relations.add(relation, source, target, this.#pairDataFor(record, info) as never);
+    }
+  }
+
+  /** Fill the relation's reusable row with the provided fields; omitted ones are `undefined`, which reads as absent. */
+  #pairDataFor(record: number, info: ComponentInfo): Record<string, unknown> {
+    const data = info.row;
+    for (let i = 0; i < info.keys.length; i++) data[info.keys[i]!] = undefined;
+    const start = this.#payloadStarts[record]!;
+    const end = start + this.#payloadCounts[record]!;
+    for (let i = start; i < end; i++) data[info.keys[this.#payloadFields[i]!]!] = this.#payloadValues[i]!;
+    return data;
   }
 
   #applySpawn(record: number): void {
@@ -667,12 +804,14 @@ export class CommandBuffer {
         continue;
       }
       const sideValue = this.#sideValues[value];
-      // A queued reference whose target died before flush reads as null, exactly like a stale stored reference.
-      // Negative values (pending handles) are not references yet and still reach the world's validation.
-      data[info.keys[field]!] = info.entityRef[field] === 1 && typeof sideValue === "number" && sideValue >= 0 &&
-          !this.#world.entities.isActive(sideValue as Entity) ?
-        null :
-        sideValue;
+      if (info.entityRef[field] === 1 && typeof sideValue === "number") {
+        // A pending entity resolves to its spawned entity (validated when queued). A queued reference whose target
+        // died before flush, or whose spawn failed, reads as null, exactly like a stale stored reference.
+        const entity = sideValue < 0 ? this.#resolve(sideValue) : sideValue;
+        data[info.keys[field]!] = entity >= 0 && this.#world.entities.isActive(entity as Entity) ? entity : null;
+      } else {
+        data[info.keys[field]!] = sideValue;
+      }
     }
     return data;
   }
@@ -693,7 +832,11 @@ export class CommandBuffer {
     const op = this.#ops[record]!;
     const target = this.#targets[record]!;
     const name = op === OP_SPAWN || op === OP_DESTROY ? "" : ` ${this.#infos[this.#components[record]!]!.name}`;
-    const entity = target < 0 ? `pending entity ${target}` : `entity ${target}`;
+    let entity = target < 0 ? `pending entity ${target}` : `entity ${target}`;
+    if (op === OP_RELATE || op === OP_UNRELATE) {
+      const pairTarget = this.#pairTargets[record]!;
+      entity += ` -> ${pairTarget < 0 ? `pending entity ${pairTarget}` : `entity ${pairTarget}`}`;
+    }
     try {
       error.message = `CommandBuffer ${OP_NAMES[op]}${name} on ${entity} failed: ${error.message}`;
     } catch {

@@ -8,6 +8,7 @@ import {
 import { ComponentDataError, EntityNotFoundError, formatEntityNotActive } from "@/errors.ts";
 import type { DynamicComponentInstance } from "@/types/component.ts";
 import type { QueryInstance } from "@/types/query.ts";
+import type { RelationInstance } from "@/types/world-relation-api.ts";
 import type { SchemaOrNull, TypedArray, TypedArrayConstructor } from "@/types/partitions.ts";
 import type { Relation } from "./relation.ts";
 import { growTypedArray, hasOwnProperty, isObject } from "@/utils.ts";
@@ -16,6 +17,24 @@ import { RelationList } from "./relation-list.ts";
 
 /** Sentinel for "no row" / "no slot" in the linked lists. */
 export const NONE = -1;
+
+/**
+ * `true` if following `parentOf` from `start` reaches `needle` within `limit` steps. Shared by the add-time cycle
+ * check and the checkpoint preflight, so both walk a hierarchy the same way.
+ */
+export function chainReaches(
+  start: Entity | undefined,
+  needle: Entity,
+  parentOf: (entity: Entity) => Entity | undefined,
+  limit: number,
+): boolean {
+  let current = start;
+  for (let steps = 0; current !== undefined && steps <= limit; steps++) {
+    if (current === needle) return true;
+    current = parentOf(current);
+  }
+  return false;
+}
 
 /** Initial pair pool size for multi-target relations; it doubles on demand. */
 const INITIAL_ROWS = 16;
@@ -66,8 +85,12 @@ export class RelationStore {
   readonly exclusive: boolean;
   readonly acyclic: boolean;
   readonly cascade: boolean;
+  /** The cached public storage view returned by `getInstance`. */
+  readonly view: RelationInstance;
   readonly #host: RelationStoreHost;
   readonly #capacity: number;
+  /** `parentOf` keyed by entity, bound once for the allocation-free cycle walk. */
+  readonly #parentOfEntity: (entity: Entity) => Entity | undefined;
 
   // Per-slot list heads.
   readonly sourceHead: Int32Array;
@@ -137,6 +160,8 @@ export class RelationStore {
     this.exclusive = relation.exclusive;
     this.acyclic = relation.acyclic;
     this.cascade = relation.onDeleteTarget === "cascade";
+    // `#assertNoCycle` and `parentOf` read one target per source, which holds only for exclusive relations.
+    if (this.acyclic && !this.exclusive) throw new Error(`Relation "${this.name}" is acyclic but not exclusive.`);
     this.#host = host;
     this.#capacity = capacity;
 
@@ -183,6 +208,13 @@ export class RelationStore {
     this.queryResult = new RelationList(capacity, false);
     this.forest = new RelationList(capacity, true);
     this.subtree = new RelationList(capacity, true);
+    this.#parentOfEntity = (entity) => this.parentOf(entityIndex(entity));
+    // `partitions` is a stable record (its columns are re-pointed on growth), so the view can hold it directly.
+    this.view = Object.freeze({
+      type: relation,
+      partitions: this.partitions as RelationInstance["partitions"],
+      rowOf: (source: Entity, target: Entity): number => this.rowOf(source, target),
+    });
   }
 
   #syncPartitions(): void {
@@ -354,16 +386,13 @@ export class RelationStore {
     if (!this.#host.isActive(entity)) throw new EntityNotFoundError(formatEntityNotActive(entity));
   }
 
-  /** Throw if `source -> target` would close a cycle. Walks the target's chain in O(depth). */
+  /**
+   * Throw if `source -> target` would close a cycle. Walks the target's chain in O(depth).
+   * Relies on `acyclic` implying `exclusive` (checked in the constructor): each source has at most one parent.
+   */
   #assertNoCycle(source: Entity, target: Entity): void {
-    let current = target;
-    for (let steps = 0; steps <= this.#capacity; steps++) {
-      if (current === source) {
-        throw new RangeError(`Relation "${this.name}" pair ${source} -> ${target} would form a cycle.`);
-      }
-      const slot = entityIndex(current);
-      if (this.sourceCount[slot] === 0) return;
-      current = this.rowTarget[slot] as Entity;
+    if (chainReaches(target, source, this.#parentOfEntity, this.#capacity)) {
+      throw new RangeError(`Relation "${this.name}" pair ${source} -> ${target} would form a cycle.`);
     }
   }
 

@@ -55,14 +55,16 @@ export type WorldRelationAPI = {
     data?: RelationDataInput<TSchema>,
   ): void;
   /**
-   * Remove `source -> target`, or every target of `source` when `target` is omitted.
-   * @returns `true` if any pair was removed
+   * Remove `source -> target`. Use {@link WorldRelationAPI.removeAll} to remove every target of `source`.
+   * @returns `true` if the pair existed and was removed
    */
-  remove(relation: AnyRelation, source: Entity, target?: Entity): boolean;
+  remove(relation: AnyRelation, source: Entity, target: Entity): boolean;
   /** Remove every target of `source`. @returns the number of pairs removed */
   removeAll(relation: AnyRelation, source: Entity): number;
-  /** @returns `true` if `source` relates to `target`, or to anything when `target` is omitted */
-  has(relation: AnyRelation, source: Entity, target?: Entity): boolean;
+  /** @returns `true` if `source` relates to `target` */
+  has(relation: AnyRelation, source: Entity, target: Entity): boolean;
+  /** @returns `true` if `source` is active and relates to at least one target */
+  hasAny(relation: AnyRelation, source: Entity): boolean;
   /** @returns the first target of `source` (the parent, for an exclusive relation), or `undefined` */
   getTarget(relation: AnyRelation, source: Entity): Entity | undefined;
   /** Targets of `source` in the order they were added. Borrowed. */
@@ -72,7 +74,7 @@ export type WorldRelationAPI = {
   /** Every entity that is the target of at least one pair, in first-targeted order. Borrowed. */
   getAllTargets(relation: AnyRelation): BorrowedRelationList;
   /** Sources of `target` that match `query`, in source order. Borrowed. */
-  queryList(query: Query, relation: AnyRelation, target: Entity): BorrowedRelationList;
+  queryList(relation: AnyRelation, target: Entity, query: Query): BorrowedRelationList;
   /** @returns a copy of the pair's data, or `undefined` when there is no such pair */
   getData<TSchema extends SchemaOrNull>(
     relation: Relation<TSchema>,
@@ -108,6 +110,14 @@ export type WorldRelationAPI = {
    * Borrowed and cached until the relation's pairs change.
    */
   traverse(relation: AnyRelation, root?: Entity): BorrowedHierarchyList;
-  /** World-local storage view (data columns and pair rows). */
-  getInstance<TSchema extends SchemaOrNull>(relation: Relation<TSchema>): RelationInstance<TSchema>;
+  /**
+   * World-local storage view (data columns and pair rows). The same view is returned on every call.
+   * @returns the view, or `undefined` if the relation is not registered in this world
+   */
+  getInstance<TSchema extends SchemaOrNull>(relation: Relation<TSchema>): RelationInstance<TSchema> | undefined;
+  /**
+   * World-local storage view (data columns and pair rows). The same view is returned on every call.
+   * @throws {NotRegisteredError} - If the relation is not registered in this world
+   */
+  getInstanceOrThrow<TSchema extends SchemaOrNull>(relation: Relation<TSchema>): RelationInstance<TSchema>;
 };

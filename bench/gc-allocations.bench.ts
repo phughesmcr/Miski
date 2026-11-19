@@ -3,8 +3,19 @@
 // deno-lint-ignore-file no-console
 
 import { getHeapSpaceStatistics, getHeapStatistics } from "node:v8";
-import { CommandBuffer, Component, entityIndex, field, loadWorld, Prefab, Query, saveWorld, World } from "../mod.ts";
-import type { ComponentInstance, Entity } from "../mod.ts";
+import {
+  CommandBuffer,
+  Component,
+  entityIndex,
+  field,
+  loadWorld,
+  Prefab,
+  Query,
+  Relation,
+  saveWorld,
+  World,
+} from "../mod.ts";
+import type { ComponentInstance, Entity, PendingEntity } from "../mod.ts";
 import {
   countEntities,
   createBenchmarkComponents,
@@ -371,7 +382,7 @@ let relToggle = false;
 // Warm every pooled list and the pair pool before measurement.
 rel.world.relations.getSources(rel.childOf, rel.entities[0]!);
 rel.world.relations.getTargets(rel.likes, relLeafA);
-rel.world.relations.queryList(relPositionQuery, rel.likes, relHub);
+rel.world.relations.queryList(rel.likes, relHub, relPositionQuery);
 rel.world.relations.traverse(rel.childOf);
 rel.world.relations.add(rel.likes, relLeafA, relHub);
 rel.world.relations.remove(rel.likes, relLeafA, relHub);
@@ -674,6 +685,42 @@ function commandSideColumnBatch(round: number): void {
   for (let i = 0; i < sideEntities.length; i++) sideBuffer.set(sidePoint, sideEntities[i]!, sideData);
   sideBuffer.flush();
   sideWorld.refresh();
+}
+
+// Deferred relation commands with pending entities: a parent and a child that points at it, spawned in one buffer.
+const pendingNode = new Component({ name: "pendingNode", schema: { parent: field.entity(), depth: Uint8Array } });
+const pendingChildOf = new Relation({ name: "pendingChildOf", exclusive: true, acyclic: true });
+const pendingLinks = new Relation({ name: "pendingLinks", schema: { weight: Float32Array } });
+const pendingWorld = new World({ capacity: SMALL_CAPACITY, components: [pendingNode, pendingChildOf, pendingLinks] });
+await pendingWorld.init();
+const pendingRoot = mustCreateEntity(pendingWorld);
+const pendingBuffer = new CommandBuffer(pendingWorld);
+const pendingNodeQuery = new Query({ all: [pendingNode] });
+const pendingParentData: { parent: Entity | PendingEntity | null; depth: number } = { parent: null, depth: 0 };
+const pendingChildData: { parent: Entity | PendingEntity | null; depth: number } = { parent: null, depth: 1 };
+const pendingLinkData = { weight: 0 };
+
+function commandPendingRelationBatch(round: number): void {
+  pendingLinkData.weight = round & 7;
+  for (let i = 0; i < 32; i++) {
+    pendingParentData.parent = pendingRoot;
+    // Bundles are added with `add`: a direct `createWith` of a component with `field.*` columns allocates today.
+    const parent = pendingBuffer.spawn();
+    pendingBuffer.add(pendingNode, parent, pendingParentData);
+    pendingChildData.parent = parent;
+    const child = pendingBuffer.spawn();
+    pendingBuffer.add(pendingNode, child, pendingChildData);
+    pendingBuffer.relate(pendingChildOf, parent, pendingRoot);
+    pendingBuffer.relate(pendingChildOf, child, parent);
+    pendingBuffer.relate(pendingLinks, child, pendingRoot, pendingLinkData);
+    pendingBuffer.unrelate(pendingLinks, child, pendingRoot);
+  }
+  pendingBuffer.flush();
+  const list = pendingWorld.entities.queryList(pendingNodeQuery);
+  entitySink ^= list.count;
+  for (let i = 0; i < list.count; i++) pendingBuffer.destroy(list.entities[i]!);
+  pendingBuffer.flush();
+  pendingWorld.refresh();
 }
 
 const scenarios: Scenario[] = [
@@ -1101,6 +1148,9 @@ const scenarios: Scenario[] = [
   budgeted("command buffer set side-column + numeric field on 128 entities + flush", 10_000, () => {
     commandSideColumnBatch(commandRound++);
   }),
+  budgeted("command buffer pending parent/child spawn + relate/unrelate + flush", 10_000, () => {
+    commandPendingRelationBatch(commandRound++);
+  }),
   budgeted("related spawn/tag/destroy + queryList refill of 4096 entities", 20_000, () => {
     const entity = mustCreateEntity(refillWorld);
     refillWorld.components.addToEntity(refillTag, entity);
@@ -1119,8 +1169,11 @@ const scenarios: Scenario[] = [
   budgeted("relation lookups: sources, targets, queryList by target", 50_000, () => {
     entitySink ^= rel.world.relations.getSources(rel.childOf, relParentA).count;
     entitySink ^= rel.world.relations.getTargets(rel.likes, relLeafA).count;
-    entitySink ^= rel.world.relations.queryList(relPositionQuery, rel.likes, relHub).count;
+    entitySink ^= rel.world.relations.queryList(rel.likes, relHub, relPositionQuery).count;
     entitySink ^= rel.world.relations.has(rel.likes, relLeafA, relHub) ? 1 : 0;
+    entitySink ^= rel.world.relations.hasAny(rel.likes, relLeafA) ? 1 : 0;
+    entitySink ^= rel.world.relations.getInstance(rel.aims)!.rowOf(relLeafA, relHub);
+    entitySink ^= rel.world.relations.getInstanceOrThrow(rel.likes).rowOf(relLeafA, relHub);
   }),
   budgeted("relation data setData + readDataInto", 50_000, () => {
     relAimsOut.weight = (relAimsOut.weight + 1) % 1_000;

@@ -1165,7 +1165,7 @@ Deno.bench({
   fn: () => {
     entitySink ^= relations.world.relations.getSources(relations.childOf, relationParentA).count;
     entitySink ^= relations.world.relations.getTargets(relations.likes, relationLeafA).count;
-    entitySink ^= relations.world.relations.queryList(relationQuery, relations.likes, relationHub).count;
+    entitySink ^= relations.world.relations.queryList(relations.likes, relationHub, relationQuery).count;
   },
 });
 
