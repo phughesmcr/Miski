@@ -1,4 +1,5 @@
 import type { TypedArray } from "@/types/partitions.ts";
+import type { ComponentStateSnapshot } from "@/component/component-snapshot.ts";
 import {
   align4,
   align8,
@@ -33,7 +34,7 @@ import {
   wordCount,
   writeUtf8,
 } from "./format.ts";
-import type { ComponentImage, KnownLayout, SaveImage } from "./image-types.ts";
+import type { KnownLayout, SaveImage } from "./image-types.ts";
 
 function entitiesPayloadBytes(capacity: number, live: number): number {
   return align8(8 + wordCount(capacity) * 4 + capacity * 4 + live * 4);
@@ -158,7 +159,7 @@ export function heapBytes(values: ArrayLike<unknown>, slots: ArrayLike<number> |
 }
 
 /** Total string / object column bytes of an image component whose cells are known to be well-formed. */
-function imageSideBytes(component: ComponentImage, codes: readonly number[] | null): number {
+function imageSideBytes(component: ComponentStateSnapshot, codes: readonly number[] | null): number {
   if (codes === null) return 0;
   const count = component.owners.length;
   let bytes = 0;

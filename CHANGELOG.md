@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- **Breaking:** the world-save format version is 2. Version 1 saves and
+  documents (written before f16 columns and the relation section were added)
+  are rejected with a `WorldSaveError` naming both versions.
+- **Breaking:** `saveWorld` throws `WorldSaveError` instead of `RangeError`
+  when `into` is not 8-byte aligned, and `loadWorld` / `readWorldSaveHeader`
+  throw `WorldSaveError` instead of `TypeError` for input that is not a
+  `Uint8Array`.
+- `loadWorld` keeps restoring entity generations exactly rather than keeping
+  each slot's highest generation as rollback does: worlds with different
+  histories that load one save must issue the same handles afterwards. Its
+  documentation now says why.
 - **Breaking:** the world-save API is consolidated (these names only existed
   on the unreleased branch, but code written against it must change):
   - `saveWorldInto(world, target): number` and `measureWorldSave(world)` are

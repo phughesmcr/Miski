@@ -1,22 +1,7 @@
+import type { ComponentStateSnapshot } from "@/component/component-snapshot.ts";
 import type { EntityArray } from "@/entity/entity.ts";
 import type { TypedArray } from "@/types/partitions.ts";
 import type { LayoutInfo, WorldSaveLayout } from "./layout.ts";
-
-/** One component's saved state; shaped like a rollback component snapshot so restore can reuse it. */
-export type ComponentImage = {
-  /** Owner slots in owner-iteration order. */
-  readonly owners: EntityArray;
-  /** Changed slots in changed-iteration order. */
-  readonly changed: EntityArray;
-  /** Owned row values per storage column, each parallel to `owners`. */
-  readonly rows: readonly TypedArray[];
-  /**
-   * Owned string / object cells per side column, in layout order, each parallel to `owners`. String columns hold
-   * strings. Object columns hold encoded values (`string`, `number` or `null`) in a parsed or document image, and
-   * decoded values only in the copy {@link loadWorld} restores from.
-   */
-  readonly sideRows: readonly (readonly unknown[])[];
-};
 
 /** The shared empty side-row list of components without string / object fields. */
 export const NO_SIDE_ROWS: readonly (readonly unknown[])[] = Object.freeze([]);
@@ -68,7 +53,7 @@ export type SaveImage = {
   readonly archetypeBits: Uint32Array;
   /** Population of every archetype in iteration order. */
   readonly populations: readonly EntityArray[];
-  readonly components: readonly ComponentImage[];
+  readonly components: readonly ComponentStateSnapshot[];
   /** Touched slots in first-touch order. */
   readonly windowSlots: EntityArray;
   /** Window-start archetype registry index plus one per touched slot (0 = no entity at window start). */
