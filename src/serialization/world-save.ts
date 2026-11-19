@@ -1,4 +1,5 @@
 import type { Archetype } from "@/archetype/archetype.ts";
+import type { ComponentStateSnapshot } from "@/component/component-snapshot.ts";
 import type { SideField } from "@/component/field-codec.ts";
 import { entityIndex } from "@/entity/entity.ts";
 import type { DynamicComponentInstance } from "@/types/component.ts";
@@ -22,7 +23,7 @@ import {
   WorldSaveError,
 } from "./format.ts";
 import { type WorldSaveHost, worldSaveHost } from "./host.ts";
-import type { ComponentImage, KnownLayout, SaveImage } from "./image-types.ts";
+import type { KnownLayout, SaveImage } from "./image-types.ts";
 import { parseSave } from "./image-read.ts";
 import { validateImage, ValidationScratch } from "./image-validate.ts";
 import { heapBytes, saveBytes, SaveSource, writeObjectCells, writeSave, writeStringCells } from "./image-write.ts";
@@ -435,14 +436,15 @@ function viewOf(context: SaveContext, into: Uint8Array, total: number): Uint8Arr
  * @param into - Optional destination to reuse; its `byteOffset` must be a multiple of 8
  * @returns The save, exactly as long as its content: `into` itself or a view of its start when it fits, otherwise a
  * new array
- * @throws {RangeError} When `into` is not 8-byte aligned
+ * @throws {WorldSaveError} When `into` is not 8-byte aligned, or an object field's `encode` hook throws or returns
+ * an unsavable value
  */
 export function saveWorld(world: World, into?: Uint8Array): Uint8Array {
   assertLittleEndian();
   const context = contextOf(world);
   context.host.assertSaveReady();
   if (into !== undefined && (into.byteOffset & 7) !== 0) {
-    throw new RangeError("World save target must be 8-byte aligned (byteOffset % 8 === 0).");
+    throw new WorldSaveError("World save target must be 8-byte aligned (byteOffset % 8 === 0).");
   }
   let out: Uint8Array;
   try {
@@ -472,8 +474,11 @@ function hasObjectColumn(columns: readonly SideColumn[]): boolean {
 }
 
 /** Copy the components whose object columns hold encoded cells, with each cell decoded through its field's hook. */
-function decodeObjects(context: SaveContext, components: readonly ComponentImage[]): readonly ComponentImage[] {
-  let out: ComponentImage[] | undefined;
+function decodeObjects(
+  context: SaveContext,
+  components: readonly ComponentStateSnapshot[],
+): readonly ComponentStateSnapshot[] {
+  let out: ComponentStateSnapshot[] | undefined;
   for (let c = 0; c < components.length; c++) {
     const columns = context.side[c]!;
     if (!hasObjectColumn(columns)) continue;
@@ -559,27 +564,6 @@ function relationSnapshot(image: SaveImage, r: number, order: Uint32Array): Rela
   };
 }
 
-/** Number of leading saved archetypes whose component sets match the world's registry. */
-function matchingPrefix(context: SaveContext, image: SaveImage): number {
-  const archetypes = context.host.archetypes;
-  const wordsPerSet = context.wordsPerSet;
-  const limit = Math.min(archetypes.archetypeCount, image.populations.length);
-  const bits = image.archetypeBits;
-  let keep = 0;
-  for (; keep < limit; keep++) {
-    const words = archetypes.archetypeAt(keep).bitfield.buffer;
-    let same = true;
-    for (let k = 0; k < wordsPerSet; k++) {
-      if ((k < words.length ? words[k]! : 0) !== bits[keep * wordsPerSet + k]) {
-        same = false;
-        break;
-      }
-    }
-    if (!same) break;
-  }
-  return keep;
-}
-
 /**
  * Replace the world's state with a save. The save is fully validated first: a corrupt, truncated or incompatible
  * save throws {@link WorldSaveError} and leaves the world untouched. Systems are code, not data, so the world keeps
@@ -587,7 +571,9 @@ function matchingPrefix(context: SaveContext, image: SaveImage): number {
  *
  * Entity generations are restored exactly, including each slot's next generation. An entity handle held from before
  * the load can therefore name a different entity afterwards, or the same slot reissued with the generation the handle
- * carries; drop or re-resolve handles across a load.
+ * carries; drop or re-resolve handles across a load. Rollback keeps each slot's highest generation instead, but a
+ * load cannot: worlds with different histories that load the same save must issue the same handles afterwards, as
+ * lockstep peers and replays rely on.
  *
  * Validation is structural: it checks every count, offset, reference and invariant the world relies on, and the
  * layout table against its hash. The body is not checksummed, so a corrupted value that still fits its field type
@@ -610,7 +596,11 @@ export function loadWorld(world: World, bytes: Uint8Array, options?: WorldSaveLo
   try {
     const problem = image.layout === context.layout ? undefined : compareLayouts(image.layout, context.layout);
     if (problem === undefined) {
-      validateImage(image, scratch, matchingPrefix(context, image));
+      validateImage(
+        image,
+        scratch,
+        host.archetypes.savedPrefix(image.archetypeBits, context.wordsPerSet, image.populations.length),
+      );
     } else {
       const migrate = options?.migrate;
       if (migrate === undefined) throw new WorldSaveError(problem);

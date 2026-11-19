@@ -310,7 +310,7 @@ Deno.test("saveWorld into a caller buffer writes the same bytes and returns a vi
   assert(small.every((byte) => byte === 0xaa), "nothing written into the small target");
   assert(bytesEqual(fresh, saveWorld(h.world)), "the fresh save is complete");
 
-  assertThrows(() => saveWorld(h.world, new Uint8Array(backing, 4, length)), RangeError, "aligned");
+  assertThrows(() => saveWorld(h.world, new Uint8Array(backing, 4, length)), WorldSaveError, "aligned");
 });
 
 Deno.test("readWorldSaveHeader describes a save without a world", async () => {
@@ -549,4 +549,43 @@ Deno.test("documents keep a field named __proto__ as an own key", async () => {
   assert(Object.hasOwn(values, "__proto__"), "the field is an own key");
   assertEquals(Object.getPrototypeOf(values), Object.prototype, "the record keeps a plain prototype");
   assertEquals(JSON.stringify(values), '{"__proto__":[3]}', "the values survive");
+});
+
+// Unlike rollback, a load does not keep each slot's highest generation: a world with a different history must
+// allocate exactly the handles the saved world would (the twin tests above), so handles held across a load can alias.
+Deno.test("a load restores generations exactly, so a handle issued after the save can alias", async () => {
+  const world = await createWorld(8);
+  world.entities.createOrThrow();
+  const bytes = saveWorld(world);
+  const stale = world.entities.createOrThrow();
+  world.entities.destroy(stale);
+  loadWorld(world, bytes);
+  const fresh = world.entities.createOrThrow();
+  assertStrictEquals(fresh, stale, "the saved world would issue this handle next, so the loaded world does too");
+
+  const twin = await createWorld(8);
+  loadWorld(twin, bytes);
+  assertStrictEquals(twin.entities.createOrThrow(), fresh, "a world without that history issues the same handle");
+});
+
+Deno.test("save inputs that are not byte arrays throw WorldSaveError", async () => {
+  const world = await createWorld(8);
+  const bytes = saveWorld(world);
+  for (const input of [Array.from(bytes), bytes.buffer, new DataView(bytes.buffer), null]) {
+    assertThrows(() => loadWorld(world, input as unknown as Uint8Array), WorldSaveError, "must be a Uint8Array");
+    assertThrows(() => readWorldSaveHeader(input as unknown as Uint8Array), WorldSaveError, "must be a Uint8Array");
+  }
+});
+
+Deno.test("saves and documents from an older format version are rejected by name", async () => {
+  const world = await createWorld(8);
+  const bytes = saveWorld(world).slice();
+  const version = new DataView(bytes.buffer).getUint16(4, true);
+  assert(version >= 2, "the format version moved past the beta.1 format");
+  new DataView(bytes.buffer).setUint16(4, 1, true);
+  for (const read of [() => readWorldSaveHeader(bytes), () => loadWorld(world, bytes)]) {
+    assertThrows(read, WorldSaveError, `format version 1 is not supported (this version reads ${version})`);
+  }
+  const document = { ...worldSaveToDocument(saveWorld(world)), version: 1 };
+  assertThrows(() => worldSaveFromDocument(document), WorldSaveError, `version must be ${version} (got 1)`);
 });

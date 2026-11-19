@@ -672,6 +672,22 @@ export class ArchetypeManager {
   }
 
   /**
+   * Number of leading registered archetypes whose component sets equal the saved ones; {@link restoreSaved} keeps them.
+   * @param bits - Component bitsets of the saved archetypes, `wordsPerSet` words each, in registry order
+   * @param wordsPerSet - Words per bitset
+   * @param count - Number of saved archetypes
+   * @internal
+   */
+  savedPrefix(bits: Uint32Array, wordsPerSet: number, count: number): number {
+    const limit = Math.min(count, this.#archetypeCount);
+    let keep = 0;
+    while (keep < limit && sameWords(this.#archetypes[keep]!.bitfield.buffer, bits, keep * wordsPerSet, wordsPerSet)) {
+      keep++;
+    }
+    return keep;
+  }
+
+  /**
    * Replace archetype state with a validated world save.
    *
    * The longest prefix of the current registry whose component sets match the save is kept, with its cached edges;
@@ -698,11 +714,7 @@ export class ArchetypeManager {
   ): void {
     this.#forgetPopulations();
     const count = populations.length;
-    const limit = Math.min(count, this.#archetypeCount);
-    let keep = 0;
-    while (keep < limit && sameWords(this.#archetypes[keep]!.bitfield.buffer, bits, keep * wordsPerSet, wordsPerSet)) {
-      keep++;
-    }
+    const keep = this.savedPrefix(bits, wordsPerSet, count);
     this.#truncateRegistry(keep);
     const componentCount = this.#componentCount;
     for (let i = keep; i < count; i++) {

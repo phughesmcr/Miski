@@ -1,4 +1,5 @@
 import { createSlotArray, type EntityArray, entityIndex } from "@/entity/entity.ts";
+import type { ComponentStateSnapshot } from "@/component/component-snapshot.ts";
 import type { TypedArray } from "@/types/partitions.ts";
 import {
   CODE_OBJECT,
@@ -10,7 +11,7 @@ import {
   wordCount,
   WorldSaveError,
 } from "./format.ts";
-import { type ComponentImage, NO_SIDE_ROWS, type RelationImage, type SaveImage } from "./image-types.ts";
+import { NO_SIDE_ROWS, type RelationImage, type SaveImage } from "./image-types.ts";
 import { parseSave } from "./image-read.ts";
 import { validateImage, ValidationScratch } from "./image-validate.ts";
 import { writeImage } from "./image-write.ts";
@@ -315,7 +316,8 @@ function slotsOf(capacity: number, list: readonly number[]): EntityArray {
 export function docToImage(document: unknown, scratch?: ValidationScratch): SaveImage {
   if (!isRecord(document)) fail("document", "must be an object");
   if (document["format"] !== "miski-world") fail("format", 'must be "miski-world"');
-  if (document["version"] !== FORMAT_VERSION) fail("version", `must be ${FORMAT_VERSION}`);
+  const version = document["version"];
+  if (version !== FORMAT_VERSION) fail("version", `must be ${FORMAT_VERSION} (got ${String(version)})`);
   const problem = layoutProblem(document["layout"]);
   if (problem !== undefined) fail("layout", `is invalid: ${problem}`);
   const rawLayout = document["layout"] as WorldSaveLayout;
@@ -371,7 +373,7 @@ export function docToImage(document: unknown, scratch?: ValidationScratch): Save
   for (const name of Object.keys(savedComponents)) {
     if (!componentIndex.has(name)) fail("components", `holds unknown component ${JSON.stringify(name)}`);
   }
-  const components: ComponentImage[] = layout.components.map((component, c) => {
+  const components: ComponentStateSnapshot[] = layout.components.map((component, c) => {
     const path = `components[${JSON.stringify(component.name)}]`;
     const saved = Object.hasOwn(savedComponents, component.name) ? savedComponents[component.name] : undefined;
     if (!isRecord(saved)) fail(path, "must be an object");

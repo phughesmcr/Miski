@@ -1,4 +1,5 @@
 import { MIN_WORLD_CAPACITY } from "@/constants.ts";
+import type { ComponentStateSnapshot } from "@/component/component-snapshot.ts";
 import { type EntityArray, MAX_WORLD_CAPACITY } from "@/entity/entity.ts";
 import type { TypedArray } from "@/types/partitions.ts";
 import {
@@ -34,14 +35,7 @@ import {
   wordCount,
   WorldSaveError,
 } from "./format.ts";
-import {
-  type ComponentImage,
-  type KnownLayout,
-  NO_SIDE_ROWS,
-  type ParsedSave,
-  type RelationImage,
-  type SaveImage,
-} from "./image-types.ts";
+import { type KnownLayout, NO_SIDE_ROWS, type ParsedSave, type RelationImage, type SaveImage } from "./image-types.ts";
 import { decodeLayout, type LayoutInfo, layoutInfo, type RelationInfo, type WorldSaveLayout } from "./layout.ts";
 
 // Holds views over the most recently parsed buffer, so repeated loads of one save allocate no views. It keeps that
@@ -56,7 +50,7 @@ const readViews = new ViewCache();
  */
 export function parseSave(input: Uint8Array, known?: KnownLayout): ParsedSave {
   assertLittleEndian();
-  if (!(input instanceof Uint8Array)) throw new TypeError("World save must be a Uint8Array.");
+  if (!(input instanceof Uint8Array)) fail("World save must be a Uint8Array.");
   if (input.byteLength < 4) fail("World save is truncated.");
   // Views need 8-byte alignment; copy a misaligned input once. `new Uint8Array` always copies, where a subclass's
   // `slice` may not (Node's `Buffer#slice` returns a view).
@@ -69,7 +63,9 @@ export function parseSave(input: Uint8Array, known?: KnownLayout): ParsedSave {
   if (bytes.byteLength < HEADER_BYTES) fail("World save is truncated.");
   const version = u32[w + 1]! & 0xffff;
   const flags = u32[w + 1]! >>> 16;
-  if (version !== FORMAT_VERSION) fail(`Unsupported world save format version ${version}.`);
+  if (version !== FORMAT_VERSION) {
+    fail(`World save format version ${version} is not supported (this version reads ${FORMAT_VERSION}).`);
+  }
   if (flags !== 0) fail(`Unsupported world save flags ${flags}.`);
   const total = u32[w + 2]!;
   if (total > bytes.byteLength) fail("World save is truncated.");
@@ -120,7 +116,7 @@ export function parseSave(input: Uint8Array, known?: KnownLayout): ParsedSave {
 
   let entities: Pick<SaveImage, "cursor" | "occupancy" | "nextGeneration" | "liveGeneration"> | undefined;
   let archetypes: Pick<SaveImage, "wordsPerSet" | "archetypeBits" | "populations"> | undefined;
-  let components: ComponentImage[] | undefined;
+  let components: ComponentStateSnapshot[] | undefined;
   let window: Pick<SaveImage, "windowSlots" | "windowOrigins" | "windowHandles"> | undefined;
   let relations: RelationImage[] | undefined;
 
@@ -189,7 +185,7 @@ export function parseSave(input: Uint8Array, known?: KnownLayout): ParsedSave {
       }
       case SECTION_COMPONENTS: {
         if (components !== undefined) fail("World save repeats its component section.");
-        const list: ComponentImage[] = new Array(componentCount);
+        const list: ComponentStateSnapshot[] = new Array(componentCount);
         let q = p;
         const limit = p + payload;
         for (let c = 0; c < componentCount; c++) {

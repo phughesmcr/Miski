@@ -3,15 +3,19 @@ import type { DynamicComponentInstance } from "@/types/component.ts";
 import type { TypedArray, TypedArrayConstructor } from "@/types/partitions.ts";
 import { sideDefault, type SideField } from "./field-codec.ts";
 
-/** One component's rollback state: owned rows only, in owner-iteration order. */
-type ComponentStateSnapshot = {
+/** One component's owned state, in owner-iteration order: a rollback snapshot, and a component in a world save. */
+export type ComponentStateSnapshot = {
   /** Owner slots in iteration order. */
   readonly owners: EntityArray;
   /** Changed slots in iteration order (always a subset of `owners`). */
   readonly changed: EntityArray;
   /** Owned row values per storage column (parallel to `storageColumns`), each parallel to `owners`. */
   readonly rows: readonly TypedArray[];
-  /** Owned string / object values per side column (parallel to `sideColumns`), each parallel to `owners`. */
+  /**
+   * Owned string / object values per side column (parallel to `sideColumns`), each parallel to `owners`. In a world
+   * save's image, object columns hold encoded values (`string`, `number` or `null`); only the copy a load restores
+   * from holds decoded values.
+   */
   readonly sideRows: readonly (readonly unknown[])[];
 };
 

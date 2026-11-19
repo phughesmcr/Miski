@@ -16,7 +16,11 @@ export class WorldSaveError extends MiskiError {
 
 /** "MSKI" read as a little-endian u32. */
 export const SAVE_MAGIC = 0x494b534d;
-export const FORMAT_VERSION = 1;
+/**
+ * Save format version; a reader accepts only its own. Version 2 marks the f16 column code (12) and the relation
+ * section, both added after version 1 saves were first written; version 1 saves are rejected.
+ */
+export const FORMAT_VERSION = 2;
 
 /**
  * Save header (40 bytes, u32 words):
@@ -35,7 +39,7 @@ export const SECTION_COMPONENTS = 3;
 export const SECTION_WINDOW = 4;
 /** Relation pair indexes; written only when the layout has relations. */
 export const SECTION_RELATIONS = 5;
-/** Number of sections a version 1 writer emits for a layout without relations (one more with relations). */
+/** Number of sections a save of a layout without relations holds (one more with relations). */
 const SECTION_COUNT = 4;
 
 /** Number of sections of a save whose layout has `relations` relation components. */
