@@ -634,8 +634,15 @@ function loop(dt: number) {
   immediately; `add` / `remove` during a run apply from the next run.
 - **Registration.** `add()` registers the system with the world if needed,
   or reuses its existing registration. `remove()` does not destroy it. A
-  system whose async `init` is still pending, or that was destroyed, makes
-  `run()` throw `WorldStateError`: `await world.onReady()` after adding.
+  system whose async `init` is still pending makes `run()` throw
+  `WorldStateError`: `await world.onReady()` after adding.
+- **Destroyed systems.** Once a system is unregistered from the world
+  (`world.systems.destroy()`, or its `init` failed), the schedule drops it as
+  if `remove()` had been called: `has()` returns `false` and `run()` skips
+  it. Re-creating it on the world does not re-add it; call `add()` again. A
+  `before` / `after` constraint naming a dropped system throws `SpecError`,
+  as for any name not in the schedule. A system destroyed during a `run()`
+  throws `WorldStateError` if it is called later in that run.
 - **Errors.** If a system throws, pending commands are discarded, the world
   is refreshed, and the error is rethrown. If a command fails when a phase
   flushes, the rest of that flush still applies, later phases are skipped, the

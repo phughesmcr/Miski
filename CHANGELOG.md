@@ -8,6 +8,14 @@
   (bad magic)" because `Buffer#slice` returns a view, not the aligned copy the
   reader needs. The parsed layout block is also now always a copy, never a view
   into the caller's Buffer.
+- `Schedule` drops systems that are no longer registered in the world
+  (destroyed with `world.systems.destroy()`, or unregistered by a failed
+  `init`). Before, `has()` stayed `true` and every `run()` threw "System is
+  not ready" until `remove()` was called. Re-creating the system on the world
+  does not re-add it; `add()` it again. The check costs one identity
+  comparison per `run()`.
+- `World.destroy()` rejects with an `AggregateError` of every failure when more
+  than one system destroy hook fails. A single failure is still rethrown as is.
 - Add `WorldRollbackScope`: a rollback point for `using` blocks. Leaving the
   block without `commit()` restores the world, so a throw can't leave the
   world's one rollback scope open (which blocked every later capture and world

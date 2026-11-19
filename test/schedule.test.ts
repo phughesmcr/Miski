@@ -601,16 +601,134 @@ Deno.test("schedule run throws when the world is not initialized", async () => {
   assertThrows(() => schedule.run(0), WorldStateError, "");
 });
 
-Deno.test("schedule propagates WorldStateError for a destroyed or not-ready system", async () => {
+Deno.test("schedule drops a system once it is destroyed, so has() and run() agree", async () => {
+  const world = await setup();
+  const log: string[] = [];
+  const schedule = new Schedule(world);
+  const doomed = logSystem("doomed", log);
+  const kept = logSystem("kept", log);
+  schedule.add(doomed).add(kept);
+  schedule.run(0);
+  await world.systems.destroy(doomed);
+  assert(!schedule.has("doomed"), "a destroyed system leaves the schedule");
+  assert(!schedule.has(doomed), "has() by System agrees");
+  assert(!schedule.isEnabled(doomed), "a dropped system is not enabled");
+  assertEquals(schedule.getOrder("update"), ["kept"], "the order no longer lists it");
+  schedule.run(0);
+  assertEquals(log, ["doomed", "kept", "kept"], "the rest of the schedule keeps running");
+  assert(!schedule.remove(doomed), "nothing left to remove");
+  assertThrows(() => schedule.setEnabled(doomed, false), SpecError, "not in this schedule");
+  await world.destroy();
+});
+
+Deno.test("schedule drops a destroyed system before run() without a has() call first", async () => {
   const world = await setup();
   const log: string[] = [];
   const schedule = new Schedule(world);
   const doomed = logSystem("doomed", log);
   schedule.add(doomed);
+  schedule.run(0);
   await world.systems.destroy(doomed);
-  assertThrows(() => schedule.run(0), WorldStateError, "doomed");
-  schedule.remove(doomed);
+  schedule.run(0);
+  assertEquals(log, ["doomed"], "run() skips the destroyed system instead of throwing");
+  assert(!schedule.has(doomed), "has() agrees with run()");
+  await world.destroy();
+});
 
+Deno.test("schedule: a system destroyed during a run throws if called later in that run, then is dropped", async () => {
+  const world = await setup();
+  const log: string[] = [];
+  const schedule = new Schedule(world);
+  const victim = logSystem("victim", log);
+  let destroying: Promise<void> | undefined;
+  const killer = new System({
+    name: "killer",
+    query: new Query({ all: [tag] }),
+    argCount: 0,
+    callback: () => {
+      destroying ??= world.systems.destroy(victim);
+    },
+  });
+  schedule.add(killer).add(victim);
+  assertThrows(() => schedule.run(0), WorldStateError, "victim");
+  await destroying;
+  assert(!schedule.has(victim), "dropped once its destruction finished");
+  schedule.run(0);
+  assertEquals(log, [], "the victim never ran");
+  await world.destroy();
+});
+
+Deno.test("schedule can re-add a system after it was destroyed", async () => {
+  const world = await setup();
+  const log: string[] = [];
+  const schedule = new Schedule(world, { phases: ["a", "b"] });
+  const system = logSystem("again", log);
+  schedule.add(system, { phase: "b" });
+  await world.systems.destroy(system);
+  schedule.add(system, { phase: "a" });
+  assert(world.systems.has(system), "add() registers it again");
+  assertEquals(schedule.getOrder("a"), ["again"], "the new options apply");
+  assertEquals(schedule.getOrder("b"), [], "the old entry is gone");
+  schedule.run(0);
+  assertEquals(log, ["again"], "it runs once");
+  await world.destroy();
+});
+
+Deno.test("schedule drops a system that was destroyed and re-created directly on the world", async () => {
+  const world = await setup();
+  const log: string[] = [];
+  const schedule = new Schedule(world);
+  const system = logSystem("recreated", log);
+  schedule.add(system);
+  await world.systems.destroy(system);
+  world.systems.create(system);
+  assert(!schedule.has(system), "the schedule held the old registration, which is gone");
+  schedule.run(0);
+  assertEquals(log, [], "re-registering does not re-add it");
+  schedule.add(system);
+  schedule.run(0);
+  assertEquals(log, ["recreated"], "adding it again schedules the new registration");
+  await world.destroy();
+});
+
+Deno.test("schedule drops a system whose initial init failed", async () => {
+  const world = new World({ capacity: 8, components: [tag] });
+  const schedule = new Schedule(world);
+  const failing = new System({
+    name: "failing",
+    query: new Query({ all: [tag] }),
+    argCount: 0,
+    init: () => {
+      throw new Error("init failed");
+    },
+    callback: () => {},
+  });
+  schedule.add(failing);
+  assert(schedule.has(failing), "scheduled before init");
+  await world.init().catch(() => {});
+  assert(!world.systems.has(failing), "the failed init unregistered it");
+  assert(!schedule.has(failing), "an unregistered system is no longer scheduled");
+  assertEquals(schedule.getOrder("update"), [], "the order no longer lists it");
+  await world.destroy();
+});
+
+Deno.test("schedule ordering against a dropped system throws like an unknown name", async () => {
+  const world = await setup();
+  const log: string[] = [];
+  const schedule = new Schedule(world);
+  const first = logSystem("first", log);
+  schedule.add(first).add(logSystem("second", log), { after: [first] });
+  await world.systems.destroy(first);
+  assertThrows(() => schedule.run(0), SpecError, '"second" is ordered after "first", which is not in this schedule');
+  schedule.remove("second");
+  schedule.run(0);
+  await world.destroy();
+});
+
+Deno.test("schedule propagates WorldStateError for a system whose init is pending", async () => {
+  const world = await setup();
+  const log: string[] = [];
+  const schedule = new Schedule(world);
   let release!: () => void;
   const gate = new Promise<void>((resolve) => (release = resolve));
   const slow = new System({

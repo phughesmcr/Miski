@@ -83,6 +83,8 @@ function referenceNames(references: unknown, owner: string, relation: string): s
  * - **Commands** queued on `context.commands` apply when the current phase (or fixed step) finishes.
  * - **Refresh**: `run()` calls `world.refresh()` once at the end, like `world.frame`, so every system sees the whole
  *   run's entered / exited / changed window.
+ * - **Destroyed systems** leave the schedule: once a system is unregistered from the world (destroyed, or its init
+ *   failed), the schedule drops it, as if `remove()` had been called. Re-registering it does not re-add it.
  *
  * The schedule's clock and pending commands are not part of rollback points.
  */
@@ -104,6 +106,11 @@ export class Schedule {
   #plan: Entry[][] = [];
   #dirty = true;
   #nextSeq = 0;
+  /**
+   * The world's system registry when entries were last checked against it. The registry object is replaced
+   * whenever a system is registered or unregistered, so a mismatch means an entry may be stale.
+   */
+  #registry: object | undefined;
 
   #accumulator = 0;
   #elapsed = 0;
@@ -235,7 +242,8 @@ export class Schedule {
 
   /**
    * Add a system. A system not yet registered in the world is registered (`world.systems.create`); a registered one
-   * is reused. Membership and order changes made during `run()` take effect on the next run.
+   * is reused. Membership and order changes made during `run()` take effect on the next run. A system that is later
+   * unregistered from the world (destroyed, or its init failed) is dropped from the schedule.
    * @param system The system; it must declare `argCount: 1` (receiving the context) or `argCount: 0`
    * @param options Phase, ordering constraints, run condition, and initial enabled state
    * @returns this schedule, for chaining
@@ -248,6 +256,7 @@ export class Schedule {
     options: ScheduleSystemOptions = {},
   ): this {
     if (!(system instanceof System)) throw new SpecError("Schedule.add expects a System");
+    this.#sync();
     const name = system.name;
     if (system.argCount !== 0 && system.argCount !== 1) {
       throw new SpecError(
@@ -296,7 +305,7 @@ export class Schedule {
     return true;
   }
 
-  /** Whether the schedule has the system. */
+  /** Whether the schedule has the system. A system unregistered from the world is no longer in the schedule. */
   has(system: ScheduleSystemReference): boolean {
     return this.#find(system) !== undefined;
   }
@@ -323,6 +332,7 @@ export class Schedule {
   getOrder(phase: string): string[] {
     const index = this.#phaseIndex.get(phase);
     if (index === undefined) throw new SpecError(`Unknown schedule phase "${String(phase)}"`);
+    this.#sync();
     if (this.#dirty) this.#build();
     return this.#plan[index]!.map((entry) => entry.name);
   }
@@ -332,11 +342,15 @@ export class Schedule {
    * then `world.refresh()`.
    *
    * If a system throws, pending commands are discarded, the world is refreshed if it can be, and the error is
-   * rethrown. The clock has already advanced by `dt`: fixed steps that were still due are dropped, not replayed. System callbacks run synchronously; a returned promise is not awaited.
+   * rethrown. The clock has already advanced by `dt`: fixed steps that were still due are dropped, not replayed.
+   * System callbacks run synchronously; a returned promise is not awaited.
+   *
+   * Systems unregistered from the world since the last call are dropped first (see {@link add}).
    * @param dt Seconds since the previous run (finite, >= 0)
    * @throws {RangeError} If `dt` is not a finite number >= 0
    * @throws {WorldStateError} If the world is not initialized, or `run()` is called from inside a run
-   * @throws {SpecError} If the ordering constraints are invalid
+   * @throws {SpecError} If the ordering constraints are invalid, including a constraint on a dropped system
+   * @throws {WorldStateError} If a system's async init is still pending, or its destruction has started
    */
   run(dt: number): void {
     if (typeof dt !== "number" || !Number.isFinite(dt) || dt < 0) {
@@ -345,6 +359,7 @@ export class Schedule {
     if (this.#running) throw new WorldStateError("Schedule.run() is already running");
     const state = this.#world.state;
     if (state !== "initialized") throw new WorldStateError(`World is not initialized: state is "${state}"`);
+    this.#sync();
     if (this.#dirty) this.#build();
 
     const context = this.#context;
@@ -417,7 +432,25 @@ export class Schedule {
     if (this.#commands.pendingCount > 0) this.#commands.flush();
   }
 
+  /**
+   * Drop entries whose system is no longer registered in the world with the instance captured by `add()`.
+   * Costs one identity check unless the world's system registry has changed since the last call.
+   */
+  #sync(): void {
+    const systems = this.#world.systems;
+    const registry = systems.registry;
+    if (registry === this.#registry) return;
+    this.#registry = registry;
+    for (const entry of this.#entries.values()) {
+      if (systems.get(entry.system) !== entry.instance) {
+        this.#entries.delete(entry.name);
+        this.#dirty = true;
+      }
+    }
+  }
+
   #find(system: ScheduleSystemReference): Entry | undefined {
+    this.#sync();
     if (typeof system === "string") return this.#entries.get(system);
     if (!isObject(system) || typeof system["name"] !== "string") return undefined;
     const entry = this.#entries.get(system["name"]);
