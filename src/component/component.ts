@@ -7,7 +7,8 @@ import type {
   DynamicComponent,
 } from "@/types/component.ts";
 import { type FieldDescriptor, fieldStorageConstructor, isFieldDescriptor } from "@/schema/field.ts";
-import type { FieldSchema, SchemaOrNull, TypedArrayConstructor } from "@/types/partitions.ts";
+import type { FieldSchema, SchemaOrNull } from "@/types/partitions.ts";
+import { SpecError } from "@/errors.ts";
 import { isPositiveUint32, isValidName } from "@/utils.ts";
 
 type ComponentSpecRuntime<TStorage extends SchemaOrNull> = {
@@ -33,9 +34,22 @@ const SUPPORTED_COLUMN_CONSTRUCTORS: ReadonlySet<unknown> = new Set<unknown>([
   Float16Array,
 ]);
 
-/** The typed-array constructor of a numeric schema property (`Ctor` or `[Ctor, initial]`). */
-export function columnConstructor(property: unknown): TypedArrayConstructor {
-  return (Array.isArray(property) ? property[0] : property) as TypedArrayConstructor;
+/**
+ * Reject PartitionedBuffer's `[Ctor, initial]` column tuple, which Miski does not support.
+ * @param owner - Spec kind and name for the message, e.g. `component "position"`
+ * @param schema - The declared schema (ignored unless it is an object)
+ * @throws {SpecError} If any column is declared as an array
+ */
+export function assertNoTupleColumns(owner: string, schema: unknown): void {
+  if (typeof schema !== "object" || schema === null || Array.isArray(schema)) return;
+  for (const key of Object.keys(schema)) {
+    if (Array.isArray((schema as Record<string, unknown>)[key])) {
+      throw new SpecError(
+        `Invalid ${owner} schema: column "${key}" uses the [Ctor, initial] tuple form, which is not supported. ` +
+          "Declare the bare typed-array constructor (e.g. Float32Array); numeric columns start at 0.",
+      );
+    }
+  }
 }
 
 /** @returns `true` if `constructor` is a typed-array constructor supported for component columns */
@@ -48,7 +62,7 @@ function findUnsupportedColumn(schema: Record<string, unknown>): string | undefi
   for (const key of Object.keys(schema)) {
     const property = schema[key];
     if (isFieldDescriptor(property)) continue;
-    if (!isSupportedColumnConstructor(Array.isArray(property) ? property[0] : property)) return key;
+    if (!isSupportedColumnConstructor(property)) return key;
   }
   return undefined;
 }
@@ -178,11 +192,13 @@ class ComponentRuntime<
   /**
    * Create a new component.
    * @param spec - The component's specification.
-   * @throws {TypeError} - If the spec is invalid
+   * @throws {SpecError} - If a column uses the unsupported `[Ctor, initial]` tuple form
+   * @throws {TypeError} - If the spec is otherwise invalid
    */
   constructor(spec: ComponentSpec<TValue, TStorage>) {
     if (!isValidComponentSpec(spec)) {
-      const schema = (spec as { schema?: unknown } | null | undefined)?.schema;
+      const { name, schema } = (spec ?? {}) as { name?: unknown; schema?: unknown };
+      assertNoTupleColumns(`component "${String(name)}"`, schema);
       if (schema && typeof schema === "object" && isValidFieldSchema(schema)) {
         const key = findUnsupportedColumn(schema as Record<string, unknown>);
         if (key !== undefined) {

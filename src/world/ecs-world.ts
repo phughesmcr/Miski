@@ -12,7 +12,7 @@ import {
 } from "@/schema/schema.ts";
 import { Relation, type RelationDeletePolicy } from "@/relation/relation.ts";
 import type { DynamicComponent } from "@/types/component.ts";
-import type { ComponentValue, SchemaProperty } from "@/types/partitions.ts";
+import type { ComponentValue, TypedArrayConstructor } from "@/types/partitions.ts";
 import { World } from "@/world/world.ts";
 
 /** Storage handles for data components keyed by name. */
@@ -44,7 +44,7 @@ export type RelationOptions = {
   readonly exclusive?: boolean;
   readonly acyclic?: boolean;
   readonly onDeleteTarget?: RelationDeletePolicy;
-  readonly schema?: Readonly<Record<string, SchemaProperty>> | null;
+  readonly schema?: Readonly<Record<string, TypedArrayConstructor>> | null;
 };
 
 /** Relations declared by name. */
@@ -52,7 +52,7 @@ export type RelationMap = Readonly<Record<string, RelationOptions>>;
 
 /** Typed relation definitions for a {@link RelationMap}. */
 export type RelationsFromMap<R extends RelationMap> = {
-  readonly [K in keyof R]: R[K] extends { readonly schema: infer S extends Record<string, SchemaProperty> } ?
+  readonly [K in keyof R]: R[K] extends { readonly schema: infer S extends Record<string, TypedArrayConstructor> } ?
     Relation<S> :
     Relation<null>;
 };

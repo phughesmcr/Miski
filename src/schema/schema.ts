@@ -1,4 +1,4 @@
-import { Component, isValidComponentSpec } from "@/component/component.ts";
+import { assertNoTupleColumns, Component, isValidComponentSpec } from "@/component/component.ts";
 import type { ComponentSpec, DynamicComponent } from "@/types/component.ts";
 import type { ComponentFieldSpec, ComponentValue, TypedArrayConstructor } from "@/types/partitions.ts";
 import { isPositiveUint32 } from "@/utils.ts";
@@ -159,6 +159,7 @@ function normalizeSchema(input: SchemaComponentMap, tags?: TagMap): NormalizedSc
     if (typeof inputProperties !== "object" || inputProperties === null || Array.isArray(inputProperties)) {
       throw new TypeError(`Component ${componentName} must be an object.`);
     }
+    assertNoTupleColumns(`component "${componentName}"`, inputProperties);
     const properties: Record<string, TypedArrayConstructor | FieldDescriptor> = Object.create(null);
     const compiledProperties: CompiledComponentProperty[] = [];
     for (const propertyName of Object.keys(inputProperties).toSorted()) {

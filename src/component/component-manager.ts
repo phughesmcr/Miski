@@ -17,7 +17,6 @@ import type {
   ComponentData,
   ComponentStorage,
   SchemaOrNull,
-  SchemaProperty,
   TypedArray,
   TypedArrayConstructor,
 } from "@/types/partitions.ts";
@@ -46,7 +45,7 @@ import {
   sideDefault,
   type SideField,
 } from "./field-codec.ts";
-import { StorageProxy } from "./storage-proxy.ts";
+import { createColumnWriters, StorageProxy } from "./storage-proxy.ts";
 
 export type { ComponentManagerSnapshot };
 
@@ -265,12 +264,10 @@ export class ComponentManager {
       let usesSparseStorage = false;
       if (bufferStorage !== null) {
         const partitions = bufferStorage.partitions as Record<string, TypedArray>;
-        const physicalSchema = partition.schema as Record<string, SchemaProperty>;
+        const physicalSchema = partition.schema as Record<string, TypedArrayConstructor>;
         for (const key of Object.keys(partitions)) {
           const column = partitions[key]!;
-          const property = physicalSchema[key]!;
-          const Ctor: TypedArrayConstructor = Array.isArray(property) ? property[0] : property;
-          const scratchColumn = new Ctor(1);
+          const scratchColumn = new physicalSchema[key]!(1);
           const codec = createFieldCodec(logicalSchema?.[key]);
           coercionScratch[key] = scratchColumn;
           storageKeys.push(key);
@@ -303,24 +300,28 @@ export class ComponentManager {
           return codec === undefined ? raw : decodeFieldValue(codec, raw as number, isEntityActive);
         } :
         undefined;
-      const proxy = storage ?
-        new StorageProxy({
-          storage,
-          codecs: codecsByKey,
-          sideFields: sideFieldsByKey,
-          isEntityActive,
-          markChanged: (slot: number) => {
-            // Only owners are tracked: raw writes to non-owner slots are an unguarded escape hatch.
-            const state = this.#states[instanceId];
-            if (state !== undefined && state.owners?.[slot] === 1) this.#markChanged(state, slot);
-          },
-          has: (entity: Entity) => this.#entityOwnsInstanceId(instanceId, entity),
-          packSlot,
-          capacity,
-          componentName: component.name,
-          coercionScratch,
-        }) :
-        null;
+      const writers = storage === null ? null : createColumnWriters({
+        storage,
+        componentName: component.name,
+        coercionScratch,
+        codecs: codecsByKey,
+        sideFields: sideFieldsByKey,
+        isEntityActive,
+        markChanged: (slot: number) => {
+          // Only owners are tracked: raw writes to non-owner slots are an unguarded escape hatch.
+          const state = this.#states[instanceId];
+          if (state !== undefined && state.owners?.[slot] === 1) this.#markChanged(state, slot);
+        },
+      });
+      const proxy = storage === null ? null : new StorageProxy({
+        storage,
+        writers: writers!,
+        codecs: codecsByKey,
+        isEntityActive,
+        has: (entity: Entity) => this.#entityOwnsInstanceId(instanceId, entity),
+        packSlot,
+        capacity,
+      });
       // register component instance
       const instance = new ComponentInstance({
         id: instanceId,
@@ -328,6 +329,8 @@ export class ComponentManager {
         markChanged: (entity: Entity): boolean => this.#markInstanceIdChanged(instanceId, entity),
         proxy,
         storage,
+        writers,
+        capacity,
         type: component,
         getRevision: () => this.#states[instanceId]?.revision ?? 0,
         decode,

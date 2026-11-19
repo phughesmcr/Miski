@@ -5,7 +5,6 @@ import {
   entityIndex,
   ReusableSlotPackIterator,
 } from "@/entity/entity.ts";
-import { columnConstructor } from "@/component/component.ts";
 import { ComponentDataError, EntityNotFoundError, formatEntityNotActive } from "@/errors.ts";
 import type { DynamicComponentInstance } from "@/types/component.ts";
 import type { QueryInstance } from "@/types/query.ts";
@@ -165,7 +164,7 @@ export class RelationStore {
 
     const schema = (relation.dataSchema ?? {}) as Record<string, unknown>;
     this.#keys = Object.freeze(Object.keys(schema));
-    this.#constructors = this.#keys.map((key) => columnConstructor(schema[key]));
+    this.#constructors = this.#keys.map((key) => schema[key] as TypedArrayConstructor);
     this.#columns = this.#constructors.map((Ctor) => new Ctor(rows));
     const scratch: Record<string, TypedArray> = {};
     const scratchColumns = this.#constructors.map((Ctor, i) => (scratch[this.#keys[i]!] = new Ctor(1)));

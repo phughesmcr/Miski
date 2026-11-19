@@ -136,7 +136,7 @@ not per entity (see row 16).
 
 - **Float16Array:** release partitionedbuffer with `Float16Array` in `TypedArray` / `TypedArrayConstructor`
   (`utils.ts:13-34`) and a `"Float16Array"` case (max 65504) in `isValidTypedArrayValue` (`utils.ts:144`). Bare
-  `{ v: Float16Array }` already works at runtime; the tuple form `[Float16Array, init]` does not. Alignment is
+  `{ v: Float16Array }` already works at runtime (Miski does not accept `[Ctor, initial]` column tuples). Alignment is
   `max(BYTES_PER_ELEMENT, 8)`, so no layout change is needed. Then in Miski:
   - add it to `SUPPORTED_COLUMN_CONSTRUCTORS` and the error message (`component.ts:21-35,193`);
   - append `"f16"` to the hashed, append-only `CONSTRUCTOR_TAGS` (`schema.ts:22`);

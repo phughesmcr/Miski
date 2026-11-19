@@ -8,7 +8,7 @@ import type {
 } from "@phughesmcr/partitionedbuffer";
 
 import type { StorageProxy } from "@/component/storage-proxy.ts";
-import type { Entity, PackSlot, SlotIndex } from "@/entity/entity.ts";
+import type { Entity, PackSlot } from "@/entity/entity.ts";
 import type { FieldDescriptor, FieldRaw, FieldValue } from "@/schema/field.ts";
 
 export type { Partition, PartitionStorage, Schema, SchemaProperty, TypedArray, TypedArrayConstructor };
@@ -18,8 +18,6 @@ export type { Partition, PartitionStorage, Schema, SchemaProperty, TypedArray, T
  * @param T The Schema / Partition type of the StorageProxy
  */
 export type StorageProxySpec<T extends SchemaOrNull> = {
-  /** Mark the actual storage slot as changed for this component. */
-  markChanged(slot: SlotIndex): void;
   /** Validate a packed entity target against liveness and ownership. */
   has(entity: Entity): boolean;
   /** Pack a raw slot into its current entity handle. */
@@ -33,8 +31,11 @@ export type StorageProxySpec<T extends SchemaOrNull> = {
 /** A Schema or null (null = tag component) */
 export type SchemaOrNull<T = unknown> = Schema<T> | null;
 
-/** One component schema entry: a numeric typed-array column or a non-numeric `field.*` descriptor. */
-export type ComponentFieldSpec = SchemaProperty | FieldDescriptor;
+/**
+ * One component schema entry: a bare numeric typed-array constructor or a non-numeric `field.*` descriptor.
+ * PartitionedBuffer's `[Ctor, initial]` tuple form is not supported; numeric columns always start at 0.
+ */
+export type ComponentFieldSpec = TypedArrayConstructor | FieldDescriptor;
 
 /** A component schema object whose entries may be numeric columns or `field.*` descriptors. */
 export type FieldSchema<T> = {
@@ -44,7 +45,6 @@ export type FieldSchema<T> = {
 /** Resolve the raw storage column type for one schema property definition. */
 export type SchemaPropertyArray<T> = T extends FieldDescriptor ? FieldRaw<T> :
   T extends TypedArrayConstructor ? InstanceType<T> :
-  T extends [infer Constructor extends TypedArrayConstructor, number] ? InstanceType<Constructor> :
   never;
 
 /**
@@ -64,7 +64,7 @@ export type ComponentPartitions<T extends SchemaOrNull> = T extends null ? null 
 /** The public write/proxy value shape for a component. */
 export type ComponentValue<T> = T extends null ? never : {
   [K in keyof T]: T[K] extends FieldDescriptor ? FieldValue<T[K]> :
-    T[K] extends SchemaProperty ? number :
+    T[K] extends TypedArrayConstructor ? number :
     T[K] extends number ? T[K] & number :
     T[K];
 };
@@ -72,7 +72,7 @@ export type ComponentValue<T> = T extends null ? never : {
 /** Data read out of component storage: numbers for numeric columns, decoded values for `field.*` fields. */
 export type ComponentData<T> = T extends null ? Record<never, number> : {
   [K in keyof T]: T[K] extends FieldDescriptor ? FieldValue<T[K]> :
-    T[K] extends SchemaProperty | number ? number :
+    T[K] extends TypedArrayConstructor | number ? number :
     T[K];
 };
 
