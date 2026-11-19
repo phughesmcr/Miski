@@ -725,8 +725,9 @@ export function parseSave(input: Uint8Array, known?: KnownLayout): ParsedSave {
   assertLittleEndian();
   if (!(input instanceof Uint8Array)) throw new TypeError("World save must be a Uint8Array.");
   if (input.byteLength < 4) fail("World save is truncated.");
-  // Views need 8-byte alignment; copy a misaligned slice once.
-  let bytes = (input.byteOffset & 7) === 0 ? input : input.slice();
+  // Views need 8-byte alignment; copy a misaligned input once. `new Uint8Array` always copies, where a subclass's
+  // `slice` may not (Node's `Buffer#slice` returns a view).
+  let bytes = (input.byteOffset & 7) === 0 ? input : new Uint8Array(input);
   const views = readViews.get(bytes.buffer);
   const base = bytes.byteOffset;
   const u32 = views.u32;
@@ -770,7 +771,7 @@ export function parseSave(input: Uint8Array, known?: KnownLayout): ParsedSave {
     if (hashLow !== low || hashHigh !== high) fail("World save layout hash is corrupt.");
     layout = decodeLayout(block, capacity, componentCount);
     info = layoutInfo(layout);
-    layoutBlock = block.slice();
+    layoutBlock = new Uint8Array(block); // a copy, even when `block` is a Buffer view
   }
 
   const width = slotWidth(capacity);

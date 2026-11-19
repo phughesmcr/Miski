@@ -29,6 +29,7 @@ import {
   worldSaveToJSON,
   WorldStateError,
 } from "../mod.ts";
+import { Buffer } from "node:buffer";
 import { assert, assertEquals, assertStrictEquals, assertThrows } from "./helpers.ts";
 
 type Rng = () => number;
@@ -317,6 +318,35 @@ Deno.test("readWorldSaveHeader describes a save without a world", async () => {
   assertEquals(header.layout.components[4], { name: "leader", maxEntities: 1, fields: null }, "tag layout");
   assertStrictEquals(typeof header.layoutHash, "string", "hash is a hex string");
   assertStrictEquals(header.layoutHash.length, 16, "hash is 64-bit");
+});
+
+Deno.test("saves load from misaligned Uint8Arrays and node:buffer Buffers", async () => {
+  const source: Harness = { world: await createWorld(64), live: [] };
+  churn(source, rng(21), 300);
+  const bytes = saveWorld(source.world);
+  const expected = observe(source.world);
+  const header = readWorldSaveHeader(bytes);
+  const json = worldSaveToJSON(bytes);
+  const n = bytes.byteLength;
+
+  for (let offset = 0; offset < 8; offset++) {
+    const backing = new ArrayBuffer(n + offset);
+    new Uint8Array(backing, offset, n).set(bytes);
+    // Node's `Buffer#slice` returns a view, so a copy made with it would stay misaligned.
+    const inputs: [string, Uint8Array][] = [
+      ["Uint8Array", new Uint8Array(backing, offset, n)],
+      ["Buffer", Buffer.from(backing, offset, n)],
+    ];
+    for (const [kind, input] of inputs) {
+      const label = `${kind} at offset ${offset}`;
+      assertEquals(readWorldSaveHeader(input), header, `${label}: header`);
+      assertEquals(worldSaveToJSON(input), json, `${label}: JSON view`);
+      const target = await createWorld(64);
+      loadWorld(target, input);
+      assertEquals(observe(target), expected, `${label}: load`);
+      assert(bytesEqual(new Uint8Array(backing, offset, n), bytes), `${label}: input untouched`);
+    }
+  }
 });
 
 Deno.test("load rejects an uninitialized world, a rollback scope, and foreign bytes", async () => {
