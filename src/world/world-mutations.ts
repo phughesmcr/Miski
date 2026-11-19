@@ -223,8 +223,8 @@ export class WorldMutations {
     }
     const instance = this.getRegisteredComponentInstance(component);
     this.#assertNotRelation(instance);
-    this.validateComponentData(instance, data);
-    const changed = this.#commitAddComponent(instance, entity, data, true);
+    // The component manager validates `data` before any change and releases what it staged.
+    const changed = this.#commitAddComponent(instance, entity, data);
     this.invalidateCommittedTransition(changed);
   }
 
@@ -240,32 +240,36 @@ export class WorldMutations {
     const instance = this.getRegisteredComponentInstance(component);
     this.#assertNotRelation(instance);
     this.validateComponentData(instance, data);
-    const count = this.#preflightBatchEntities(entities);
-
     try {
-      // Batch slots double as entity indices for the owner-count preflight (entityIndex(slot) === slot).
-      this.#componentManager.preflightAddInstanceToEntities(instance, this.#batchSlots, count);
-      let changedCount = 0;
-      for (let i = 0; i < count; i++) {
-        if (
-          this.#componentManager.addInstanceToEntity(
-            instance,
-            this.#entityManager.packSlot(this.#batchSlots[i]!),
-            data,
-            asSlotIndex(this.#batchSlots[i]!),
-            true,
-          )
-        ) {
-          changedCount++;
+      const count = this.#preflightBatchEntities(entities);
+      try {
+        // Batch slots double as entity indices for the owner-count preflight (entityIndex(slot) === slot).
+        this.#componentManager.preflightAddInstanceToEntities(instance, this.#batchSlots, count);
+        let changedCount = 0;
+        for (let i = 0; i < count; i++) {
+          if (
+            this.#componentManager.addInstanceToEntity(
+              instance,
+              this.#entityManager.packSlot(this.#batchSlots[i]!),
+              data,
+              asSlotIndex(this.#batchSlots[i]!),
+              true,
+            )
+          ) {
+            changedCount++;
+          }
         }
+        if (changedCount > 0) {
+          this.#archetypeManager.addComponents(this.#batchSlots, count, instance);
+        }
+        this.invalidateCommittedTransition(changedCount > 0);
+        return changedCount;
+      } finally {
+        this.#clearBatchEntities(count);
       }
-      if (changedCount > 0) {
-        this.#archetypeManager.addComponents(this.#batchSlots, count, instance);
-      }
-      this.invalidateCommittedTransition(changedCount > 0);
-      return changedCount;
     } finally {
-      this.#clearBatchEntities(count);
+      // Staged once for every row; release it after the last one, or when the batch is rejected.
+      if (data !== undefined) this.#componentManager.releaseStagedData(instance.id);
     }
   }
 
@@ -360,6 +364,7 @@ export class WorldMutations {
     for (let i = 0; i < this.#bundleEntryCount; i++) {
       const entry = this.#bundleEntries[i]!;
       this.#bundleSeenComponents[entry.instance.id] = 0;
+      if (entry.data !== undefined) this.#componentManager.releaseStagedData(entry.instance.id);
       entry.data = undefined;
     }
     this.#bundleEntryCount = 0;

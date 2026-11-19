@@ -193,6 +193,8 @@ export class ComponentManager {
   ): void {
     const maxEntities = state.maxEntities;
     if (maxEntities !== 0 && state.owners.count >= maxEntities) {
+      // The add is discarded, and so is the data staged for it.
+      this.#releaseSideScratch(state);
       throw maxOwnersError(state.instance.type.name, maxEntities);
     }
     if (state.sideKeys.length > 0) this.#stageSideInitial(state, data, template);
@@ -281,8 +283,9 @@ export class ComponentManager {
         initial[i] = value === null || clone === undefined ? value : clone(value);
       }
     } catch (error) {
-      // Values staged before the throw must not stay referenced.
+      // Values staged before the throw must not stay referenced, nor the discarded add's staged data.
       this.#clearSideInitial(state);
+      this.#releaseSideScratch(state);
       throw error;
     }
   }
@@ -300,12 +303,14 @@ export class ComponentManager {
   }
 
   /**
-   * Release the side (string / object) values {@link validateInstanceData} staged for `instance`. Call after the last
-   * write of a path that stages once and writes several rows; {@link refresh} also releases them.
+   * Release the side (string / object) values {@link validateInstanceData} staged for a component. Call once a path
+   * that validates first is done with them: after its last write, or when it discards them. {@link refresh} also
+   * releases them, as a backstop.
+   * @param instanceId - The registered component instance id
    * @internal
    */
-  releaseStagedData(instance: DynamicComponentInstance): void {
-    const state = this.#states[instance.id];
+  releaseStagedData(instanceId: number): void {
+    const state = this.#states[instanceId];
     if (state !== undefined) this.#releaseSideScratch(state);
   }
 
@@ -325,7 +330,8 @@ export class ComponentManager {
    * @param entity - The entity to add the component to
    * @param data - Optional data to set for the component
    * @param slot - Optional precomputed storage slot
-   * @param dataValidated - When true, the caller already staged canonical values with validateInstanceData
+   * @param dataValidated - When true, the caller already staged canonical values with validateInstanceData and
+   *   releases them with {@link releaseStagedData}. Either way, a throw after staging releases them here.
    * @returns `true` if the component ownership changed
    * @internal
    */
@@ -651,23 +657,19 @@ export class ComponentManager {
     addedOut: DynamicComponentInstance[],
   ): number {
     let addedCount = 0;
+    const slot = entityIndex(entity);
     for (let i = 0; i < count; i++) {
       const { data, instance } = entries[i]!;
-      if (
-        this.addInstanceToEntity(
-          instance,
-          entity,
-          data as Partial<Record<PropertyKey, unknown>> | undefined,
-          entityIndex(entity),
-          true,
-        )
-      ) {
-        addedOut[addedCount++] = instance;
-      }
-    }
-    for (let i = 0; i < count; i++) {
-      const entry = entries[i]!;
-      if (entry.data !== undefined) this.releaseStagedData(entry.instance);
+      const added = this.addInstanceToEntity(
+        instance,
+        entity,
+        data as Partial<Record<PropertyKey, unknown>> | undefined,
+        slot,
+        true,
+      );
+      // Entries are unique, so each entry's staged data is done with once its row is written.
+      if (data !== undefined) this.releaseStagedData(instance.id);
+      if (added) addedOut[addedCount++] = instance;
     }
     return addedCount;
   }

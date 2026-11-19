@@ -56,9 +56,12 @@ export function prepareEntityStorageData(
   for (let i = 0; i < state.sideKeys.length; i++) {
     const key = state.sideKeys[i]!;
     if (!hasOwnProperty(values, key)) continue;
-    const value = values[key];
-    validateSideValue(state.sideFields[i]!, componentName, key, value);
-    state.sideScratch[i] = value;
+    validateSideValue(state.sideFields[i]!, componentName, key, values[key]);
+  }
+  // Stage only once every field is valid, so a throw never leaves values behind in the scratch.
+  for (let i = 0; i < state.sideKeys.length; i++) {
+    const key = state.sideKeys[i]!;
+    if (hasOwnProperty(values, key)) state.sideScratch[i] = values[key];
   }
 }
 

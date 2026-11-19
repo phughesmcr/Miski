@@ -169,6 +169,7 @@ export class PrefabSpawner {
     for (let i = 0; i < staging.idCount; i++) {
       const id = staging.ids[i]!;
       staging.seen[id] = 0;
+      if (staging.data[id] !== undefined) this.#componentManager.releaseStagedData(id);
       staging.data[id] = undefined;
     }
     staging.idCount = 0;
