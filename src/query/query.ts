@@ -158,7 +158,14 @@ function validateQuerySpec(spec: unknown): NormalizedQueryEntrySpec | undefined 
  */
 export const isValidQuerySpec = (spec: unknown): spec is QueryInputSpec => validateQuerySpec(spec) !== undefined;
 
-/** A Query is a collection of Components that can be used to find Entities. */
+/**
+ * A Query is a collection of Components that can be used to find Entities.
+ *
+ * Create queries once, at startup, and reuse them: a query lives as long as the world. The first time a world
+ * sees a query it builds an internal instance for it, and that instance stays registered, and is kept current on
+ * every refresh, until the world is destroyed; there is no way to unregister it. Creating a query inside a system
+ * or a loop repeats that setup work, and every distinct filter adds to the cost of each refresh.
+ */
 export interface Query<TComponents extends ComponentMap = UntypedQueryComponents> {
   /** Carries the typed component map through to {@link System} inference. */
   readonly $inferComponents: ComponentInstances<TComponents>;
@@ -336,5 +343,5 @@ export interface QueryConstructor {
   ): Query<ComposedQueryComponents<TQueries>>;
 }
 
-/** A Query is a collection of Components that can be used to find Entities */
+/** A Query is a collection of Components that can be used to find Entities. Create queries once; they live as long as the world. */
 export const Query: QueryConstructor = QueryRuntime;

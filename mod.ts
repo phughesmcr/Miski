@@ -153,6 +153,9 @@
  *
  * ## Hot-path
  *
+ * Create queries once and reuse them: a query lives as long as the world. A world registers each query the
+ * first time it sees it and keeps it current on every refresh until the world is destroyed; there is no unregister.
+ *
  * @example Dense queryList and frame lifecycle
  * ```ts
  * const positionComponent = new Component({ name: "position", schema: { x: Float32Array, y: Float32Array } });

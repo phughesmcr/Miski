@@ -498,6 +498,12 @@ world.entities.queryEntered(q);
 world.entities.queryExited(q);
 ```
 
+Create queries once and reuse them: a query lives as long as the world. A world
+registers each query the first time it sees it and keeps it current on every
+refresh until the world is destroyed; there is no unregister. Making queries
+inside a system or a loop repeats that setup, and every distinct filter adds to
+the cost of each refresh.
+
 Both `query(q)` and `queryList(q)` read the query's result as it was when they
 were called, so destroying or moving the current entity inside the loop skips
 nothing. Calling either again for the same query after a mutation refills that
