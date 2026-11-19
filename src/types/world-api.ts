@@ -1,9 +1,8 @@
-import type { Query } from "@/query/query.ts";
 import type { DynamicComponent } from "@/types/component.ts";
+import type { World } from "@/world/world.ts";
 import type { WorldArchetypeAPI } from "@/types/world-archetype-api.ts";
 import type { WorldComponentAPI } from "@/types/world-component-api.ts";
 import type { WorldEntityAPI } from "@/types/world-entity-api.ts";
-import type { WorldRelationAPI } from "@/types/world-relation-api.ts";
 import type { WorldSystemAPI } from "@/types/world-system-api.ts";
 
 export type { ComponentBundle, ComponentBundleEntryFor, ComponentBundleEntryInput } from "@/types/component-bundle.ts";
@@ -27,20 +26,25 @@ export type WorldSpec = {
 /** The state of a World */
 export type WorldState = "uninitialized" | "initialized" | "destroyed" | "error";
 
-/** Public world surface available to systems and external callers. */
-export type WorldContext = {
-  readonly state: WorldState;
-  readonly components: WorldComponentAPI;
-  readonly entities: WorldEntityAPI;
-  readonly systems: WorldSystemAPI;
-  readonly archetypes: WorldArchetypeAPI;
-  readonly relations: WorldRelationAPI;
-  init(): Promise<void>;
-  destroy(): Promise<void>;
-  refresh(): void;
-  frame<T>(fn: () => T): T;
-  queryRevision(query: Query): number;
-};
+/**
+ * Public world surface available to systems and external callers: the `World` members passed to system `init` and
+ * `destroy` hooks. Derived from `World`, so it always matches it.
+ */
+export type WorldContext = Pick<
+  World,
+  | "state"
+  | "components"
+  | "entities"
+  | "systems"
+  | "archetypes"
+  | "relations"
+  | "init"
+  | "destroy"
+  | "onReady"
+  | "refresh"
+  | "frame"
+  | "queryRevision"
+>;
 
 /** The result of a World API constructor */
 export type WorldAPIResult = {

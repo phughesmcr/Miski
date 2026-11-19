@@ -22,14 +22,14 @@ Deno.test("world teardown closes system registration and rejects concurrent tear
       await gate.promise;
     },
   });
-  const run = world.systems.create(system);
+  const run = world.systems.register(system);
   await world.init();
   const teardown = world.destroy();
   await entered.promise;
   try {
     assertThrows(
       () =>
-        world.systems.create(
+        world.systems.register(
           new System({
             name: "lateDuringDestroy",
             query: new Query({ all: [tag] }),
@@ -57,7 +57,7 @@ Deno.test("world initialization keeps hook mutations but delays callbacks and re
   const world = new World({ capacity: 8, components: [tag] });
   const gate = Promise.withResolvers<void>();
   const entered = Promise.withResolvers<void>();
-  const run = world.systems.create(
+  const run = world.systems.register(
     new System({
       name: "pausedInit",
       query: new Query({ all: [tag] }),
@@ -91,7 +91,7 @@ Deno.test("late async system initialization delays callbacks and onReady", async
   const world = new World({ capacity: 8, components: [tag] });
   await world.init();
   const gate = Promise.withResolvers<void>();
-  const run = world.systems.create(
+  const run = world.systems.register(
     new System({
       name: "lateInit",
       query: new Query({ all: [tag] }),
@@ -120,7 +120,7 @@ Deno.test("systems registered during async world init are included in readiness"
   const initialGate = Promise.withResolvers<void>();
   const entered = Promise.withResolvers<void>();
   const lateGate = Promise.withResolvers<void>();
-  world.systems.create(
+  world.systems.register(
     new System({
       name: "initial",
       query: new Query({ all: [tag] }),
@@ -133,7 +133,7 @@ Deno.test("systems registered during async world init are included in readiness"
   );
   const initialization = world.init();
   await entered.promise;
-  world.systems.create(
+  world.systems.register(
     new System({
       name: "late",
       query: new Query({ all: [tag] }),
@@ -157,7 +157,7 @@ Deno.test("world teardown unregisters failed hooks and still destroys remaining 
   const world = new World({ capacity: 8, components: [tag] });
   const destroyed: string[] = [];
   for (const name of ["bad", "good"]) {
-    world.systems.create(
+    world.systems.register(
       new System({
         name,
         query: new Query({ all: [tag] }),
@@ -181,7 +181,7 @@ Deno.test("world teardown reports every destroy-hook failure as an AggregateErro
   const world = new World({ capacity: 8, components: [tag] });
   const failures = ["first", "second"].map((name) => new Error(`${name} destroy failed`));
   for (const [i, name] of ["first", "good", "second"].entries()) {
-    world.systems.create(
+    world.systems.register(
       new System({
         name,
         query: new Query({ all: [tag] }),
@@ -214,7 +214,7 @@ Deno.test("concurrent individual system teardown runs a hook only once", async (
       return gate.promise;
     },
   });
-  world.systems.create(system);
+  world.systems.register(system);
   await world.init();
   const first = world.systems.destroy(system);
   const second = world.systems.destroy(system);
@@ -230,7 +230,7 @@ Deno.test("world teardown awaits late initialization before destroying that syst
   await world.init();
   const gate = Promise.withResolvers<void>();
   const calls: string[] = [];
-  world.systems.create(
+  world.systems.register(
     new System({
       name: "lateTeardown",
       query: new Query({ all: [tag] }),
@@ -255,7 +255,7 @@ Deno.test("world teardown awaits late initialization before destroying that syst
 Deno.test("failed world initialization rejects readiness and callbacks", async () => {
   const tag = tagComponent("tag");
   const world = new World({ capacity: 8, components: [tag] });
-  const run = world.systems.create(
+  const run = world.systems.register(
     new System({
       name: "failedInit",
       query: new Query({ all: [tag] }),
@@ -279,7 +279,7 @@ Deno.test("failed initialization rejects readiness without waiting for an unrela
   const initial = Promise.withResolvers<void>();
   const entered = Promise.withResolvers<void>();
   const late = Promise.withResolvers<void>();
-  world.systems.create(
+  world.systems.register(
     new System({
       name: "initialFailure",
       query: new Query({ all: [tag] }),
@@ -292,7 +292,7 @@ Deno.test("failed initialization rejects readiness without waiting for an unrela
   );
   const initialization = assertRejects(() => world.init(), Error, "initial failed");
   await entered.promise;
-  world.systems.create(
+  world.systems.register(
     new System({
       name: "unrelatedPending",
       query: new Query({ all: [tag] }),
@@ -323,7 +323,7 @@ Deno.test("rejected pending system callbacks leave borrowed query views untouche
   const borrowed = world.entities.queryList(query);
   world.entities.createWithOrThrow([[tag]]);
   const gate = Promise.withResolvers<void>();
-  const run = world.systems.create(
+  const run = world.systems.register(
     new System({
       name: "pendingBorrowedView",
       query,
@@ -374,7 +374,7 @@ Deno.test("frame propagates the callback error when it moves the world into erro
   let caught: unknown;
   try {
     world.frame(() => {
-      world.systems.create(bad);
+      world.systems.register(bad);
     });
   } catch (error) {
     caught = error;
@@ -405,7 +405,7 @@ Deno.test("late async init failure after init surfaces the root cause through on
   const world = new World({ capacity: 8, components: [tag] });
   await world.init();
   const rootCause = new Error("ROOT CAUSE");
-  world.systems.create(makeSystem(tag, "lateRoot", {
+  world.systems.register(makeSystem(tag, "lateRoot", {
     init: async () => {
       await Promise.resolve();
       throw rootCause;
@@ -433,9 +433,9 @@ Deno.test("an init hook that registers a failing late system rejects init with t
   const tag = lifecycleTag();
   const world = new World({ capacity: 8, components: [tag] });
   const rootCause = new Error("NESTED ROOT CAUSE");
-  world.systems.create(makeSystem(tag, "parent", {
+  world.systems.register(makeSystem(tag, "parent", {
     init: (hookWorld) => {
-      hookWorld.systems.create(makeSystem(tag, "child", {
+      hookWorld.systems.register(makeSystem(tag, "child", {
         init: async () => {
           await Promise.resolve();
           throw rootCause;
@@ -467,9 +467,9 @@ Deno.test("destroy after a failed initial init destroys only systems whose init 
       calls.push(`${name}:destroy`);
     },
   });
-  world.systems.create(makeSystem(tag, "a", hooks("a")));
-  world.systems.create(makeSystem(tag, "b", hooks("b", true)));
-  world.systems.create(makeSystem(tag, "c", hooks("c")));
+  world.systems.register(makeSystem(tag, "a", hooks("a")));
+  world.systems.register(makeSystem(tag, "b", hooks("b", true)));
+  world.systems.register(makeSystem(tag, "c", hooks("c")));
   await assertRejects(() => world.init(), Error, "b init failed");
   assertEquals(Object.keys(world.systems.registry), ["a", "c"], "Failed system is unregistered");
   await world.destroy();
@@ -481,12 +481,12 @@ Deno.test("destroy after a failed initial init destroys only systems whose init 
 Deno.test("destroy from error still reports destroy hook failures and leaves the world in error", async () => {
   const tag = lifecycleTag();
   const world = new World({ capacity: 8, components: [tag] });
-  world.systems.create(makeSystem(tag, "ok", {
+  world.systems.register(makeSystem(tag, "ok", {
     destroy: () => {
       throw new Error("cleanup failed");
     },
   }));
-  world.systems.create(makeSystem(tag, "bad", {
+  world.systems.register(makeSystem(tag, "bad", {
     init: () => {
       throw new Error("init failed");
     },
@@ -513,7 +513,7 @@ Deno.test("systems.destroy waits for that system's pending init", async () => {
       calls.push("destroy");
     },
   });
-  world.systems.create(system);
+  world.systems.register(system);
   const destruction = world.systems.destroy(system);
   await settle();
   assertEquals(calls, ["init-start"], "Destroy waits for init to finish");
@@ -535,7 +535,7 @@ Deno.test("systems.destroy skips the destroy hook of a system whose init never r
       calls.push("destroy");
     },
   });
-  world.systems.create(system);
+  world.systems.register(system);
   await world.systems.destroy(system);
   assertEquals(calls, [], "Neither hook runs for a system that never initialised");
   assert(!world.systems.has(system), "The system is still unregistered");
@@ -549,7 +549,7 @@ Deno.test("a late init hook that awaits onReady is rejected instead of deadlocki
   const world = new World({ capacity: 8, components: [tag] });
   await world.init();
   let hookError: unknown;
-  world.systems.create(makeSystem(tag, "selfWaiting", {
+  world.systems.register(makeSystem(tag, "selfWaiting", {
     init: async (_world, hook) => {
       await Promise.resolve();
       try {
@@ -571,7 +571,7 @@ Deno.test("world.destroy does not hang on a late init hook that awaits onReady",
   const world = new World({ capacity: 8, components: [tag] });
   await world.init();
   const entered = Promise.withResolvers<void>();
-  world.systems.create(makeSystem(tag, "selfWaitingUnhandled", {
+  world.systems.register(makeSystem(tag, "selfWaitingUnhandled", {
     init: async () => {
       entered.resolve();
       await world.onReady();
@@ -588,7 +588,7 @@ Deno.test("world.destroy does not hang on a late init hook that awaits onReady",
 Deno.test("an initial init hook that awaits onReady is rejected instead of deadlocking", async () => {
   const tag = lifecycleTag();
   const world = new World({ capacity: 8, components: [tag] });
-  world.systems.create(makeSystem(tag, "initialSelfWaiting", {
+  world.systems.register(makeSystem(tag, "initialSelfWaiting", {
     init: async () => {
       await world.onReady();
     },
@@ -605,7 +605,7 @@ Deno.test("destroy right after an un-awaited init waits for it and then tears do
   const world = new World({ capacity: 8, components: [tag] });
   const gate = Promise.withResolvers<void>();
   const calls: string[] = [];
-  world.systems.create(makeSystem(tag, "slowInit", {
+  world.systems.register(makeSystem(tag, "slowInit", {
     init: async () => {
       calls.push("init-start");
       await gate.promise;
@@ -632,12 +632,12 @@ Deno.test("destroy right after an un-awaited failing init waits for it and clean
   const world = new World({ capacity: 8, components: [tag] });
   const gate = Promise.withResolvers<void>();
   const calls: string[] = [];
-  world.systems.create(makeSystem(tag, "good", {
+  world.systems.register(makeSystem(tag, "good", {
     destroy: () => {
       calls.push("good:destroy");
     },
   }));
-  world.systems.create(makeSystem(tag, "slowFailure", {
+  world.systems.register(makeSystem(tag, "slowFailure", {
     init: async () => {
       await gate.promise;
       throw new Error("slow init failed");
@@ -663,7 +663,7 @@ Deno.test("world.destroy surfaces the root cause of a late init failure that hap
   await world.init();
   const gate = Promise.withResolvers<void>();
   const rootCause = new Error("TEARDOWN ROOT CAUSE");
-  world.systems.create(makeSystem(tag, "failsDuringTeardown", {
+  world.systems.register(makeSystem(tag, "failsDuringTeardown", {
     init: async () => {
       await gate.promise;
       throw rootCause;
@@ -687,7 +687,7 @@ Deno.test("calls made after a hook settles are not mistaken for hook code", asyn
   const world = new World({ capacity: 8, components: [tag] });
   await world.init();
   let afterHook: Promise<void> | undefined;
-  world.systems.create(makeSystem(tag, "spawnsTimer", {
+  world.systems.register(makeSystem(tag, "spawnsTimer", {
     init: () => {
       afterHook = new Promise<void>((resolve) => setTimeout(resolve, 5)).then(() => world.onReady());
     },
@@ -701,7 +701,7 @@ Deno.test("world destroy is idempotent once the world is destroyed", async () =>
   const tag = lifecycleTag();
   const world = new World({ capacity: 8, components: [tag] });
   let destroyed = 0;
-  world.systems.create(makeSystem(tag, "countDestroy", {
+  world.systems.register(makeSystem(tag, "countDestroy", {
     destroy: () => {
       destroyed++;
     },
@@ -726,7 +726,7 @@ Deno.test("await using destroys the world when the scope exits, including on thr
   let escaped: World | undefined;
   {
     await using world = new World({ capacity: 8, components: [tag] });
-    world.systems.create(makeSystem(tag, "scoped", hooks));
+    world.systems.register(makeSystem(tag, "scoped", hooks));
     await world.init();
     escaped = world;
   }
@@ -734,7 +734,7 @@ Deno.test("await using destroys the world when the scope exits, including on thr
   await assertRejects(
     async () => {
       await using world = new World({ capacity: 8, components: [tag] });
-      world.systems.create(makeSystem(tag, "throwing", hooks));
+      world.systems.register(makeSystem(tag, "throwing", hooks));
       await world.init();
       escaped = world;
       throw new Error("body failed");
@@ -762,7 +762,7 @@ Deno.test("overlapping async disposals share one teardown, and a failed one can 
   const tag = lifecycleTag();
   const world = new World({ capacity: 8, components: [tag] });
   let calls = 0;
-  world.systems.create(makeSystem(tag, "failsOnce", {
+  world.systems.register(makeSystem(tag, "failsOnce", {
     destroy: () => {
       calls++;
       if (calls === 1) throw new Error("cleanup failed");
@@ -790,7 +790,7 @@ Deno.test("async disposal rejects during a running destroy() and works after in-
 
   const initializing = new World({ capacity: 8, components: [tag] });
   const gate = Promise.withResolvers<void>();
-  initializing.systems.create(makeSystem(tag, "slowInit", { init: () => gate.promise }));
+  initializing.systems.register(makeSystem(tag, "slowInit", { init: () => gate.promise }));
   const init = initializing.init();
   const disposal = initializing[Symbol.asyncDispose]();
   gate.resolve();
@@ -799,7 +799,7 @@ Deno.test("async disposal rejects during a running destroy() and works after in-
   assertEquals(initializing.state, "destroyed", "Disposal waits for in-flight init, then tears down");
 
   const failed = new World({ capacity: 8, components: [tag] });
-  failed.systems.create(makeSystem(tag, "failingInit", {
+  failed.systems.register(makeSystem(tag, "failingInit", {
     init: () => {
       throw new Error("init failed");
     },

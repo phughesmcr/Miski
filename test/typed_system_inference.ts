@@ -2,7 +2,7 @@
  * Compile-only type inference checks. Included in `deno task check`, not `deno test`.
  * See test/README.md.
  */
-import { Component, defineComponentSchema, entityIndex, Query, System, World } from "../mod.ts";
+import { Component, defineComponentSchema, entityIndex, Query, Schedule, System, World } from "../mod.ts";
 import type {
   BorrowedEntityList,
   ComponentData,
@@ -11,7 +11,9 @@ import type {
   DynamicComponentInstance,
   Entity,
   QuerySpec,
+  ScheduleContext,
   SchemaOrNull,
+  SystemArgCount,
   SystemCallback,
   SystemInstance,
   UntypedQueryComponents,
@@ -75,7 +77,7 @@ const manualTypedSystem = new System({
     components.postion;
   },
 });
-const manualTypedInstance = world.systems.create(manualTypedSystem);
+const manualTypedInstance = world.systems.register(manualTypedSystem);
 manualTypedInstance(1 / 60);
 // @ts-expect-error system instance arguments are inferred from the callback.
 manualTypedInstance("fast");
@@ -131,7 +133,7 @@ const asyncSystem = new System({
   },
 });
 
-const asyncInstance = world.systems.create(asyncSystem);
+const asyncInstance = world.systems.register(asyncSystem);
 expectType<Promise<void>>(asyncInstance());
 
 const querySpec: QuerySpec = {
@@ -162,7 +164,7 @@ const dynamicSystem = new System({
 });
 
 const dynamicWorld = new World({ capacity: 8, components: [position, renderable, disabled, inferredTag] });
-const dynamicInstance = dynamicWorld.systems.create(dynamicSystem);
+const dynamicInstance = dynamicWorld.systems.register(dynamicSystem);
 dynamicInstance("label");
 
 // -- Partition typing: constructor-shaped generics resolve exact typed arrays,
@@ -295,7 +297,7 @@ const fixedArgSystem = new System({
   argCount: 1,
   callback: (_components, _entities, dt: number): number => dt,
 });
-expectType<(dt: number) => number>(world.systems.create(fixedArgSystem));
+expectType<(dt: number) => number>(world.systems.register(fixedArgSystem));
 const optionalArgSystem = new System({
   name: "optionalArg",
   query: argCountQuery,
@@ -326,3 +328,38 @@ const untypedArgSystem = new System<UntypedQueryComponents, unknown[], void>({
   callback: (): void => {},
 });
 void untypedArgSystem;
+
+// Scheduled systems: argCount is optional for Schedule.add (the context is still forwarded), limited to the
+// callback's arity, and SystemArgCount is the 0..4 union.
+{
+  const world = new World({ capacity: 8, components: [renderable] });
+  const schedule = new Schedule(world);
+  const query = new Query({ all: [renderable] });
+  const withoutArgCount = new System<Record<string, never>, [ScheduleContext], void>({
+    name: "withoutArgCount",
+    query,
+    callback: (_components, _entities, _ctx) => {},
+  });
+  schedule.add(withoutArgCount);
+  schedule.add(new System({ name: "fixed", query, argCount: 1, callback: (_c, _e, _ctx: ScheduleContext) => {} }));
+  new System<Record<string, never>, [ScheduleContext], void>({
+    name: "tooMany",
+    query,
+    // @ts-expect-error argCount cannot exceed the callback's extra parameters
+    argCount: 2,
+    callback: (_components, _entities, _ctx) => {},
+  });
+  const twoArgs = new System({ name: "twoArgs", query, argCount: 2, callback: (_c, _e, _a: number, _b: number) => {} });
+  // @ts-expect-error a scheduled system receives only the context
+  schedule.add(twoArgs);
+  expectType<0 | 1 | 2 | 3 | 4>(null! as SystemArgCount);
+  expectType<SystemArgCount>(4);
+  // @ts-expect-error 5 is not a SystemArgCount
+  expectType<SystemArgCount>(5);
+  const enabled: boolean = schedule.setEnabled("fixed", false);
+  void enabled;
+  const destroyed: Promise<boolean> = world.systems.destroy("fixed");
+  const destroyedOrThrow: Promise<void> = world.systems.destroyOrThrow("fixed");
+  void destroyed;
+  void destroyedOrThrow;
+}

@@ -111,7 +111,7 @@ Deno.test("include exposes optional component instances without filtering render
     },
   });
 
-  world.systems.create(renderSystem)();
+  world.systems.register(renderSystem)();
 
   assertEquals(
     rendered,

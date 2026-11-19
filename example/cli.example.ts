@@ -6,7 +6,18 @@
  */
 
 // The only Miski imports we need:
-import { asEntity, Component, type Entity, entityIndex, type FieldSchema, Query, System, World } from "../mod.ts";
+import {
+  asEntity,
+  Component,
+  type Entity,
+  entityIndex,
+  type FieldSchema,
+  Query,
+  Schedule,
+  type ScheduleContext,
+  System,
+  World,
+} from "../mod.ts";
 
 // ############################################################################
 // DEMO CONFIG - not Miski specific
@@ -415,6 +426,7 @@ const capVelocity = (vx: number, vy: number): { x: number; y: number } => {
 const predatorAISystem = new System({
   name: "predatorAI",
   query: predatorQuery,
+  argCount: 0,
   callback: (components, entities) => {
     const positionX = components.position.storage.partitions.x;
     const positionY = components.position.storage.partitions.y;
@@ -457,6 +469,7 @@ const predatorAISystem = new System({
 const preyAISystem = new System({
   name: "preyAI",
   query: preyQuery,
+  argCount: 0,
   callback: (components, entities) => {
     const positionX = components.position.storage.partitions.x;
     const positionY = components.position.storage.partitions.y;
@@ -499,7 +512,8 @@ const preyAISystem = new System({
 const separationSystem = new System({
   name: "separation",
   query: movementQuery,
-  callback: (components, entities, dt: number) => {
+  argCount: 1,
+  callback: (components, entities, { dt }: ScheduleContext) => {
     const positionX = components.position.storage.partitions.x;
     const positionY = components.position.storage.partitions.y;
     const velocityX = components.velocity.storage.partitions.x;
@@ -551,7 +565,8 @@ const separationSystem = new System({
 const movementSystem = new System({
   name: "movement",
   query: movementQuery,
-  callback: (components, entities, dt: number) => {
+  argCount: 1,
+  callback: (components, entities, { dt }: ScheduleContext) => {
     const positionX = components.position.storage.partitions.x;
     const positionY = components.position.storage.partitions.y;
     const velocityX = components.velocity.storage.partitions.x;
@@ -595,7 +610,8 @@ const interpolatePosition = (prev: number, current: number, alpha: number): numb
 const renderPredatorSystem = new System({
   name: "renderPredator",
   query: predatorQuery,
-  callback: (components, entities, alpha: number) => {
+  argCount: 1,
+  callback: (components, entities, { alpha }: ScheduleContext) => {
     const positionX = components.position.storage.partitions.x;
     const positionY = components.position.storage.partitions.y;
     const prevX = components.previousPosition.storage.partitions.x;
@@ -623,7 +639,8 @@ const renderPredatorSystem = new System({
 const renderPreySystem = new System({
   name: "renderPrey",
   query: preyQuery,
-  callback: (components, entities, alpha: number) => {
+  argCount: 1,
+  callback: (components, entities, { alpha }: ScheduleContext) => {
     const positionX = components.position.storage.partitions.x;
     const positionY = components.position.storage.partitions.y;
     const prevX = components.previousPosition.storage.partitions.x;
@@ -644,6 +661,7 @@ const renderPreySystem = new System({
 const collisionSystem = new System({
   name: "collision",
   query: predatorQuery,
+  argCount: 0,
   callback: (components, entities) => {
     const positionX = components.position.storage.partitions.x;
     const positionY = components.position.storage.partitions.y;
@@ -683,7 +701,8 @@ const collisionSystem = new System({
 const predatorEnergySystem = new System({
   name: "predatorEnergy",
   query: predatorQuery,
-  callback: (components, entities, dt: number) => {
+  argCount: 1,
+  callback: (components, entities, { dt }: ScheduleContext) => {
     const energyValue = components.energy.storage.partitions.value;
     let destroyCount = 0;
 
@@ -716,7 +735,8 @@ const predatorEnergySystem = new System({
 const preyReproductionSystem = new System({
   name: "preyReproduction",
   query: preyQuery,
-  callback: (components, entities, dt: number) => {
+  argCount: 1,
+  callback: (components, entities, { dt }: ScheduleContext) => {
     const positionX = components.position.storage.partitions.x;
     const positionY = components.position.storage.partitions.y;
     const reproTimer = components.reproductionTimer.storage.partitions.value;
@@ -778,6 +798,7 @@ const preyReproductionSystem = new System({
 const updatePreviousPositionSystem = new System({
   name: "updatePreviousPosition",
   query: previousPositionQuery,
+  argCount: 0,
   callback: (components, entities) => {
     const positionX = components.position.storage.partitions.x;
     const positionY = components.position.storage.partitions.y;
@@ -792,17 +813,29 @@ const updatePreviousPositionSystem = new System({
   },
 });
 
-// Initialize systems in a world like so:
-const predatorAI = world.systems.create(predatorAISystem);
-const preyAI = world.systems.create(preyAISystem);
-const separation = world.systems.create(separationSystem);
-const movement = world.systems.create(movementSystem);
-const collision = world.systems.create(collisionSystem);
-const predatorEnergy = world.systems.create(predatorEnergySystem);
-const preyReproduction = world.systems.create(preyReproductionSystem);
-const renderPrey = world.systems.create(renderPreySystem);
-const renderPredator = world.systems.create(renderPredatorSystem);
-const updatePreviousPosition = world.systems.create(updatePreviousPositionSystem);
+// Run the systems with a schedule: a fixed-step simulation phase, then a render phase once per frame.
+// Systems run in the order they are added; `before` makes the separation -> movement dependency explicit.
+const SIMULATION_STEP_SECONDS = FIXED_TIME_STEP / 1000;
+const schedule = new Schedule(world, {
+  phases: [{ name: "simulate", fixed: true }, "render"],
+  fixedStep: SIMULATION_STEP_SECONDS,
+  maxFixedSteps: MAX_UPDATES,
+});
+schedule
+  .add(updatePreviousPositionSystem, { phase: "simulate" })
+  // AI behavior
+  .add(predatorAISystem, { phase: "simulate" })
+  .add(preyAISystem, { phase: "simulate" })
+  // Physics - separation must run before movement
+  .add(separationSystem, { phase: "simulate", before: [movementSystem] })
+  .add(movementSystem, { phase: "simulate" })
+  // Game logic
+  .add(collisionSystem, { phase: "simulate" })
+  .add(predatorEnergySystem, { phase: "simulate" })
+  .add(preyReproductionSystem, { phase: "simulate" })
+  // Rendering, interpolated by the leftover fraction of a step (`alpha`)
+  .add(renderPredatorSystem, { phase: "render" })
+  .add(renderPreySystem, { phase: "render" });
 
 // ############################################################################
 // GAME LOOP - not Miski specific
@@ -810,7 +843,6 @@ const updatePreviousPosition = world.systems.create(updatePreviousPositionSystem
 
 let running = true;
 let lastTime = 0;
-let accumulator = 0;
 let frameCount = 0;
 let fpsTime = 0;
 let fps = 0;
@@ -820,7 +852,6 @@ function gameLoop(currentTime: number = performance.now()): void {
 
   const deltaTime = currentTime - lastTime;
   lastTime = currentTime;
-  accumulator += deltaTime;
 
   // Calculate FPS
   frameCount++;
@@ -831,39 +862,11 @@ function gameLoop(currentTime: number = performance.now()): void {
     fpsTime = 0;
   }
 
-  let updates = 0;
-  while (accumulator >= FIXED_TIME_STEP && updates < MAX_UPDATES) {
-    // world.frame runs the tick then refreshes entered/exited/changed state.
-    world.frame(() => {
-      updatePreviousPosition();
-
-      // AI behavior
-      predatorAI();
-      preyAI();
-
-      // Physics - separation must run before movement
-      separation(FIXED_TIME_STEP / 1000);
-      movement(FIXED_TIME_STEP / 1000);
-
-      // Game logic
-      collision();
-      predatorEnergy(FIXED_TIME_STEP / 1000);
-      preyReproduction(FIXED_TIME_STEP / 1000);
-    });
-
-    accumulator -= FIXED_TIME_STEP;
-    updates++;
-  }
-
-  // Clear game grid
+  // Clear game grid; the render phase redraws it
   clearGrid();
 
-  // Calculate interpolation factor
-  const alpha = accumulator / FIXED_TIME_STEP;
-
-  // Call render systems
-  renderPredator(alpha);
-  renderPrey(alpha);
+  // Run every due simulation step, then the render phase, then refresh the world
+  schedule.run(deltaTime / 1000);
 
   // print screen to console
   printScreen();

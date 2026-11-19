@@ -590,6 +590,6 @@ Deno.test("createEcsWorld and systems work with field types", async () => {
       }
     },
   });
-  game.world.systems.create(naming)();
+  game.world.systems.register(naming)();
   assertEquals(seen.toSorted(), [":1", "a:0"], "Systems read raw side and typed columns");
 });

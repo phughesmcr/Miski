@@ -1,8 +1,8 @@
 /// <reference lib="deno.ns" />
 
-import { Query, System, World, WorldStateError } from "../mod.ts";
+import { NotRegisteredError, Query, System, World, WorldStateError } from "../mod.ts";
 import { createEntity, createTestWorld, tagComponent } from "./fixtures.ts";
-import { assert, assertEquals, assertRejects, listIds } from "./helpers.ts";
+import { assert, assertEquals, assertRejects, assertStrictEquals, listIds } from "./helpers.ts";
 
 type Settled = { ok: true; value: unknown } | { ok: false; error: unknown };
 
@@ -55,7 +55,7 @@ Deno.test("an init hook awaiting its own systems.destroy rejects instead of dead
       await hook.destroySystem(system);
     },
   });
-  world.systems.create(system);
+  world.systems.register(system);
 
   const result = await settleWithin(world.init(), "world.init()");
   const error = assertSettledWith(result, WorldStateError, "world.init()");
@@ -80,7 +80,7 @@ Deno.test("a late init hook can catch the rejection of its own systems.destroy a
       }
     },
   });
-  world.systems.create(system);
+  world.systems.register(system);
 
   const ready = await settleWithin(world.onReady(), "world.onReady()");
   assert(ready.ok, `world.onReady() resolves once the hook handles the rejection: ${String(ready)}`);
@@ -103,7 +103,7 @@ Deno.test("a destroy hook awaiting its own systems.destroy rejects instead of de
       await hook.destroySystem(system);
     },
   });
-  world.systems.create(system);
+  world.systems.register(system);
   await world.onReady();
 
   const result = await settleWithin(world.systems.destroy(system), "systems.destroy()");
@@ -143,8 +143,8 @@ Deno.test("hooks that await each other's systems.destroy reject the closing call
       }
     },
   });
-  world.systems.create(a);
-  world.systems.create(b);
+  world.systems.register(a);
+  world.systems.register(b);
 
   startA.resolve();
   await awaitingB.promise;
@@ -162,7 +162,7 @@ Deno.test("hooks that await each other's systems.destroy reject the closing call
 type HookCall = "onReady" | "world.destroy" | "self systems.destroy";
 
 /** Make `call` on the closure `world` from a hook body, before any `await`. */
-function callFromHookBody(world: World, call: HookCall, self: () => System): Promise<void> {
+function callFromHookBody(world: World, call: HookCall, self: () => System): Promise<unknown> {
   if (call === "onReady") return world.onReady();
   if (call === "world.destroy") return world.destroy();
   return world.systems.destroy(self());
@@ -172,7 +172,7 @@ for (const call of ["onReady", "world.destroy", "self systems.destroy"] as const
   Deno.test(`a synchronous ${call} from an initial init hook rejects with WorldStateError`, async () => {
     const tag = tagComponent("tag");
     const world = new World({ capacity: 8, components: [tag] });
-    let pending: Promise<void> | undefined;
+    let pending: Promise<unknown> | undefined;
     const system: System = new System({
       name: "syncInitial",
       query: new Query({ all: [tag] }),
@@ -182,7 +182,7 @@ for (const call of ["onReady", "world.destroy", "self systems.destroy"] as const
         pending.catch(() => {});
       },
     });
-    world.systems.create(system);
+    world.systems.register(system);
     await settleWithin(world.init(), "world.init()");
     assertSettledWith(await settleWithin(pending!, call), WorldStateError, call);
     assertEquals(world.state, "initialized", "A handled rejection leaves the world healthy");
@@ -193,7 +193,7 @@ for (const call of ["onReady", "world.destroy", "self systems.destroy"] as const
   Deno.test(`a synchronous ${call} from a late init hook rejects with WorldStateError`, async () => {
     const tag = tagComponent("tag");
     const world = await createTestWorld([tag]);
-    let pending: Promise<void> | undefined;
+    let pending: Promise<unknown> | undefined;
     const system: System = new System({
       name: "syncLate",
       query: new Query({ all: [tag] }),
@@ -203,7 +203,7 @@ for (const call of ["onReady", "world.destroy", "self systems.destroy"] as const
         pending.catch(() => {});
       },
     });
-    world.systems.create(system);
+    world.systems.register(system);
     assertSettledWith(await settleWithin(pending!, call), WorldStateError, call);
     assert((await settleWithin(world.onReady(), "world.onReady()")).ok, "The world stays ready");
     await world.destroy();
@@ -212,7 +212,7 @@ for (const call of ["onReady", "world.destroy", "self systems.destroy"] as const
   Deno.test(`a synchronous ${call} from a destroy hook rejects with WorldStateError`, async () => {
     const tag = tagComponent("tag");
     const world = await createTestWorld([tag]);
-    let pending: Promise<void> | undefined;
+    let pending: Promise<unknown> | undefined;
     const system: System = new System({
       name: "syncDestroy",
       query: new Query({ all: [tag] }),
@@ -222,7 +222,7 @@ for (const call of ["onReady", "world.destroy", "self systems.destroy"] as const
         pending.catch(() => {});
       },
     });
-    world.systems.create(system);
+    world.systems.register(system);
     await world.onReady();
     assert((await settleWithin(world.systems.destroy(system), "systems.destroy()")).ok, "Destroy completes");
     assertSettledWith(await settleWithin(pending!, call), WorldStateError, call);
@@ -249,7 +249,7 @@ for (const call of ["onReady", "world.destroy", "self systems.destroy"] as const
         }
       },
     });
-    world.systems.create(system);
+    world.systems.register(system);
     assert((await settleWithin(world.onReady(), "world.onReady()")).ok, "Readiness settles");
     assert(caught instanceof WorldStateError, `Expected WorldStateError, got ${String(caught)}`);
     assertEquals(world.state, "initialized", "A handled rejection leaves the world healthy");
@@ -271,7 +271,7 @@ Deno.test("a hook that throws synchronously does not leave its caller marker beh
   });
   let thrown: unknown;
   try {
-    world.systems.create(failing);
+    world.systems.register(failing);
   } catch (error) {
     thrown = error;
   }
@@ -284,18 +284,18 @@ Deno.test("a hook that throws synchronously does not leave its caller marker beh
 Deno.test("a nested late init restores the outer hook as the caller", async () => {
   const tag = tagComponent("tag");
   const world = await createTestWorld([tag]);
-  let pending: Promise<void> | undefined;
+  let pending: Promise<unknown> | undefined;
   const outer: System = new System({
     name: "outer",
     query: new Query({ all: [tag] }),
     callback: () => {},
     init: (hookWorld) => {
-      hookWorld.systems.create(new System({ name: "inner", query: new Query({ all: [tag] }), callback: () => {} }));
+      hookWorld.systems.register(new System({ name: "inner", query: new Query({ all: [tag] }), callback: () => {} }));
       pending = world.systems.destroy(outer);
       pending.catch(() => {});
     },
   });
-  world.systems.create(outer);
+  world.systems.register(outer);
   assertSettledWith(await settleWithin(pending!, "systems.destroy()"), WorldStateError, "self destroy");
   await world.destroy();
 });
@@ -312,7 +312,7 @@ Deno.test("the hook context behaves like the world once the hook has settled", a
       saved = hook;
     },
   });
-  world.systems.create(system);
+  world.systems.register(system);
   await world.onReady();
   assert(!saved!.pending, "The hook has settled");
   assert((await settleWithin(saved!.onReady(), "hook.onReady()")).ok, "onReady resolves after the hook settles");
@@ -342,7 +342,7 @@ for (const call of ["onReady", "world.destroy", "self systems.destroy"] as const
         }
       },
     });
-    world.systems.create(system);
+    world.systems.register(system);
     await world.onReady();
     assert((await settleWithin(world.systems.destroy(system), "systems.destroy()")).ok, "Destroy completes");
     assert(caught instanceof WorldStateError, `Expected WorldStateError, got ${String(caught)}`);
@@ -357,7 +357,7 @@ Deno.test("closure world.onReady after an await in a late init hook waits until 
   const tag = tagComponent("tag");
   const world = await createTestWorld([tag]);
   const waiting = Promise.withResolvers<{ promise: Promise<void> }>();
-  world.systems.create(
+  world.systems.register(
     new System({
       name: "closureOnReady",
       query: new Query({ all: [tag] }),
@@ -380,7 +380,7 @@ Deno.test("closure world.onReady after an await in a late init hook waits until 
 Deno.test("closure systems.destroy of its own system after an await never settles", async () => {
   const tag = tagComponent("tag");
   const world = await createTestWorld([tag]);
-  const waiting = Promise.withResolvers<{ promise: Promise<void> }>();
+  const waiting = Promise.withResolvers<{ promise: Promise<unknown> }>();
   const system: System = new System({
     name: "closureSelfDestroy",
     query: new Query({ all: [tag] }),
@@ -392,7 +392,7 @@ Deno.test("closure systems.destroy of its own system after an await never settle
       await destruction;
     },
   });
-  world.systems.create(system);
+  world.systems.register(system);
   const destruction = (await waiting.promise).promise;
   const outcome = await settleWithin(destruction, "systems.destroy()", 50).catch((error) => error);
   assert(
@@ -414,7 +414,7 @@ Deno.test("closure world.onReady after an await in a destroy hook resolves when 
       outcome = await settleWithin(world.onReady(), "world.onReady()");
     },
   });
-  world.systems.create(system);
+  world.systems.register(system);
   await world.onReady();
   await settleWithin(world.systems.destroy(system), "systems.destroy()");
   assert(outcome?.ok === true, "Readiness does not wait for destroy hooks");
@@ -425,7 +425,7 @@ Deno.test("closure world.destroy after an await in a destroy hook during teardow
   const tag = tagComponent("tag");
   const world = await createTestWorld([tag]);
   let outcome: Settled | undefined;
-  world.systems.create(
+  world.systems.register(
     new System({
       name: "closureDestroyInTeardown",
       query: new Query({ all: [tag] }),
@@ -447,7 +447,7 @@ Deno.test("systems.destroy rejects rather than throwing synchronously after worl
   const tag = tagComponent("tag");
   const world = await createTestWorld([tag]);
   const system = new System({ name: "afterTeardown", query: new Query({ all: [tag] }), callback: () => {} });
-  world.systems.create(system);
+  world.systems.register(system);
   await world.destroy();
 
   await assertRejects(() => callDestroy(world, system), WorldStateError, "World has already been destroyed");
@@ -468,7 +468,7 @@ Deno.test("systems.destroy rejects rather than throwing synchronously while the 
       await gate.promise;
     },
   });
-  world.systems.create(system);
+  world.systems.register(system);
   const teardown = world.destroy();
   await entered.promise;
   try {
@@ -494,7 +494,7 @@ Deno.test("a system whose query only has none terms gets an empty components rec
   const query = new Query({ none: [disabled] });
   let seenComponents: string[] | undefined;
   let seenEntities: number[] | undefined;
-  const sweep = world.systems.create(
+  const sweep = world.systems.register(
     new System({
       name: "enabledSweep",
       query,
@@ -514,4 +514,24 @@ Deno.test("a system whose query only has none terms gets an empty components rec
     "The system sees the same entities as world.entities.queryList",
   );
   await world.destroy();
+});
+
+// --- destroy / destroyOrThrow ---
+
+Deno.test("systems.destroy resolves false for an unregistered system; destroyOrThrow rejects", async () => {
+  const tag = tagComponent("tag");
+  const world = await createTestWorld([tag]);
+  const system = new System({ name: "once", query: new Query({ all: [tag] }), callback: () => {} });
+  world.systems.register(system);
+  assertStrictEquals(await world.systems.destroy(system), true, "destroy resolves true for a registered system");
+  assertStrictEquals(await world.systems.destroy(system), false, "destroy resolves false once it is gone");
+  assertStrictEquals(await world.systems.destroy("never"), false, "destroy resolves false for an unknown name");
+  await assertRejects(() => world.systems.destroyOrThrow(system), NotRegisteredError, "once");
+  await assertRejects(() => world.systems.destroyOrThrow("never"), NotRegisteredError, "never");
+  world.systems.register(system);
+  await world.systems.destroyOrThrow(system);
+  assert(!world.systems.has(system), "destroyOrThrow destroys a registered system");
+  await world.destroy();
+  await assertRejects(() => world.systems.destroy("never"), WorldStateError, "destroyed");
+  await assertRejects(() => world.systems.destroyOrThrow("never"), WorldStateError, "destroyed");
 });

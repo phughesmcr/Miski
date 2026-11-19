@@ -199,7 +199,7 @@
  * console.log(renderablePlayerQuery);
  * ```
  *
- * @example Register a typed System
+ * @example Register a typed System and call it directly
  * ```ts
  * const positionComponent = new Component({ name: "position", schema: { x: Float32Array, y: Float32Array } });
  * const facingComponent = new Component({ name: "facing", schema: { dir: Uint8Array } });
@@ -232,7 +232,9 @@
  *   },
  * });
  *
- * const systemInstance = world.systems.create(positionSystem);
+ * // `register` runs the system's lifecycle hooks and returns its instance. A `Schedule` (below) is the usual way to
+ * // run systems; calling the instance directly, as here, bypasses schedule state (enabled, runIf, ordering).
+ * const systemInstance = world.systems.register(positionSystem);
  * const update = (frametime: number) => {
  *   world.frame(() => {
  *     systemInstance(frametime, "Hello, World!");
@@ -390,7 +392,7 @@ export type {
   RelationInstance,
   WorldRelationAPI,
 } from "@/types/world-relation-api.ts";
-export { isValidSystemSpec, System } from "@/system/system.ts";
+export { System } from "@/system/system.ts";
 export {
   captureWorldRollbackPoint,
   commitWorldRollbackPoint,
@@ -507,7 +509,6 @@ export type {
   Entity,
   FieldSchema,
   InferredDataComponentSpec,
-  ParametersExceptFirstTwo,
   Partition,
   PartitionStorage,
   QueryEntityList,
@@ -522,6 +523,7 @@ export type {
   StorageCell,
   StorageFromMap,
   StorageProxyWithProperties,
+  SystemArgCount,
   SystemCallback,
   SystemFunction,
   SystemHook,

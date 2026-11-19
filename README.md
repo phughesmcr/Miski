@@ -85,11 +85,11 @@ import { Component, Query, System, World } from "@phughesmcr/miski";
 
 ## :rocket: Quick start
 
-One complete bite — components, world, spawn, system, frame:
+One complete bite — components, world, spawn, system, schedule:
 
 ```ts
-import { Component, defineComponentSchema, Query, System, World } from "@phughesmcr/miski";
-import type { ComponentSchema } from "@phughesmcr/miski";
+import { Component, defineComponentSchema, Query, Schedule, System, World } from "@phughesmcr/miski";
+import type { ComponentSchema, ScheduleContext } from "@phughesmcr/miski";
 
 // Schema is the source of truth — pick the typed array you mean.
 const vec2 = defineComponentSchema({ x: Float32Array, y: Float32Array });
@@ -115,24 +115,22 @@ const movement = new System({
   query: new Query({
     all: { position: Position, velocity: Velocity },
   }),
-  callback: (components, entities, dt: number) => {
+  argCount: 1, // receives the schedule's context, allocation-free
+  callback: (components, entities, ctx: ScheduleContext) => {
     const pos = components.position.storage.partitions;
     const vel = components.velocity.storage.partitions;
 
     for (let i = 0; i < entities.count; i++) {
       const slot = entities.slots[i]!;
-      pos.x[slot]! += vel.x[slot]! * dt;
-      pos.y[slot]! += vel.y[slot]! * dt;
+      pos.x[slot]! += vel.x[slot]! * ctx.dt;
+      pos.y[slot]! += vel.y[slot]! * ctx.dt;
     }
   },
 });
 
-const runMovement = world.systems.create(movement);
+const schedule = new Schedule(world).add(movement);
 
-world.frame(() => {
-  runMovement(1 / 60);
-  // read entered / exited / changed here — refresh runs after the callback
-});
+schedule.run(1 / 60); // runs every system, then refreshes entered / exited / changed
 
 console.log(world.components.getEntityData(Position, entity));
 // → { x: ~0.0167, y: ~0.0083 }
@@ -488,6 +486,17 @@ Where the work happens. Author with keyed component maps for typed instance
 records. Callbacks receive a borrowed `BorrowedEntityList` — same shape as
 `queryList`, same zero-alloc manners.
 
+Run systems with a [`Schedule`](#calendar-scheduling). `world.systems` owns
+their lifecycle: `register(system)` runs the `init` hook (now, or at
+`world.init()`), `destroy(system)` runs the `destroy` hook (resolving `false`
+if the system is not registered; `destroyOrThrow` rejects instead), and
+`get` / `has` look systems up. `Schedule.add` registers a system for you.
+
+`register` and `get` also return the system's instance, a plain function that
+runs the system once. Calling it directly is fine for tests, tools or a
+hand-written loop, but it bypasses everything a schedule adds: enabled state,
+`runIf`, ordering, phases, deferred commands and the end-of-run refresh.
+
 ```ts
 const movement = new System({
   name: "movement",
@@ -506,14 +515,15 @@ const movement = new System({
   },
 });
 
-const run = world.systems.create(movement);
-run(1 / 60);
+const run = world.systems.register(movement);
+run(1 / 60); // a direct call: no schedule state applies
 ```
 
 A system instance forwards whatever arguments its caller passes, which
 allocates an arguments array on every call. For a system called with a fixed
 number of arguments on a hot path, set `argCount` (0 to 4) in the spec — here
-`argCount: 1` for `dt` — and calls allocate nothing. The callback then always
+`argCount: 1` for `dt`; for a scheduled system, `1` for the context — and calls
+allocate nothing. The callback then always
 receives exactly `argCount` arguments: missing ones arrive as `undefined`, and
 extras are dropped.
 
@@ -578,9 +588,9 @@ for (let i = 0; i < tree.count; i++) visit(tree.entities[i]!, tree.depths[i]!);
   `ecs.relations.ChildOf`.
 ### :calendar: Scheduling
 
-Prefer not to call systems by hand? A `Schedule` runs them in phases, in a
-deterministic order, with an optional fixed timestep — and refreshes the world
-once at the end, like `world.frame`.
+A `Schedule` is how systems run: in phases, in a deterministic order, with an
+optional fixed timestep — and it refreshes the world once at the end, like
+`world.frame`.
 
 ```ts
 import { Schedule } from "@phughesmcr/miski";
@@ -624,8 +634,10 @@ function loop(dt: number) {
   the path, e.g. `a -> b -> a`). `getOrder(phase)` shows the result.
 - **Fixed timestep.** Fixed phases must be contiguous. `run(dt)` adds `dt` to
   an accumulator and runs every fixed phase, in order, once per whole step due
-  (up to `maxFixedSteps`; whole steps beyond that are dropped). Other phases
-  run once per `run()`.
+  (up to `maxFixedSteps`; whole steps beyond that are dropped). A step counts
+  as due within a relative `1e-9` of `fixedStep`, so frame `dt`s that should
+  add up to a step (nine `1 / 540` frames for a `1 / 60` step) don't miss it by
+  a rounding error. Other phases run once per `run()`.
 - **Change windows and fixed phases.** The world refreshes once per `run()`,
   not per fixed step, so what a fixed-phase system sees in the
   entered / exited / changed windows depends on how many steps ran that frame.
@@ -634,12 +646,13 @@ function loop(dt: number) {
 - **Context.** Every system receives the same reused `ScheduleContext`:
   `dt`, `time`, `tick`, `fixedTick`, `alpha` (leftover fraction of a step, for
   interpolation), `phase`, `fixed`, `world`, and `commands`. Declare
-  `argCount: 1` (or `0` to ignore it); `add()` rejects anything else, which
-  keeps every call allocation-free.
+  `argCount: 1` (or `0` to ignore it) to keep every call allocation-free. A
+  system without `argCount` still gets the context, but its call may allocate;
+  `add()` rejects `argCount` 2 to 4.
 - **Run conditions.** `runIf` is checked before each call and the system
   runs only when it returns `true`;
-  `setEnabled(system, false)` skips a system until re-enabled. Both apply
-  immediately; `add` / `remove` during a run apply from the next run.
+  `setEnabled(system, false)` skips a system until re-enabled (it returns
+  `false` if the system is not in the schedule). Both apply immediately; `add` / `remove` during a run apply from the next run.
 - **Registration.** `add()` registers the system with the world if needed,
   or reuses its existing registration. `remove()` does not destroy it. A
   system whose async `init` is still pending makes `run()` throw
@@ -647,7 +660,7 @@ function loop(dt: number) {
 - **Destroyed systems.** Once a system is unregistered from the world
   (`world.systems.destroy()`, or its `init` failed), the schedule drops it as
   if `remove()` had been called: `has()` returns `false` and `run()` skips
-  it. Re-creating it on the world does not re-add it; call `add()` again. A
+  it. Re-registering it on the world does not re-add it; call `add()` again. A
   `before` / `after` constraint naming a dropped system throws `SpecError`,
   as for any name not in the schedule. A system destroyed during a `run()`
   throws `WorldStateError` if it is called later in that run.
@@ -659,7 +672,8 @@ function loop(dt: number) {
 - **Saves and rollback.** Supported between `run()` calls only. The
   schedule's clock is not part of a world save or rollback point: keep
   `schedule.getClock()` (plain data) alongside it, and after restoring call
-  `schedule.setClock(clock)`. The schedule flushes its commands every phase,
+  `schedule.setClock(clock)`. An `accumulator` of a whole `fixedStep` or more
+  is reduced to its remainder (the whole steps are dropped). The schedule flushes its commands every phase,
   so its buffer is empty between runs; call `commands.clear()` on any buffer
   you fill outside a run to drop commands from the abandoned timeline.
 - **Yielding to the browser.** `run()` is synchronous. To keep input
@@ -892,7 +906,7 @@ Hot entity, ownership, direct-write, cached query, changed/owner iteration,
 bulk transition, and game-frame (move + query + refresh) paths are
 **effectively allocation-free** in steady state (`deno task bench:gc`) —
 about ~3 B/iter of measurement noise on the frame path, not a feast. The
-frame path needs systems created with `argCount`; without it, each system
+frame path needs systems declared with `argCount`; without it, each system
 call allocates its arguments array (about 32 B plus 8 B per argument).
 `Schedule.run` and `CommandBuffer` queue + flush are budgeted
 allocation-free too.

@@ -170,19 +170,35 @@ Deno.test("schedule validates its spec and add options", async () => {
   await world.destroy();
 });
 
-Deno.test("schedule requires argCount 0 or 1 and rejects duplicate systems", async () => {
+Deno.test("schedule accepts argCount 0, 1 or unset, and rejects 2+ and duplicate systems", async () => {
   const world = await setup();
   const schedule = new Schedule(world);
   const query = new Query({ all: [tag] });
-  const loose = new System({ name: "loose", query, callback: (_c, _e, _ctx: ScheduleContext) => {} });
-  assertThrows(() => schedule.add(loose), SpecError, "argCount");
-  assert(!world.systems.has(loose), "a rejected system is not registered in the world");
+  const wide = new System({
+    name: "wide",
+    query,
+    argCount: 2,
+    callback: (_c, _e, _ctx: ScheduleContext, _extra: number) => {},
+  });
+  // @ts-expect-error a scheduled system receives only the context
+  assertThrows(() => schedule.add(wide), SpecError, "argCount");
+  assert(!world.systems.has(wide), "a rejected system is not registered in the world");
+
+  // Without argCount the system still receives the context, forwarded through rest/spread.
+  const seen: unknown[][] = [];
+  const loose = new System({
+    name: "loose",
+    query,
+    callback: (_c, _e, ...args: [ctx: ScheduleContext]) => void seen.push(args),
+  });
+  schedule.add(loose);
 
   let ran = 0;
   const silent = new System({ name: "silent", query, argCount: 0, callback: () => void ran++ });
   schedule.add(silent);
   schedule.run(0);
   assertStrictEquals(ran, 1, "argCount 0 systems run without the context");
+  assertEquals(seen, [[schedule.context]], "a system without argCount receives exactly the context");
 
   assertThrows(() => schedule.add(silent), AlreadyRegisteredError, "silent");
   await world.destroy();
@@ -197,7 +213,7 @@ Deno.test("schedule registers systems with the world, or reuses an existing regi
   assert(world.systems.has(fresh), "add registers an unregistered system");
 
   const existing = logSystem("existing", log);
-  world.systems.create(existing);
+  world.systems.register(existing);
   schedule.add(existing);
   schedule.run(0);
   assertEquals(log, ["fresh", "existing"], "both run");
@@ -214,7 +230,7 @@ Deno.test("schedule registers systems with the world, or reuses an existing regi
 Deno.test("schedule rejects a system with the same name as a different registered system", async () => {
   const world = await setup();
   const log: string[] = [];
-  world.systems.create(logSystem("twin", log));
+  world.systems.register(logSystem("twin", log));
   const schedule = new Schedule(world);
   assertThrows(() => schedule.add(logSystem("twin", log)), AlreadyRegisteredError, "twin");
   assert(!schedule.has("twin"), "the failed add leaves no entry");
@@ -235,13 +251,13 @@ Deno.test("schedule runIf and setEnabled skip systems", async () => {
   assert(!schedule.isEnabled("off"), "isEnabled reports disabled");
 
   allow = true;
-  schedule.setEnabled("off", true);
+  assert(schedule.setEnabled("off", true), "setEnabled reports a scheduled system");
   schedule.setEnabled(gated, true);
   log.length = 0;
   schedule.run(0);
   assertEquals(log, ["gated", "off", "on"], "enabled and passing systems run");
   assert(schedule.isEnabled("off"), "isEnabled reports enabled");
-  assertThrows(() => schedule.setEnabled("nobody", true), SpecError, "nobody");
+  assertStrictEquals(schedule.setEnabled("nobody", true), false, "setEnabled reports a system not in the schedule");
   await world.destroy();
 });
 
@@ -617,7 +633,7 @@ Deno.test("schedule drops a system once it is destroyed, so has() and run() agre
   schedule.run(0);
   assertEquals(log, ["doomed", "kept", "kept"], "the rest of the schedule keeps running");
   assert(!schedule.remove(doomed), "nothing left to remove");
-  assertThrows(() => schedule.setEnabled(doomed, false), SpecError, "not in this schedule");
+  assertStrictEquals(schedule.setEnabled(doomed, false), false, "a dropped system cannot be enabled or disabled");
   await world.destroy();
 });
 
@@ -640,7 +656,7 @@ Deno.test("schedule: a system destroyed during a run throws if called later in t
   const log: string[] = [];
   const schedule = new Schedule(world);
   const victim = logSystem("victim", log);
-  let destroying: Promise<void> | undefined;
+  let destroying: Promise<unknown> | undefined;
   const killer = new System({
     name: "killer",
     query: new Query({ all: [tag] }),
@@ -681,7 +697,7 @@ Deno.test("schedule drops a system that was destroyed and re-created directly on
   const system = logSystem("recreated", log);
   schedule.add(system);
   await world.systems.destroy(system);
-  world.systems.create(system);
+  world.systems.register(system);
   assert(!schedule.has(system), "the schedule held the old registration, which is gone");
   schedule.run(0);
   assertEquals(log, [], "re-registering does not re-add it");
@@ -763,6 +779,45 @@ Deno.test("schedule systems see their query entities", async () => {
   );
   schedule.run(1 / 60);
   assertEquals(seen, [[entity]], "the borrowed entity list is passed");
+  await world.destroy();
+});
+
+Deno.test("schedule takes a fixed step when frame dts sum to it within rounding", async () => {
+  const world = await setup();
+  let steps = 0;
+  const schedule = new Schedule(world, { phases: [{ name: "physics", fixed: true }], fixedStep: 1 / 60 });
+  schedule.add(
+    new System({ name: "step", query: new Query({ all: [tag] }), argCount: 0, callback: () => void steps++ }),
+    { phase: "physics" },
+  );
+  // Nine 1/540 frames sum to just under 1/60 in floating point; without a tolerance the step would wait a frame.
+  let sum = 0;
+  for (let frame = 1; frame <= 9; frame++) {
+    sum += 1 / 540;
+    schedule.run(1 / 540);
+    assertStrictEquals(steps, frame === 9 ? 1 : 0, `frame ${frame}: the step is due only after the ninth frame`);
+  }
+  assert(sum < 1 / 60, "the summed dts really do fall short of the step");
+  assertStrictEquals(schedule.accumulator, 0, "the rounding shortfall does not carry over as a negative remainder");
+  assertStrictEquals(schedule.context.alpha, 0, "alpha is 0 after an exact step");
+  const clock = schedule.getClock();
+  schedule.setClock(clock);
+  assertEquals(schedule.getClock(), clock, "the clock still round-trips");
+  await world.destroy();
+});
+
+Deno.test("schedule setClock reduces an accumulator of a whole step or more to its remainder", async () => {
+  const world = await setup();
+  const seen: number[] = [];
+  const schedule = new Schedule(world, { phases: [{ name: "physics", fixed: true }, "update"], fixedStep: 0.25 });
+  schedule.add(probeSystem("alpha", seen, (ctx) => ctx.alpha), { phase: "update" });
+  schedule.setClock({ tick: 0, fixedTick: 0, elapsed: 0, accumulator: 0.625 });
+  assertStrictEquals(schedule.accumulator, 0.125, "whole steps are dropped");
+  assertStrictEquals(schedule.context.alpha, 0.5, "alpha matches the reduced accumulator");
+  schedule.setClock({ tick: 0, fixedTick: 0, elapsed: 0, accumulator: 0.25 * (1 - 1e-12) });
+  assertStrictEquals(schedule.accumulator, 0, "a step within the tolerance counts as whole");
+  schedule.run(0);
+  assertEquals(seen, [0], "run() sees the reduced clock");
   await world.destroy();
 });
 

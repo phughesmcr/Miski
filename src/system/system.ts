@@ -3,6 +3,7 @@ import { SpecError } from "@/errors.ts";
 import { Query } from "@/query/query.ts";
 import type { ComponentInstances, ComponentMap } from "@/types/component.ts";
 import type {
+  SystemArgCount,
   SystemHook,
   SystemInstance,
   SystemPrivateMethods,
@@ -14,8 +15,11 @@ import type { UntypedQueryComponents } from "@/types/query.ts";
 import type { BorrowedEntityList } from "@/entity/entity.ts";
 import { isObject, isValidName, noop } from "@/utils.ts";
 
-/** The largest `argCount` a system spec may declare. */
-const MAX_SYSTEM_ARG_COUNT = 4;
+/**
+ * The `argCount` values a system spec may declare. Keyed by {@link SystemArgCount}, so the compiler rejects a key
+ * missing from the type or a type member missing here: the runtime check and the type cannot drift apart.
+ */
+const SYSTEM_ARG_COUNTS: Readonly<Record<SystemArgCount, true>> = { 0: true, 1: true, 2: true, 3: true, 4: true };
 
 /** Untyped view of a system callback, used only to forward calls. */
 type ForwardedCallback = (components: unknown, entities: BorrowedEntityList, ...args: unknown[]) => unknown;
@@ -77,14 +81,15 @@ export function createSystemInstance<
 /**
  * Test if a value is a valid system `argCount`
  * @param argCount The value to test
- * @returns `true` if `argCount` is an integer from 0 to {@link MAX_SYSTEM_ARG_COUNT}
+ * @returns `true` if `argCount` is one of the {@link SystemArgCount} values
  */
-function isValidArgCount(argCount: unknown): argCount is number {
-  return Number.isInteger(argCount) && (argCount as number) >= 0 && (argCount as number) <= MAX_SYSTEM_ARG_COUNT;
+function isValidArgCount(argCount: unknown): argCount is SystemArgCount {
+  return Number.isInteger(argCount) && Object.hasOwn(SYSTEM_ARG_COUNTS, argCount as number);
 }
 
 /**
  * Test if an object is a valid system specification
+ * @internal Not exported from `mod.ts`; the `System` constructor throws `SpecError` for an invalid spec.
  * @param spec The object to test
  * @returns `true` if the object is a valid system specification, `false` otherwise
  */
@@ -116,7 +121,7 @@ export class System<
    * The number of arguments the system instance forwards to the callback after the components and entities, or
    * `undefined` to forward exactly what the caller passes. See {@link SystemSpec.argCount}.
    */
-  readonly argCount: number | undefined;
+  readonly argCount: SystemArgCount | undefined;
 
   /** The name of the system */
   readonly name: string;
@@ -124,7 +129,7 @@ export class System<
   /** The query which will provide the components and entities to the system. */
   readonly query: Query<TComponents>;
 
-  /** The core function of the system. Invoked when the registered SystemInstance is called. */
+  /** The core function of the system. Invoked when the system runs (see {@link SystemSpec.callback}). */
   readonly callback: TypedSystemCallback<TComponents, TArgs, TReturn>;
 
   /**

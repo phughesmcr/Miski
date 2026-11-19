@@ -201,7 +201,7 @@ export async function populateMovementWorld(
     },
   });
 
-  const movement = world.systems.create(movementSystem) as MovementSystem;
+  const movement = world.systems.register(movementSystem) as MovementSystem;
   world.refresh();
   return { world, components, entities, movement };
 }

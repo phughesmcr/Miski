@@ -18,6 +18,23 @@ const DEFAULT_PHASES: readonly SchedulePhaseSpec[] = ["update"];
 const DEFAULT_FIXED_STEP = 1 / 60;
 const DEFAULT_MAX_FIXED_STEPS = 8;
 
+/**
+ * Relative tolerance for "a whole fixed step is due". Frame `dt`s that should sum to exactly one step can fall short
+ * of it by a rounding error (nine `1 / 540` frames against a `1 / 60` step, for example), which without a tolerance
+ * would delay that step by a frame.
+ */
+const FIXED_STEP_TOLERANCE = 1e-9;
+
+/**
+ * Reduce an accumulator that still holds a whole fixed step (or within the tolerance of one) to its remainder, so it
+ * always ends in `[0, threshold)` and `alpha` stays below 1. The whole steps are dropped.
+ */
+function dropWholeSteps(accumulator: number, step: number, threshold: number): number {
+  if (accumulator < threshold) return accumulator;
+  accumulator %= step;
+  return accumulator < threshold ? accumulator : 0;
+}
+
 /** A system a schedule can run: it takes the schedule context as its one argument, or no argument. */
 // deno-lint-ignore no-explicit-any
 type AnySystem = System<any, any, any>;
@@ -72,14 +89,20 @@ function referenceNames(references: unknown, owner: string, relation: string): s
 }
 
 /**
- * Runs systems in phases, in a deterministic order, with an optional fixed timestep.
+ * Runs systems in phases, in a deterministic order, with an optional fixed timestep. This is the way to run
+ * systems: `world.systems` owns their lifecycle (registration and `init` / `destroy` hooks), and `add()` registers
+ * a system there if it is not registered yet. Calling a system's instance directly (from `world.systems.register`
+ * or `world.systems.get`) bypasses the schedule entirely: enabled state, `runIf`, ordering, commands and refresh.
  *
  * - **Phases** run in the order given. Within a phase, systems run in the order they were added, adjusted by
  *   `before` / `after` constraints (ties keep insertion order). Cycles throw a `SpecError` naming the cycle.
  * - **Fixed phases** (contiguous) run once per fixed step: `run(dt)` adds `dt` to an accumulator and takes as many
- *   whole steps as are due, up to `maxFixedSteps`; whole steps beyond that are dropped. Other phases run once per run.
+ *   whole steps as are due, up to `maxFixedSteps`; whole steps beyond that are dropped. A step counts as due when the
+ *   accumulator is within a relative `1e-9` of it, so rounding in the summed `dt`s does not delay it by a frame.
+ *   Other phases run once per run.
  * - **Context**: each system receives one reused {@link ScheduleContext} (`dt`, `time`, `tick`, `alpha`, `commands`,
- *   ...). Scheduled systems must declare `argCount: 1` (or `0` to ignore it), which keeps calls allocation-free.
+ *   ...). Declare `argCount: 1` (or `0` to ignore the context) to keep calls allocation-free; a system without
+ *   `argCount` still runs, but its call forwards through rest/spread and may allocate.
  * - **Commands** queued on `context.commands` apply when the current phase (or fixed step) finishes.
  * - **Refresh**: `run()` calls `world.refresh()` once at the end, like `world.frame`, so every system sees the whole
  *   run's entered / exited / changed window.
@@ -99,6 +122,8 @@ export class Schedule {
   /** One past the last fixed phase index. */
   readonly #fixedEnd: number;
   readonly #fixedStep: number;
+  /** The accumulator value at which a fixed step is due: `fixedStep` less the rounding tolerance. */
+  readonly #stepThreshold: number;
   readonly #maxFixedSteps: number;
 
   readonly #entries: Map<string, Entry> = new Map();
@@ -164,6 +189,7 @@ export class Schedule {
     this.#fixedStart = fixedStart;
     this.#fixedEnd = fixedEnd;
     this.#fixedStep = fixedStep;
+    this.#stepThreshold = fixedStep * (1 - FIXED_STEP_TOLERANCE);
     this.#maxFixedSteps = maxFixedSteps;
   }
 
@@ -182,7 +208,7 @@ export class Schedule {
     return this.#maxFixedSteps;
   }
 
-  /** Seconds accumulated toward the next fixed step. */
+  /** Seconds accumulated toward the next fixed step; always less than `fixedStep`. */
   get accumulator(): number {
     return this.#accumulator;
   }
@@ -202,6 +228,10 @@ export class Schedule {
 
   /**
    * Restore a clock from {@link getClock}. Call it between runs, not from a system.
+   *
+   * An `accumulator` of a whole `fixedStep` or more (which `getClock()` never returns, but a clock saved from a
+   * schedule with a larger step can hold) is reduced to its remainder: the whole steps are dropped, as `run()` drops
+   * steps beyond `maxFixedSteps`. `accumulator` then reads back the reduced value.
    * @throws {RangeError} If a value is negative or not finite, or `tick` / `fixedTick` is not an integer
    * @throws {WorldStateError} If called during `run()`
    */
@@ -221,13 +251,15 @@ export class Schedule {
     if (typeof accumulator !== "number" || !Number.isFinite(accumulator) || accumulator < 0) {
       throw new RangeError(`Schedule clock accumulator must be a finite number >= 0, got ${String(accumulator)}`);
     }
+    const step = this.#fixedStep;
+    const reduced = dropWholeSteps(accumulator, step, this.#stepThreshold);
     const context = this.#context;
     context.tick = tick;
     context.fixedTick = fixedTick;
     context.time = elapsed;
-    context.alpha = this.#fixedStart === -1 ? 0 : (accumulator % this.#fixedStep) / this.#fixedStep;
+    context.alpha = this.#fixedStart === -1 ? 0 : reduced / step;
     this.#elapsed = elapsed;
-    this.#accumulator = accumulator;
+    this.#accumulator = reduced;
   }
 
   /** The context passed to systems (reused across calls; read-only to callers). */
@@ -241,13 +273,14 @@ export class Schedule {
   }
 
   /**
-   * Add a system. A system not yet registered in the world is registered (`world.systems.create`); a registered one
-   * is reused. Membership and order changes made during `run()` take effect on the next run. A system that is later
-   * unregistered from the world (destroyed, or its init failed) is dropped from the schedule.
-   * @param system The system; it must declare `argCount: 1` (receiving the context) or `argCount: 0`
+   * Add a system. A system not yet registered in the world is registered (`world.systems.register`); a registered
+   * one is reused. Membership and order changes made during `run()` take effect on the next run. A system that is
+   * later unregistered from the world (destroyed, or its init failed) is dropped from the schedule.
+   * @param system The system. It is called with the context as its one argument: declare `argCount: 1` (or `0` to
+   * ignore it) so the call does not allocate. Without `argCount` it still runs, but may allocate per call.
    * @param options Phase, ordering constraints, run condition, and initial enabled state
    * @returns this schedule, for chaining
-   * @throws {SpecError} If the system, its argCount, or the options are invalid
+   * @throws {SpecError} If the system or the options are invalid, or the system declares an `argCount` of 2 or more
    * @throws {AlreadyRegisteredError} If the schedule already has a system with that name, or the world has a
    * different system with that name
    */
@@ -258,9 +291,11 @@ export class Schedule {
     if (!(system instanceof System)) throw new SpecError("Schedule.add expects a System");
     this.#sync();
     const name = system.name;
-    if (system.argCount !== 0 && system.argCount !== 1) {
+    const argCount = system.argCount;
+    if (argCount !== undefined && argCount !== 0 && argCount !== 1) {
       throw new SpecError(
-        `System "${name}" must declare argCount: 1 (or 0) to be scheduled; it receives the schedule context`,
+        `System "${name}" declares argCount: ${argCount}, but a scheduled system receives only the schedule ` +
+          "context: use argCount: 1 (or 0)",
       );
     }
     if (this.#entries.has(name)) throw new AlreadyRegisteredError(`System "${name}" is already in this schedule`);
@@ -277,7 +312,7 @@ export class Schedule {
     if (typeof enabled !== "boolean") throw new SpecError("Schedule option enabled must be a boolean");
 
     const systems = this.#world.systems;
-    const instance = systems.has(system) ? systems.get(system)! : systems.create(system);
+    const instance = systems.get(system) ?? systems.register(system);
     this.#entries.set(name, {
       name,
       system,
@@ -312,12 +347,13 @@ export class Schedule {
 
   /**
    * Enable or disable a system. Takes effect immediately, including later in the current run.
-   * @throws {SpecError} If the system is not in the schedule
+   * @returns `true` if the system is in the schedule, or `false` (changing nothing) if it is not
    */
-  setEnabled(system: ScheduleSystemReference, enabled: boolean): void {
+  setEnabled(system: ScheduleSystemReference, enabled: boolean): boolean {
     const entry = this.#find(system);
-    if (entry === undefined) throw new SpecError(`System "${referenceName(system)}" is not in this schedule`);
+    if (entry === undefined) return false;
     entry.enabled = enabled === true;
+    return true;
   }
 
   /** Whether the system is in the schedule and enabled. */
@@ -368,12 +404,15 @@ export class Schedule {
     context.tick++;
     this.#elapsed += dt;
     if (this.#fixedStart !== -1) {
+      const threshold = this.#stepThreshold;
       let accumulator = this.#accumulator + dt;
-      while (accumulator >= step && steps < this.#maxFixedSteps) {
+      while (accumulator >= threshold && steps < this.#maxFixedSteps) {
         accumulator -= step;
         steps++;
       }
-      if (accumulator >= step) accumulator %= step;
+      // A step taken within the tolerance leaves a tiny negative remainder.
+      if (accumulator < 0) accumulator = 0;
+      accumulator = dropWholeSteps(accumulator, step, threshold);
       this.#accumulator = accumulator;
       context.alpha = accumulator / step;
     }

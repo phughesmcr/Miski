@@ -2,6 +2,39 @@
 
 ## Unreleased
 
+- **Breaking:** `world.systems.create(system)` is renamed
+  `world.systems.register(system)`. It still returns the system's instance.
+  `Schedule` is now the documented way to run systems; `world.systems` owns
+  their lifecycle. Calling an instance directly still works but bypasses
+  schedule state (enabled, `runIf`, ordering, commands, refresh).
+- **Breaking:** `world.systems.destroy(system)` resolves `false` for a system
+  that is not registered instead of rejecting with `NotRegisteredError`, and
+  resolves `true` once it is destroyed. The new `world.systems.destroyOrThrow`
+  rejects as before. `SystemHookContext.destroySystem` mirrors `destroy`.
+- **Breaking:** `Schedule.setEnabled` returns `false` for a system that is not
+  in the schedule instead of throwing `SpecError`, and `true` otherwise.
+- `Schedule.add` accepts a system without `argCount`: it receives the context
+  through rest/spread forwarding, which may allocate per call. Declaring
+  `argCount: 1` (or `0`) keeps calls allocation-free. `argCount` 2 to 4 still
+  throws `SpecError`, and the types now reject it as well.
+- Fix: a fixed step is due when the accumulator is within a relative `1e-9`
+  of `fixedStep`. Frame `dt`s that should add up to one step (nine `1 / 540`
+  frames against a `1 / 60` step) could fall short by a rounding error and
+  delay the step by a frame.
+- `Schedule.setClock` reduces an `accumulator` of a whole `fixedStep` or more
+  to its remainder, dropping the whole steps, so `accumulator` stays below
+  `fixedStep` and `alpha` below 1.
+- **Breaking (types):** `WorldContext` is now `Pick<World, ...>` of the same
+  members plus `onReady`, so it can't drift from `World`. `refresh` gains its
+  optional `retainChanged` / `retainTransitions` parameters.
+- **Breaking (types):** `SystemInstance<T>` takes one type parameter; the
+  unused `TReturn` and `TArgs` parameters are gone.
+  `ParametersExceptFirstTwo` is no longer exported.
+- **Breaking:** `isValidSystemSpec` is no longer exported; `new System()`
+  throws `SpecError` for an invalid spec.
+- New `SystemArgCount` type (`0 | 1 | 2 | 3 | 4`), now the type of
+  `System.argCount` and `SystemSpec.argCount`.
+- `SystemManager.inHook` is marked `@internal`.
 - Fix world-save loads from a Node `Buffer` whose `byteOffset` is not a
   multiple of 8 (common for pooled `fs.readFileSync` Buffers): `loadWorld`,
   `readWorldSaveHeader` and `worldSaveToJSON` threw "Not a Miski world save
