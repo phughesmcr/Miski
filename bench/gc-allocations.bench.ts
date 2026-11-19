@@ -2,6 +2,7 @@
 /// <reference lib="dom" />
 // deno-lint-ignore-file no-console
 
+import { getHeapSpaceStatistics, getHeapStatistics } from "node:v8";
 import {
   CommandBuffer,
   Component,
@@ -53,12 +54,17 @@ type MemorySnapshot = ReturnType<typeof Deno.memoryUsage>;
 type RoundMeasurement = {
   beforeGc: MemorySnapshot;
   retainedAfterGc: MemorySnapshot;
+  /** Bytes V8 allocated during the round that the heap diff does not show: a GC ran inside it. */
+  hiddenByGc: number;
 };
+type RoundKey = "beforeGc" | "retainedAfterGc";
 type ScenarioSummary = {
   scenario: Scenario;
   lowestBeforeGc: MemorySnapshot;
   lowestRetainedAfterGc: MemorySnapshot;
   highestSteadyStateBeforeGc: MemorySnapshot;
+  /** Largest {@link RoundMeasurement.hiddenByGc} of any round. */
+  hiddenByGc: number;
 };
 
 const DEFAULT_ROUNDS = 3;
@@ -73,7 +79,9 @@ const SYSTEM_UPDATE_BUDGET_BYTES_PER_ITER = 64;
 const FIXED_ARITY_SYSTEM_UPDATE_BUDGET_BYTES_PER_ITER = ZERO_ALLOC_BUDGET_BYTES_PER_ITER;
 const FRAME_BUDGET_BYTES_PER_ITER = 128;
 const FIXED_ARITY_FRAME_BUDGET_BYTES_PER_ITER = 8;
-const WORLD_CONSTRUCTOR_BUDGET_BYTES_PER_ITER = 12_000;
+// Building a World allocates its managers, storage proxies and buffer partitions: measured about 101 KiB (heap plus
+// ArrayBuffers) for the mixed components at capacity 256.
+const WORLD_CONSTRUCTOR_BUDGET_BYTES_PER_ITER = 120_000;
 const PROJECTILE_SPAWN_DESPAWN_BUDGET_BYTES_PER_ITER = 3_200;
 const GET_ENTITY_DATA_BUDGET_BYTES_PER_ITER = 80;
 // Six-field getEntityData result object (numeric + bool + enum + entity + string + object).
@@ -86,8 +94,8 @@ const WIDE_ARCHETYPE_TRANSITION_BUDGET_BYTES_PER_ITER = 1_100;
 // A scheduled frame runs the same work as the manual argCount frame, so it shares that budget.
 const SCHEDULED_FRAME_BUDGET_BYTES_PER_ITER = FIXED_ARITY_FRAME_BUDGET_BYTES_PER_ITER;
 // Load validates into cached scratch and builds one small view per saved array: O(components + archetypes), not
-// O(entities). Measured about 400 B/iter on the mixed 8K world.
-const WORLD_LOAD_BUDGET_BYTES_PER_ITER = 1_000;
+// O(entities). Measured about 10.4 KiB/iter on the mixed 8K world, the same at capacities 1K to 32K.
+const WORLD_LOAD_BUDGET_BYTES_PER_ITER = 12_000;
 // Object fields are saved through user encode hooks (exempt from the zero-allocation rule). This codec returns a
 // stored string, so the budget covers Miski's own cost: none, measured 0 B/iter on 1,024 objects.
 const OBJECT_SAVE_BUDGET_BYTES_PER_ITER = ZERO_ALLOC_BUDGET_BYTES_PER_ITER;
@@ -97,11 +105,40 @@ const onlyFilter = Deno.args.find((arg) => arg.startsWith("--only="))?.slice("--
 
 const gc = (globalThis as { gc?: GcFn }).gc;
 
+// A round's "before GC" figure is the heap growth across it, which only counts every allocation if no GC runs inside
+// the round. The task pins a 64 MiB young generation, so a scavenge needs about 64 MiB of garbage; V8's cumulative
+// allocation counter then shows the bytes the heap diff lost, and the round fails instead of passing on an undercount.
+const RUN_COMMAND = "deno task bench:gc (or deno run --v8-flags=--expose-gc,--min-semi-space-size=64," +
+  "--max-semi-space-size=64 bench/gc-allocations.bench.ts)";
+const MIN_YOUNG_GENERATION_BYTES = 48 * 1024 * 1024;
+// The counter drifts by up to ~1.5 MiB per round with no allocation at all, so only a larger gap means a GC. It counts
+// heap allocations only: a GC forced by ArrayBuffer (external) pressure that frees little heap would go unnoticed, so
+// keep a round's external allocation well below the heap's.
+const HIDDEN_BY_GC_THRESHOLD_BYTES = 8 * 1024 * 1024;
+
 if (typeof gc !== "function") {
-  throw new Error("Run with: deno run --v8-flags=--expose-gc bench/gc-allocations.bench.ts");
+  throw new Error(`Run with: ${RUN_COMMAND}`);
 }
 
 const forceGc: GcFn = gc;
+
+function totalAllocatedBytes(): number {
+  return (getHeapStatistics() as unknown as { total_allocated_bytes: number }).total_allocated_bytes;
+}
+
+function youngGenerationBytes(): number {
+  forceGc();
+  return getHeapSpaceStatistics().find((space) => space.space_name === "new_space")?.space_available_size ?? 0;
+}
+
+if (typeof totalAllocatedBytes() !== "number") {
+  throw new Error("This runtime's node:v8 getHeapStatistics() has no total_allocated_bytes.");
+}
+if (youngGenerationBytes() < MIN_YOUNG_GENERATION_BYTES) {
+  throw new Error(
+    `The young generation is too small to measure rounds without a GC inside them. Run with: ${RUN_COMMAND}`,
+  );
+}
 
 // Deno.memoryUsage is JavaScript and runs inside each measured window; let it reach its optimized tiers first, or its
 // compiled code lands in whichever round happens to make the call that tiers it up.
@@ -153,15 +190,19 @@ function printRow(label: string, delta: MemorySnapshot, iterations: number): voi
 
 function measureRound(scenario: Scenario): RoundMeasurement {
   collect();
+  const allocatedBefore = totalAllocatedBytes();
   const before = Deno.memoryUsage();
   repeat(scenario.fn, scenario.iterations);
   const beforeCollection = Deno.memoryUsage();
+  const allocated = totalAllocatedBytes() - allocatedBefore;
   collect();
   const afterCollection = Deno.memoryUsage();
+  const beforeGc = diff(beforeCollection, before);
 
   return {
-    beforeGc: diff(beforeCollection, before),
+    beforeGc,
     retainedAfterGc: diff(afterCollection, before),
+    hiddenByGc: allocated - beforeGc.heapUsed,
   };
 }
 
@@ -179,7 +220,7 @@ function warmupScenario(scenario: Scenario): void {
   collect();
 }
 
-function selectLowestAllocRound(rounds: RoundMeasurement[], key: keyof RoundMeasurement): MemorySnapshot {
+function selectLowestAllocRound(rounds: RoundMeasurement[], key: RoundKey): MemorySnapshot {
   let best = rounds[0]![key];
   for (let i = 1; i < rounds.length; i++) {
     const candidate = rounds[i]![key];
@@ -192,7 +233,7 @@ function selectLowestAllocRound(rounds: RoundMeasurement[], key: keyof RoundMeas
 
 function selectHighestAllocRound(
   rounds: RoundMeasurement[],
-  key: keyof RoundMeasurement,
+  key: RoundKey,
   startRound: number,
 ): MemorySnapshot {
   let worst = rounds[startRound]![key];
@@ -217,6 +258,11 @@ function runScenario(scenario: Scenario): ScenarioSummary {
     printRow(`round ${round + 1} before GC`, measurement.beforeGc, scenario.iterations);
     printRow(`round ${round + 1} retained after GC`, measurement.retainedAfterGc, scenario.iterations);
   }
+  // Only the rounds the budget reads: round 1 may also pay for tiering up and is never checked.
+  const hiddenByGc = Math.max(...rounds.slice(roundCount > 1 ? 1 : 0).map((round) => round.hiddenByGc));
+  if (hiddenByGc > HIDDEN_BY_GC_THRESHOLD_BYTES) {
+    console.log(`a GC ran inside a round and hid about ${formatBytes(hiddenByGc)}; the before-GC rows undercount`);
+  }
 
   const lowestBeforeGc = selectLowestAllocRound(rounds, "beforeGc");
   const lowestRetainedAfterGc = selectLowestAllocRound(rounds, "retainedAfterGc");
@@ -233,6 +279,7 @@ function runScenario(scenario: Scenario): ScenarioSummary {
     lowestBeforeGc,
     lowestRetainedAfterGc,
     highestSteadyStateBeforeGc,
+    hiddenByGc,
   };
 }
 
@@ -245,13 +292,16 @@ function checkBudgets(summaries: ScenarioSummary[]): boolean {
     if (budget === undefined) continue;
 
     const actual = bytesPerIteration(summary.highestSteadyStateBeforeGc, summary.scenario.iterations);
-    const ok = actual <= budget;
+    const measured = summary.hiddenByGc <= HIDDEN_BY_GC_THRESHOLD_BYTES;
+    const ok = measured && actual <= budget;
     passed &&= ok;
     const status = ok ? "PASS" : "FAIL";
     console.log(
       `${status} ${summary.scenario.name}: highest steady-state before-GC ${
         actual.toFixed(4)
-      } B/iter <= ${budget} B/iter`,
+      } B/iter <= ${budget} B/iter${
+        measured ? "" : ` (a GC inside a round hid ${formatBytes(summary.hiddenByGc)}; use fewer iterations)`
+      }`,
     );
   }
 
@@ -628,7 +678,10 @@ function commandSideColumnBatch(round: number): void {
 const scenarios: Scenario[] = [
   {
     name: "world constructor allocating",
-    iterations: 10_000,
+    // Each World allocates tens of KiB, so a round must stay small enough to fit the young generation (see
+    // HIDDEN_BY_GC_THRESHOLD_BYTES); the warmup still runs thousands of constructions.
+    iterations: 250,
+    warmupIterations: 2_000,
     maxSteadyStateBeforeGcBytesPerIter: WORLD_CONSTRUCTOR_BUDGET_BYTES_PER_ITER,
     fn: () => {
       objectSink = new World({ capacity: 256, components: mixed.components.all });
@@ -784,14 +837,16 @@ const scenarios: Scenario[] = [
   },
   {
     name: "querySnapshot allocating convenience helper",
-    iterations: 10_000,
+    // About 32 KiB per snapshot: keep a round inside the young generation.
+    iterations: 1_000,
     fn: () => {
       objectSink = mixed.world.entities.querySnapshot(movementQuery);
     },
   },
   {
     name: "snapshot helpers allocating convenience baseline",
-    iterations: 5_000,
+    // About 500 KiB per iteration: keep a round inside the young generation.
+    iterations: 50,
     fn: () => {
       objectSink = mixed.world.entities.getActiveSnapshot();
       objectSink = mixed.world.components.getOwnersSnapshot(mixed.components.position);
