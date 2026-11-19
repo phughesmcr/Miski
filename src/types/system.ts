@@ -7,16 +7,8 @@ import type { BorrowedEntityList } from "@/entity/entity.ts";
 import type { UntypedQueryComponents } from "@/types/query.ts";
 import type { WorldContext } from "@/types/world-api.ts";
 
-/**
- * The parameters of a function omitting the first two parameters
- * @author https://stackoverflow.com/a/67605309
- */
-export type ParametersExceptFirstTwo<F extends SystemFunction> = Parameters<F> extends [
-  unknown,
-  unknown,
-  ...infer R,
-] ? R :
-  [];
+/** The number of arguments a system instance can forward to its callback: `0` to `4`. */
+export type SystemArgCount = 0 | 1 | 2 | 3 | 4;
 
 /**
  * Internal-compatible system function constraint.
@@ -67,12 +59,15 @@ export type SystemHookContext = {
   onReady(): Promise<void>;
   /** `world.destroy()`, rejecting while this hook is pending. */
   destroyWorld(): Promise<void>;
-  /** `world.systems.destroy()`, rejecting if the destruction would wait for this pending hook. */
+  /**
+   * `world.systems.destroy()`, rejecting if the destruction would wait for this pending hook.
+   * Resolves `false` if the system is not registered.
+   */
   destroySystem<
     TComponents extends ComponentMap,
     TArgs extends unknown[],
     TReturn,
-  >(system: System<TComponents, TArgs, TReturn> | string): Promise<void>;
+  >(system: System<TComponents, TArgs, TReturn> | string): Promise<boolean>;
 };
 
 /** A system `init` or `destroy` hook. */
@@ -92,10 +87,12 @@ export type SystemSpec<
   name: string;
   /** The query which will provide the components and entities to the system. */
   query: Query<TComponents>;
-  /** The core function of the system. Invoked when the registered SystemInstance is called. */
+  /** The core function of the system. Invoked each time a schedule runs the system, or its instance is called. */
   callback: TypedSystemCallback<TComponents, TArgs, TReturn>;
   /**
    * How many arguments the system instance forwards to the callback after the components and entities (0 to 4).
+   * A scheduled system receives one argument, the `ScheduleContext`: declare `argCount: 1` (or `0` if the callback
+   * ignores it) so scheduled calls do not allocate. `Schedule.add` rejects 2 to 4.
    *
    * Leave it unset to forward exactly what the caller passes. That form allocates an arguments array on every call
    * (about 32 B plus 8 B per argument in measurements). V8 may optimise it away after tens of thousands of calls,
@@ -106,7 +103,7 @@ export type SystemSpec<
    * `undefined` (so default parameters still apply), extra arguments are dropped, and the callback's
    * `arguments.length` and rest parameters always see `argCount` arguments.
    */
-  argCount?: TArgs["length"] & (0 | 1 | 2 | 3 | 4);
+  argCount?: TArgs["length"] & SystemArgCount;
   /**
    * The function to call when the system is initialized.
    * The world waits for it (and `onReady()` includes it), so it must not await `world.onReady()`,
@@ -134,20 +131,17 @@ export interface SystemPrivateMethods {
 }
 
 /**
- * A SystemInstance is the System.callback bound to the world
+ * A SystemInstance is the System.callback bound to the world: calling it runs the callback once with the query's
+ * components and entities, followed by the instance's own arguments.
  *
- * SystemInstances are convenience functions that memoize the components and entities for the system
+ * Calling an instance directly runs the system unconditionally. It bypasses everything a `Schedule` adds:
+ * enabled state, `runIf`, ordering, phases, the shared command buffer, and the end-of-run `world.refresh()`.
  *
- * @param T The callback's type
- * @param U The parameters of the callback excluding the first two (which are always the components and entities)
+ * @param T The callback's type; the instance takes its parameters after the first two (components and entities)
  */
-export type SystemInstance<
-  T extends SystemFunction,
-  TReturn = ReturnType<T>,
-  TArgs extends ParametersExceptFirstTwo<T> = ParametersExceptFirstTwo<T>,
-> = (
-  ...args: TArgs
-) => TReturn;
+export type SystemInstance<T extends SystemFunction> = (
+  ...args: Parameters<T> extends [unknown, unknown, ...infer R] ? R : []
+) => ReturnType<T>;
 
 /** A Record of SystemInstances by System name */
 export type SystemRecord = Readonly<Record<string, SystemInstance<SystemCallback>>>;

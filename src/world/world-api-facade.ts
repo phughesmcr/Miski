@@ -298,16 +298,20 @@ function constructSystemAPI(host: WorldApiHost): WorldSystemAPI {
     get registry() {
       return systemManager.registry;
     },
-    create: (system) => {
+    register: (system) => {
       host.assertSystemRegistrationAvailable();
-      return host.systemManager.create(system);
+      return host.systemManager.register(system);
     },
     get: ((system: string) => host.systemManager.get(system)) as WorldSystemAPI["get"],
     has: (system) => host.systemManager.has(system),
     // Async so that every failure, including world-state checks, surfaces as a rejected promise.
     destroy: async (system) => {
       host.assertSystemRegistrationAvailable();
-      await host.systemManager.destroy(system);
+      return await host.systemManager.destroy(system, false);
+    },
+    destroyOrThrow: async (system) => {
+      host.assertSystemRegistrationAvailable();
+      await host.systemManager.destroy(system, true);
     },
   };
 }

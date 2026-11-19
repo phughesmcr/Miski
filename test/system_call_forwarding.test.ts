@@ -1,6 +1,6 @@
 /// <reference lib="deno.ns" />
 
-import { isValidSystemSpec, Query, SpecError, System, type World } from "../mod.ts";
+import { Query, SpecError, System, type World } from "../mod.ts";
 import { createEntity, createTestWorld, tagComponent } from "./fixtures.ts";
 import { assert, assertEquals, assertStrictEquals, assertThrows, listIds } from "./helpers.ts";
 
@@ -19,7 +19,7 @@ async function setup(): Promise<{ world: World; query: Query; entity: number }> 
 Deno.test("a system callback's arguments.length matches the caller's argument count", async () => {
   const { world, query, entity } = await setup();
   let seen: unknown[] = [];
-  const instance = world.systems.create(
+  const instance = world.systems.register(
     new System<Record<string, never>, unknown[], void>({
       name: "argumentsLength",
       query,
@@ -42,7 +42,7 @@ Deno.test("a system callback's arguments.length matches the caller's argument co
 Deno.test("a system callback with a rest parameter receives exactly the caller's arguments", async () => {
   const { world, query } = await setup();
   let rest: unknown[] = [];
-  const instance = world.systems.create(
+  const instance = world.systems.register(
     new System({
       name: "restParam",
       query,
@@ -64,7 +64,7 @@ Deno.test("a system callback with a rest parameter receives exactly the caller's
 Deno.test("explicit trailing undefined arguments are forwarded, not dropped", async () => {
   const { world, query } = await setup();
   let count = -1;
-  const instance = world.systems.create(
+  const instance = world.systems.register(
     new System<Record<string, never>, unknown[], void>({
       name: "explicitUndefined",
       query,
@@ -84,7 +84,7 @@ Deno.test("explicit trailing undefined arguments are forwarded, not dropped", as
 Deno.test("a system callback's default parameters apply only when the caller omits them", async () => {
   const { world, query } = await setup();
   let seen: unknown[] = [];
-  const instance = world.systems.create(
+  const instance = world.systems.register(
     new System({
       name: "defaults",
       query,
@@ -105,7 +105,7 @@ Deno.test("a system callback's default parameters apply only when the caller omi
 
 Deno.test("a system instance returns the callback's return value", async () => {
   const { world, query } = await setup();
-  const sum = world.systems.create(
+  const sum = world.systems.register(
     new System({
       name: "sum",
       query,
@@ -113,14 +113,14 @@ Deno.test("a system instance returns the callback's return value", async () => {
     }),
   );
   const marker = {};
-  const identity = world.systems.create(
+  const identity = world.systems.register(
     new System({
       name: "identity",
       query,
       callback: (_components, _entities, value: object) => value,
     }),
   );
-  const asyncSystem = world.systems.create(
+  const asyncSystem = world.systems.register(
     new System({
       name: "async",
       query,
@@ -142,7 +142,7 @@ Deno.test("a system instance returns the callback's return value", async () => {
 Deno.test("a system callback is called without a this value", async () => {
   const { world, query } = await setup();
   let self: unknown = "unset";
-  const instance = world.systems.create(
+  const instance = world.systems.register(
     new System<Record<string, never>, unknown[], void>({
       name: "thisValue",
       query,
@@ -163,7 +163,7 @@ Deno.test("a system with argCount forwards exactly that many arguments", async (
   const { world, query } = await setup();
   for (const argCount of [0, 1, 2, 3, 4] as const) {
     let seen: unknown[] = [];
-    const instance = world.systems.create(
+    const instance = world.systems.register(
       new System<Record<string, never>, unknown[], void>({
         name: `fixed${argCount}`,
         query,
@@ -186,7 +186,7 @@ Deno.test("a system with argCount forwards exactly that many arguments", async (
 
 Deno.test("a system with argCount still applies default parameters and returns the callback's value", async () => {
   const { world, query, entity } = await setup();
-  const instance = world.systems.create(
+  const instance = world.systems.register(
     new System({
       name: "fixedDefaults",
       query,
@@ -205,10 +205,10 @@ Deno.test("an argCount outside 0 to 4 is an invalid system specification", () =>
   const query = new Query({ all: [tagComponent("tag")] });
   for (const argCount of [-1, 5, 1.5, Number.NaN, "1", null]) {
     const spec = { name: "badArgCount", query, callback: () => {}, argCount };
-    assertEquals(isValidSystemSpec(spec), false, `argCount ${String(argCount)} is rejected`);
     assertThrows(() => new System(spec as never), SpecError, "Invalid system specification");
   }
-  for (const argCount of [undefined, 0, 4]) {
-    assert(isValidSystemSpec({ name: "okArgCount", query, callback: () => {}, argCount }), `${argCount} is valid`);
+  for (const argCount of [undefined, 0, 4] as const) {
+    const system = new System({ name: "okArgCount", query, callback: (..._args: unknown[]) => {}, argCount });
+    assertStrictEquals(system.argCount, argCount, `${argCount} is valid`);
   }
 });

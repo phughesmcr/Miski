@@ -94,7 +94,7 @@ Deno.test("disposing a rollback scope on an errored world drops the captured sta
   const tag = tagComponent("tag");
   const world = new World({ capacity: 8, components: [tag] });
   let scope: WorldRollbackScope | undefined;
-  world.systems.create(
+  world.systems.register(
     new System({
       name: "speculativeInit",
       query: new Query({ all: [tag] }),

@@ -40,7 +40,7 @@ export interface ScheduleContext {
 
 /**
  * A schedule's clock as plain data, from `Schedule.getClock()` and for `Schedule.setClock()`. Save it alongside a
- * world save or rollback point; saves and rollback are only supported between `run()` calls.
+ * world save or rollback scope; saves and rollback are only supported between `run()` calls.
  */
 export type ScheduleClock = {
   /** `run()` calls started so far. */

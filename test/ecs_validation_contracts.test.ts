@@ -159,7 +159,7 @@ Deno.test("system registry exposes a frozen live view without backing lookup mut
   });
 
   assert(Object.isFrozen(world.systems.registry), "Expected initial public system registry to be frozen");
-  const instance = world.systems.create(movement);
+  const instance = world.systems.register(movement);
   assert(Object.isFrozen(world.systems.registry), "Expected updated public system registry to be frozen");
   assert(world.systems.registry["movement"] === instance, "Expected created system to appear in public registry");
 
@@ -201,14 +201,14 @@ Deno.test("duplicate system names are rejected explicitly", async () => {
     callback: () => {},
   });
 
-  world.systems.create(first);
+  world.systems.register(first);
   assertThrows(
-    () => world.systems.create(second),
+    () => world.systems.register(second),
     AlreadyRegisteredError,
     'System "movement" is already registered',
   );
   assertThrows(
-    () => world.systems.create(first),
+    () => world.systems.register(first),
     AlreadyRegisteredError,
     'System "movement" is already registered',
   );

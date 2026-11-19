@@ -122,6 +122,7 @@ export class SystemManager {
   /**
    * Whether the caller is a pending system lifecycle hook: either the synchronous part of a hook is running,
    * or a hook's own world context is making the call while that hook is pending.
+   * @internal
    */
   get inHook(): boolean {
     return this.#caller !== undefined;
@@ -140,7 +141,7 @@ export class SystemManager {
 
   /** The hook context passed to one hook run: lifecycle calls attributed to that run while it is pending. */
   #hookContext(record: SystemRegistration, run: HookRun): SystemHookContext {
-    const world = this.#world as WorldContext & { onReady(): Promise<void> };
+    const world = this.#world;
     const as = <T>(fn: () => T): T => record.hook === run ? this.#callAs(run, fn) : fn();
     return {
       get pending() {
@@ -218,13 +219,13 @@ export class SystemManager {
   }
 
   /**
-   * Create a system instance
-   * @param system The system to create the instance of
-   * @returns The created system instance
+   * Register a system and create its instance. Runs its `init` hook now if the world is already initialized.
+   * @param system The system to register
+   * @returns The system instance
    * @throws {AlreadyRegisteredError} If a system with the same name is already registered
    * @throws {NotRegisteredError} If a component in the system query is not registered in the world
    */
-  create<
+  register<
     TComponents extends ComponentMap,
     TArgs extends unknown[],
     TReturn,
@@ -269,6 +270,7 @@ export class SystemManager {
    * destruction would wait for that same hook (itself, or a system whose pending hook is awaiting its destruction).
    * @param system The system to destroy
    * @param throwOnNotFound Whether to reject when the system is not registered
+   * @returns `true` once the system is destroyed; `false` if it was not registered and `throwOnNotFound` is `false`
    * @throws {NotRegisteredError} If the system is not registered and `throwOnNotFound` is `true`
    * @throws {WorldStateError} If called from a system hook whose own completion the destruction would wait on
    */
@@ -279,10 +281,10 @@ export class SystemManager {
   >(
     system: System<TComponents, TArgs, TReturn> | string,
     throwOnNotFound = true,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const record = this.#getRecord(system);
     if (record === undefined) {
-      if (throwOnNotFound === false) return;
+      if (throwOnNotFound === false) return false;
       const name = typeof system === "string" ? system : system.name;
       throw new NotRegisteredError(formatSystemNotRegistered(name));
     }
@@ -290,7 +292,7 @@ export class SystemManager {
     if (caller === undefined) {
       record.discarded = true;
       await this.#requestDestroy(record);
-      return;
+      return true;
     }
     if (destructionWaitsOn(record, caller)) {
       throw new WorldStateError(
@@ -305,6 +307,7 @@ export class SystemManager {
     } finally {
       caller.awaiting.delete(record);
     }
+    return true;
   }
 
   /** Share one destroy run per record between concurrent requests. */

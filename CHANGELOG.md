@@ -47,6 +47,26 @@
   fails, but writes through the public paths, so a throwing object-field
   `create()` / `clone()` hook can leave it partly applied. Wrap it in a
   `WorldRollbackScope` to make it all-or-nothing.
+- **Breaking:** `world.systems.create(system)` is renamed
+  `world.systems.register(system)`. It still returns the system's instance.
+  `Schedule` is now the documented way to run systems; `world.systems` owns
+  their lifecycle. Calling an instance directly still works but bypasses
+  schedule state (enabled, `runIf`, ordering, commands, refresh).
+- **Breaking:** `world.systems.destroy(system)` resolves `false` for a system
+  that is not registered instead of rejecting with `NotRegisteredError`, and
+  resolves `true` once it is destroyed. The new `world.systems.destroyOrThrow`
+  rejects as before. `SystemHookContext.destroySystem` mirrors `destroy`.
+- **Breaking (types):** `WorldContext` is now `Pick<World, ...>` of the same
+  members plus `onReady`, so it can't drift from `World`. `refresh` gains its
+  optional `retainChanged` / `retainTransitions` parameters.
+- **Breaking (types):** `SystemInstance<T>` takes one type parameter; the
+  unused `TReturn` and `TArgs` parameters are gone.
+  `ParametersExceptFirstTwo` is no longer exported.
+- **Breaking:** `isValidSystemSpec` is no longer exported; `new System()`
+  throws `SpecError` for an invalid spec.
+- New `SystemArgCount` type (`0 | 1 | 2 | 3 | 4`), now the type of
+  `System.argCount` and `SystemSpec.argCount`.
+- `SystemManager.inHook` is marked `@internal`.
 - Fix world-save loads from a Node `Buffer` whose `byteOffset` is not a
   multiple of 8 (common for pooled `fs.readFileSync` Buffers): `loadWorld`,
   `readWorldSaveHeader` and `worldSaveToDocument` threw "Not a Miski world save
@@ -56,7 +76,7 @@
 - `Schedule` drops systems that are no longer registered in the world
   (destroyed with `world.systems.destroy()`, or unregistered by a failed
   `init`). Before, `has()` stayed `true` and every `run()` threw "System is
-  not ready" until `remove()` was called. Re-creating the system on the world
+  not ready" until `remove()` was called. Re-registering the system on the world
   does not re-add it; `add()` it again. The check costs one identity
   comparison per `run()`.
 - `World.destroy()` rejects with an `AggregateError` of every failure when more
@@ -191,12 +211,19 @@
 - Add `Schedule`, a system scheduler. Systems run in user-defined phases, in
   insertion order adjusted by `before` / `after` constraints (deterministic;
   cycles throw `SpecError` naming the path). Contiguous fixed phases run once
-  per fixed step from an accumulator (`fixedStep`, `maxFixedSteps`, `alpha`).
-  Systems get one reused `ScheduleContext` and must declare `argCount` 1 or 0.
-  `runIf` and `setEnabled` skip systems. `run(dt)` refreshes the world once at
+  per fixed step from an accumulator (`fixedStep`, `maxFixedSteps`, `alpha`); a
+  step is due within a relative `1e-9` of `fixedStep`, so frame `dt`s that
+  should add up to one step (nine `1 / 540` frames against `1 / 60`) don't
+  delay it by a frame through rounding. Systems get one reused
+  `ScheduleContext`; declare `argCount: 1` (or `0`) to keep calls
+  allocation-free. A system without `argCount` still runs but may allocate per
+  call; `argCount` 2 to 4 throws `SpecError` and fails to type-check.
+  `runIf` and `setEnabled` skip systems; `setEnabled` returns `false` for a
+  system not in the schedule. `run(dt)` refreshes the world once at
   the end, like `world.frame`, and is allocation-free in steady state.
   `getClock()` / `setClock()` save and restore its clock as plain data
-  alongside a world save or rollback point (between runs only).
+  alongside a world save or rollback point (between runs only); `setClock`
+  reduces an `accumulator` of a whole `fixedStep` or more to its remainder.
 - Add `CommandBuffer` for deferred `spawn` (with a bundle, returning a
   `PendingEntity`), `destroy`, `add`, `set` and `remove`. Queuing validates
   and copies data; `flush()` applies commands in order like the direct calls

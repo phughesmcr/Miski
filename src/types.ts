@@ -58,7 +58,7 @@ export type {
   UntypedQueryComponents,
 } from "@/types/query.ts";
 export type {
-  ParametersExceptFirstTwo,
+  SystemArgCount,
   SystemBindings,
   SystemCallback,
   SystemFunction,

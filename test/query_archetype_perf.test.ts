@@ -406,7 +406,7 @@ Deno.test("systems see every match after their query result grows", async () => 
     },
   });
   const world = await createTestWorld([a], 1024);
-  const update = world.systems.create(system);
+  const update = world.systems.register(system);
   const expected: Entity[] = [createEntity(world)];
   world.components.addToEntity(a, expected[0]!);
   update();

@@ -326,9 +326,13 @@ const burst = (x: number, y: number, count: number, hue: number): void => {
 };
 
 // --- Systems -----------------------------------------------------------------------------------
+// Most games run systems with a `Schedule` (see example/cli.example.ts). This demo calls the instances returned by
+// `world.systems.register` directly instead: each simulation step reads the charged query's entered / exited window
+// and refreshes the world, and forecasts replay steps after a rollback, so it drives one step at a time by hand.
+// Direct calls bypass schedule state (enabled, runIf, ordering, deferred commands).
 
 /** Bin drones into a coarse grid, then box-blur each cell with its 8 neighbours into mean fields. */
-const fieldSystem = world.systems.create(
+const fieldSystem = world.systems.register(
   new System({
     name: "fieldSystem",
     query: droneQuery,
@@ -397,7 +401,7 @@ const ignite = (entity: number, slot: number, rest: Column, glow: Column): void 
 };
 
 /** Team targets + flocking + pulse/attractor forces, and charge contagion. */
-const steeringSystem = world.systems.create(
+const steeringSystem = world.systems.register(
   new System({
     name: "steeringSystem",
     query: droneQuery,
@@ -598,7 +602,7 @@ const steeringSystem = world.systems.create(
 );
 
 /** Burn charge down; drones that run out lose the component and leave the charged query. */
-const chargeSystem = world.systems.create(
+const chargeSystem = world.systems.register(
   new System({
     name: "chargeSystem",
     query: chargedQuery,
@@ -626,7 +630,7 @@ const chargeSystem = world.systems.create(
   }),
 );
 
-const movementSystem = world.systems.create(
+const movementSystem = world.systems.register(
   new System({
     name: "movementSystem",
     query: movementQuery,
@@ -662,7 +666,7 @@ const movementSystem = world.systems.create(
   }),
 );
 
-const lifetimeSystem = world.systems.create(
+const lifetimeSystem = world.systems.register(
   new System({
     name: "lifetimeSystem",
     query: sparkQuery,

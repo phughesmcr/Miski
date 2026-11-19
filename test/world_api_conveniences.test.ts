@@ -196,7 +196,7 @@ Deno.test("system callbacks receive iterable entity lists", async () => {
     query: new Query({ all: { position } }),
     callback: (_components, entities): Entity[] => [...entities],
   });
-  const collectInstance = world.systems.create(collect);
+  const collectInstance = world.systems.register(collect);
 
   assertEquals(collectInstance(), [entity], "Expected system entities to be iterable");
 });

@@ -24,7 +24,7 @@ Deno.test("systems preserve supplied arity, defaults, return values, and promise
     assert(!world.systems.has(name), "inherited keys are not registered systems");
   }
   assertStrictEquals(Object.getPrototypeOf(world.systems.registry), null, "system registry has no prototype");
-  const rest = world.systems.create(
+  const rest = world.systems.register(
     new System({
       name: "restArguments",
       query,
@@ -33,7 +33,7 @@ Deno.test("systems preserve supplied arity, defaults, return values, and promise
   );
   assertEquals(rest(), [], "zero supplied arguments stay zero arguments");
   assertEquals(rest(1, 2, 3, 4, 5, 6), [1, 2, 3, 4, 5, 6], "all rest arguments arrive");
-  const defaults = world.systems.create(
+  const defaults = world.systems.register(
     new System({
       name: "defaults",
       query,
@@ -42,7 +42,7 @@ Deno.test("systems preserve supplied arity, defaults, return values, and promise
   );
   assertEquals(defaults(), [7], "default parameters keep their intended arity");
   assertEquals(defaults(undefined, 2, 3, 4, 5), [7, 2, 3, 4, 5], "defaults and rest arguments compose");
-  const six = world.systems.create(
+  const six = world.systems.register(
     new System({
       name: "sixArguments",
       query,

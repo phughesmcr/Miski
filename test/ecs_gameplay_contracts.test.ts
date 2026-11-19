@@ -207,7 +207,7 @@ Deno.test("manual typed query and system expose keyed component instances in cal
     },
   });
 
-  const updateMovement = world.systems.create(movement);
+  const updateMovement = world.systems.register(movement);
   updateMovement(2);
   assertEquals(world.components.getEntityData(position, first), { x: 7, y: 10 }, "Expected typed manual system update");
 });
@@ -229,7 +229,7 @@ Deno.test("equivalent query filters preserve distinct callback component keys", 
     },
   });
 
-  world.systems.create(aliasedMovement)();
+  world.systems.register(aliasedMovement)();
   assert(callbackRan, "Expected aliased system callback to run");
 });
 
@@ -265,7 +265,7 @@ Deno.test("systems receive matching component instances, borrowed entity lists, 
     },
   });
 
-  const updateMovement = world.systems.create(movement);
+  const updateMovement = world.systems.register(movement);
   updateMovement(2);
   assertEquals(world.components.getEntityData(position, first), { x: 12, y: 16 }, "Expected first movement update");
 
@@ -317,7 +317,7 @@ Deno.test("typed systems receive keyed component records and borrowed entity lis
     },
   });
 
-  const updateMovement = world.systems.create(movement);
+  const updateMovement = world.systems.register(movement);
   updateMovement(2);
 
   const second = createEntity(world);
@@ -350,7 +350,7 @@ Deno.test("system lifecycle hooks run during world initialization and destructio
     },
   });
 
-  const runLifecycle = world.systems.create(lifecycle);
+  const runLifecycle = world.systems.register(lifecycle);
   await world.init();
   runLifecycle();
   await world.destroy();
@@ -364,7 +364,7 @@ Deno.test("systems created after world initialization run their init hook", asyn
   const world = await createTestWorld([position]);
   let initCount = 0;
 
-  world.systems.create(
+  world.systems.register(
     new System({
       name: "lateSystem",
       query: new Query({ all: [position] }),
@@ -391,7 +391,7 @@ Deno.test("late async system init rejection moves the world into error state", a
     callback: () => {},
   });
 
-  world.systems.create(lateSystem);
+  world.systems.register(lateSystem);
   await Promise.resolve();
   await Promise.resolve();
 
@@ -414,7 +414,7 @@ Deno.test("late async system init rejection is ignored after the system is destr
     callback: () => {},
   });
 
-  world.systems.create(lateSystem);
+  world.systems.register(lateSystem);
   // Destroying a system waits for its pending init; the init failure is moot once the system is discarded.
   const destruction = world.systems.destroy(lateSystem);
   rejectInit(new Error("stale late init failed"));
@@ -439,7 +439,7 @@ Deno.test("late synchronous system init failure rolls back registration and pois
     callback: () => {},
   });
 
-  assertThrows(() => world.systems.create(lateSystem), Error, "late sync init failed");
+  assertThrows(() => world.systems.register(lateSystem), Error, "late sync init failed");
   assertEquals(world.state, "error", "Expected synchronous late init failure to poison the world");
   assert(!world.systems.has(lateSystem), "Expected failed late-created system to be rolled back");
 });
@@ -791,7 +791,7 @@ Deno.test("systems can be registered before init but cannot run outside the init
     },
   });
 
-  const runSystem = world.systems.create(system);
+  const runSystem = world.systems.register(system);
   assertStrictEquals(world.systems.get(system), runSystem, "Expected pre-init system registration to succeed");
   assertThrows(() => runSystem(), WorldStateError, "World has not been initialized");
 
@@ -800,7 +800,7 @@ Deno.test("systems can be registered before init but cannot run outside the init
   await world.destroy();
 
   assertThrows(() => runSystem(), WorldStateError, "World has already been destroyed");
-  assertThrows(() => world.systems.create(system), WorldStateError, "World has already been destroyed");
+  assertThrows(() => world.systems.register(system), WorldStateError, "World has already been destroyed");
   await assertRejects(() => world.systems.destroy(system), WorldStateError, "World has already been destroyed");
   assertEquals(calls, ["init", "callback"], "Expected guarded system calls to skip the callback");
 });
@@ -822,7 +822,7 @@ Deno.test("captured lifecycle API methods observe the current world state", asyn
   const addToEntity = world.components.addToEntity;
   const queryComponents = world.components.query;
   const queryEntered = world.entities.queryEntered;
-  const createSystem = world.systems.create;
+  const registerSystem = world.systems.register;
   const destroySystem = world.systems.destroy;
 
   await world.destroy();
@@ -832,7 +832,7 @@ Deno.test("captured lifecycle API methods observe the current world state", asyn
   assertThrows(() => addToEntity(position, asEntity(0)), WorldStateError, "World has already been destroyed");
   assertThrows(() => queryComponents(query), WorldStateError, "World has already been destroyed");
   assertThrows(() => queryEntered(query), WorldStateError, "World has already been destroyed");
-  assertThrows(() => createSystem(system), WorldStateError, "World has already been destroyed");
+  assertThrows(() => registerSystem(system), WorldStateError, "World has already been destroyed");
   await assertRejects(() => destroySystem(system), WorldStateError, "World has already been destroyed");
 });
 
