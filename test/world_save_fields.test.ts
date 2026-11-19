@@ -53,7 +53,7 @@ function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
 /** Counts hook calls, and lets a test make decode throw for one encoded value. */
 type HookLog = { encoded: number; decoded: number; nullSeen: boolean; poison: string | undefined };
 
-// deno-lint-ignore explicit-function-return-type -- the inferred field descriptor type are the point of this factory
+// deno-lint-ignore explicit-function-return-type -- the inferred field descriptor type is the point of this factory
 function meshField(log: HookLog) {
   return field.object<Mesh>({
     encode: (mesh) => {
@@ -454,7 +454,7 @@ function refUnitOf() {
   });
 }
 
-// deno-lint-ignore no-explicit-any
+// deno-lint-ignore no-explicit-any -- documents are edited freely to build invalid saves
 type SaveDocument = any;
 
 async function savedUnitDocument(): Promise<SaveDocument> {
