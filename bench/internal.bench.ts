@@ -9,6 +9,7 @@ import { asEntity, asSlotIndex, ReusableEntityIterator } from "../src/entity/ent
 import { EntityManager } from "../src/entity/entity-manager.ts";
 import { EntityIteratorPool } from "../src/entity/pooled-entity-iterator.ts";
 import { QueryManager } from "../src/query/query-manager.ts";
+import { QueryMembership } from "../src/query/query-membership.ts";
 import { Query } from "../src/query/query.ts";
 import { QueryEntityResult } from "../src/query/query-pool.ts";
 import type { DynamicComponentInstance, QueryInstance } from "../src/types.ts";
@@ -106,7 +107,8 @@ for (let entity = 0; entity < SMALL_CAPACITY; entity++) {
   if (entity % 4 === 0) archetypeManager.addComponent(e, renderableInstance);
   if (entity % 64 === 0) archetypeManager.addComponent(e, sleepingInstance);
 }
-archetypeManager.refresh(archetypeQueryList);
+const archetypeMembership = new QueryMembership(archetypeManager);
+archetypeMembership.reconcile(archetypeQueryList);
 
 const queryResult = new QueryEntityResult(MEDIUM_CAPACITY);
 for (let i = 0; i < MEDIUM_CAPACITY; i++) {
@@ -126,9 +128,7 @@ const queryManager = new QueryManager(
     isInitialized: () => true,
   },
   MEDIUM_CAPACITY,
-  (queries) => archetypeManager.ensureQueryMembership(queries),
-  (query) => archetypeManager.registerQuery(query),
-  archetypeManager.clock,
+  archetypeManager,
 );
 queryManager.entityList(cachedQuery);
 
@@ -399,18 +399,19 @@ Deno.bench({
 });
 
 Deno.bench({
-  name: "ArchetypeManager registerQuery",
+  name: "QueryMembership register query",
   group: "internal archetype manager",
   fn: () => {
-    archetypeManager.registerQuery(movementQueryInstance);
+    archetypeMembership.register(movementQueryInstance);
   },
 });
 
 Deno.bench({
-  name: "ArchetypeManager refresh query membership",
+  name: "QueryMembership reconcile + ArchetypeManager refresh",
   group: "internal archetype manager",
   fn: () => {
-    archetypeManager.refresh(archetypeQueryList);
+    archetypeMembership.reconcile(archetypeQueryList);
+    archetypeManager.refresh();
   },
 });
 

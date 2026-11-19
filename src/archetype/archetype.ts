@@ -168,8 +168,11 @@ export class Archetype {
     }
   }
 
-  /** Grow the dense list so it can hold `length` entries. */
-  #reserve(length: number): void {
+  /**
+   * Grow the dense list so it can hold `length` entries.
+   * @internal
+   */
+  reserve(length: number): void {
     if (length <= this.#entityList.length) return;
     let next = this.#entityList.length * 2;
     while (next < length) next *= 2;
@@ -185,7 +188,7 @@ export class Archetype {
   #activateEntity(slot: number): boolean {
     if (this.hasSlot(slot)) return false;
     const position = this.#populationCount;
-    if (position === this.#entityList.length) this.#reserve(position + 1);
+    if (position === this.#entityList.length) this.reserve(position + 1);
     this.#entityList[position] = slot;
     this.#handleList[position] = this.#packSlot(slot);
     this.#positions[slot] = position;
@@ -279,7 +282,7 @@ export class Archetype {
    * @returns The number of newly active entities
    */
   addEntities(slots: EntityArray, start: number, count: number): number {
-    this.#reserve(this.#populationCount + count);
+    this.reserve(this.#populationCount + count);
     let added = 0;
     const end = start + count;
     for (let i = start; i < end; i++) {
@@ -357,7 +360,7 @@ export class Archetype {
    */
   restorePopulation(slots: EntityArray): void {
     this.#populationCount = 0;
-    this.#reserve(slots.length);
+    this.reserve(slots.length);
     this.#entityList.set(slots);
     // Generations are restored first, so packing now yields the restored handles.
     const handles = this.#handleList;

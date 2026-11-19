@@ -10,6 +10,7 @@ import type { ComponentInstanceGetter, QueryManagerDependencies } from "@/types/
 import { EntityIteratorPool } from "@/entity/pooled-entity-iterator.ts";
 import { QueryEntityResult } from "./query-pool.ts";
 import type { NormalizedQueryComponentEntry, Query } from "./query.ts";
+import { type MembershipSource, QueryMembership } from "./query-membership.ts";
 
 type QueryComponent = Parameters<ComponentInstanceGetter>[0][number];
 type RegisteredComponentInstance = DynamicComponentInstance;
@@ -127,11 +128,8 @@ export class QueryManager {
   /** Component registry accessors supplied by the owning World. */
   #dependencies: QueryManagerDependencies;
 
-  /** Callback for refreshing query-to-archetype membership. */
-  #ensureQueryMembership: (queries: QueryInstanceList) => void;
-
-  /** Callback for registering one query against existing archetypes. */
-  #registerQueryMembership: (query: QueryInstance) => void;
+  /** Keeps each query's archetype list current. */
+  readonly #membership: QueryMembership;
 
   /** Dense registered query instances (avoids Map.values() on the hot path). */
   readonly #queries: QueryInstance[] = [];
@@ -164,30 +162,16 @@ export class QueryManager {
    * Create a new QueryManager
    * @param dependencies - Component registry accessors and lifecycle hooks
    * @param capacity - The world's entity capacity
-   * @param ensureQueryMembership - Refreshes query-to-archetype membership
-   * @param registerQueryMembership - Registers one query against existing archetypes
-   * @param clock - The world's structural change clock
+   * @param archetypes - The world's archetype state (its `ArchetypeManager`)
    */
-  constructor(
-    dependencies: QueryManagerDependencies,
-    capacity: number,
-    ensureQueryMembership: (queries: QueryInstanceList) => void,
-    registerQueryMembership: (query: QueryInstance) => void,
-    clock: ArchetypeClock,
-  ) {
-    this.#clock = clock;
+  constructor(dependencies: QueryManagerDependencies, capacity: number, archetypes: MembershipSource) {
     this.#dependencies = dependencies;
-    this.#ensureQueryMembership = ensureQueryMembership;
-    this.#registerQueryMembership = registerQueryMembership;
+    this.#membership = new QueryMembership(archetypes);
+    this.#clock = archetypes.clock;
     this.#queryList = { queries: this.#queries, count: 0 };
     this.#capacity = capacity;
     this.instancesByID = new Map();
     this.#instancesByQuery = new WeakMap();
-  }
-
-  /** Dense registered queries for archetype membership rebuilds. */
-  get registeredQueries(): QueryInstanceList {
-    return this.#queryList;
   }
 
   /** Get components for a query */
@@ -256,7 +240,7 @@ export class QueryManager {
 
     // Refresh archetypes after query registration to update mappings
     if (this.#dependencies.isInitialized()) {
-      this.#registerQueryMembership(instance);
+      this.#membership.register(instance);
     }
 
     return instance;
@@ -271,7 +255,7 @@ export class QueryManager {
 
   /** Ensures query-to-archetype membership is current before entity queries. */
   ensureQueryMembership(): void {
-    this.#ensureQueryMembership(this.registeredQueries);
+    this.#membership.reconcile(this.#queryList);
   }
 
   /**

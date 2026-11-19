@@ -354,13 +354,7 @@ export class World {
         isInitialized: () => this.#state === "initialized",
       },
       capacity,
-      (queries) => {
-        this.#archetypeManager.ensureQueryMembership(queries, true);
-      },
-      (query) => {
-        this.#archetypeManager.registerQuery(query, true);
-      },
-      this.#archetypeManager.clock,
+      this.#archetypeManager,
     );
     this.#archetypeQueryIterators = new ArchetypeQueryIterators({
       instanceWithMembership: (query) => this.#queryManager.instanceWithMembership(query),
@@ -615,7 +609,8 @@ export class World {
   refresh(retainChanged: boolean = false, retainTransitions: boolean = false): void {
     this.#assertInitialized();
     try {
-      this.#archetypeManager.refresh(this.#queryManager.registeredQueries, retainTransitions);
+      this.#queryManager.ensureQueryMembership();
+      this.#archetypeManager.refresh(retainTransitions);
       if (!retainChanged) {
         this.#componentManager.refresh();
         this.#relationManager?.refresh();

@@ -394,9 +394,7 @@ function worldParts(components: DynamicComponent[], capacity: number) {
       isInitialized: () => true,
     },
     capacity,
-    (list) => archetypes.ensureQueryMembership(list),
-    (query) => archetypes.registerQuery(query),
-    archetypes.clock,
+    archetypes,
   );
   return { componentManager, archetypes, queries };
 }

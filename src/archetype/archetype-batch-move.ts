@@ -1,74 +1,56 @@
 import { createSlotArray, type EntityArray } from "@/entity/entity.ts";
 import type { DynamicComponentInstance } from "@/types/component.ts";
 import type { Archetype } from "./archetype.ts";
-import type { MembershipTracker } from "./membership-tracker.ts";
-import type { TransitionWindow } from "./transition-window.ts";
-
-/** Resolves the archetype reached by adding or removing one component. */
-export type TransitionArchetypeGetter = (
-  from: Archetype,
-  instance: DynamicComponentInstance,
-  add: boolean,
-) => Archetype;
+import type { ArchetypeGraph } from "./archetype-graph.ts";
 
 /**
- * Owns reusable scratch buffers for batch single-component archetype transitions.
- * Used by {@link ArchetypeManager} for `addComponents` / `removeComponents`.
+ * Groups a dense slot list by source archetype for a single-component transition, so each group resolves its
+ * target archetype once. Used by {@link ArchetypeManager} for `addComponents` / `removeComponents`, which then
+ * relocates each grouped slot.
+ *
+ * After {@link group} returns `n`, group `g < n` moves `counts[g]` slots, `slots[offsets[g]]` onwards, from
+ * `sources[g]` to `targets[g]`. Groups are in first-seen order and keep each source's slot order.
  *
  * Group lists keep capacity across calls - never truncate with `.length = 0`, which
  * reallocates V8 elements backing stores on the hot path.
  */
 export class ArchetypeBatchMove {
-  /** Reusable grouped slot storage for batch component transitions */
-  #bulkSlots: EntityArray;
+  /** Grouped slots; group `g` occupies `[offsets[g], offsets[g] + counts[g])`. */
+  readonly slots: EntityArray;
 
-  /** Reusable group counts for batch component transitions */
-  #bulkGroupCounts: number[];
+  /** Slot count of each group. */
+  readonly counts: number[] = [];
 
-  /** Reusable group offsets for batch component transitions */
-  #bulkGroupOffsets: number[];
+  /** First index of each group in {@link slots}. */
+  readonly offsets: number[] = [];
 
-  /** Reusable group write offsets for batch component transitions */
-  #bulkGroupWrites: number[];
+  /** Source archetype of each group. */
+  readonly sources: Archetype[] = [];
 
-  /** Reusable source archetypes for batch component transitions */
-  #bulkSources: Archetype[];
+  /** Target archetype of each group. */
+  readonly targets: Archetype[] = [];
 
-  /** Reusable target archetypes for batch component transitions */
-  #bulkTargets: Archetype[];
+  /** Next write index of each group while filling {@link slots}. */
+  readonly #writes: number[] = [];
 
-  /** Records each moved slot's window-start archetype */
-  #window: TransitionWindow;
-
-  /** Records archetypes whose population crossed the empty boundary */
-  #tracker: MembershipTracker;
-
-  constructor(capacity: number, window: TransitionWindow, tracker: MembershipTracker) {
-    this.#window = window;
-    this.#tracker = tracker;
-    this.#bulkSlots = createSlotArray(capacity);
-    this.#bulkGroupCounts = [];
-    this.#bulkGroupOffsets = [];
-    this.#bulkGroupWrites = [];
-    this.#bulkSources = [];
-    this.#bulkTargets = [];
+  /** @param capacity - The world's entity capacity */
+  constructor(capacity: number) {
+    this.slots = createSlotArray(capacity);
   }
 
   /**
-   * Move a dense slot list through a single-component transition grouped by source archetype.
-   * @param entityArchetypes - Archetypes indexed by entity storage slot
-   * @param root - Fallback archetype when a slot has no mapping yet
-   * @param getTransitionArchetype - Resolves the add/remove transition target
+   * Group a dense slot list by source archetype, skipping slots the transition leaves in place.
+   * @param slotArchetypes - Archetypes indexed by storage slot
+   * @param graph - Resolves (and caches) each source's transition target
    * @param slots - Dense storage slots
    * @param count - Number of slots to read
    * @param instance - The component instance being added or removed
    * @param add - Whether the component is being added
-   * @returns The number of entities moved to a different archetype
+   * @returns The number of groups
    */
-  moveEntities(
-    entityArchetypes: Array<Archetype | undefined>,
-    root: Archetype,
-    getTransitionArchetype: TransitionArchetypeGetter,
+  group(
+    slotArchetypes: ReadonlyArray<Archetype | undefined>,
+    graph: ArchetypeGraph,
     slots: EntityArray,
     count: number,
     instance: DynamicComponentInstance,
@@ -76,24 +58,23 @@ export class ArchetypeBatchMove {
   ): number {
     if (count === 0) return 0;
 
-    const sources = this.#bulkSources;
-    const targets = this.#bulkTargets;
-    const counts = this.#bulkGroupCounts;
-    const offsets = this.#bulkGroupOffsets;
-    const writes = this.#bulkGroupWrites;
+    const root = graph.root;
+    const sources = this.sources;
+    const targets = this.targets;
+    const counts = this.counts;
+    const offsets = this.offsets;
+    const writes = this.#writes;
     let groupCount = 0;
-    let moved = 0;
 
     // Group by source archetype in first-seen order. Each source remembers its group in `batchGroup`; the
     // index only counts when `sources` points back at it, so a stale value (e.g. after a throw) is ignored.
     // Sources the transition leaves in place get no group and are re-resolved through their cached edge.
     try {
       for (let i = 0; i < count; i++) {
-        const slot = slots[i]!;
-        const source = entityArchetypes[slot] ?? root;
+        const source = slotArchetypes[slots[i]!] ?? root;
         let group = source.batchGroup;
         if (group < 0 || group >= groupCount || sources[group] !== source) {
-          const target = getTransitionArchetype(source, instance, add);
+          const target = graph.transition(source, instance, add);
           if (source === target) continue;
           group = groupCount++;
           source.batchGroup = group;
@@ -104,50 +85,26 @@ export class ArchetypeBatchMove {
         counts[group]!++;
       }
 
+      let moved = 0;
       for (let group = 0; group < groupCount; group++) {
         offsets[group] = moved;
         writes[group] = moved;
         moved += counts[group]!;
       }
-      if (moved === 0) {
-        return 0;
-      }
+      if (moved === 0) return 0;
 
       for (let i = 0; i < count; i++) {
         const slot = slots[i]!;
-        const source = entityArchetypes[slot] ?? root;
+        const source = slotArchetypes[slot] ?? root;
         const group = source.batchGroup;
         if (group < 0 || group >= groupCount || sources[group] !== source) continue;
         const write = writes[group]!;
-        this.#bulkSlots[write] = slot;
+        this.slots[write] = slot;
         writes[group] = write + 1;
       }
     } finally {
       for (let group = 0; group < groupCount; group++) sources[group]!.batchGroup = -1;
     }
-
-    for (let group = 0; group < groupCount; group++) {
-      const source = sources[group]!;
-      const target = targets[group]!;
-      const offset = offsets[group]!;
-      const groupSize = counts[group] ?? 0;
-      const end = offset + groupSize;
-      for (let i = offset; i < end; i++) {
-        this.#window.touch(this.#bulkSlots[i]!, source);
-      }
-      source.removeEntities(this.#bulkSlots, offset, groupSize);
-      if (source.getPopulationCount() === 0) this.#tracker.markEmptied(source);
-      const targetWasEmpty = target.getPopulationCount() === 0;
-      target.addEntities(this.#bulkSlots, offset, groupSize);
-      if (targetWasEmpty) this.#tracker.markPopulated(target);
-      for (let i = offset; i < end; i++) {
-        entityArchetypes[this.#bulkSlots[i]!] = target;
-      }
-      counts[group] = 0;
-      offsets[group] = 0;
-      writes[group] = 0;
-    }
-
-    return moved;
+    return groupCount;
   }
 }
