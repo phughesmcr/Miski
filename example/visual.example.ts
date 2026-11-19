@@ -704,13 +704,13 @@ const lifetimeSystem = world.systems.create(
 const emitEmbersAndRefresh = (): void => {
   let emberCount = 0;
   let enteredCount = 0;
-  const entered = world.archetypes.queryEntered(chargedQuery);
+  const entered = world.entities.queryEntered(chargedQuery);
   for (const entity of entered) {
     if (emberCount < EMBERS_PER_STEP && rand() < 0.35) emberScratch[emberCount++] = entity;
     enteredCount++;
   }
   let exitedCount = 0;
-  for (const _entity of world.archetypes.queryExited(chargedQuery)) exitedCount++;
+  for (const _entity of world.entities.queryExited(chargedQuery)) exitedCount++;
   sim.ignited += enteredCount;
   sim.spent += exitedCount;
   // Spawn after iterating: the transition iterators are borrowed and invalidated by mutation.
@@ -738,7 +738,7 @@ const advance = (): void => {
 };
 
 const seedWorld = (droneCount = desiredDroneCount): void => {
-  // Snapshot before destroy: borrowed getActive() is invalidated by mutations.
+  // Stable array: the list is walked while its entities are destroyed.
   const active = world.entities.getActiveSnapshot();
   for (let i = 0; i < active.length; i++) world.entities.destroy(active[i]!);
   desiredDroneCount = snapDrones(droneCount);

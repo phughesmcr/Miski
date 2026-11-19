@@ -251,7 +251,7 @@ Deno.test("bundles and spawn APIs preflight before mutation and move once to the
   assertEquals(ids(world.components.getChanged(GridPos)), [entity], "Expected bundle data to be changed");
   assertEquals(ids(world.components.getChanged(Facing)), [entity], "Expected branded bundle data to be changed");
   assertEquals(
-    ids(world.archetypes.queryExited(intermediate)),
+    ids(world.entities.queryExited(intermediate)),
     [],
     "Expected bundle add to skip intermediate archetype transitions",
   );

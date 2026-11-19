@@ -56,16 +56,16 @@ Deno.test("rollback restores changed and transition windows and advances query r
   world.refresh();
   world.components.setEntityData(position, entity, { x: 2 });
   const query = new Query({ all: [position], none: [tag] });
-  const entered = ids(world.archetypes.queryEntered(query));
-  const exited = ids(world.archetypes.queryExited(query));
+  const entered = ids(world.entities.queryEntered(query));
+  const exited = ids(world.entities.queryExited(query));
   const changed = ids(world.components.getChanged(position));
   const point = captureWorldRollbackPoint(world);
   world.components.addToEntity(tag, entity);
   world.refresh();
   const beforeRestore = world.queryRevision(query);
   restoreWorldRollbackPoint(world, point);
-  assertEquals(ids(world.archetypes.queryEntered(query)), entered, "Rollback must restore entered window");
-  assertEquals(ids(world.archetypes.queryExited(query)), exited, "Rollback must restore exited window");
+  assertEquals(ids(world.entities.queryEntered(query)), entered, "Rollback must restore entered window");
+  assertEquals(ids(world.entities.queryExited(query)), exited, "Rollback must restore exited window");
   assertEquals(ids(world.components.getChanged(position)), changed, "Rollback must restore changed window");
   assert(world.queryRevision(query) > beforeRestore, "Restore must advance observed query revision");
   await world.destroy();
@@ -82,14 +82,14 @@ Deno.test("historical exits retain each departed generation and reject stale arc
     // Exits are relative to the window start, so the entity must be a member before the window opens.
     world.refresh();
     world.entities.destroy(entity);
-    assertEquals(ids(world.archetypes.queryExited(query)), [entity], "Exits must preserve complete handles");
+    assertEquals(ids(world.entities.queryExited(query)), [entity], "Exits must preserve complete handles");
     departed.push(entity);
   }
   assertEquals(new Set(departed).size, 20, "Every recycled generation must produce a distinct handle");
   assertEquals(world.archetypes.getEntityArchetype(departed[0]!), undefined, "Stale handle has no archetype");
   assertEquals(world.archetypes.isEntityInRoot(departed[0]!), false, "Stale handle cannot identify replacement");
   world.refresh();
-  assertEquals(ids(world.archetypes.queryExited(query)), [], "Refresh clears historical exits");
+  assertEquals(ids(world.entities.queryExited(query)), [], "Refresh clears historical exits");
   await world.destroy();
 });
 
@@ -180,7 +180,7 @@ Deno.test("same-handle leave, reenter, and leave records one historical exit", a
   world.components.removeFromEntity(position, entity);
   world.components.addToEntity(position, entity);
   world.components.removeFromEntity(position, entity);
-  assertEquals(ids(world.archetypes.queryExited(query)), [entity], "Repeated exit must deduplicate the same handle");
+  assertEquals(ids(world.entities.queryExited(query)), [entity], "Repeated exit must deduplicate the same handle");
   await world.destroy();
 });
 
@@ -202,8 +202,8 @@ Deno.test("failed spawn preflight preserves lifecycle windows, revisions, and ha
   assertThrows(() => world.entities.createWith([[capped]]), RangeError, "can only be added");
   assertThrows(() => world.entities.createWith([[position], [position]]), RangeError, "Duplicate component");
   assertEquals(world.entities.getActiveSnapshot(), [owner], "Failed spawn must preserve active handles");
-  assertEquals(ids(world.archetypes.queryEntered(query)), [], "Failed spawn must not publish entries");
-  assertEquals(ids(world.archetypes.queryExited(query)), [], "Failed spawn must not publish phantom exits");
+  assertEquals(ids(world.entities.queryEntered(query)), [], "Failed spawn must not publish entries");
+  assertEquals(ids(world.entities.queryExited(query)), [], "Failed spawn must not publish phantom exits");
   assertEquals(world.queryRevision(query), revision, "Failed spawn must not advance query revisions");
   assertEquals(
     world.entities.createWithOrThrow([[position, { x: 2 }]]),

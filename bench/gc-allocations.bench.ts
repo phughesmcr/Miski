@@ -358,6 +358,13 @@ await refillWorld.init();
 for (let i = 0; i < 4_096; i++) refillWorld.components.addToEntity(refillTag, mustCreateEntity(refillWorld));
 const refillQuery = new Query({ all: [refillTag] });
 refillWorld.refresh();
+// Nested loops: every query() / getActive() call gets its own pooled cursor, so depth-2 nesting reuses two.
+const nestedTag = new Component<null>({ name: "nestedTag" });
+const nestedWorld = new World({ capacity: SMALL_CAPACITY, components: [nestedTag] });
+await nestedWorld.init();
+for (let i = 0; i < 32; i++) nestedWorld.components.addToEntity(nestedTag, mustCreateEntity(nestedWorld));
+const nestedQuery = new Query({ all: [nestedTag] });
+nestedWorld.refresh();
 // Relations: a 1,024-node 4-ary hierarchy plus multi-target and exclusive data relations.
 const rel = await populateRelationWorld(MEDIUM_CAPACITY);
 const relLeafA = rel.entities[1_000]!;
@@ -798,6 +805,31 @@ const scenarios: Scenario[] = [
       entitySink ^= countEntities(mixed.world.entities.query(movementQuery));
     },
   },
+  budgeted("nested query entity iteration (depth 2)", 10_000, () => {
+    let pairs = 0;
+    for (const _outer of nestedWorld.entities.query(nestedQuery)) {
+      for (const _inner of nestedWorld.entities.query(nestedQuery)) pairs++;
+    }
+    entitySink ^= pairs;
+  }),
+  {
+    name: "getActive dense iteration",
+    iterations: 5_000,
+    maxSteadyStateBeforeGcBytesPerIter: ZERO_ALLOC_BUDGET_BYTES_PER_ITER,
+    // Each pass walks 8K entities; with only the default warmup the loop tiers up during a measured round and its
+    // compiled code (about 25 KiB) lands in the budget. A longer warmup settles it first.
+    warmupIterations: 20_000,
+    fn: () => {
+      entitySink ^= countEntities(mixed.world.entities.getActive());
+    },
+  },
+  budgeted("nested getActive iteration (depth 2)", 10_000, () => {
+    let pairs = 0;
+    for (const _outer of nestedWorld.entities.getActive()) {
+      for (const _inner of nestedWorld.entities.getActive()) pairs++;
+    }
+    entitySink ^= pairs;
+  }),
   {
     name: "queryList cached entity iteration",
     iterations: 100_000,
@@ -935,9 +967,9 @@ const scenarios: Scenario[] = [
         x: 1,
         y: 1,
       });
-      entitySink ^= countEntities(transitionTracking.world.archetypes.queryEntered(transitionTrackingQuery));
+      entitySink ^= countEntities(transitionTracking.world.entities.queryEntered(transitionTrackingQuery));
       transitionTracking.world.components.removeFromEntity(transitionTracking.components.velocity, enteredExitedEntity);
-      entitySink ^= countEntities(transitionTracking.world.archetypes.queryExited(transitionTrackingQuery));
+      entitySink ^= countEntities(transitionTracking.world.entities.queryExited(transitionTrackingQuery));
       transitionTracking.world.refresh();
     },
   },

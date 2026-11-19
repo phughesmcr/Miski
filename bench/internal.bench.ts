@@ -7,6 +7,7 @@ import { Archetype } from "../src/archetype/archetype.ts";
 import { ComponentManager } from "../src/component/component-manager.ts";
 import { asEntity, asSlotIndex, ReusableEntityIterator } from "../src/entity/entity.ts";
 import { EntityManager } from "../src/entity/entity-manager.ts";
+import { EntityIteratorPool } from "../src/entity/pooled-entity-iterator.ts";
 import { QueryManager } from "../src/query/query-manager.ts";
 import { Query } from "../src/query/query.ts";
 import { QueryEntityResult } from "../src/query/query-pool.ts";
@@ -62,6 +63,7 @@ for (let i = 0; i < SMALL_CAPACITY; i++) {
   activeIteratorIndices[i] = i;
 }
 const reusableIterator = new ReusableEntityIterator(activeIteratorIndices).reset(SMALL_CAPACITY);
+const entityIteratorPool = new EntityIteratorPool();
 
 const componentCount = components.all.length;
 const movementQueryInstance = createQueryInstance(
@@ -433,11 +435,11 @@ Deno.bench({
 });
 
 Deno.bench({
-  name: "QueryEntityResult iterate 8K ids",
+  name: "QueryEntityResult pooled iterator over 8K ids",
   group: "internal query cache",
   fn: () => {
     let count = 0;
-    for (const entity of queryResult.iterate()) {
+    for (const entity of entityIteratorPool.acquire().open(queryResult.entityBuffer, queryResult.count)) {
       count += entity & 1;
     }
     entitySink ^= count;

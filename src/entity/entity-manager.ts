@@ -8,9 +8,9 @@ import {
   entityIndex,
   MAX_WORLD_CAPACITY,
   packEntity,
-  ReusableEntityIterator,
   type SlotIndex,
 } from "@/entity/entity.ts";
+import { EntityIteratorPool } from "@/entity/pooled-entity-iterator.ts";
 import { SlotAllocator } from "@/entity/slot-allocator.ts";
 import type { EntityManagerSerialized } from "@/types/component.ts";
 import { isUint32, numberArrayFromString } from "@/utils.ts";
@@ -32,8 +32,8 @@ export class EntityManager {
   /** Scratch storage for occupied slot indices before packing (allocated by {@link getActive}, grown on demand) */
   #activeSlots: Uint32Array | undefined;
 
-  /** Reusable active entity iterator over packed handles (allocated with `#activeSlots`) */
-  #activeIterator: ReusableEntityIterator | undefined;
+  /** Per-call active entity iterators; each owns its packed handle buffer, grown on demand and kept for reuse. */
+  readonly #activeIterators = new EntityIteratorPool(true);
 
   readonly #capacity: number;
 
@@ -137,7 +137,8 @@ export class EntityManager {
   }
 
   /**
-   * @returns an iterable of all active packed entities
+   * @returns a pooled per-call iterator over a snapshot of the active packed entities taken now; nested calls each
+   * get their own cursor and buffer
    * @param startSlot - Inclusive raw slot lower bound (default 0)
    * @param endSlot - Exclusive raw slot upper bound (default capacity)
    * @throws {TypeError} - If either bound is not an integer
@@ -149,26 +150,29 @@ export class EntityManager {
     if (!Number.isInteger(startSlot) || !Number.isInteger(endSlot)) {
       throw new TypeError(`Active entity bounds must be integer slot indices (got ${startSlot}, ${endSlot}).`);
     }
-    // Scratch is sized to the live population (an upper bound on any range), doubling up to capacity.
+    // Buffers are sized to the live population (an upper bound on any range), doubling up to capacity.
     const occupied = this.#slots.occupiedCount;
     let slots = this.#activeSlots;
-    let iterator = this.#activeIterator;
-    if (slots === undefined || iterator === undefined || slots.length < occupied) {
-      const length = Math.min(this.#capacity, Math.max(occupied, (slots?.length ?? 8) * 2));
-      slots = new Uint32Array(length);
-      const entities = createEntityArray(this.#capacity, length);
-      if (iterator === undefined) iterator = new ReusableEntityIterator(entities);
-      else iterator.indices = entities;
+    if (slots === undefined || slots.length < occupied) {
+      slots = new Uint32Array(this.#growActiveLength(slots?.length ?? 0, occupied));
       this.#activeSlots = slots;
-      this.#activeIterator = iterator;
     }
-    const entities = iterator.indices;
+    const iterator = this.#activeIterators.acquire();
+    let entities = iterator.indices;
+    if (entities.length < occupied) {
+      entities = createEntityArray(this.#capacity, this.#growActiveLength(entities.length, occupied));
+    }
     const count = this.#slots.occupiedIndicesInto(slots, startSlot, endSlot);
     for (let i = 0; i < count; i++) {
       const slot = slots[i]!;
       entities[i] = packEntity(slot, this.#generation[slot]!);
     }
-    return iterator.reset(count);
+    return iterator.open(entities, count);
+  }
+
+  /** Next length for a {@link getActive} buffer of `length` that must hold `needed` entries. */
+  #growActiveLength(length: number, needed: number): number {
+    return Math.min(this.#capacity, Math.max(needed, length * 2, 8));
   }
 
   /** @returns the number of active entities */

@@ -154,8 +154,8 @@ function observe(world: World): unknown {
       return {
         entities: Array.from({ length: list.count }, (_, i) => list.entities[i]),
         slots: Array.from({ length: list.count }, (_, i) => list.slots[i]),
-        entered: handles(world.archetypes.queryEntered(query)),
-        exited: handles(world.archetypes.queryExited(query)),
+        entered: handles(world.entities.queryEntered(query)),
+        exited: handles(world.entities.queryExited(query)),
       };
     }),
     owners: components.map((component) => handles(world.components.getOwners(component))),

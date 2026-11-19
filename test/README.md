@@ -27,6 +27,7 @@ Runtime tests live in `*.test.ts` files and run via `deno test` (see `deno.json`
 | `component_write_regressions.test.ts` | `set` / `setAt` leave the shared proxy cursor alone across every field kind, changed marking and revision per real write, `[Ctor, initial]` tuples rejected with `SpecError` |
 | `entity_slot_reuse.test.ts` | Next-fit slot reissue, churn rotation, stale handles not reissued, generation wrap limit |
 | `query_archetype_perf.test.ts` | Query result order and generations through moves, batches and rollback; refills only for related changes, by copying handles |
+| `query_iteration.test.ts` | Per-call `query()` / `getActive()` iterators: nested loops (same and different queries, different bounds), pool reuse, destroy or remove during `query()` / `queryList()` / `getActive()` iteration |
 | `query_schema_integrity.test.ts` | System arity forwarding, query alias keys and immutable metadata, retained result buffers, schema hashing and bootstrap validation |
 | `query_transition_integrity.test.ts` | Atomic bundle spawn, entered/exited relative to the refresh window (also after rollback), nested transition iteration |
 | `rollback_neutrality.test.ts` | Committing a rollback point leaves allocation and iteration order untouched |

@@ -113,7 +113,7 @@ async function probeResultBuffers(): Promise<void> {
   world.refresh();
   const queries = components.map((component) => new Query({ all: [component] }));
   // Register first so only the result buffers are measured.
-  for (const query of queries) world.archetypes.queryComponents(query);
+  for (const query of queries) world.components.query(query);
   const bytes = allocatedBytes(() => {
     for (const query of queries) sink ^= world.entities.queryList(query).count;
   });
@@ -122,7 +122,7 @@ async function probeResultBuffers(): Promise<void> {
   await world.destroy();
 }
 
-/** Finding 3: archetype query iterators must not allocate per entity or per call. */
+/** Finding 3: query iterators must not allocate per entity or per call. */
 async function probeIterators(): Promise<void> {
   const groups = tags("iter", 4);
   const mover = new Component<null>({ name: "mover" });
@@ -140,17 +140,17 @@ async function probeIterators(): Promise<void> {
   world.refresh();
 
   const passes = 20;
-  for (let i = 0; i < 5; i++) sink ^= countIterable(world.archetypes.queryEntities(all));
+  for (let i = 0; i < 5; i++) sink ^= countIterable(world.entities.query(all));
   const passBytes = allocatedBytes(() => {
-    for (let i = 0; i < passes; i++) sink ^= countIterable(world.archetypes.queryEntities(all));
+    for (let i = 0; i < passes; i++) sink ^= countIterable(world.entities.query(all));
   });
 
   const calls = 20_000;
   const transition = () => {
     world.components.addToEntity(mover, moved);
-    sink ^= countIterable(world.archetypes.queryEntered(moving));
+    sink ^= countIterable(world.entities.queryEntered(moving));
     world.components.removeFromEntity(mover, moved);
-    sink ^= countIterable(world.archetypes.queryExited(moving));
+    sink ^= countIterable(world.entities.queryExited(moving));
     world.refresh();
   };
   const transitionOnly = () => {
@@ -169,8 +169,8 @@ async function probeIterators(): Promise<void> {
     for (let i = 0; i < calls; i++) transitionOnly();
   });
 
-  console.log("\n[3] archetype iterators");
-  console.log(`  queryEntities 30k-entity pass ${(passBytes / passes / 1024).toFixed(2).padStart(24)} KiB/pass`);
+  console.log("\n[3] query iterators");
+  console.log(`  entities.query 30k-entity pass ${(passBytes / passes / 1024).toFixed(2).padStart(23)} KiB/pass`);
   console.log(
     `  queryEntered + queryExited ${((withViews - withoutViews) / calls / 2).toFixed(1).padStart(27)} B/call`,
   );

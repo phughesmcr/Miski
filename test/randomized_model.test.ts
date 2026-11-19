@@ -425,8 +425,8 @@ function checkAgainstModel(world: World, model: Model, where: string): void {
     const start = model.windowStart[q]!;
     const entered = [...now].filter((e) => !start.has(e));
     const exited = [...start].filter((e) => !now.has(e));
-    assertEquals(sorted(world.archetypes.queryEntered(queries[q]!)), sorted(entered), `${where}: q${q} entered`);
-    assertEquals(sorted(world.archetypes.queryExited(queries[q]!)), sorted(exited), `${where}: q${q} exited`);
+    assertEquals(sorted(world.entities.queryEntered(queries[q]!)), sorted(entered), `${where}: q${q} entered`);
+    assertEquals(sorted(world.entities.queryExited(queries[q]!)), sorted(exited), `${where}: q${q} exited`);
   }
 }
 
@@ -453,8 +453,8 @@ function observe(world: World): string {
   for (const query of queries) {
     parts.push(
       `list=${slots(world.entities.querySnapshot(query))}` +
-        ` entered=${slots(world.archetypes.queryEntered(query))}` +
-        ` exited=${slots(world.archetypes.queryExited(query))}`,
+        ` entered=${slots(world.entities.queryEntered(query))}` +
+        ` exited=${slots(world.entities.queryExited(query))}`,
     );
   }
   return parts.join("\n");

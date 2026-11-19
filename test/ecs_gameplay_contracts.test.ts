@@ -617,23 +617,23 @@ Deno.test("batch component transitions preserve entered and exited visibility un
 
   world.components.addToEntities(velocity, world.entities.queryList(positioned), { x: 1, y: 1 });
   assertEquals(
-    ids(world.archetypes.queryEntered(moving)).toSorted((a, b) => a - b),
+    ids(world.entities.queryEntered(moving)).toSorted((a, b) => a - b),
     [first, second],
     "Expected batch-added entities to be visible as entered",
   );
 
   world.refresh();
-  assertEquals(ids(world.archetypes.queryEntered(moving)), [], "Expected refresh to clear batch entered state");
+  assertEquals(ids(world.entities.queryEntered(moving)), [], "Expected refresh to clear batch entered state");
 
   world.components.removeFromEntities(velocity, world.entities.queryList(moving));
   assertEquals(
-    ids(world.archetypes.queryExited(moving)).toSorted((a, b) => a - b),
+    ids(world.entities.queryExited(moving)).toSorted((a, b) => a - b),
     [first, second],
     "Expected batch-removed entities to be visible as exited",
   );
 
   world.refresh();
-  assertEquals(ids(world.archetypes.queryExited(moving)), [], "Expected refresh to clear batch exited state");
+  assertEquals(ids(world.entities.queryExited(moving)), [], "Expected refresh to clear batch exited state");
 });
 
 Deno.test("queries remain live across add, remove, destroy, and recreate operations", async () => {
@@ -680,7 +680,7 @@ Deno.test("entered and exited query views deduplicate entities that match throug
   world.components.addToEntity(renderable, entity);
 
   assertEquals(ids(world.entities.query(query)), [entity], "Expected live query to deduplicate entity");
-  assertEquals(ids(world.archetypes.queryEntered(query)), [entity], "Expected entered query to deduplicate entity");
+  assertEquals(ids(world.entities.queryEntered(query)), [entity], "Expected entered query to deduplicate entity");
 
   world.refresh();
   world.components.removeFromEntity(renderable, entity);
@@ -688,7 +688,7 @@ Deno.test("entered and exited query views deduplicate entities that match throug
 
   assertEquals(ids(world.entities.query(query)), [entity], "Expected entity to still match through position");
   assertEquals(
-    ids(world.archetypes.queryExited(query)),
+    ids(world.entities.queryExited(query)),
     [],
     "Expected partial component removal to avoid false query exits",
   );
@@ -731,10 +731,9 @@ Deno.test("world state guards make lifecycle misuse explicit", async () => {
     "World has not been initialized",
   );
   assertThrows(() => world.components.query(query), WorldStateError, "World has not been initialized");
-  assertThrows(() => world.archetypes.queryComponents(query), WorldStateError, "World has not been initialized");
-  assertThrows(() => ids(world.archetypes.queryEntities(query)), WorldStateError, "World has not been initialized");
-  assertThrows(() => ids(world.archetypes.queryEntered(query)), WorldStateError, "World has not been initialized");
-  assertThrows(() => ids(world.archetypes.queryExited(query)), WorldStateError, "World has not been initialized");
+  assertThrows(() => ids(world.entities.query(query)), WorldStateError, "World has not been initialized");
+  assertThrows(() => ids(world.entities.queryEntered(query)), WorldStateError, "World has not been initialized");
+  assertThrows(() => ids(world.entities.queryExited(query)), WorldStateError, "World has not been initialized");
 
   await world.init();
   await assertRejects(() => world.init(), WorldStateError, "World has already been initialized");
@@ -770,10 +769,9 @@ Deno.test("world state guards make lifecycle misuse explicit", async () => {
     "World has already been destroyed",
   );
   assertThrows(() => world.components.query(query), WorldStateError, "World has already been destroyed");
-  assertThrows(() => world.archetypes.queryComponents(query), WorldStateError, "World has already been destroyed");
-  assertThrows(() => ids(world.archetypes.queryEntities(query)), WorldStateError, "World has already been destroyed");
-  assertThrows(() => ids(world.archetypes.queryEntered(query)), WorldStateError, "World has already been destroyed");
-  assertThrows(() => ids(world.archetypes.queryExited(query)), WorldStateError, "World has already been destroyed");
+  assertThrows(() => ids(world.entities.query(query)), WorldStateError, "World has already been destroyed");
+  assertThrows(() => ids(world.entities.queryEntered(query)), WorldStateError, "World has already been destroyed");
+  assertThrows(() => ids(world.entities.queryExited(query)), WorldStateError, "World has already been destroyed");
   await assertRejects(() => world.onReady(), WorldStateError, 'state is "destroyed"');
 });
 
@@ -823,7 +821,7 @@ Deno.test("captured lifecycle API methods observe the current world state", asyn
   const queryList = world.entities.queryList;
   const addToEntity = world.components.addToEntity;
   const queryComponents = world.components.query;
-  const queryEntities = world.archetypes.queryEntities;
+  const queryEntered = world.entities.queryEntered;
   const createSystem = world.systems.create;
   const destroySystem = world.systems.destroy;
 
@@ -833,7 +831,7 @@ Deno.test("captured lifecycle API methods observe the current world state", asyn
   assertThrows(() => queryList(query), WorldStateError, "World has already been destroyed");
   assertThrows(() => addToEntity(position, asEntity(0)), WorldStateError, "World has already been destroyed");
   assertThrows(() => queryComponents(query), WorldStateError, "World has already been destroyed");
-  assertThrows(() => queryEntities(query), WorldStateError, "World has already been destroyed");
+  assertThrows(() => queryEntered(query), WorldStateError, "World has already been destroyed");
   assertThrows(() => createSystem(system), WorldStateError, "World has already been destroyed");
   await assertRejects(() => destroySystem(system), WorldStateError, "World has already been destroyed");
 });

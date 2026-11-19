@@ -775,14 +775,6 @@ Deno.bench({
 });
 
 Deno.bench({
-  name: "archetype queryEntities generator",
-  group: "queries",
-  fn: () => {
-    entitySink ^= countEntities(mixed.world.archetypes.queryEntities(movementQuery));
-  },
-});
-
-Deno.bench({
   name: "query component record lookup",
   group: "queries",
   fn: () => {
@@ -849,9 +841,9 @@ Deno.bench({
       x: 1,
       y: 1,
     });
-    entitySink ^= countEntities(transitionTracking.world.archetypes.queryEntered(transitionTrackingQuery));
+    entitySink ^= countEntities(transitionTracking.world.entities.queryEntered(transitionTrackingQuery));
     transitionTracking.world.components.removeFromEntity(transitionTracking.components.velocity, enteredExitedEntity);
-    entitySink ^= countEntities(transitionTracking.world.archetypes.queryExited(transitionTrackingQuery));
+    entitySink ^= countEntities(transitionTracking.world.entities.queryExited(transitionTrackingQuery));
     transitionTracking.world.refresh();
   },
 });
