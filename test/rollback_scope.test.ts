@@ -73,13 +73,13 @@ Deno.test("a disposed rollback scope frees the world for later captures and load
   await world.destroy();
 });
 
-Deno.test("disposing a rollback scope on a destroyed world drops the point without throwing", async () => {
+Deno.test("disposing a rollback scope on a destroyed world drops the captured state without throwing", async () => {
   const tag = tagComponent("tag");
   const world = await createTestWorld([tag]);
   const scope = new WorldRollbackScope(world);
   await world.destroy();
   scope[Symbol.dispose]();
-  assert(!scope.isOpen, "The point is dropped");
+  assert(!scope.isOpen, "The scope is closed");
   scope[Symbol.dispose]();
 });
 
@@ -90,7 +90,7 @@ Deno.test("a rollback scope cannot open on a destroyed world", async () => {
   assertThrows(() => new WorldRollbackScope(world), WorldStateError, "destroyed");
 });
 
-Deno.test("disposing a rollback scope on an errored world drops the point, and the world can still be destroyed", async () => {
+Deno.test("disposing a rollback scope on an errored world drops the captured state, and the world can still be destroyed", async () => {
   const tag = tagComponent("tag");
   const world = new World({ capacity: 8, components: [tag] });
   let scope: WorldRollbackScope | undefined;
@@ -109,7 +109,7 @@ Deno.test("disposing a rollback scope on an errored world drops the point, and t
   assertEquals(world.state, "error", "Failed init leaves the error state");
   assert(scope?.isOpen === true, "The scope opened inside the hook");
   scope[Symbol.dispose]();
-  assert(!scope.isOpen, "Disposal drops the point without restoring");
+  assert(!scope.isOpen, "Disposal closes the scope without restoring");
   await world.destroy();
   assertEquals(world.state, "destroyed", "The errored world still tears down");
 });

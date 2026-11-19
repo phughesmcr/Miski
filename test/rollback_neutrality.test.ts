@@ -123,7 +123,7 @@ for (const seed of [1, 7, 42, 1337, 9001]) {
   });
 }
 
-Deno.test("committing a rollback point leaves allocation and iteration order untouched", async () => {
+Deno.test("committing a rollback scope leaves allocation and iteration order untouched", async () => {
   const control = await harness();
   const subject = await harness();
   const a = rng(99);
