@@ -3,23 +3,17 @@ import type { TypedArray } from "@/types/partitions.ts";
 import {
   CODE_OBJECT,
   CODE_STRING,
-  FIELD_TYPE_CONSTRUCTORS,
   FORMAT_VERSION,
   hashBytes64,
+  NUMERIC_FIELD_TYPES,
   utf8Length,
   wordCount,
   WorldSaveError,
 } from "./format.ts";
-import {
-  type ComponentImage,
-  NO_SIDE_ROWS,
-  parseSave,
-  type RelationImage,
-  type SaveImage,
-  validateImage,
-  ValidationScratch,
-  writeImage,
-} from "./image.ts";
+import { type ComponentImage, NO_SIDE_ROWS, type RelationImage, type SaveImage } from "./image-types.ts";
+import { parseSave } from "./image-read.ts";
+import { validateImage, ValidationScratch } from "./image-validate.ts";
+import { writeImage } from "./image-write.ts";
 import {
   decodeLayout,
   encodeLayout,
@@ -164,23 +158,24 @@ export function imageToDoc(image: SaveImage): WorldSaveDocument {
         changed: toArray(saved.changed),
         values: (() => {
           const codes = image.info.codes[c]!;
-          const out: Record<string, WorldSaveFieldValues> = {};
+          // Entries, not assignment: a field named `__proto__` must stay an own key.
+          const out: [string, WorldSaveFieldValues][] = new Array(codes.length);
           let t = 0;
           let s = 0;
           for (let k = 0; k < codes.length; k++) {
             const name = component.fields![k]!.name;
             if (codes[k] === CODE_STRING) {
-              out[name] = (saved.sideRows[s++]! as string[]).slice();
+              out[k] = [name, (saved.sideRows[s++]! as string[]).slice()];
             } else if (codes[k] === CODE_OBJECT) {
-              out[name] = saved.sideRows[s++]!.map(encodeObjectValue);
+              out[k] = [name, saved.sideRows[s++]!.map(encodeObjectValue)];
             } else {
               const row = saved.rows[t++]!;
               const values: WorldSaveNumber[] = new Array(row.length);
               for (let j = 0; j < row.length; j++) values[j] = encodeNumber(row[j]!);
-              out[name] = values;
+              out[k] = [name, values];
             }
           }
-          return out;
+          return Object.fromEntries(out);
         })(),
       };
     return [component.name, entry];
@@ -223,9 +218,9 @@ function relationToDoc(info: RelationInfo, relation: RelationImage): WorldSaveRe
         pairs.push(pair);
         continue;
       }
-      const data: Record<string, WorldSaveNumber> = {};
-      for (let c = 0; c < info.codes.length; c++) data[info.keys[c]!] = encodeNumber(relation.data[c]![k]!);
-      pairs.push({ ...pair, data });
+      const data: [string, WorldSaveNumber][] = new Array(info.codes.length);
+      for (let c = 0; c < info.codes.length; c++) data[c] = [info.keys[c]!, encodeNumber(relation.data[c]![k]!)];
+      pairs.push({ ...pair, data: Object.fromEntries(data) });
     }
     sources.push({ slot: relation.sources[i]!, pairs });
   }
@@ -292,20 +287,6 @@ function decodeNumber(value: unknown): number | undefined {
   }
 }
 
-/** Inclusive integer range per type code; float codes have none. */
-const INTEGER_RANGE: readonly (readonly [number, number] | undefined)[] = [
-  undefined,
-  [-0x80, 0x7f],
-  [-0x8000, 0x7fff],
-  [-0x8000_0000, 0x7fff_ffff],
-  [0, 0xff],
-  [0, 0xffff],
-  [0, 0xffff_ffff],
-  undefined,
-  undefined,
-  [0, 0xff],
-];
-
 /** Check one string or object cell of a document and return its image form. */
 function sideCell(code: number, value: unknown, path: string): unknown {
   if (typeof value === "string") {
@@ -327,8 +308,11 @@ function slotsOf(capacity: number, list: readonly number[]): EntityArray {
   return out;
 }
 
-/** Convert and fully validate a document; throws {@link WorldSaveError} naming the first problem. */
-export function docToImage(document: unknown): SaveImage {
+/**
+ * Convert and fully validate a document; throws {@link WorldSaveError} naming the first problem.
+ * @param scratch - Validation scratch to reuse when its capacity matches the document's
+ */
+export function docToImage(document: unknown, scratch?: ValidationScratch): SaveImage {
   if (!isRecord(document)) fail("document", "must be an object");
   if (document["format"] !== "miski-world") fail("format", 'must be "miski-world"');
   if (document["version"] !== FORMAT_VERSION) fail("version", `must be ${FORMAT_VERSION}`);
@@ -418,8 +402,9 @@ export function docToImage(document: unknown): SaveImage {
           (sideRows as unknown[][]).push(cells);
           continue;
         }
-        const row = new FIELD_TYPE_CONSTRUCTORS[code]!(owners.length);
-        const range = INTEGER_RANGE[code];
+        const type = NUMERIC_FIELD_TYPES[code]!;
+        const row = new type.ctor(owners.length);
+        const range = type.intRange;
         for (let j = 0; j < list.length; j++) {
           const value = decodeNumber(list[j]);
           if (value === undefined) fail(`${fieldPath}[${j}]`, "must be a number");
@@ -474,7 +459,7 @@ export function docToImage(document: unknown): SaveImage {
     windowHandles,
     relations,
   };
-  validateImage(image, new ValidationScratch(capacity), 0);
+  validateImage(image, scratch?.capacity === capacity ? scratch : new ValidationScratch(capacity), 0);
   return image;
 }
 
@@ -536,7 +521,7 @@ function relationsFromDoc(value: unknown, infos: readonly RelationInfo[], capaci
           const fieldPath = `${pairPath}.data[${JSON.stringify(info.keys[c])}]`;
           const number = decodeNumber(Object.hasOwn(values, info.keys[c]!) ? values[info.keys[c]!] : undefined);
           if (number === undefined) fail(fieldPath, "must be a number");
-          const range = INTEGER_RANGE[info.codes[c]!];
+          const range = NUMERIC_FIELD_TYPES[info.codes[c]!]!.intRange;
           if (range !== undefined && (!Number.isInteger(number) || number < range[0] || number > range[1])) {
             fail(fieldPath, `must be an integer from ${range[0]} to ${range[1]}`);
           }
@@ -565,7 +550,7 @@ function relationsFromDoc(value: unknown, infos: readonly RelationInfo[], capaci
       rows: Uint32Array.from(rows),
       targets: Uint32Array.from(targets),
       data: columns.map((column, c) => {
-        const out = new FIELD_TYPE_CONSTRUCTORS[info.codes[c]!]!(column.length);
+        const out = new NUMERIC_FIELD_TYPES[info.codes[c]!]!.ctor(column.length);
         for (let j = 0; j < column.length; j++) out[j] = column[j]!;
         return out;
       }),
@@ -577,20 +562,21 @@ function relationsFromDoc(value: unknown, infos: readonly RelationInfo[], capaci
 }
 
 /**
- * Convert a binary world save to a JSON-safe document. `JSON.stringify` of the result round-trips losslessly through
- * {@link worldSaveFromJSON}, except that NaN payload bits are canonicalized.
+ * Convert a binary world save to a plain, JSON-safe document. `JSON.stringify` of the result round-trips losslessly
+ * through {@link worldSaveFromDocument}, except that NaN payload bits are canonicalized.
  * @throws {WorldSaveError} When the save is malformed
  */
-export function worldSaveToJSON(bytes: Uint8Array): WorldSaveDocument {
+export function worldSaveToDocument(bytes: Uint8Array): WorldSaveDocument {
   const { image } = parseSave(bytes);
   validateImage(image, new ValidationScratch(image.capacity), 0);
   return imageToDoc(image);
 }
 
 /**
- * Convert a document from {@link worldSaveToJSON} (or a hand-built or migrated one) back to binary save bytes.
+ * Convert a document from {@link worldSaveToDocument} (or a parsed, hand-built or migrated one) back to binary save
+ * bytes.
  * @throws {WorldSaveError} When the document is malformed or inconsistent
  */
-export function worldSaveFromJSON(document: WorldSaveDocument): Uint8Array {
+export function worldSaveFromDocument(document: WorldSaveDocument): Uint8Array {
   return writeImage(docToImage(document));
 }

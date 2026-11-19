@@ -2,17 +2,15 @@
 
 import {
   Component,
-  describeWorldSaveLayout,
   type DynamicComponent,
   field,
   loadWorld,
-  measureWorldSave,
   saveWorld,
-  saveWorldInto,
   World,
   WorldSaveError,
-  worldSaveFromJSON,
-  worldSaveToJSON,
+  worldSaveFromDocument,
+  worldSaveLayout,
+  worldSaveToDocument,
 } from "../mod.ts";
 import { assertEquals, assertThrows } from "./helpers.ts";
 
@@ -59,7 +57,7 @@ Deno.test("saves x field types: bool, enum and entity fields round-trip into a f
 
 Deno.test("saves x field types: the layout records field tags", async () => {
   const world = await worldOf([unitOf()]);
-  const fields = describeWorldSaveLayout(world).components[0]!.fields!;
+  const fields = worldSaveLayout(world).components[0]!.fields!;
   assertEquals(
     fields.map((f) => f.type),
     ["u16", "bool", 'enum:["idle","run","dead"]', "entity"],
@@ -87,8 +85,8 @@ Deno.test("saves x field types: the JSON view round-trips field tags", async () 
   const source = await worldOf([unit]);
   source.entities.createWithOrThrow([[unit, { alive: true, state: "dead" }]]);
   const bytes = saveWorld(source);
-  const document = worldSaveToJSON(bytes);
-  const again = worldSaveFromJSON(JSON.parse(JSON.stringify(document)));
+  const document = worldSaveToDocument(bytes);
+  const again = worldSaveFromDocument(JSON.parse(JSON.stringify(document)));
   assertEquals(Array.from(again), Array.from(bytes), "JSON view is lossless");
 });
 
@@ -102,9 +100,8 @@ Deno.test("saves x field types: unsupported worlds throw on every entry point", 
     const world = await worldOf([unitOf(), component]);
     const kept = world.entities.createOrThrow();
     assertThrows(() => saveWorld(world), WorldSaveError, label);
-    assertThrows(() => saveWorldInto(world, new Uint8Array(1 << 16)), WorldSaveError, label);
-    assertThrows(() => measureWorldSave(world), WorldSaveError, label);
-    assertThrows(() => describeWorldSaveLayout(world), WorldSaveError, label);
+    assertThrows(() => saveWorld(world, new Uint8Array(1 << 16)), WorldSaveError, label);
+    assertThrows(() => worldSaveLayout(world), WorldSaveError, label);
     assertThrows(() => loadWorld(world, bytes), WorldSaveError, label);
     assertEquals(world.entities.isActive(kept), true, `${label}: rejected load leaves the world untouched`);
   }

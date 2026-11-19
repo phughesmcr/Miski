@@ -5,11 +5,12 @@ import { isRelation, type Relation } from "@/relation/relation.ts";
 import { isFieldDescriptor } from "@/schema/field.ts";
 import {
   align8,
-  FIELD_TYPE_NAMES,
   fieldTypeCode,
   fieldTypeCodeOfName,
   fieldValueLimitOfName,
   isSideCode,
+  NUMERIC_FIELD_TYPES,
+  numericTypeCodeOfName,
   WorldSaveError,
   type WorldSaveFieldType,
 } from "./format.ts";
@@ -85,10 +86,10 @@ function relationLayout(relation: Relation<never>): WorldSaveRelationLayout {
     fields = keys.map((key) => {
       const property = schema![key];
       const code = fieldTypeCode(property);
-      if (code === 0 || code >= FIELD_TYPE_NAMES.length) {
+      if (code === 0) {
         throw new WorldSaveError(`Relation ${relation.name} pair field ${key} has an unsaveable storage type.`);
       }
-      return Object.freeze({ name: key, type: FIELD_TYPE_NAMES[code] as WorldSaveFieldType });
+      return Object.freeze({ name: key, type: NUMERIC_FIELD_TYPES[code]!.name });
     });
     Object.freeze(fields);
   }
@@ -123,7 +124,7 @@ export function layoutOfStates(capacity: number, states: readonly SaveableCompon
         const property = (type.schema as Record<string, unknown> | null)?.[key];
         const fieldType = isFieldDescriptor(property) ?
           property.tag as WorldSaveFieldType :
-          FIELD_TYPE_NAMES[code] as WorldSaveFieldType;
+          NUMERIC_FIELD_TYPES[code]!.name;
         if (fieldTypeCodeOfName(fieldType) !== code) {
           throw new WorldSaveError(`Component ${type.name}.${key} has an unsaveable field type ${fieldType}.`);
         }
@@ -374,8 +375,7 @@ function relationProblem(component: WorldSaveComponentLayout): string | undefine
     }
     if (names.has(field.name)) return `${at} pair field ${field.name} is repeated`;
     names.add(field.name);
-    const code = FIELD_TYPE_NAMES.indexOf(field.type as never);
-    if (code < 1) return `${at} pair field ${field.name} must have a numeric type`;
+    if (numericTypeCodeOfName(field.type) === 0) return `${at} pair field ${field.name} must have a numeric type`;
   }
   return undefined;
 }

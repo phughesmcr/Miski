@@ -773,31 +773,32 @@ a little ding every time the batter changes.
 Bottle the whole jar. Pour it back exactly.
 
 ```ts
-import {
-  loadWorld,
-  measureWorldSave,
-  saveWorld,
-  saveWorldInto,
-  worldSaveFromJSON,
-  worldSaveToJSON,
-} from "@phughesmcr/miski";
+import { loadWorld, saveWorld, worldSaveFromDocument, worldSaveToDocument } from "@phughesmcr/miski";
 
 const bytes = saveWorld(world); // exact-size Uint8Array
 loadWorld(otherWorld, bytes); // same layout: replaces otherWorld's state
 
-const buffer = new Uint8Array(measureWorldSave(world) * 2);
-const length = saveWorldInto(world, buffer); // no allocation with a reused buffer
+let buffer: Uint8Array = new Uint8Array(64 * 1024);
+const save = saveWorld(world, buffer); // a view of buffer's first save.byteLength bytes
+if (save.buffer !== buffer.buffer) buffer = save; // too small: save is a fresh array, so keep it
 
-const text = JSON.stringify(worldSaveToJSON(bytes)); // lossless JSON view
-loadWorld(otherWorld, worldSaveFromJSON(JSON.parse(text)));
+const text = JSON.stringify(worldSaveToDocument(bytes)); // plain JSON-safe document
+loadWorld(otherWorld, worldSaveFromDocument(JSON.parse(text)));
 ```
+
+`saveWorld(world, into)` writes into `into` when the save fits and returns a
+view of its start; repeated saves of a steady-size world into one buffer
+allocate nothing. When `into` is too small, the save goes to a fresh array and
+`into` is left alone. `into.byteOffset` must be a multiple of 8.
 
 A save holds entity handles with their generations and allocator state,
 component ownership, values and changed lists, the archetype registry order, and
 the open entered / exited window. A loaded world behaves exactly like the saved
 one: the same handles stay valid, the next created entities get the same
 handles, and queries, owners and changes iterate in the same order. Revision
-tokens move forward on load, as after rollback.
+tokens move forward on load, as after rollback. Generations are restored
+exactly, so a handle you held from the world's state before the load may name a
+different entity after it; re-resolve handles across a load.
 
 A save covers ECS state only. Systems, schedules and their clocks are not part
 of it: the target keeps its own systems, and anything outside the world (a
@@ -807,7 +808,7 @@ middle of one.
 
 A save loads only into an initialized world, outside a rollback scope, with the
 same layout: capacity, and the same components in the same order with the same
-names, caps, fields and storage types. `describeWorldSaveLayout(world)` and
+names, caps, fields and storage types. `worldSaveLayout(world)` and
 `readWorldSaveHeader(bytes)` show both sides. On a mismatch, `loadWorld` throws
 `WorldSaveError` naming the first difference, unless you pass a migration:
 
@@ -817,12 +818,15 @@ loadWorld(world, oldBytes, {
 });
 ```
 
-`migrate` runs only on a mismatch and receives the save as a JSON document and
-the world's layout. Its result is validated like any other save. Every load is
+`migrate` runs only on a mismatch and receives the save as a document and the
+world's layout. Its result is validated like any other save. Every load is
 validated in full before anything changes, so a corrupt, truncated or
-incompatible save leaves the world untouched. Saves are little-endian. Raw
+incompatible save leaves the world untouched. Validation is structural: the
+layout table is hashed, but the body is not checksummed, so a corrupted value
+that still fits its field type loads as written. Saves are little-endian. Raw
 writes to slots that do not own a component are not saved; NaN payload bits do
-not survive the JSON view.
+not survive the document. The save format is versioned but may still change
+before 1.0; a save from an incompatible version is rejected, not misread.
 
 `field.bool()`, `field.enum()` and `field.entity()` columns are saved, and the
 layout records their kind and enum labels, so a bool never loads into a `u8`
@@ -830,7 +834,7 @@ field and reordered labels are rejected.
 
 `field.string()` fields are saved as UTF-8. A string holding a lone surrogate
 cannot be stored as UTF-8, so saving it throws `WorldSaveError`. With a reused
-buffer, `saveWorldInto` writes strings without allocating; loading allocates
+buffer, `saveWorld` writes strings without allocating; loading allocates
 only the strings it creates.
 
 `field.object()` fields are saved through their `encode` / `decode` hooks:
@@ -862,8 +866,8 @@ records each relation's `exclusive`, `acyclic` and `onDeleteTarget` options and
 its pair data fields, so a mismatch is caught like any other layout change. A
 loaded world returns the same `getTargets`, `getSources` and `traverse` order
 as the saved one, and new pairs get the same rows. With a reused buffer,
-`saveWorldInto` writes relations without allocating. Pair data is saved for
-live pairs only. In the JSON view, `document.relations` holds each relation by
+`saveWorld` writes relations without allocating. Pair data is saved for
+live pairs only. In the document, `document.relations` holds each relation by
 name, and it is present only when the layout has relations.
 
 ---

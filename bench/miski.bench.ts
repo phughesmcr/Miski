@@ -6,15 +6,13 @@ import {
   entityIndex,
   field,
   loadWorld,
-  measureWorldSave,
   Prefab,
   Query,
   restoreWorldRollbackPoint,
   saveWorld,
-  saveWorldInto,
   World,
-  worldSaveFromJSON,
-  worldSaveToJSON,
+  worldSaveFromDocument,
+  worldSaveToDocument,
 } from "../mod.ts";
 import type { ComponentInstance, Entity } from "../mod.ts";
 import {
@@ -1218,17 +1216,17 @@ Deno.bench({
 // --- Serialization ---
 const saveSource = await populateMixedWorld(MEDIUM_CAPACITY);
 const saveLoadTarget = await populateMixedWorld(MEDIUM_CAPACITY);
-const saveBuffer = new Uint8Array(measureWorldSave(saveSource.world) + 1024);
+const saveBuffer = new Uint8Array(saveWorld(saveSource.world).byteLength + 1024);
 const savedBytes = saveWorld(saveSource.world);
 const savedSmall = saveWorld((await populateMixedWorld(SMALL_CAPACITY)).world);
-const savedDocument = worldSaveToJSON(savedSmall);
+const savedDocument = worldSaveToDocument(savedSmall);
 
 Deno.bench({
-  name: "saveWorldInto 8K mixed world - reused buffer",
+  name: "saveWorld 8K mixed world - reused buffer",
   group: "serialization",
   baseline: true,
   fn: () => {
-    numericSink ^= saveWorldInto(saveSource.world, saveBuffer);
+    numericSink ^= saveWorld(saveSource.world, saveBuffer).byteLength;
   },
 });
 
@@ -1249,24 +1247,24 @@ Deno.bench({
 });
 
 Deno.bench({
-  name: "worldSaveToJSON + worldSaveFromJSON 1K mixed world",
+  name: "worldSaveToDocument + worldSaveFromDocument 1K mixed world",
   group: "serialization",
   fn: () => {
-    objectSink = worldSaveFromJSON(worldSaveToJSON(savedSmall));
+    objectSink = worldSaveFromDocument(worldSaveToDocument(savedSmall));
     objectSink = savedDocument;
   },
 });
 
 const namedSource = await populateNamedWorld(MEDIUM_CAPACITY, true);
 const namedTarget = await populateNamedWorld(MEDIUM_CAPACITY, true);
-const namedBuffer = new Uint8Array(measureWorldSave(namedSource.world) + 1024);
+const namedBuffer = new Uint8Array(saveWorld(namedSource.world).byteLength + 1024);
 const namedBytes = saveWorld(namedSource.world);
 
 Deno.bench({
-  name: "saveWorldInto 8K world with strings + objects - reused buffer",
+  name: "saveWorld 8K world with strings + objects - reused buffer",
   group: "serialization",
   fn: () => {
-    numericSink ^= saveWorldInto(namedSource.world, namedBuffer);
+    numericSink ^= saveWorld(namedSource.world, namedBuffer).byteLength;
   },
 });
 
@@ -1280,14 +1278,14 @@ Deno.bench({
 
 const relationSaveSource = await populateRelationWorld(MEDIUM_CAPACITY, 4_096);
 const relationSaveTarget = await populateRelationWorld(MEDIUM_CAPACITY, 2_048);
-const relationBuffer = new Uint8Array(measureWorldSave(relationSaveSource.world) + 1024);
+const relationBuffer = new Uint8Array(saveWorld(relationSaveSource.world).byteLength + 1024);
 const relationBytes = saveWorld(relationSaveSource.world);
 
 Deno.bench({
-  name: "saveWorldInto 8K world with 4K-node relations - reused buffer",
+  name: "saveWorld 8K world with 4K-node relations - reused buffer",
   group: "serialization",
   fn: () => {
-    numericSink ^= saveWorldInto(relationSaveSource.world, relationBuffer);
+    numericSink ^= saveWorld(relationSaveSource.world, relationBuffer).byteLength;
   },
 });
 

@@ -12,38 +12,24 @@ import {
   CODE_OBJECT,
   CODE_STRING,
   FIELD_TYPE_BYTES,
-  FORMAT_VERSION,
   hashBytes64,
   hashHex,
   objectColumnBytes,
   stringColumnBytes,
   ViewCache,
-  type Views,
+  Views,
   wordCount,
   WorldSaveError,
 } from "./format.ts";
 import { type WorldSaveHost, worldSaveHost } from "./host.ts";
-import {
-  type ComponentImage,
-  heapBytes,
-  type KnownLayout,
-  parseSave,
-  relationTargetOrder,
-  saveBytes,
-  type SaveImage,
-  SaveSource,
-  validateImage,
-  ValidationScratch,
-  writeObjectCells,
-  writeSave,
-  writeStringCells,
-} from "./image.ts";
+import type { ComponentImage, KnownLayout, SaveImage } from "./image-types.ts";
+import { parseSave } from "./image-read.ts";
+import { validateImage, ValidationScratch } from "./image-validate.ts";
+import { heapBytes, saveBytes, SaveSource, writeObjectCells, writeSave, writeStringCells } from "./image-write.ts";
 import { compareLayouts, encodeLayout, layoutInfo, layoutOfStates, type WorldSaveLayout } from "./layout.ts";
 
 /** Summary of a world save, read without a world. */
 export type WorldSaveHeader = {
-  /** Save format version. */
-  readonly formatVersion: number;
   /** Exact length of the save in bytes. */
   readonly byteLength: number;
   /** Capacity and component layout the save was written with. */
@@ -90,6 +76,8 @@ type SaveContext = KnownLayout & {
   /** Number of encoded cells currently held in the object columns' `encoded` arrays. */
   encodedCount: number;
   scratch: ValidationScratch | undefined;
+  /** The view of a caller's buffer the last save returned, reused while it matches. */
+  lastView: Uint8Array | undefined;
   /** Relation stores in layout order. */
   readonly relations: readonly RelationStore[];
   /** The world as a save source, staged by `measure`. */
@@ -132,6 +120,7 @@ function createContext(world: World): SaveContext {
     side,
     encodedCount: 0,
     scratch: undefined,
+    lastView: undefined,
     relations,
     source: new WorldSource(known, host, wordCount(states.length), side, relations),
   };
@@ -172,6 +161,8 @@ function measureSide(
     }
     const encoded = side.encoded!;
     const encode = (side.field as SideField & { kind: "object" }).encode!;
+    // Raised before the loop, so a throwing hook still lets `releaseEncoded` drop the cells already stored.
+    if (owners > context.encodedCount) context.encodedCount = owners;
     for (let j = 0; j < owners; j++) {
       const value = side.column[ownerList![j]!];
       if (value === null) {
@@ -191,7 +182,6 @@ function measureSide(
       }
       encoded[j] = result;
     }
-    if (owners > context.encodedCount) context.encodedCount = owners;
     const heap = heapBytes(encoded, null, owners);
     if (heap < 0) {
       throw new WorldSaveError(
@@ -419,41 +409,52 @@ class WorldSource extends SaveSource {
   }
 }
 
-/**
- * Get the number of bytes {@link saveWorldInto} needs for the world's current state.
- * @param world - An initialized world
- */
-export function measureWorldSave(world: World): number {
-  const context = contextOf(world);
-  context.host.assertSaveReady();
-  try {
-    return measure(context);
-  } finally {
-    releaseEncoded(context);
+/** The `into.subarray(0, total)` view a save returns, reused while `into` and the save's length stay the same. */
+function viewOf(context: SaveContext, into: Uint8Array, total: number): Uint8Array {
+  if (total === into.byteLength) return into;
+  const last = context.lastView;
+  if (
+    last !== undefined && last.byteLength === total && last.byteOffset === into.byteOffset &&
+    last.buffer === into.buffer
+  ) {
+    return last;
   }
+  return context.lastView = into.subarray(0, total);
 }
 
 /**
- * Write the world's full state into a caller-owned buffer. With a reused buffer this allocates nothing.
+ * Save the world's full state: entities with their generations and allocator state, component ownership, values
+ * and changed lists, archetype registry and iteration order, the open transition window and relation pair indexes.
+ * Loading the save into a world with the same layout makes it behave exactly as the saved world would have.
+ *
+ * Each object field's `encode` hook runs once per owned cell. With `into`, the save is written into that buffer when
+ * it fits, and the result is a view of its first bytes; once the save's length is steady, repeated saves into one
+ * buffer allocate nothing. When `into` is too small, the save goes to a fresh buffer instead: check
+ * `result.buffer === into.buffer` to tell the two apart, and pass a larger buffer next time.
  * @param world - An initialized world
- * @param target - Destination; its `byteOffset` must be a multiple of 8 and it must hold {@link measureWorldSave} bytes
- * @returns The number of bytes written, from the start of `target`
- * @throws {RangeError} When `target` is misaligned or too small
+ * @param into - Optional destination to reuse; its `byteOffset` must be a multiple of 8
+ * @returns The save, exactly as long as its content: `into` itself or a view of its start when it fits, otherwise a
+ * new array
+ * @throws {RangeError} When `into` is not 8-byte aligned
  */
-export function saveWorldInto(world: World, target: Uint8Array): number {
+export function saveWorld(world: World, into?: Uint8Array): Uint8Array {
   assertLittleEndian();
   const context = contextOf(world);
   context.host.assertSaveReady();
-  if ((target.byteOffset & 7) !== 0) {
+  if (into !== undefined && (into.byteOffset & 7) !== 0) {
     throw new RangeError("World save target must be 8-byte aligned (byteOffset % 8 === 0).");
   }
-  let total: number;
+  let out: Uint8Array;
   try {
-    total = measure(context);
-    if (target.byteLength < total) {
-      throw new RangeError(`World save needs ${total} bytes; target has ${target.byteLength} bytes.`);
+    const total = measure(context);
+    if (into !== undefined && into.byteLength >= total) {
+      out = viewOf(context, into, total);
+      writeSave(context.source, context.writeViews.get(into.buffer), into.byteOffset, total);
+    } else {
+      // A fresh buffer gets its own views: caching them would keep the returned save alive with the world.
+      out = new Uint8Array(total);
+      writeSave(context.source, new Views(out.buffer), 0, total);
     }
-    writeSave(context.source, context.writeViews.get(target.buffer), target.byteOffset, total);
   } catch (error) {
     releaseEncoded(context);
     throw error;
@@ -461,26 +462,7 @@ export function saveWorldInto(world: World, target: Uint8Array): number {
   // writeSave dropped every encoded cell as it wrote it. Not calling releaseEncoded here keeps the hot path off a
   // function that reaches its optimized tier late.
   context.encodedCount = 0;
-  return total;
-}
-
-/**
- * Save the world's full state: entities with their generations and allocator state, component ownership, values
- * and changed lists, archetype registry and iteration order, and the open transition window. Loading the save into
- * a world with the same layout makes it behave exactly as the saved world would have.
- * @param world - An initialized world
- * @returns A new buffer holding exactly the save
- */
-export function saveWorld(world: World): Uint8Array {
-  const context = contextOf(world);
-  context.host.assertSaveReady();
-  try {
-    const out = new Uint8Array(measure(context));
-    writeSave(context.source, new ViewCache().get(out.buffer), 0, out.byteLength);
-    return out;
-  } finally {
-    releaseEncoded(context);
-  }
+  return out;
 }
 
 /** Whether any side column is an object field. A loop, not `some`: a callback here costs a closure per component per load. */
@@ -524,10 +506,12 @@ function decodeObjects(context: SaveContext, components: readonly ComponentImage
   return out ?? components;
 }
 
-/** Build a rollback snapshot of a validated relation, linking each target's pairs in its saved order. */
-function relationSnapshot(image: SaveImage, r: number, scratch: ValidationScratch): RelationStoreSnapshot {
+/**
+ * Build a rollback snapshot of a validated relation, linking each target's pairs in its saved order.
+ * @param order - The relation's pair indices in target-list order, from validation
+ */
+function relationSnapshot(image: SaveImage, r: number, order: Uint32Array): RelationStoreSnapshot {
   const relation = image.relations[r]!;
-  const order = relationTargetOrder(image, r, scratch);
   const pairs = relation.rows.length;
   const rows = relation.rows;
   const rowNextByTarget = new Int32Array(pairs);
@@ -600,8 +584,16 @@ function matchingPrefix(context: SaveContext, image: SaveImage): number {
  * Replace the world's state with a save. The save is fully validated first: a corrupt, truncated or incompatible
  * save throws {@link WorldSaveError} and leaves the world untouched. Systems are code, not data, so the world keeps
  * its registered systems. Query and component revisions move forward.
+ *
+ * Entity generations are restored exactly, including each slot's next generation. An entity handle held from before
+ * the load can therefore name a different entity afterwards, or the same slot reissued with the generation the handle
+ * carries; drop or re-resolve handles across a load.
+ *
+ * Validation is structural: it checks every count, offset, reference and invariant the world relies on, and the
+ * layout table against its hash. The body is not checksummed, so a corrupted value that still fits its field type
+ * (a flipped float bit, say) loads as written. Store saves somewhere that detects corruption when that matters.
  * @param world - An initialized world outside any rollback scope, with the save's layout (or a `migrate` hook)
- * @param bytes - A save from {@link saveWorld}, {@link saveWorldInto} or {@link worldSaveFromJSON}
+ * @param bytes - A save from {@link saveWorld} or {@link worldSaveFromDocument}
  * @param options - Optional migration hook for saves written with a different layout
  * @throws {WorldStateError} When the world is not initialized or a rollback scope is active
  * @throws {WorldSaveError} When the save is malformed or its layout differs and cannot be migrated
@@ -611,26 +603,31 @@ export function loadWorld(world: World, bytes: Uint8Array, options?: WorldSaveLo
   const host = context.host;
   host.assertLoadReady();
   let image = parseSave(bytes, context).image;
-  context.scratch ??= new ValidationScratch(context.capacity);
-  if (image.layout !== context.layout) {
-    const problem = compareLayouts(image.layout, context.layout);
-    if (problem !== undefined) {
+  const scratch = context.scratch ??= new ValidationScratch(context.capacity);
+  const orders = scratch.relationOrders;
+  let components: ReturnType<typeof decodeObjects>;
+  let relations: RelationStoreSnapshot[];
+  try {
+    const problem = image.layout === context.layout ? undefined : compareLayouts(image.layout, context.layout);
+    if (problem === undefined) {
+      validateImage(image, scratch, matchingPrefix(context, image));
+    } else {
       const migrate = options?.migrate;
       if (migrate === undefined) throw new WorldSaveError(problem);
-      validateImage(
-        image,
-        image.capacity === context.capacity ? context.scratch : new ValidationScratch(image.capacity),
-        0,
-      );
-      image = docToImage(migrate(imageToDoc(image), context.layout));
+      // The hook gets a validated document; `docToImage` validates what it returns.
+      validateImage(image, image.capacity === context.capacity ? scratch : new ValidationScratch(image.capacity), 0);
+      image = docToImage(migrate(imageToDoc(image), context.layout), scratch);
       const after = compareLayouts(image.layout, context.layout);
       if (after !== undefined) throw new WorldSaveError(`Migrated save does not match the world. ${after}`);
     }
+    // Decode objects before anything changes, so a throwing hook leaves the world untouched.
+    components = decodeObjects(context, image.components);
+    const loaded = image;
+    relations = loaded.relations.map((_, r) => relationSnapshot(loaded, r, orders[r]!));
+  } finally {
+    // The validated target orders must not outlive the load, whether or not it succeeded.
+    orders.length = 0;
   }
-  validateImage(image, context.scratch, matchingPrefix(context, image));
-  // Decode objects before anything changes, so a throwing hook leaves the world untouched.
-  const components = decodeObjects(context, image.components);
-  const relations = image.relations.map((_, r) => relationSnapshot(image, r, context.scratch!));
 
   host.entities.restoreSaved(image.occupancy, image.cursor, image.nextGeneration, image.liveGeneration);
   host.components.restoreSnapshot({ states: components });
@@ -644,13 +641,12 @@ export function loadWorld(world: World, bytes: Uint8Array, options?: WorldSaveLo
 }
 
 /**
- * Read a save's format version, length, layout and entity count without a world.
+ * Read a save's length, layout and entity count without a world. A save with an unsupported format version throws.
  * @throws {WorldSaveError} When the bytes are not a well-formed save
  */
 export function readWorldSaveHeader(bytes: Uint8Array): WorldSaveHeader {
   const { image, bytes: exact } = parseSave(bytes);
   return Object.freeze({
-    formatVersion: FORMAT_VERSION,
     byteLength: exact.byteLength,
     layout: image.layout,
     layoutHash: hashHex(image.layoutHashLow, image.layoutHashHigh),
@@ -658,7 +654,11 @@ export function readWorldSaveHeader(bytes: Uint8Array): WorldSaveHeader {
   });
 }
 
-/** Describe the layout a world writes its saves with; a save loads directly only into a world with an equal layout. */
-export function describeWorldSaveLayout(world: World): WorldSaveLayout {
+/**
+ * Get the layout a world writes its saves with. A save loads directly only into a world with an equal layout; compare
+ * it with {@link readWorldSaveHeader}'s `layout`.
+ * @param world - Any world; the layout is fixed at construction
+ */
+export function worldSaveLayout(world: World): WorldSaveLayout {
   return contextOf(world).layout;
 }

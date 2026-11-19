@@ -2,9 +2,32 @@
 
 ## Unreleased
 
+- **Breaking:** the world-save API is consolidated (these names only existed
+  on the unreleased branch, but code written against it must change):
+  - `saveWorldInto(world, target): number` and `measureWorldSave(world)` are
+    folded into `saveWorld(world, into?)`. With an 8-byte-aligned `into` large
+    enough for the save it writes there and returns a view of it (`into` itself on
+    an exact fit, else `into.subarray(0, length)`, the same view object while the length is unchanged, so a reused buffer
+    still allocates nothing); otherwise it returns a fresh array and leaves
+    `into` untouched. Each object field's `encode` hook now runs once per save
+    instead of once to measure and once to write. To pre-size a buffer, use the
+    `byteLength` of a first `saveWorld(world)` or of `readWorldSaveHeader`.
+  - `worldSaveToJSON` / `worldSaveFromJSON` → `worldSaveToDocument` /
+    `worldSaveFromDocument`.
+  - `describeWorldSaveLayout` → `worldSaveLayout`.
+  - `WorldSaveHeader.formatVersion` is removed; it always equalled the reader's
+    own version, since a save with another version is rejected. The format is
+    versioned but may still change before 1.0.
+- World-save documents keep a field or relation named `__proto__` as an own
+  key of `values` / pair data instead of setting the object's prototype.
+- `loadWorld` sorts each relation's target lists once (during validation)
+  instead of twice, cutting a relation-heavy load's allocations by about 40%.
+- `loadWorld` documents that it restores entity generations exactly, so a
+  handle held from before the load may refer to a different entity after it,
+  and that it checks a save's structure, not a checksum of its body.
 - Fix world-save loads from a Node `Buffer` whose `byteOffset` is not a
   multiple of 8 (common for pooled `fs.readFileSync` Buffers): `loadWorld`,
-  `readWorldSaveHeader` and `worldSaveToJSON` threw "Not a Miski world save
+  `readWorldSaveHeader` and `worldSaveToDocument` threw "Not a Miski world save
   (bad magic)" because `Buffer#slice` returns a view, not the aligned copy the
   reader needs. The parsed layout block is also now always a copy, never a view
   into the caller's Buffer.
@@ -96,19 +119,19 @@
 - World saves record `field.*` hash tags (`bool`, `entity`, `enum:[...]`) as field types, so the layout check
   catches kind changes and reordered enum labels.
 - World saves support `field.string()` and `field.object()` fields. Strings are written as UTF-8 (an offset table
-  plus a heap), and `saveWorldInto` stays allocation-free for them; a string with a lone surrogate throws
+  plus a heap), and `saveWorld` into a reused buffer stays allocation-free for them; a string with a lone surrogate throws
   `WorldSaveError`. Object fields are saved through their `encode` / `decode` hooks, which are never called with
   `null`; a component whose object field has no hooks throws `WorldSaveError` naming the field. Loads run every
-  `decode` before changing the world, so a throwing hook leaves it untouched. The JSON view holds strings as
+  `decode` before changing the world, so a throwing hook leaves it untouched. The document holds strings as
   strings and object cells as `WorldSaveObjectValue` (`{ number: "NaN" }` and so on for numbers JSON cannot hold).
   `WorldSaveComponentDocument.values` is now typed `WorldSaveFieldValues`.
 - World saves support relations. A RELATIONS section holds each relation's row pool, sources and pairs in store order,
   target lists, changed sources and live pair data, so a loaded world returns the same `getTargets`, `getSources` and
   `traverse` order and hands out the same rows. The layout records `exclusive`, `acyclic`, `onDeleteTarget` and pair
   fields (`WorldSaveLayout` components gain an optional `relation`), and every load checks pairs, rows, target lists
-  and acyclic chains before changing the world. The JSON view gains `relations`, keyed by relation name and present
+  and acyclic chains before changing the world. The document gains `relations`, keyed by relation name and present
   only when the layout has relations (`WorldSaveRelationDocument`, `WorldSaveRelationPair`). Saves of worlds without
-  relations are unchanged, and `saveWorldInto` stays allocation-free with relations.
+  relations are unchanged, and `saveWorld` into a reused buffer stays allocation-free with relations.
 - Command buffers carry `field.*` values through their side column. A queued entity-ref value whose target died
   before the flush is written as `null` instead of failing the command; direct guarded writes still reject dead
   handles.
@@ -159,8 +182,8 @@
   the flush: the rest still apply and the first error is rethrown. Non-numeric
   schema fields are queued by reference and validated at flush. A `Schedule`
   flushes its buffer at the end of each phase.
-- Add whole-world saves. `saveWorld` / `saveWorldInto` (no allocation with a
-  reused buffer) write entity handles and generations, allocator state,
+- Add whole-world saves. `saveWorld(world, into?)` (no allocation with a
+  reused buffer) writes entity handles and generations, allocator state,
   component ownership, values and changed lists, archetype registry order and
   the open transition window. `loadWorld` replaces an initialized world's state
   with a save so that it behaves exactly like the saved world, including future
@@ -168,8 +191,8 @@
   first and throw the new `WorldSaveError` without changing the world. A save
   loads only into a world with the same layout; `loadWorld`'s `migrate` option
   converts a save written with a different layout. Also add
-  `measureWorldSave`, `readWorldSaveHeader`, `describeWorldSaveLayout` and a
-  lossless JSON view (`worldSaveToJSON` / `worldSaveFromJSON`).
+  `readWorldSaveHeader`, `worldSaveLayout` and a lossless JSON-safe document
+  (`worldSaveToDocument` / `worldSaveFromDocument`).
 - Reuse entity slots next-fit instead of last-freed-first. A destroyed entity's
   slot is reissued only after the allocator has swept past every other free
   slot, so a held stale handle no longer comes back to life after 32,768

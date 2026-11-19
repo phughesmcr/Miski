@@ -36,7 +36,7 @@ export const SECTION_WINDOW = 4;
 /** Relation pair indexes; written only when the layout has relations. */
 export const SECTION_RELATIONS = 5;
 /** Number of sections a version 1 writer emits for a layout without relations (one more with relations). */
-export const SECTION_COUNT = 4;
+const SECTION_COUNT = 4;
 
 /** Number of sections of a save whose layout has `relations` relation components. */
 export function sectionCount(relations: number): number {
@@ -60,23 +60,6 @@ export type WorldSaveFieldType =
   | "string"
   | "object";
 
-/** Numeric field type names by type code (code 0 is unused). Append-only: codes are persisted. */
-export const FIELD_TYPE_NAMES: readonly (WorldSaveNumericFieldType | "")[] = Object.freeze([
-  "",
-  "i8",
-  "i16",
-  "i32",
-  "u8",
-  "u16",
-  "u32",
-  "f32",
-  "f64",
-  "u8c",
-  "", // 10: CODE_STRING
-  "", // 11: CODE_OBJECT
-  "f16",
-]);
-
 /** Type code of a `field.string()` column: u32 offsets plus a UTF-8 heap. Append-only, like every code. */
 export const CODE_STRING = 10;
 /** Type code of a `field.object()` column: kinds, numbers, then u32 offsets plus a UTF-8 heap. */
@@ -87,30 +70,62 @@ export function isSideCode(code: number): boolean {
   return code === CODE_STRING || code === CODE_OBJECT;
 }
 
-/** Element byte size by type code (0 for variable-length codes). */
-export const FIELD_TYPE_BYTES: readonly number[] = Object.freeze([0, 1, 2, 4, 1, 2, 4, 4, 8, 1, 0, 0, 2]);
+/** One numeric storage type of a saved field. */
+export type NumericFieldType = {
+  /** Persisted type code. */
+  readonly code: number;
+  readonly name: WorldSaveNumericFieldType;
+  /** Element byte size. */
+  readonly bytes: number;
+  readonly ctor: TypedArrayConstructor;
+  /** Inclusive range of a saved integer cell; `undefined` for float types. */
+  readonly intRange: readonly [number, number] | undefined;
+};
 
-/** Typed-array constructor by type code. */
-export const FIELD_TYPE_CONSTRUCTORS: readonly (TypedArrayConstructor | undefined)[] = Object.freeze([
+function numericType(
+  code: number,
+  name: WorldSaveNumericFieldType,
+  ctor: TypedArrayConstructor,
+  intRange?: readonly [number, number],
+): NumericFieldType {
+  return Object.freeze({ code, name, bytes: ctor.BYTES_PER_ELEMENT, ctor, intRange });
+}
+
+/**
+ * Numeric storage types by type code; `undefined` at code 0, {@link CODE_STRING} and {@link CODE_OBJECT}.
+ * Append-only: codes are persisted.
+ */
+export const NUMERIC_FIELD_TYPES: readonly (NumericFieldType | undefined)[] = Object.freeze([
   undefined,
-  Int8Array,
-  Int16Array,
-  Int32Array,
-  Uint8Array,
-  Uint16Array,
-  Uint32Array,
-  Float32Array,
-  Float64Array,
-  Uint8ClampedArray,
-  undefined, // 10: CODE_STRING
-  undefined, // 11: CODE_OBJECT
-  Float16Array,
+  numericType(1, "i8", Int8Array, [-0x80, 0x7f]),
+  numericType(2, "i16", Int16Array, [-0x8000, 0x7fff]),
+  numericType(3, "i32", Int32Array, [-0x8000_0000, 0x7fff_ffff]),
+  numericType(4, "u8", Uint8Array, [0, 0xff]),
+  numericType(5, "u16", Uint16Array, [0, 0xffff]),
+  numericType(6, "u32", Uint32Array, [0, 0xffff_ffff]),
+  numericType(7, "f32", Float32Array),
+  numericType(8, "f64", Float64Array),
+  numericType(9, "u8c", Uint8ClampedArray, [0, 0xff]),
+  undefined, // CODE_STRING
+  undefined, // CODE_OBJECT
+  numericType(12, "f16", Float16Array),
 ]);
+
+/** Element byte size by type code (0 for variable-length codes): {@link NUMERIC_FIELD_TYPES} flattened for hot loops. */
+export const FIELD_TYPE_BYTES: readonly number[] = Object.freeze(NUMERIC_FIELD_TYPES.map((type) => type?.bytes ?? 0));
 
 /** @returns the type code of a typed-array constructor, or 0 when it has none */
 export function fieldTypeCode(constructor: unknown): number {
-  for (let code = 1; code < FIELD_TYPE_CONSTRUCTORS.length; code++) {
-    if (FIELD_TYPE_CONSTRUCTORS[code] === constructor) return code;
+  for (let code = 1; code < NUMERIC_FIELD_TYPES.length; code++) {
+    if (NUMERIC_FIELD_TYPES[code]?.ctor === constructor) return code;
+  }
+  return 0;
+}
+
+/** @returns the type code of a numeric storage type name, or 0 when `name` is not one */
+export function numericTypeCodeOfName(name: unknown): number {
+  for (let code = 1; code < NUMERIC_FIELD_TYPES.length; code++) {
+    if (NUMERIC_FIELD_TYPES[code]?.name === name) return code;
   }
   return 0;
 }
@@ -141,8 +156,8 @@ function enumTagLabelCount(name: string): number {
 /** @returns the storage type code of a field type name or `field.*` tag, or 0 when unknown */
 export function fieldTypeCodeOfName(name: unknown): number {
   if (typeof name !== "string" || name === "") return 0;
-  const code = FIELD_TYPE_NAMES.indexOf(name as WorldSaveNumericFieldType);
-  if (code !== -1) return code;
+  const code = numericTypeCodeOfName(name);
+  if (code !== 0) return code;
   if (name === "bool") return CODE_U8;
   if (name === "entity") return CODE_I32;
   if (name === "string") return CODE_STRING;
@@ -196,51 +211,42 @@ export function assertLittleEndian(): void {
 export class Views {
   readonly buffer: ArrayBufferLike;
   readonly u8: Uint8Array;
-  readonly i8: Int8Array;
   readonly u16: Uint16Array;
-  readonly i16: Int16Array;
   readonly u32: Uint32Array;
-  readonly i32: Int32Array;
-  readonly f32: Float32Array;
   readonly f64: Float64Array;
-  readonly f16: Float16Array;
+  /** One view per numeric type code, over the whole buffer. */
+  readonly #columns: (TypedArray | undefined)[];
 
   constructor(buffer: ArrayBufferLike) {
     const length = buffer.byteLength;
     this.buffer = buffer;
     this.u8 = new Uint8Array(buffer);
-    this.i8 = new Int8Array(buffer);
     this.u16 = new Uint16Array(buffer, 0, length >>> 1);
-    this.i16 = new Int16Array(buffer, 0, length >>> 1);
     this.u32 = new Uint32Array(buffer, 0, length >>> 2);
-    this.i32 = new Int32Array(buffer, 0, length >>> 2);
-    this.f32 = new Float32Array(buffer, 0, length >>> 2);
     this.f64 = new Float64Array(buffer, 0, length >>> 3);
-    this.f16 = new Float16Array(buffer, 0, length >>> 1);
+    const columns: (TypedArray | undefined)[] = new Array(NUMERIC_FIELD_TYPES.length);
+    for (let code = 0; code < NUMERIC_FIELD_TYPES.length; code++) {
+      const type = NUMERIC_FIELD_TYPES[code];
+      if (type === undefined) continue;
+      const ctor = type.ctor;
+      columns[code] = ctor === Uint8Array ?
+        this.u8 :
+        ctor === Uint16Array ?
+        this.u16 :
+        ctor === Uint32Array ?
+        this.u32 :
+        ctor === Float64Array ?
+        this.f64 :
+        new ctor(buffer as ArrayBuffer, 0, Math.floor(length / type.bytes));
+    }
+    this.#columns = columns;
   }
 
-  /** The view a type code is written through (`u8c` shares the `u8` view). */
+  /** The view a numeric type code is written through. */
   column(code: number): TypedArray {
-    switch (code) {
-      case 1:
-        return this.i8;
-      case 2:
-        return this.i16;
-      case 3:
-        return this.i32;
-      case 5:
-        return this.u16;
-      case 6:
-        return this.u32;
-      case 7:
-        return this.f32;
-      case 8:
-        return this.f64;
-      case 12:
-        return this.f16;
-      default:
-        return this.u8;
-    }
+    const view = this.#columns[code];
+    if (view === undefined) throw new WorldSaveError(`World save type code ${code} has no column view.`);
+    return view;
   }
 
   /** The view a saved slot list of `width` bytes is written through. */
@@ -353,4 +359,35 @@ export function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
   return true;
+}
+
+/** Payload bytes of the archetype section. */
+export function archetypesPayloadBytes(count: number, wordsPerSet: number, population: number, width: number): number {
+  return align8(8 + count * wordsPerSet * 4 + count * 4 + population * width);
+}
+
+/**
+ * Payload bytes of one saved component.
+ * @param sideBytes - Total bytes of its string / object columns (they are variable-length)
+ */
+export function componentPayloadBytes(
+  owners: number,
+  changed: number,
+  codes: readonly number[] | null,
+  width: number,
+  sideBytes: number,
+): number {
+  let bytes = 8 + align8(owners * width) + align8(changed * width) + sideBytes;
+  if (codes !== null) { for (let c = 0; c < codes.length; c++) bytes += align8(owners * FIELD_TYPE_BYTES[codes[c]!]!); }
+  return bytes;
+}
+
+/** Payload bytes of the transition-window section. */
+export function windowPayloadBytes(count: number, width: number): number {
+  return align8(8 + align4(count * width) + count * 8);
+}
+
+/** Throw a {@link WorldSaveError}. */
+export function fail(message: string): never {
+  throw new WorldSaveError(message);
 }

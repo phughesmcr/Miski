@@ -14,8 +14,8 @@ import {
   saveWorld,
   World,
   WorldSaveError,
-  worldSaveFromJSON,
-  worldSaveToJSON,
+  worldSaveFromDocument,
+  worldSaveToDocument,
 } from "../mod.ts";
 import { createTestWorld } from "./fixtures.ts";
 import { assert, assertEquals, assertStrictEquals, assertThrows } from "./helpers.ts";
@@ -41,13 +41,13 @@ async function savedUnitDocument(): Promise<SaveDocument> {
   const world = await createTestWorld([unit], 16);
   const target = world.entities.createOrThrow();
   world.entities.createWithOrThrow([[unit, { state: "b", alive: true, target }]]);
-  return worldSaveToJSON(saveWorld(world));
+  return worldSaveToDocument(saveWorld(world));
 }
 
 async function assertRejected(document: SaveDocument, message: string, label: string): Promise<void> {
   const world = await createTestWorld([unitOf()], 16);
   const kept = world.entities.createOrThrow();
-  assertThrows(() => loadWorld(world, worldSaveFromJSON(document)), WorldSaveError, message);
+  assertThrows(() => loadWorld(world, worldSaveFromDocument(document)), WorldSaveError, message);
   assertEquals(world.entities.isActive(kept), true, `${label}: a rejected load leaves the world untouched`);
 }
 

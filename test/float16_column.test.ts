@@ -3,13 +3,13 @@
 import {
   captureWorldRollbackPoint,
   Component,
-  describeWorldSaveLayout,
   loadWorld,
   restoreWorldRollbackPoint,
   saveWorld,
   World,
-  worldSaveFromJSON,
-  worldSaveToJSON,
+  worldSaveFromDocument,
+  worldSaveLayout,
+  worldSaveToDocument,
 } from "../mod.ts";
 import { assert, assertEquals, assertThrows } from "./helpers.ts";
 
@@ -40,10 +40,10 @@ Deno.test("Float16Array column: write, canonicalize, save, JSON, rollback", asyn
     65504,
     "f16 roundtrip through binary save",
   );
-  const doc = worldSaveToJSON(bytes);
-  const back = worldSaveFromJSON(JSON.parse(JSON.stringify(doc)));
+  const doc = worldSaveToDocument(bytes);
+  const back = worldSaveFromDocument(JSON.parse(JSON.stringify(doc)));
   assertEquals(back.length, bytes.length, "JSON roundtrip size");
-  console.log(JSON.stringify(describeWorldSaveLayout(world)));
+  console.log(JSON.stringify(worldSaveLayout(world)));
 
   const point = captureWorldRollbackPoint(world);
   world.components.setEntityData(half, e, { v: 2, w: 2 });
