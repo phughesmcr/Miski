@@ -2,13 +2,12 @@
 
 import {
   asEntity,
-  captureWorldRollbackPoint,
   compileComponentSchema,
   Component,
   ComponentOwnershipError,
   entityIndex,
   NotRegisteredError,
-  restoreWorldRollbackPoint,
+  WorldRollbackScope,
 } from "../mod.ts";
 import { createEntity, createTestWorld, tagComponent, vec2Component } from "./fixtures.ts";
 import { assert, assertEquals, assertThrows, ids } from "./helpers.ts";
@@ -162,12 +161,12 @@ Deno.test("rollback restores capped mappings and pre-scope changes with fresh re
   world.refresh();
   const instance = world.components.require(position);
   instance.set(first, "x", 5);
-  const point = captureWorldRollbackPoint(world);
+  const point = new WorldRollbackScope(world);
   world.components.removeFromEntity(position, first);
   world.components.setEntityData(position, second, { x: 8, y: 9 });
   const third = world.entities.createWithOrThrow([[position, { x: 10, y: 11 }]]);
   const revision = instance.revision;
-  restoreWorldRollbackPoint(world, point);
+  point.restore();
   assertEquals(world.components.getEntityData(position, first), { x: 5, y: 2 }, "Restore first sparse mapping");
   assertEquals(world.components.getEntityData(position, second), { x: 3, y: 4 }, "Restore other shared columns");
   assert(!instance.has(third), "Discard speculative owner");

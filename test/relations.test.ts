@@ -1,8 +1,6 @@
 /// <reference lib="deno.ns" />
 
 import {
-  captureWorldRollbackPoint,
-  commitWorldRollbackPoint,
   ComponentDataError,
   createEcsWorld,
   type Entity,
@@ -11,9 +9,9 @@ import {
   NotRegisteredError,
   Query,
   Relation,
-  restoreWorldRollbackPoint,
   SpecError,
   World,
+  WorldRollbackScope,
 } from "../mod.ts";
 import { createEntity, createTestWorld, tagComponent, vec2Component } from "./fixtures.ts";
 import { assert, assertEquals, assertStrictEquals, assertThrows, ids, listIds } from "./helpers.ts";
@@ -483,10 +481,10 @@ Deno.test("rollback restores relation state exactly and order-neutrally", async 
   const liveC = setup(control);
 
   const before = observe(speculative, defsA, liveS);
-  const point = captureWorldRollbackPoint(speculative);
+  const point = new WorldRollbackScope(speculative);
   // Speculative work: retargets, removals, cascades, new entities and pairs, data writes.
   world_mutate(speculative, defsA, liveS);
-  restoreWorldRollbackPoint(speculative, point);
+  point.restore();
   assertEquals(observe(speculative, defsA, liveS), before, "observable relation state restored");
   assertEquals(observe(speculative, defsA, liveS), observe(control, defsB, liveC), "matches the control world");
 
@@ -506,9 +504,9 @@ Deno.test("rollback restores relation state exactly and order-neutrally", async 
   assertEquals(observe(speculative, defsA, afterS), observe(control, defsB, afterC), "same relation state");
 
   // Commit keeps speculative relation work.
-  const point2 = captureWorldRollbackPoint(speculative);
+  const point2 = new WorldRollbackScope(speculative);
   speculative.relations.add(defsA.likes, afterS[0]!, afterS[1]!);
-  commitWorldRollbackPoint(speculative, point2);
+  point2.commit();
   assertStrictEquals(speculative.relations.has(defsA.likes, afterS[0]!, afterS[1]!), true, "committed pair kept");
 });
 

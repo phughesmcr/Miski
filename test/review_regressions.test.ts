@@ -1,15 +1,6 @@
 /// <reference lib="deno.ns" />
 
-import {
-  asSlotIndex,
-  captureWorldRollbackPoint,
-  commitWorldRollbackPoint,
-  entityIndex,
-  Query,
-  restoreWorldRollbackPoint,
-  SpecError,
-  World,
-} from "../mod.ts";
+import { asSlotIndex, entityIndex, Query, SpecError, World, WorldRollbackScope } from "../mod.ts";
 import { createTestWorld, tagComponent, vec2Component } from "./fixtures.ts";
 import { assert, assertEquals, assertThrows } from "./helpers.ts";
 
@@ -52,8 +43,8 @@ async function rollbackCost(capacity: number): Promise<RollbackCost> {
   for (let i = 0; i < 1000; i++) {
     world.entities.createWithOrThrow([[position, { x: i, y: i }], [velocity, { x: 1, y: 1 }]]);
   }
-  const commit = medianMs(() => commitWorldRollbackPoint(world, captureWorldRollbackPoint(world)));
-  const restore = medianMs(() => restoreWorldRollbackPoint(world, captureWorldRollbackPoint(world)));
+  const commit = medianMs(() => new WorldRollbackScope(world).commit());
+  const restore = medianMs(() => new WorldRollbackScope(world).restore());
   await world.destroy();
   return { commit, restore };
 }
@@ -86,7 +77,7 @@ Deno.test("rollback restore keeps query iteration order for reordered archetypes
     return Array.from({ length: list.count }, (_, i) => list.slots[i]!);
   };
   const before = order();
-  restoreWorldRollbackPoint(world, captureWorldRollbackPoint(world));
+  new WorldRollbackScope(world).restore();
   assertEquals(order(), before, "A no-op rollback must not reorder query iteration");
 });
 
@@ -98,10 +89,10 @@ Deno.test("rollback restore keeps the entity allocation cursor", async () => {
     world.entities.destroy(entities[1]!);
     world.entities.destroy(entities[3]!);
   }
-  const point = captureWorldRollbackPoint(subject);
+  const point = new WorldRollbackScope(subject);
   subject.entities.createOrThrow();
   subject.entities.createOrThrow();
-  restoreWorldRollbackPoint(subject, point);
+  point.restore();
 
   const next = (world: World): number[] => [0, 1, 2].map(() => entityIndex(world.entities.createOrThrow()));
   assertEquals(next(subject), next(control), "Rollback must restore the next slots handed out");

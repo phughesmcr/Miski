@@ -2,15 +2,14 @@
 
 import {
   AlreadyRegisteredError,
-  captureWorldRollbackPoint,
   type ComponentInstance,
   Query,
-  restoreWorldRollbackPoint,
   Schedule,
   type ScheduleContext,
   SpecError,
   System,
   World,
+  WorldRollbackScope,
   WorldStateError,
 } from "../mod.ts";
 import { createEntity, createTestWorld, tagComponent, vec2Component } from "./fixtures.ts";
@@ -862,12 +861,12 @@ Deno.test("schedule resumes identically after a rollback restore between runs pl
   schedule.run(0.3);
   log.length = 0;
 
-  const point = captureWorldRollbackPoint(world);
+  const point = new WorldRollbackScope(world);
   const clock = schedule.getClock();
   for (const dt of frames) schedule.run(dt);
   const first = log.splice(0);
 
-  restoreWorldRollbackPoint(world, point);
+  point.restore();
   schedule.setClock(clock);
   for (const dt of frames) schedule.run(dt);
   assertEquals(log, first, "same entities, values, ticks, times and alphas after resimulating");

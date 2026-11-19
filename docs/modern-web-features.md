@@ -123,13 +123,13 @@ single frames can exceed 50 ms, add an opt-in `runScheduleYielding` adapter. It 
 ### 5. Disposable rollback scope (`src/rollback/rollback.ts`)
 
 ```ts
-using scope = world.rollback.scope(); // opens a rollback point
+using scope = new WorldRollbackScope(world); // opens the world's rollback scope
 simulate();
 if (ok) scope.commit(); // otherwise scope exit restores
 ```
 
 `WorldRollbackScope` has a sync `[Symbol.dispose]` and `commit()`, `restore()` and `isOpen`. Dispose restores if still
-open, and just drops the point if the world is no longer `initialized`. Use it in user code at frame/turn granularity,
+open, and just drops the captured state if the world is no longer `initialized`. Use it in user code at frame/turn granularity,
 not per entity (see row 16).
 
 ## Later items: what has to happen first

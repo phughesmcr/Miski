@@ -1,15 +1,6 @@
 /// <reference lib="deno.ns" />
 
-import {
-  captureWorldRollbackPoint,
-  Component,
-  type DynamicComponent,
-  field,
-  Prefab,
-  Relation,
-  restoreWorldRollbackPoint,
-  SpecError,
-} from "../mod.ts";
+import { Component, type DynamicComponent, field, Prefab, Relation, SpecError, WorldRollbackScope } from "../mod.ts";
 import { createTestWorld } from "./fixtures.ts";
 import { assertEquals, assertThrows } from "./helpers.ts";
 
@@ -53,12 +44,12 @@ Deno.test("relations x field types: one rollback restores side columns and relat
   world.relations.add(childOf, child, parent);
   world.refresh();
 
-  const point = captureWorldRollbackPoint(world);
+  const point = new WorldRollbackScope(world);
   world.components.setEntityData(unit, child, { label: "changed", target: null, alive: false });
   world.relations.remove(childOf, child, parent);
   world.relations.add(likes, parent, child);
   world.entities.destroy(parent);
-  restoreWorldRollbackPoint(world, point);
+  point.restore();
 
   assertEquals(
     world.components.getEntityData(unit, child),

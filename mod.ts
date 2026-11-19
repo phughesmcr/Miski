@@ -289,11 +289,10 @@
  * @example Typed world bootstrap, schema hash, and rollback
  * ```ts
  * import {
- *   captureWorldRollbackPoint,
  *   compileComponentSchema,
  *   componentSchemaHash,
  *   createEcsWorld,
- *   restoreWorldRollbackPoint,
+ *   WorldRollbackScope,
  * } from "@phughesmcr/miski";
  *
  * const game = createEcsWorld({
@@ -319,10 +318,11 @@
  * );
  * console.log(hash, schema);
  *
- * // Rollback points are captured from (and restored to) the underlying World.
- * const point = captureWorldRollbackPoint(game.world);
- * // mutate...
- * restoreWorldRollbackPoint(game.world, point);
+ * // A rollback scope opens on the underlying World; leaving it without commit() restores the world.
+ * {
+ *   using _scope = new WorldRollbackScope(game.world);
+ *   game.spawn({ Position: { x: 1, y: 1 } });
+ * } // the spawn is undone here
  * ```
  *
  * @example World saves and JSON documents
@@ -391,13 +391,8 @@ export type {
   WorldRelationAPI,
 } from "@/types/world-relation-api.ts";
 export { isValidSystemSpec, System } from "@/system/system.ts";
-export {
-  captureWorldRollbackPoint,
-  commitWorldRollbackPoint,
-  restoreWorldRollbackPoint,
-  World,
-  WorldRollbackScope,
-} from "@/world/world.ts";
+export { World } from "@/world/world.ts";
+export { WorldRollbackScope } from "@/rollback/rollback.ts";
 export { isValidWorldSpec } from "@/world/utils.ts";
 export { isValidName } from "@/utils.ts";
 export {
@@ -543,7 +538,6 @@ export type {
   WorldComponentAPI,
   WorldContext,
   WorldEntityAPI,
-  WorldRollbackPoint,
   WorldSpec,
   WorldState,
   WorldSystemAPI,

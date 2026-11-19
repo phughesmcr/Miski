@@ -37,12 +37,7 @@ import {
   type CheckpointWorld,
   type ComponentCheckpoint,
 } from "@/checkpoint/checkpoint.ts";
-import {
-  captureRollbackState,
-  commitRollbackState,
-  restoreRollbackState,
-  validateRollbackState,
-} from "@/rollback/rollback.ts";
+import { captureRollbackState, commitRollbackState, restoreRollbackState } from "@/rollback/rollback.ts";
 import { type WorldSaveHost, worldSaveHost } from "@/serialization/host.ts";
 import { constructWorldAPIs } from "./world-api-facade.ts";
 import { noop } from "@/utils.ts";
@@ -676,16 +671,29 @@ export class World {
     return captureComponentCheckpoint(this.#checkpointHost, entitySet, components);
   }
 
-  /** Restore a component-subset checkpoint captured from this world. */
+  /**
+   * Restore a component-subset checkpoint captured from this world.
+   *
+   * Not atomic. Apply first checks, without writing, that every captured entity is alive, that every payload is
+   * valid, that no capped component would exceed its owner limit and that every relation's pairs can be restored;
+   * any of these failures throws with the world unchanged. Only then does it write, through the same paths as the
+   * public component and relation APIs. Those paths run user code (an object field's `create()` / `clone()` hook),
+   * and a hook that throws at that point leaves the checkpoint partly applied. To make an apply all-or-nothing, run
+   * it inside a `WorldRollbackScope` and restore the scope if it throws.
+   *
+   * @throws {EntityNotFoundError} - If a captured entity is no longer alive
+   * @throws {CapacityError} - If a capped component would exceed its owner limit
+   * @throws {Error} - If the checkpoint was captured from another world, a payload is invalid, or a hook throws
+   */
   applyCheckpoint(checkpoint: ComponentCheckpoint): void {
     this.#assertInitialized();
     applyComponentCheckpoint(this.#checkpointHost, checkpoint);
   }
 
-  /** @internal */
+  /** @internal Open the world's one rollback scope; see `WorldRollbackScope`. */
   [captureRollbackState](): WorldRollbackState {
     this.#assertInitialized();
-    if (this.#rollbackState !== undefined) throw new Error("A world rollback scope is already active.");
+    if (this.#rollbackState !== undefined) throw new WorldStateError("A world rollback scope is already active.");
     const state: WorldRollbackState = {
       entities: this.#entityManager.captureState(),
       componentSnapshot: this.#componentManager.captureSnapshot(),
@@ -696,28 +704,27 @@ export class World {
     return state;
   }
 
-  /** @internal */
-  [validateRollbackState](state: WorldRollbackState): void {
-    this.#assertInitialized();
-    if (this.#rollbackState !== state) throw new TypeError("Invalid world rollback state.");
-  }
-
-  /** @internal */
+  /** @internal Keep every write and close the rollback scope that captured `state`. */
   [commitRollbackState](state: WorldRollbackState): void {
-    this[validateRollbackState](state);
-    this.#rollbackState = undefined;
+    this.#closeRollbackState(state);
   }
 
-  /** @internal */
+  /** @internal Restore `state` and close the rollback scope that captured it. */
   [restoreRollbackState](state: WorldRollbackState): void {
-    this[validateRollbackState](state);
-    this.#rollbackState = undefined;
+    this.#closeRollbackState(state);
     this.#entityManager.restoreState(state.entities);
     this.#componentManager.restoreSnapshot(state.componentSnapshot);
     this.#archetypeManager.restoreState(state.archetypes);
     if (state.relations !== undefined) this.#relationManager?.restoreState(state.relations);
     this.#queryManager.invalidate();
     this.#entityRevision = ++this.#revision;
+  }
+
+  /** The one rollback-state check: the world is initialized and `state` is its open scope's. */
+  #closeRollbackState(state: WorldRollbackState): void {
+    this.#assertInitialized();
+    if (this.#rollbackState !== state) throw new WorldStateError("Invalid world rollback state.");
+    this.#rollbackState = undefined;
   }
 
   /** @internal */
@@ -742,10 +749,3 @@ export class World {
     };
   }
 }
-
-export {
-  captureWorldRollbackPoint,
-  commitWorldRollbackPoint,
-  restoreWorldRollbackPoint,
-  WorldRollbackScope,
-} from "@/rollback/rollback.ts";

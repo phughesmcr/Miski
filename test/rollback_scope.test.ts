@@ -1,15 +1,6 @@
 /// <reference lib="deno.ns" />
 
-import {
-  captureWorldRollbackPoint,
-  loadWorld,
-  Query,
-  saveWorld,
-  System,
-  World,
-  WorldRollbackScope,
-  WorldStateError,
-} from "../mod.ts";
+import { loadWorld, Query, saveWorld, System, World, WorldRollbackScope, WorldStateError } from "../mod.ts";
 import { createEntity, createTestWorld, tagComponent, vec2Component } from "./fixtures.ts";
 import { assert, assertEquals, assertRejects, assertThrows, ids } from "./helpers.ts";
 
@@ -44,8 +35,8 @@ Deno.test("a committed rollback scope keeps writes and closes", async () => {
     created = createEntity(world);
     scope.commit();
     assert(!scope.isOpen, "Commit closes the scope");
-    assertThrows(() => scope.commit(), TypeError, "already closed");
-    assertThrows(() => scope.restore(), TypeError, "already closed");
+    assertThrows(() => scope.commit(), WorldStateError, "already closed");
+    assertThrows(() => scope.restore(), WorldStateError, "already closed");
   }
   assert(world.entities.isActive(created as never), "Committed writes survive the scope");
   await world.destroy();
@@ -71,14 +62,14 @@ Deno.test("a disposed rollback scope frees the world for later captures and load
   const bytes = saveWorld(world);
   try {
     using _scope = new WorldRollbackScope(world);
-    assertThrows(() => new WorldRollbackScope(world), Error, "already active");
+    assertThrows(() => new WorldRollbackScope(world), WorldStateError, "already active");
     assertThrows(() => loadWorld(world, bytes), WorldStateError, "rollback scope is active");
     throw new Error("leak");
   } catch {
     // expected
   }
-  const point = captureWorldRollbackPoint(world);
-  assert(point !== undefined, "A new rollback point can be captured");
+  const next = new WorldRollbackScope(world);
+  assert(next.isOpen, "A new rollback scope can open");
   await world.destroy();
 });
 

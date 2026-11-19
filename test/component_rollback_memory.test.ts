@@ -2,13 +2,12 @@
 
 import {
   asSlotIndex,
-  captureWorldRollbackPoint,
   Component,
   type DynamicComponent,
   type Entity,
   entityIndex,
-  restoreWorldRollbackPoint,
   type World,
+  WorldRollbackScope,
 } from "../mod.ts";
 import { createEntity, createTestWorld, tagComponent, vec2Component } from "./fixtures.ts";
 import { assert, assertEquals, ids } from "./helpers.ts";
@@ -101,11 +100,11 @@ for (const seed of [3, 29, 777]) {
     }
     assert(ids(subject.world.components.getOwners(position)).length > 16, "Prefix must grow the owner list");
 
-    const point = captureWorldRollbackPoint(subject.world);
+    const point = new WorldRollbackScope(subject.world);
     const speculation = rng(seed ^ 0x9e3779b9);
     const speculative: Harness = { world: subject.world, live: [...subject.live] };
     for (let i = 0; i < 900; i++) step(speculative, speculation);
-    restoreWorldRollbackPoint(subject.world, point);
+    point.restore();
 
     assertEquals(observe(subject.world), observe(control.world), "Restore must reproduce the captured state");
     const continueA = rng(seed + 1);
@@ -126,13 +125,13 @@ Deno.test("rollback restores capped owners even when stray raw writes exhausted 
   world.components.addToEntity(health, a, { hp: 10 });
   world.components.addToEntity(health, b, { hp: 20 });
 
-  const point = captureWorldRollbackPoint(world);
+  const point = new WorldRollbackScope(world);
   world.components.removeFromEntity(health, a);
   world.components.removeFromEntity(health, b);
   // Both dense rows now hold raw non-owner writes.
   instance.setAt(asSlotIndex(entityIndex(c)), "hp", 7);
   instance.setAt(asSlotIndex(entityIndex(d)), "hp", 8);
-  restoreWorldRollbackPoint(world, point);
+  point.restore();
 
   assertEquals(ids(world.components.getOwners(health)), [a, b], "Owners restored in order");
   assertEquals(world.components.getEntityData(health, a), { hp: 10 }, "First owner value restored");
@@ -192,11 +191,11 @@ Deno.test("rollback keeps allocation order and retires speculative handles at 16
   const kept = Array.from({ length: 50 }, () => createEntity(world));
   for (let i = 0; i < kept.length; i += 3) world.entities.destroy(kept[i]!);
 
-  const point = captureWorldRollbackPoint(world);
+  const point = new WorldRollbackScope(world);
   const before = world.entities.getActiveSnapshot();
   const speculative = Array.from({ length: 30 }, () => createEntity(world));
   for (const entity of before.slice(0, 5)) world.entities.destroy(entity);
-  restoreWorldRollbackPoint(world, point);
+  point.restore();
 
   assertEquals(world.entities.getActiveSnapshot(), before, "Live handles restored exactly");
   for (const entity of speculative) {

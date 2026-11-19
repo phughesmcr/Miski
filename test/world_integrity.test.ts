@@ -4,13 +4,11 @@ import {
   asEntity,
   asSlotIndex,
   CapacityError,
-  captureWorldRollbackPoint,
-  commitWorldRollbackPoint,
   type Entity,
   entityIndex,
   Query,
-  restoreWorldRollbackPoint,
   World,
+  WorldRollbackScope,
   WorldStateError,
 } from "../mod.ts";
 import { EntityManager } from "../src/entity/entity-manager.ts";
@@ -23,11 +21,11 @@ Deno.test("rollback restores the stable entity authority without reissuing specu
   const original = createEntity(world);
   world.components.addToEntity(position, original, { x: 1 });
   const query = new Query({ all: [position] });
-  const point = captureWorldRollbackPoint(world);
+  const point = new WorldRollbackScope(world);
   world.entities.destroy(original);
   const discarded = createEntity(world);
   world.components.addToEntity(position, discarded, { x: 9 });
-  restoreWorldRollbackPoint(world, point);
+  point.restore();
   assert(world.entities.isActive(original), "Facade must use restored entity authority");
   assert(!world.entities.isActive(discarded), "Speculative handle must be invalidated");
   assertEquals(world.entities.getActiveSnapshot(), [original], "Active snapshot must restore");
@@ -37,9 +35,9 @@ Deno.test("rollback restores the stable entity authority without reissuing specu
   assert(replacement !== discarded, "Restoring a live generation must retain issuance history");
   world.entities.destroy(replacement);
   for (let index = 0; index < 3; index++) {
-    const emptyPoint = captureWorldRollbackPoint(world);
+    const emptyPoint = new WorldRollbackScope(world);
     const speculative = createEntity(world);
-    restoreWorldRollbackPoint(world, emptyPoint);
+    emptyPoint.restore();
     const next = createEntity(world);
     assert(next !== speculative, "Empty-world rollback must retire speculative generations");
     world.entities.destroy(next);
@@ -59,11 +57,11 @@ Deno.test("rollback restores changed and transition windows and advances query r
   const entered = ids(world.entities.queryEntered(query));
   const exited = ids(world.entities.queryExited(query));
   const changed = ids(world.components.getChanged(position));
-  const point = captureWorldRollbackPoint(world);
+  const point = new WorldRollbackScope(world);
   world.components.addToEntity(tag, entity);
   world.refresh();
   const beforeRestore = world.queryRevision(query);
-  restoreWorldRollbackPoint(world, point);
+  point.restore();
   assertEquals(ids(world.entities.queryEntered(query)), entered, "Rollback must restore entered window");
   assertEquals(ids(world.entities.queryExited(query)), exited, "Rollback must restore exited window");
   assertEquals(ids(world.components.getChanged(position)), changed, "Rollback must restore changed window");
@@ -151,12 +149,13 @@ Deno.test("checkpoint restores tags and capped memberships atomically, including
 
 Deno.test("rollback scopes reject uninitialized and destroyed worlds", async () => {
   const world = new World({ capacity: 8, components: [tagComponent("tag")] });
-  assertThrows(() => captureWorldRollbackPoint(world), WorldStateError, "not been initialized");
+  assertThrows(() => new WorldRollbackScope(world), WorldStateError, "not been initialized");
   await world.init();
-  const point = captureWorldRollbackPoint(world);
+  const point = new WorldRollbackScope(world);
   await world.destroy();
-  assertThrows(() => restoreWorldRollbackPoint(world, point), WorldStateError, "destroyed");
-  assertThrows(() => commitWorldRollbackPoint(world, point), WorldStateError, "destroyed");
+  assertThrows(() => point.restore(), WorldStateError, "destroyed");
+  assert(!point.isOpen, "A failed restore still closes the scope");
+  assertThrows(() => point.commit(), WorldStateError, "already closed");
 });
 
 Deno.test("entity generation allocation retains the packed 15-bit wrap contract", () => {

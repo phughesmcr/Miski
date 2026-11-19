@@ -1,17 +1,15 @@
 /// <reference lib="deno.ns" />
 
 import {
-  captureWorldRollbackPoint,
-  commitWorldRollbackPoint,
   type DynamicComponent,
   type Entity,
   entityIndex,
   NotRegisteredError,
   Query,
-  restoreWorldRollbackPoint,
   type SlotIndex,
   System,
   type World,
+  WorldRollbackScope,
 } from "../mod.ts";
 import { ArchetypeManager } from "../src/archetype/archetype-manager.ts";
 import { EntityManager } from "../src/entity/entity-manager.ts";
@@ -131,15 +129,15 @@ async function orderTrace(): Promise<string[]> {
     for (let i = 0; i < 20; i++) step(world, live, random);
     record(world, trace, `r${round}`);
     if (round % 6 === 5) {
-      const point = captureWorldRollbackPoint(world);
+      const point = new WorldRollbackScope(world);
       const speculative = [...live];
       for (let i = 0; i < 15; i++) step(world, speculative, random);
       record(world, trace, `r${round}-speculative`);
       if (round % 12 === 5) {
-        restoreWorldRollbackPoint(world, point);
+        point.restore();
         record(world, trace, `r${round}-restored`);
       } else {
-        commitWorldRollbackPoint(world, point);
+        point.commit();
         live.length = 0;
         live.push(...speculative);
       }
@@ -180,11 +178,11 @@ Deno.test("query results carry each recycled slot's current generation through m
     for (let i = 0; i < 12; i++) step(world, live, random);
     assertListsCarryLiveHandles(world, `r${round}`);
     if (round % 5 === 4) {
-      const point = captureWorldRollbackPoint(world);
+      const point = new WorldRollbackScope(world);
       const speculative = [...live];
       for (let i = 0; i < 12; i++) step(world, speculative, random);
       assertListsCarryLiveHandles(world, `r${round}-speculative`);
-      restoreWorldRollbackPoint(world, point);
+      point.restore();
       assertListsCarryLiveHandles(world, `r${round}-restored`);
     }
     world.refresh();
@@ -294,11 +292,11 @@ Deno.test("rollback restore refills every query result", async () => {
   world.refresh();
   assertEquals(listIds(world.entities.queryList(withA)), [kept], "Before speculation");
 
-  const point = captureWorldRollbackPoint(world);
+  const point = new WorldRollbackScope(world);
   world.components.addToEntity(a, createEntity(world));
   world.components.removeFromEntity(a, kept);
   assertStrictEquals(world.entities.queryList(withA).count, 1, "Speculative membership");
-  restoreWorldRollbackPoint(world, point);
+  point.restore();
   assertEquals(listIds(world.entities.queryList(withA)), [kept], "Restored membership");
   await world.destroy();
 });

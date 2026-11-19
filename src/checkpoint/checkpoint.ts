@@ -9,7 +9,7 @@ export type CheckpointEntitySet =
   | { forEach(fn: (entity: Entity) => void): void };
 
 /** Ordered targets and pair data of one relation source. */
-export type CheckpointRelationPairs = {
+type CheckpointRelationPairs = {
   readonly targets: readonly Entity[];
   readonly data: readonly Readonly<Record<string, number>>[];
 };
@@ -51,17 +51,15 @@ export interface CheckpointWorld {
   ): void;
   removeComponentFromEntity(entity: Entity, component: DynamicComponent): void;
   /** @returns `true` if `component` is a relation, whose pairs are captured instead of its presence tag */
-  isRelation?(component: DynamicComponent): boolean;
-  captureRelationPairs?(entity: Entity, component: DynamicComponent): CheckpointRelationPairs;
+  isRelation(component: DynamicComponent): boolean;
+  captureRelationPairs(entity: Entity, component: DynamicComponent): CheckpointRelationPairs;
   /** Throw, without mutating, if restoring these pairs would fail. */
-  preflightRelationPairs?(
+  preflightRelationPairs(
     component: DynamicComponent,
     entries: readonly { readonly entity: Entity; readonly pairs: CheckpointRelationPairs }[],
   ): void;
-  restoreRelationPairs?(entity: Entity, component: DynamicComponent, pairs: CheckpointRelationPairs): void;
+  restoreRelationPairs(entity: Entity, component: DynamicComponent, pairs: CheckpointRelationPairs): void;
 }
-
-const checkpointData = new WeakMap<ComponentCheckpoint, CheckpointData>();
 
 /** Fields a checkpoint must rework on every apply: entity refs (may have died) and objects with a clone hook. */
 type ApplyFixups = {
@@ -114,16 +112,24 @@ export interface ComponentCheckpoint {
 }
 
 class ComponentCheckpointImpl implements ComponentCheckpoint {
+  readonly #data: CheckpointData;
+
   constructor(data: CheckpointData) {
-    checkpointData.set(this, data);
+    this.#data = data;
   }
 
   get entityCount(): number {
-    return requireData(this).entities.length;
+    return this.#data.entities.length;
   }
 
   get components(): readonly DynamicComponent[] {
-    return requireData(this).components;
+    return this.#data.components;
+  }
+
+  /** @returns the captured data of a checkpoint made by {@link captureComponentCheckpoint} */
+  static dataOf(checkpoint: ComponentCheckpoint): CheckpointData {
+    if (!(#data in (checkpoint as object))) throw new TypeError("Invalid ComponentCheckpoint.");
+    return (checkpoint as ComponentCheckpointImpl).#data;
   }
 }
 
@@ -134,7 +140,7 @@ export function captureComponentCheckpoint(
   requestedComponents: readonly DynamicComponent[],
 ): ComponentCheckpoint {
   const components = Object.freeze([...new Set(requestedComponents)]);
-  const relations = components.map((component) => world.isRelation?.(component) === true);
+  const relations = components.map((component) => world.isRelation(component));
   const keys = components.map((component) => {
     const instance = world.getComponentInstance(component);
     const schema = instance.type.schema;
@@ -150,7 +156,7 @@ export function captureComponentCheckpoint(
 
     const captured = components.map((component, index): CapturedComponent => {
       if (relations[index]) {
-        const pairs = world.captureRelationPairs!(entity, component);
+        const pairs = world.captureRelationPairs(entity, component);
         return pairs.targets.length === 0 ? { present: false, pairs } : { present: true, pairs };
       }
       if (!world.entityHasComponent(entity, component)) return { present: false };
@@ -174,7 +180,7 @@ export function captureComponentCheckpoint(
 
 /** Restore a component-subset checkpoint captured from this world. */
 export function applyComponentCheckpoint(world: CheckpointWorld, checkpoint: ComponentCheckpoint): void {
-  const data = requireData(checkpoint);
+  const data = ComponentCheckpointImpl.dataOf(checkpoint);
   if (data.owner !== world) {
     throw new Error("Cannot apply a component checkpoint to a different world.");
   }
@@ -189,8 +195,8 @@ export function applyComponentCheckpoint(world: CheckpointWorld, checkpoint: Com
   // Validate the final ownership counts and every payload before any part of the checkpoint changes.
   for (let index = 0; index < data.components.length; index++) {
     const component = data.components[index]!;
-    if (world.isRelation?.(component) === true) {
-      world.preflightRelationPairs!(
+    if (world.isRelation(component)) {
+      world.preflightRelationPairs(
         component,
         data.entities.map(({ entity, components }) => ({ entity, pairs: components[index]!.pairs! })),
       );
@@ -234,7 +240,7 @@ export function applyComponentCheckpoint(world: CheckpointWorld, checkpoint: Com
       const component = data.components[index]!;
       const captured = components[index]!;
       if (captured.pairs !== undefined) {
-        world.restoreRelationPairs!(entity, component, captured.pairs);
+        world.restoreRelationPairs(entity, component, captured.pairs);
         continue;
       }
       if (!captured.present) continue;
@@ -246,12 +252,6 @@ export function applyComponentCheckpoint(world: CheckpointWorld, checkpoint: Com
       }
     }
   }
-}
-
-function requireData(checkpoint: ComponentCheckpoint): CheckpointData {
-  const data = checkpointData.get(checkpoint);
-  if (data === undefined) throw new TypeError("Invalid ComponentCheckpoint.");
-  return data;
 }
 
 function forEachEntity(entitySet: CheckpointEntitySet, fn: (entity: Entity) => void): void {

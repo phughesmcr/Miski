@@ -9,7 +9,6 @@
  */
 
 import {
-  captureWorldRollbackPoint,
   Component,
   describeWorldSaveLayout,
   type DynamicComponent,
@@ -19,10 +18,10 @@ import {
   measureWorldSave,
   Query,
   readWorldSaveHeader,
-  restoreWorldRollbackPoint,
   saveWorld,
   saveWorldInto,
   World,
+  WorldRollbackScope,
   type WorldSaveDocument,
   WorldSaveError,
   worldSaveFromJSON,
@@ -179,11 +178,11 @@ function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
 function churn(h: Harness, random: Rng, steps: number): void {
   for (let i = 0; i < steps; i++) {
     if (random() % 97 === 0) {
-      const point = captureWorldRollbackPoint(h.world);
+      const point = new WorldRollbackScope(h.world);
       const live = [...h.live];
       const speculative: Harness = { world: h.world, live: [...h.live] };
       for (let j = 0; j < 20; j++) step(speculative, random);
-      restoreWorldRollbackPoint(h.world, point);
+      point.restore();
       h.live = live;
       continue;
     }
@@ -356,9 +355,9 @@ Deno.test("load rejects an uninitialized world, a rollback scope, and foreign by
   assertThrows(() => saveWorld(new World({ capacity: 16, components })), WorldStateError, "");
 
   const target = await createWorld(16);
-  const point = captureWorldRollbackPoint(target);
+  const point = new WorldRollbackScope(target);
   assertThrows(() => loadWorld(target, bytes), WorldStateError, "rollback");
-  restoreWorldRollbackPoint(target, point);
+  point.restore();
 
   assertThrows(() => loadWorld(target, new Uint8Array(64)), WorldSaveError, "magic");
   assertThrows(() => loadWorld(target, bytes.subarray(0, bytes.byteLength - 8)), WorldSaveError, "");

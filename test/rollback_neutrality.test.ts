@@ -1,15 +1,6 @@
 /// <reference lib="deno.ns" />
 
-import {
-  captureWorldRollbackPoint,
-  commitWorldRollbackPoint,
-  type DynamicComponent,
-  type Entity,
-  entityIndex,
-  Query,
-  restoreWorldRollbackPoint,
-  type World,
-} from "../mod.ts";
+import { type DynamicComponent, type Entity, entityIndex, Query, type World, WorldRollbackScope } from "../mod.ts";
 import { createTestWorld, tagComponent, vec2Component } from "./fixtures.ts";
 import { assertEquals } from "./helpers.ts";
 
@@ -113,12 +104,12 @@ for (const seed of [1, 7, 42, 1337, 9001]) {
       step(subject, prefixB, 3);
     }
 
-    const point = captureWorldRollbackPoint(subject.world);
+    const point = new WorldRollbackScope(subject.world);
     const speculativeLive = [...subject.live];
     const speculation = rng(seed ^ 0x5bd1e995);
     const speculative: Harness = { world: subject.world, live: speculativeLive };
     for (let i = 0; i < 80; i++) step(speculative, speculation, components.length);
-    restoreWorldRollbackPoint(subject.world, point);
+    point.restore();
 
     assertEquals(observe(subject.world), observe(control.world), "Restore must reproduce the captured state");
 
@@ -141,7 +132,7 @@ Deno.test("committing a rollback point leaves allocation and iteration order unt
     step(control, a, components.length);
     step(subject, b, components.length);
   }
-  commitWorldRollbackPoint(subject.world, captureWorldRollbackPoint(subject.world));
+  new WorldRollbackScope(subject.world).commit();
   for (let i = 0; i < 100; i++) {
     step(control, a, components.length);
     step(subject, b, components.length);

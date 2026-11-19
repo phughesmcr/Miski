@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+- **Breaking:** `WorldRollbackScope` is the one rollback API. The free
+  functions `captureWorldRollbackPoint`, `commitWorldRollbackPoint` and
+  `restoreWorldRollbackPoint` and the `WorldRollbackPoint` type are removed.
+  Replace `const point = captureWorldRollbackPoint(world)` with
+  `const scope = new WorldRollbackScope(world)`, and
+  `restoreWorldRollbackPoint(world, point)` / `commitWorldRollbackPoint(world,
+  point)` with `scope.restore()` / `scope.commit()`; or open the scope with
+  `using` so leaving the block restores the world.
+- **Breaking:** rollback errors are `WorldStateError`. Opening a second scope
+  on a world threw a plain `Error`, and using a closed scope threw a
+  `TypeError`; both now throw `WorldStateError`.
+- **Breaking:** `commit()` and `restore()` close the scope even when they
+  throw (for example on a destroyed world), as `WorldRollbackScope` already
+  did. The removed free functions left a point usable after a failed call.
+- `WorldRollbackScope` holds its captured state in private fields, and the
+  world validates it once per commit or restore instead of twice. `mod.ts` no
+  longer re-exports rollback through `world.ts`.
+- Document `applyCheckpoint`'s atomicity: it checks entities, payloads, caps
+  and relation pairs before writing and throws with the world unchanged if any
+  fails, but writes through the public paths, so a throwing object-field
+  `create()` / `clone()` hook can leave it partly applied. Wrap it in a
+  `WorldRollbackScope` to make it all-or-nothing.
 - Fix world-save loads from a Node `Buffer` whose `byteOffset` is not a
   multiple of 8 (common for pooled `fs.readFileSync` Buffers): `loadWorld`,
   `readWorldSaveHeader` and `worldSaveToJSON` threw "Not a Miski world save
