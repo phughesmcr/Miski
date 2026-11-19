@@ -110,7 +110,7 @@ export type CompiledComponentSchema<
 };
 
 /** Create one strongly typed component definition from its storage schema. */
-export function createComponentFromSchema<
+function createComponentFromSchema<
   TSchema extends Readonly<Record<string, TypedArrayConstructor | FieldDescriptor>>,
 >(
   name: string,
@@ -121,7 +121,7 @@ export function createComponentFromSchema<
 }
 
 /** Create a tag component definition from a {@link TagSpec}. */
-export function createTagFromSpec(name: string, spec: TagSpec): Component<null, null> {
+function createTagFromSpec(name: string, spec: TagSpec): Component<null, null> {
   if (spec === true) {
     return new Component({ name });
   }

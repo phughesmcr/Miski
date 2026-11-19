@@ -1,3 +1,4 @@
+import { relationComponentError } from "@/component/bundle-entry.ts";
 import { Component } from "@/component/component.ts";
 import { ComponentDataError, SpecError } from "@/errors.ts";
 import { isRelation } from "@/relation/relation.ts";
@@ -7,6 +8,9 @@ import type { DynamicComponent } from "@/types/component.ts";
 import type { ComponentData, SchemaOrNull, TypedArrayConstructor } from "@/types/partitions.ts";
 import { hasOwnProperty, isObject } from "@/utils.ts";
 import { canonicalizeStoredValue } from "@/value/canonicalize.ts";
+
+/** @internal What to do instead when a prefab spec or instantiate override lists a relation. */
+export const PREFAB_RELATION_ADVICE = "add its pairs with world.relations after instantiating";
 
 /** Flattened defaults of every prefab, parallel to its components (kept off the public surface). */
 const defaultsByPrefab = new WeakMap<object, readonly PrefabDefaults[]>();
@@ -197,9 +201,7 @@ export class Prefab<
       }
       if (isRelation(component)) {
         // Pairs need a target in a specific world; attach them with world.relations after instantiation.
-        throw new SpecError(
-          `Component "${component.name}" is a relation; add its pairs with world.relations after instantiating.`,
-        );
+        throw new SpecError(relationComponentError(component.name, PREFAB_RELATION_ADVICE).message);
       }
       if (own.has(component)) {
         throw new SpecError(`Duplicate component "${component.name}" in prefab.`);

@@ -105,7 +105,7 @@ function hasDuplicateCallbackKeys(entries: NormalizedQueryEntrySpec): boolean {
  * @param spec The specification object to check
  * @returns `true` if the spec is valid, `false` otherwise
  */
-export const isValidQuerySpec = (spec: unknown): spec is QueryInputSpec => {
+const isValidQuerySpec = (spec: unknown): spec is QueryInputSpec => {
   if (isObject(spec) === false) return false;
   const { all, any, include, none } = spec as QueryInputSpec;
   if (all == undefined && any == undefined && none == undefined && include == undefined) return false;

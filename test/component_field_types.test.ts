@@ -12,12 +12,12 @@ import {
   EntityNotFoundError,
   field,
   isFieldDescriptor,
-  isValidComponentSpec,
   Query,
   SpecError,
   System,
   WorldRollbackScope,
 } from "../mod.ts";
+import { isValidComponentSpec } from "../src/component/component.ts";
 import { ComponentManager } from "../src/component/component-manager.ts";
 import { createEntity, createTestWorld, Mesh } from "./fixtures.ts";
 import { assert, assertEquals, assertStrictEquals, assertThrows, ids } from "./helpers.ts";

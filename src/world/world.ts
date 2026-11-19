@@ -442,12 +442,8 @@ export class World {
       prefabs: new PrefabSpawner({
         entityManager: this.#entityManager,
         componentManager: this.#componentManager,
-        archetypeManager: this.#archetypeManager,
         componentCount: components.length,
-        notifyEntityLifecycle: () => {
-          this.#entityRevision = ++this.#revision;
-        },
-        invalidateCommittedTransition: (changed) => this.#mutations.invalidateCommittedTransition(changed),
+        mutations: this.#mutations,
       }),
       getComponentEntityData: (component, entity) => this.#getComponentEntityData(component, entity),
       readComponentEntityData: (component, entity) => this.#readComponentEntityData(component, entity),

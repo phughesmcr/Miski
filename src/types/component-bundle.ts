@@ -1,6 +1,6 @@
 import type { Component } from "@/component/component.ts";
 import type { DynamicComponent } from "@/types/component.ts";
-import type { SchemaValues } from "@/types/partitions.ts";
+import type { ComponentValue } from "@/types/partitions.ts";
 
 /** Runtime-compatible component bundle tuple. */
 export type ComponentBundleEntryInput =
@@ -10,7 +10,7 @@ export type ComponentBundleEntryInput =
 /** A bundle tuple checked against one concrete component definition. */
 export type ComponentBundleEntryFor<TComponent extends DynamicComponent> = TComponent extends
   Component<infer TValue, infer TStorage> ? TStorage extends null ? readonly [TComponent] :
-  readonly [TComponent] | readonly [TComponent, Partial<SchemaValues<TValue>>] :
+  readonly [TComponent] | readonly [TComponent, Partial<ComponentValue<TValue>>] :
   never;
 
 /** A component bundle whose entries are checked component-by-component. */

@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- **Breaking:** internal helpers are no longer exported from `mod.ts`:
+  - `isValidComponentSpec`, `isValidQuerySpec`, `isValidWorldSpec` and
+    `isValidName`. `new Component`, `new Query` and `new World` already throw
+    `SpecError` for an invalid spec or name; catch that instead.
+  - `mergeComponentSchemas` (only tests used it).
+  - The types `Partition` and `PartitionStorage` (PartitionedBuffer internals;
+    use `ComponentPartitions` / `ComponentStorage`) and `SchemaValues` (an
+    alias of `ComponentValue`; use `ComponentValue`).
+
 - **Breaking:** every failure the library throws is now a `MiskiError`, so
   `isMiskiError(error)` catches them all. Code that caught `TypeError`,
   `RangeError` or `Error` from Miski must catch the new class instead; messages

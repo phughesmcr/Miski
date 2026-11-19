@@ -1,5 +1,4 @@
 import type { Archetype } from "@/archetype/archetype.ts";
-import type { ArchetypeManager } from "@/archetype/archetype-manager.ts";
 import {
   assertBundleArray,
   assertBundleEntry,
@@ -21,18 +20,16 @@ import { QueryEntityResult } from "@/query/query-pool.ts";
 import type { ComponentBundleEntryInput } from "@/types/component-bundle.ts";
 import { isRelation } from "@/relation/relation.ts";
 import type { DynamicComponentInstance } from "@/types/component.ts";
-import { Prefab, prefabDefaults } from "./prefab.ts";
+import type { WorldMutations } from "@/world/world-mutations.ts";
+import { Prefab, PREFAB_RELATION_ADVICE, prefabDefaults } from "./prefab.ts";
 
 /** Dependencies required by {@link PrefabSpawner}. */
 export type PrefabSpawnerDeps = {
   readonly entityManager: EntityManager;
   readonly componentManager: ComponentManager;
-  readonly archetypeManager: ArchetypeManager;
   readonly componentCount: number;
-  /** Bump the world's entity lifecycle revision (once per created entity, as `create(bundle)` does). */
-  readonly notifyEntityLifecycle: () => void;
-  /** Invalidate query caches after a committed structural change. */
-  readonly invalidateCommittedTransition: (changed: boolean) => void;
+  /** The world's `create(bundle)` path, which places, publishes and discards created entities. */
+  readonly mutations: Pick<WorldMutations, "publishCreatedEntity" | "discardCreatedEntity">;
 };
 
 /** A prefab compiled against one world's registration: resolved instances and defaults in column order. */
@@ -72,15 +69,14 @@ type OverrideStaging = {
  * Instantiation is observationally identical to `create(bundle)` with the prefab's flattened bundle followed by the
  * overrides the prefab lacks: same handles, ownership and changed order, values, archetype path, entered order and
  * revision sequence. Every check (payloads, owner caps, capacity) finishes before the first allocation, so a rejected
- * call allocates nothing, consumes no generation and publishes no transition.
+ * call allocates nothing, consumes no generation and publishes no transition. Each entity is placed, published and (on
+ * an unexpected failure) discarded by the same {@link WorldMutations} helpers `create(bundle)` uses.
  */
 export class PrefabSpawner {
   readonly #entityManager: EntityManager;
   readonly #componentManager: ComponentManager;
-  readonly #archetypeManager: ArchetypeManager;
   readonly #componentCount: number;
-  readonly #notifyEntityLifecycle: () => void;
-  readonly #invalidateCommittedTransition: (changed: boolean) => void;
+  readonly #mutations: PrefabSpawnerDeps["mutations"];
 
   /** Compiled plans; weak so discarded prefabs do not outlive their last use. */
   readonly #plans: WeakMap<Prefab, PrefabPlan> = new WeakMap();
@@ -93,10 +89,8 @@ export class PrefabSpawner {
   constructor(deps: PrefabSpawnerDeps) {
     this.#entityManager = deps.entityManager;
     this.#componentManager = deps.componentManager;
-    this.#archetypeManager = deps.archetypeManager;
     this.#componentCount = deps.componentCount;
-    this.#notifyEntityLifecycle = deps.notifyEntityLifecycle;
-    this.#invalidateCommittedTransition = deps.invalidateCommittedTransition;
+    this.#mutations = deps.mutations;
   }
 
   /**
@@ -258,7 +252,7 @@ export class PrefabSpawner {
         throw new NotRegisteredError(formatComponentNotRegistered(componentDisplayName(entry[0])));
       }
       if (isRelation(instance.type)) {
-        throw relationComponentError(instance.type.name, "add its pairs with world.relations after instantiating");
+        throw relationComponentError(instance.type.name, PREFAB_RELATION_ADVICE);
       }
       const id = instance.id;
       if (staging.seen[id] === 1) {
@@ -287,7 +281,7 @@ export class PrefabSpawner {
   ): Entity | undefined {
     const entityManager = this.#entityManager;
     const componentManager = this.#componentManager;
-    const archetypeManager = this.#archetypeManager;
+    const mutations = this.#mutations;
     const { instances, rows } = plan;
     const added = staging.added;
     const data = staging.data;
@@ -319,41 +313,23 @@ export class PrefabSpawner {
           );
         }
         // Every instance lands in the same archetype: resolve it once, then place the rest directly.
-        if (total === 0) archetypeManager.createEntity(entity);
-        else if (target === undefined) target = archetypeManager.addComponentSet(entity, added, total);
-        else archetypeManager.set(target, entity);
-        this.#notifyEntityLifecycle();
-        this.#invalidateCommittedTransition(true);
+        target = mutations.publishCreatedEntity(entity, added, total, target);
         list?.add(entity, asSlotIndex(slot));
         pending = undefined;
         last = entity;
       }
     } catch (error) {
-      if (pending !== undefined) this.#discard(pending, added, total);
+      if (pending !== undefined) mutations.discardCreatedEntity(pending, added, total);
       if (list !== undefined) {
-        for (let i = 0; i < list.count; i++) this.#discard(list.entities[i]! as Entity, added, total);
+        for (let i = 0; i < list.count; i++) mutations.discardCreatedEntity(list.entities[i]! as Entity, added, total);
         list.clear();
       } else if (last !== undefined) {
-        this.#discard(last, added, total);
+        mutations.discardCreatedEntity(last, added, total);
       }
       throw error;
     } finally {
       for (let i = 0; i < total; i++) added[i] = undefined as unknown as DynamicComponentInstance;
     }
     return last;
-  }
-
-  /** Strip and destroy an entity this call created, after an unexpected commit failure. */
-  #discard(entity: Entity, added: readonly DynamicComponentInstance[], total: number): void {
-    let changed = this.#archetypeManager.getEntityArchetype(entity) !== undefined;
-    for (let i = 0; i < total; i++) {
-      if (this.#componentManager.removeInstanceFromEntity(added[i]!, entity)) changed = true;
-    }
-    this.#archetypeManager.destroyEntity(entity);
-    if (this.#entityManager.isActive(entity)) {
-      this.#entityManager.destroy(entity);
-      this.#notifyEntityLifecycle();
-    }
-    this.#invalidateCommittedTransition(changed);
   }
 }

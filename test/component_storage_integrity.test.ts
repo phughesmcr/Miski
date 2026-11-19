@@ -8,11 +8,11 @@ import {
   ComponentDataError,
   createEcsWorld,
   entityIndex,
-  isValidComponentSpec,
   Query,
   SpecError,
   World,
 } from "../mod.ts";
+import { isValidComponentSpec } from "../src/component/component.ts";
 import { createEntity, createTestWorld, vec2Component } from "./fixtures.ts";
 import { assert, assertEquals, assertThrows, ids } from "./helpers.ts";
 

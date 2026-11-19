@@ -1,17 +1,10 @@
-import type {
-  Partition,
-  PartitionStorage,
-  Schema,
-  SchemaProperty,
-  TypedArray,
-  TypedArrayConstructor,
-} from "@phughesmcr/partitionedbuffer";
+import type { Schema, SchemaProperty, TypedArray, TypedArrayConstructor } from "@phughesmcr/partitionedbuffer";
 
 import type { StorageProxy } from "@/component/storage-proxy.ts";
 import type { Entity, PackSlot } from "@/entity/entity.ts";
 import type { FieldDescriptor, FieldRaw, FieldValue } from "@/schema/field.ts";
 
-export type { Partition, PartitionStorage, Schema, SchemaProperty, TypedArray, TypedArrayConstructor };
+export type { Schema, SchemaProperty, TypedArray, TypedArrayConstructor };
 
 /**
  * The specification for a StorageProxy
@@ -91,9 +84,6 @@ export type ComponentStorage<T extends SchemaOrNull> = {
    */
   readonly partitions: ComponentPartitions<T>;
 };
-
-/** Compatibility alias for component write/proxy values. */
-export type SchemaValues<T> = ComponentValue<T>;
 
 /**
  * A StorageProxy with properties
