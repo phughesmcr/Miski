@@ -84,7 +84,7 @@ function relationLayout(relation: Relation<never>): WorldSaveRelationLayout {
   if (keys.length > 0) {
     fields = keys.map((key) => {
       const property = schema![key];
-      const code = fieldTypeCode(Array.isArray(property) ? property[0] : property);
+      const code = fieldTypeCode(property);
       if (code === 0 || code >= FIELD_TYPE_NAMES.length) {
         throw new WorldSaveError(`Relation ${relation.name} pair field ${key} has an unsaveable storage type.`);
       }

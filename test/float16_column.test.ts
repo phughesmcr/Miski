@@ -14,10 +14,6 @@ import {
 import { assert, assertEquals, assertThrows } from "./helpers.ts";
 
 const half = new Component({ name: "half", schema: { v: Float16Array, w: Float32Array } });
-const halfInit = new Component({
-  name: "halfInit",
-  schema: { v: [Float16Array, 1.5] as [Float16ArrayConstructor, number] },
-});
 
 async function make(): Promise<World> {
   const world = new World({ capacity: 16, components: [half] });
@@ -53,5 +49,4 @@ Deno.test("Float16Array column: write, canonicalize, save, JSON, rollback", asyn
   world.components.setEntityData(half, e, { v: 2, w: 2 });
   restoreWorldRollbackPoint(world, point);
   assertEquals((world.components.getEntityData(half, e) as { v: number }).v, 65504, "rollback");
-  void halfInit;
 });

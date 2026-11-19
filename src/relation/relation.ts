@@ -1,8 +1,7 @@
-import type { SchemaProperty } from "@phughesmcr/partitionedbuffer";
-import { Component, isValidComponentSpec } from "@/component/component.ts";
+import { assertNoTupleColumns, Component, isValidComponentSpec } from "@/component/component.ts";
 import { SpecError } from "@/errors.ts";
 import { isFieldDescriptor } from "@/schema/field.ts";
-import type { SchemaOrNull } from "@/types/partitions.ts";
+import type { SchemaOrNull, TypedArrayConstructor } from "@/types/partitions.ts";
 
 /** What happens to a relation's sources when one of its targets is destroyed. */
 export type RelationDeletePolicy = "remove" | "cascade";
@@ -29,13 +28,13 @@ export type TagRelationSpec = RelationSpecBase & {
 };
 
 /** Spec for a relation whose pairs carry numeric data. */
-export type DataRelationSpec<TSchema extends Record<string, SchemaProperty>> = RelationSpecBase & {
+export type DataRelationSpec<TSchema extends Record<string, TypedArrayConstructor>> = RelationSpecBase & {
   /** Per-pair numeric fields, stored as typed-array columns indexed by pair row. */
   schema: TSchema;
 };
 
 /** Any relation spec. */
-export type RelationSpec = TagRelationSpec | DataRelationSpec<Record<string, SchemaProperty>>;
+export type RelationSpec = TagRelationSpec | DataRelationSpec<Record<string, TypedArrayConstructor>>;
 
 /**
  * A relation between entities, such as `ChildOf(parent)` or `Targets(enemy)`.
@@ -61,7 +60,7 @@ export interface RelationConstructor {
   /** Create a relation whose pairs carry no data. */
   new (spec: TagRelationSpec): Relation<null>;
   /** Create a relation whose pairs carry numeric data, inferring the columns from `schema`. */
-  new <TSchema extends Record<string, SchemaProperty>>(spec: DataRelationSpec<TSchema>): Relation<TSchema>;
+  new <TSchema extends Record<string, TypedArrayConstructor>>(spec: DataRelationSpec<TSchema>): Relation<TSchema>;
 }
 
 const TagComponentBase = Component as unknown as new (spec: { name: string }) => Component<null, null>;
@@ -74,6 +73,7 @@ function invalid(detail: string): Error {
 function validateRelationSpec(spec: unknown): asserts spec is RelationSpec {
   if (!spec || typeof spec !== "object") throw invalid("expected an object.");
   const s = spec as RelationSpec;
+  assertNoTupleColumns(`relation "${String(s.name)}"`, s.schema);
   // Reuse the component rules for the name and the data columns (supported arrays, reserved fields).
   if (!isValidComponentSpec({ name: s.name, schema: s.schema ?? null })) {
     throw invalid("name or schema is not valid for a component.");

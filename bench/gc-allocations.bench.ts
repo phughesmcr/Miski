@@ -585,7 +585,8 @@ const fieldStates = ["idle", "run"] as const;
 const fieldTarget = mustCreateEntity(fieldWorld);
 const fieldEntity = fieldWorld.entities.createWithOrThrow([[fieldUnit, { label: "x" }]]);
 const fieldTransitionEntity = mustCreateEntity(fieldWorld);
-const fieldProxy = fieldWorld.components.require(fieldUnit).proxy;
+const fieldInstance = fieldWorld.components.require(fieldUnit);
+const fieldProxy = fieldInstance.proxy;
 const fieldWriteData = {
   hp: 0,
   alive: false,
@@ -767,6 +768,10 @@ const scenarios: Scenario[] = [
     positionProxy.entity = mutationEntity;
     positionProxy.x = numericSink++;
     positionProxy.y = -numericSink;
+  }),
+  budgeted("instance.set / setAt numeric writes with changed tracking", 250_000, () => {
+    positionInstance.set(mutationEntity, "x", numericSink++);
+    positionInstance.setAt(mutationSlot, "y", -numericSink);
   }),
   budgeted("setEntityData with reused data object", 250_000, () => {
     positionData.x = numericSink++;
@@ -1006,6 +1011,15 @@ const scenarios: Scenario[] = [
     fieldProxy.target = (i & 1) === 1 ? fieldTarget : null;
     fieldProxy.label = fieldLabels[i & 1]!;
     fieldProxy.mesh = fieldMeshes[i & 1]!;
+    fieldWorld.refresh();
+  }),
+  budgeted("instance.set of bool/enum/entity/string/object fields", 250_000, () => {
+    const i = numericSink++;
+    fieldInstance.set(fieldEntity, "alive", (i & 1) === 1);
+    fieldInstance.set(fieldEntity, "state", fieldStates[i & 1]!);
+    fieldInstance.set(fieldEntity, "target", (i & 1) === 1 ? fieldTarget : null);
+    fieldInstance.set(fieldEntity, "label", fieldLabels[i & 1]!);
+    fieldInstance.set(fieldEntity, "mesh", fieldMeshes[i & 1]!);
     fieldWorld.refresh();
   }),
   budgeted("proxy reads of bool/enum/entity/string/object fields", 250_000, () => {

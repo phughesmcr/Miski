@@ -1,10 +1,10 @@
-import { columnConstructor, Component } from "@/component/component.ts";
+import { Component } from "@/component/component.ts";
 import { ComponentDataError } from "@/errors.ts";
 import { isRelation } from "@/relation/relation.ts";
 import { type FieldDescriptor, isFieldDescriptor } from "@/schema/field.ts";
 import type { ComponentBundle, ComponentBundleEntryInput } from "@/types/component-bundle.ts";
 import type { DynamicComponent } from "@/types/component.ts";
-import type { ComponentData, SchemaOrNull } from "@/types/partitions.ts";
+import type { ComponentData, SchemaOrNull, TypedArrayConstructor } from "@/types/partitions.ts";
 import { hasOwnProperty, isObject } from "@/utils.ts";
 import { canonicalizeStoredValue } from "@/value/canonicalize.ts";
 
@@ -105,7 +105,7 @@ function mergeDefinitionData(component: DynamicComponent, row: Record<string, un
       throw new ComponentDataError(`Component ${name} data field "${key}" must be a finite number.`);
     }
     // Canonicalize through the field's own typed array, so instances store exactly these values.
-    row[key] = canonicalizeStoredValue(name, key, value, new (columnConstructor(property))(1));
+    row[key] = canonicalizeStoredValue(name, key, value, new (property as TypedArrayConstructor)(1));
   }
 }
 

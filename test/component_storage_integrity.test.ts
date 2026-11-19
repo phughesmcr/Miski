@@ -8,6 +8,7 @@ import {
   entityIndex,
   isValidComponentSpec,
   Query,
+  SpecError,
   World,
 } from "../mod.ts";
 import { createEntity, createTestWorld, vec2Component } from "./fixtures.ts";
@@ -173,7 +174,7 @@ Deno.test("column constructors are consistent across Component and compileCompon
     assert(!isValidComponentSpec({ name: "c", schema }), `${(Ctor as { name: string }).name} invalid for Component`);
     assertThrows(() => new Component({ name: "c", schema }), TypeError, 'column "v"');
     assertThrows(() => compileComponentSchema({ c: schema }), TypeError, "typed-array");
-    assertThrows(() => new Component({ name: "c", schema: { v: [Ctor, 0] } as never }), TypeError, "Invalid component");
+    assertThrows(() => new Component({ name: "c", schema: { v: [Ctor, 0] } as never }), SpecError, "tuple form");
   }
 });
 

@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+- Fix: `ComponentInstance.set()` and `setAt()` no longer move the shared
+  `instance.proxy` cursor. Before, `inst.set(b, "x", 9)` left a proxy that a
+  system had pointed at `a` reading and writing `b`. Single-field writes now go
+  through per-column writers that the proxy setters share, so validation,
+  encoding, change marking and revision bumps are unchanged. `set` checks
+  ownership once instead of twice.
+- **Breaking:** component and relation schemas no longer accept
+  PartitionedBuffer's `[Ctor, initial]` column tuple. It was never fully
+  supported: the initial value was dropped and storage started at 0, and
+  `compileComponentSchema` already rejected it. `new Component`, `new Relation`,
+  `compileComponentSchema` and `componentSchemaHash` now throw a `SpecError`
+  naming the column (not the generic `TypeError`). Declare the bare
+  typed-array constructor instead.
+- **Breaking (types):** `ComponentFieldSpec` is now `TypedArrayConstructor |
+  FieldDescriptor`, `SchemaPropertyArray` drops its tuple branch, and
+  `DataRelationSpec` schemas are `Record<string, TypedArrayConstructor>`. A
+  schema annotated with PartitionedBuffer's `Schema<T>` (whose properties allow
+  tuples) no longer type-checks as a component schema; use `FieldSchema<T>` or
+  `defineComponentSchema`.
+- **Breaking (types):** `StorageProxySpec` no longer has `markChanged`, and
+  `ComponentInstanceSpec` gains required `writers` and `capacity`. Both only
+  matter if you construct `StorageProxy` or `ComponentInstance` yourself.
 - Add `WorldRollbackScope`: a rollback point for `using` blocks. Leaving the
   block without `commit()` restores the world, so a throw can't leave the
   world's one rollback scope open (which blocked every later capture and world

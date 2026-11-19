@@ -6,7 +6,7 @@
  */
 
 // The only Miski imports we need:
-import { asEntity, Component, type Entity, entityIndex, Query, type Schema, System, World } from "../mod.ts";
+import { asEntity, Component, type Entity, entityIndex, type FieldSchema, Query, System, World } from "../mod.ts";
 
 // ############################################################################
 // DEMO CONFIG - not Miski specific
@@ -129,7 +129,7 @@ const printScreen = () => {
 // For type safety and DRY purposes, we can define a type for the schema of our components, but this is optional.
 type Vec2 = { x: Float32ArrayConstructor; y: Float32ArrayConstructor };
 
-const schemaVec2: Schema<Vec2> = {
+const schemaVec2: FieldSchema<Vec2> = {
   x: Float32Array,
   y: Float32Array,
 };

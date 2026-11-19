@@ -10,6 +10,72 @@ import {
   validateSideValue,
 } from "./field-codec.ts";
 
+/** Validate, encode and write one value into one column slot, marking the slot changed when the cell changes. */
+export type ColumnWriter = (slot: number, value: unknown) => void;
+
+/** Inputs for {@link createColumnWriters}. */
+export type ColumnWritersSpec = {
+  /** Component storage whose `partitions` hold every typed and side column. */
+  storage: { readonly partitions: unknown };
+  /** Component name used in validation errors. */
+  componentName: string;
+  /** Reusable one-element canonicalization buffers for numeric columns, keyed by field name. */
+  coercionScratch: Record<string, TypedArray>;
+  /** Codecs for bool / enum / entity columns, keyed by field name. */
+  codecs?: Readonly<Record<string, FieldCodec>>;
+  /** Descriptors for string / object columns, keyed by field name. */
+  sideFields?: Readonly<Record<string, SideField>>;
+  /** Canonical entity liveness check for entity fields. */
+  isEntityActive: (entity: Entity) => boolean;
+  /** Called with the slot after a write changes a cell. */
+  markChanged: (slot: number) => void;
+};
+
+/**
+ * Build one allocation-free writer per column. The proxy setters and `ComponentInstance.set` / `setAt` share these,
+ * so every single-field write applies the same validation, encoding and change tracking.
+ * @returns a null-prototype map from field name to writer
+ */
+export function createColumnWriters(spec: ColumnWritersSpec): Readonly<Record<string, ColumnWriter>> {
+  const { componentName, coercionScratch, codecs, sideFields, isEntityActive, markChanged } = spec;
+  const partitions = spec.storage.partitions as Record<string, TypedArray | unknown[]>;
+  const writers: Record<string, ColumnWriter> = Object.create(null);
+  for (const key of Object.keys(partitions)) {
+    const codec = codecs?.[key];
+    const side = sideFields?.[key];
+    if (codec !== undefined) {
+      const store = partitions[key] as TypedArray;
+      writers[key] = (slot, value) => {
+        const raw = encodeFieldValue(codec, componentName, key, value, isEntityActive);
+        if (store[slot] !== raw) {
+          store[slot] = raw;
+          markChanged(slot);
+        }
+      };
+    } else if (side !== undefined) {
+      const store = partitions[key] as unknown[];
+      writers[key] = (slot, value) => {
+        validateSideValue(side, componentName, key, value);
+        if (!Object.is(store[slot], value)) {
+          store[slot] = value;
+          markChanged(slot);
+        }
+      };
+    } else {
+      const store = partitions[key] as TypedArray;
+      const scratch = coercionScratch[key]!;
+      writers[key] = (slot, value) => {
+        const canonical = canonicalizeStoredValue(componentName, key, value as number, scratch);
+        if (!Object.is(store[slot], canonical)) {
+          store[slot] = canonical;
+          markChanged(slot);
+        }
+      };
+    }
+  }
+  return Object.freeze(writers);
+}
+
 /** A reusable slot cursor over component storage. Entity targets additionally validate ownership. */
 export class StorageProxy<T extends SchemaOrNull> {
   #entity: Entity | undefined;
@@ -18,119 +84,47 @@ export class StorageProxy<T extends SchemaOrNull> {
   #has: (entity: Entity) => boolean;
   #packSlot: (slot: number) => Entity;
 
-  /** Create a proxy with reusable canonicalization buffers for every numeric column. */
+  /** Create a proxy whose field accessors read columns directly and write through the shared column writers. */
   constructor(
     spec: StorageProxySpec<T> & {
-      componentName?: string;
-      coercionScratch: Record<string, TypedArray>;
+      /** Shared per-column writers from {@link createColumnWriters}. */
+      writers: Readonly<Record<string, ColumnWriter>>;
       /** Codecs for bool / enum / entity columns, keyed by field name. */
       codecs?: Readonly<Record<string, FieldCodec>>;
-      /** Descriptors for string / object columns, keyed by field name. */
-      sideFields?: Readonly<Record<string, SideField>>;
       /** Canonical entity liveness check for entity fields. */
       isEntityActive?: (entity: Entity) => boolean;
     },
   ) {
-    const { capacity, markChanged, storage, coercionScratch } = spec;
-    const componentName = spec.componentName ?? "component";
+    const { capacity, storage, writers } = spec;
     const isEntityActive = spec.isEntityActive ?? (() => true);
     this.#capacity = capacity;
     this.#has = spec.has;
     this.#packSlot = spec.packSlot ?? ((slot) => packEntity(slot, 0));
     if (storage === null) return;
-    const partitions = storage.partitions as unknown as Record<string, TypedArray | unknown[]>;
-    const markSlotChanged = (slot: number): void => markChanged(slot as SlotIndex);
+    const partitions = storage.partitions as unknown as Record<string, ArrayLike<unknown>>;
     for (const key of Object.keys(partitions)) {
+      const store = partitions[key]!;
       const codec = spec.codecs?.[key];
-      const side = spec.sideFields?.[key];
-      if (codec !== undefined) {
-        this.#defineCodecProperty(key, partitions[key] as TypedArray, codec, {
-          componentName,
-          isEntityActive,
-          markChanged: markSlotChanged,
-        });
-        continue;
-      }
-      if (side !== undefined) {
-        this.#defineSideProperty(key, partitions[key] as unknown[], side, componentName, markSlotChanged);
-        continue;
-      }
-      const store = partitions[key] as TypedArray;
-      const scratch = coercionScratch[key]!;
+      const write = writers[key]!;
       Object.defineProperty(this, key, {
-        get: () => {
+        get: codec === undefined ?
+          () => {
+            this.#validateTarget();
+            return store[this.#slot];
+          } :
+          () => {
+            this.#validateTarget();
+            return decodeFieldValue(codec, store[this.#slot] as number, isEntityActive);
+          },
+        set: (value: unknown) => {
           this.#validateTarget();
-          return store[this.#slot];
-        },
-        set: (value: number) => {
-          this.#validateTarget();
-          const canonical = canonicalizeStoredValue(componentName, key, value, scratch);
-          if (!Object.is(store[this.#slot], canonical)) {
-            store[this.#slot] = canonical;
-            markChanged(this.#slot);
-          }
+          write(this.#slot, value);
         },
         enumerable: true,
         configurable: false,
       });
     }
     Object.preventExtensions(this);
-  }
-
-  /** Define a decoding / encoding accessor for a bool, enum or entity column. */
-  #defineCodecProperty(
-    key: string,
-    store: TypedArray,
-    codec: FieldCodec,
-    context: {
-      componentName: string;
-      isEntityActive: (entity: Entity) => boolean;
-      markChanged: (slot: number) => void;
-    },
-  ): void {
-    const { componentName, isEntityActive, markChanged } = context;
-    Object.defineProperty(this, key, {
-      get: () => {
-        this.#validateTarget();
-        return decodeFieldValue(codec, store[this.#slot]!, isEntityActive);
-      },
-      set: (value: unknown) => {
-        this.#validateTarget();
-        const raw = encodeFieldValue(codec, componentName, key, value, isEntityActive);
-        if (store[this.#slot] !== raw) {
-          store[this.#slot] = raw;
-          markChanged(this.#slot);
-        }
-      },
-      enumerable: true,
-      configurable: false,
-    });
-  }
-
-  /** Define a validating accessor for a string or object column. */
-  #defineSideProperty(
-    key: string,
-    store: unknown[],
-    side: SideField,
-    componentName: string,
-    markChanged: (slot: number) => void,
-  ): void {
-    Object.defineProperty(this, key, {
-      get: () => {
-        this.#validateTarget();
-        return store[this.#slot];
-      },
-      set: (value: unknown) => {
-        this.#validateTarget();
-        validateSideValue(side, componentName, key, value);
-        if (!Object.is(store[this.#slot], value)) {
-          store[this.#slot] = value;
-          markChanged(this.#slot);
-        }
-      },
-      enumerable: true,
-      configurable: false,
-    });
   }
 
   #validateTarget(): void {

@@ -2,6 +2,7 @@ import type { Partition } from "@phughesmcr/partitionedbuffer";
 
 import type { $_COMPONENT_ID_KEY, $_PARTITION_KEY } from "@/constants.ts";
 import type { ComponentInstance } from "@/component/component-instance.ts";
+import type { ColumnWriter } from "@/component/storage-proxy.ts";
 import type { Component } from "@/component/component.ts";
 import type { Entity } from "@/entity/entity.ts";
 import type {
@@ -175,6 +176,10 @@ export type ComponentInstanceSpec<
   getRevision?: () => number;
   /** Decode one raw cell for guarded reads; omitted when every column is numeric */
   decode?: (key: string, raw: unknown) => unknown;
+  /** Shared per-column writers used by `set` / `setAt` and the proxy; `null` for tag components */
+  writers: TStorage extends null ? null : Readonly<Record<string, ColumnWriter>>;
+  /** The world's entity capacity */
+  capacity: number;
   /** The StorageProxy of the ComponentInstance */
   proxy: TStorage extends null ? null : StorageProxyWithProperties<TValue>;
   /** The storage of the ComponentInstance */

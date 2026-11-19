@@ -1,4 +1,4 @@
-import { ComponentDataError, ComponentOwnershipError } from "@/errors.ts";
+import { ComponentDataError, ComponentOwnershipError, EntityNotFoundError, formatEntityOutOfRange } from "@/errors.ts";
 import type { ComponentInstanceSpec } from "@/types/component.ts";
 import type {
   ComponentData,
@@ -8,8 +8,9 @@ import type {
   SchemaOrNull,
   StorageProxyWithProperties,
 } from "@/types/partitions.ts";
-import { asSlotIndex, type Entity, entityIndex, type SlotIndex } from "@/entity/entity.ts";
+import { type Entity, entityIndex, type SlotIndex } from "@/entity/entity.ts";
 import { hasOwnProperty } from "@/utils.ts";
+import type { ColumnWriter } from "./storage-proxy.ts";
 import type { Component } from "./component.ts";
 
 /** A ComponentInstance is the world-local representation of a component */
@@ -28,6 +29,12 @@ export class ComponentInstance<
 
   /** Revision provider */
   readonly #getRevision: () => number;
+
+  /** Shared per-column writers (null-prototype), or `null` for tag components */
+  readonly #writers: Readonly<Record<string, ColumnWriter>> | null;
+
+  /** The world's entity capacity (exclusive upper bound for slots) */
+  readonly #capacity: number;
 
   /** Raw cell decoder for `field.*` columns, or `undefined` when every column is numeric */
   readonly #decode: ((key: string, raw: unknown) => unknown) | undefined;
@@ -60,12 +67,14 @@ export class ComponentInstance<
    * @throws {TypeError} If the spec is invalid
    */
   constructor(spec: ComponentInstanceSpec<TValue, TStorage>) {
-    const { has, id, markChanged, proxy, storage, type, getRevision, decode } = spec;
+    const { has, id, markChanged, proxy, storage, type, getRevision, decode, writers, capacity } = spec;
     this.id = id;
     this.#has = has;
     this.#markChanged = markChanged;
     this.#getRevision = getRevision ?? (() => 0);
     this.#decode = decode;
+    this.#writers = writers ?? null;
+    this.#capacity = capacity;
     this.proxy = proxy as TStorage extends null ? null : StorageProxyWithProperties<TValue>;
     this.storage = storage as TStorage extends null ? null : ComponentStorage<TStorage>;
     this.type = type;
@@ -114,19 +123,18 @@ export class ComponentInstance<
     return this.getAt(entityIndex(entity), key);
   }
 
-  /** Write a property for a packed entity handle, validating it like the proxy does. */
+  /** Write a property for a packed entity handle, validating it like the proxy does. Does not move {@link proxy}. */
   set<K extends keyof ComponentValue<TValue> & string>(entity: Entity, key: K, value: ComponentValue<TValue>[K]): void;
   /** Write a property by untyped key; the value is validated at runtime. */
   set(entity: Entity, key: string, value: unknown): void;
   set(entity: Entity, key: string, value: unknown): void {
-    if (this.proxy === null) {
-      throw new TypeError(`Component ${this.name} has no data storage.`);
+    const write = this.#writer(key);
+    const slot = entityIndex(entity);
+    if (slot >= this.#capacity) throw new EntityNotFoundError(formatEntityOutOfRange(entity));
+    if (!this.#has(entity)) {
+      throw new ComponentOwnershipError(`Entity ${entity} does not own component ${this.name}.`);
     }
-    if (!hasOwnProperty(this.storage!.partitions, key)) {
-      throw new ComponentDataError(`Component ${this.name} does not define data field "${key}".`);
-    }
-    this.proxy.entity = entity;
-    (this.proxy as Record<string, unknown>)[key] = value;
+    write(slot, value);
   }
 
   /** Read a property by raw slot with no generation or membership check. Field columns decode like {@link get}. */
@@ -146,7 +154,10 @@ export class ComponentInstance<
     return decode === undefined ? raw : decode(key, raw);
   }
 
-  /** Write a property by raw slot with no generation or membership check. Values are validated like {@link set}. */
+  /**
+   * Write a property by raw slot with no generation or membership check. Values are validated like {@link set}.
+   * Does not move {@link proxy}.
+   */
   setAt<K extends keyof ComponentValue<TValue> & string>(
     slot: SlotIndex,
     key: K,
@@ -155,14 +166,24 @@ export class ComponentInstance<
   /** Write a property by raw slot and untyped key; the value is validated at runtime. */
   setAt(slot: SlotIndex, key: string, value: unknown): void;
   setAt(slot: SlotIndex, key: string, value: unknown): void {
-    if (this.proxy === null) {
+    const write = this.#writer(key);
+    if (!Number.isInteger(slot) || slot < 0 || slot >= this.#capacity) {
+      throw new EntityNotFoundError(formatEntityOutOfRange(slot as unknown as Entity));
+    }
+    write(slot, value);
+  }
+
+  /** Resolve the shared writer for `key`, throwing for tag components and undeclared fields. */
+  #writer(key: string): ColumnWriter {
+    const writers = this.#writers;
+    if (writers === null) {
       throw new TypeError(`Component ${this.name} has no data storage.`);
     }
-    if (!hasOwnProperty(this.storage!.partitions, key)) {
+    const write = writers[key];
+    if (write === undefined) {
       throw new ComponentDataError(`Component ${this.name} does not define data field "${key}".`);
     }
-    this.proxy.slot = asSlotIndex(slot);
-    (this.proxy as Record<string, unknown>)[key] = value;
+    return write;
   }
 
   /** Runtime string tag used by `Object.prototype.toString`. */
