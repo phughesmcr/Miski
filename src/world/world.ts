@@ -536,7 +536,8 @@ export class World {
    * Only systems whose init completed successfully are destroyed. Teardown also cleans up a world that
    * is in the error state (for example after a failed `init()`): it runs those destroy hooks and, if they
    * all succeed, leaves the world `destroyed`. A destroy-hook failure unregisters all systems and leaves
-   * the world in the error state. Destroy hooks of an errored world see the world in the error state.
+   * the world in the error state; when more than one hook fails, the rejection is an `AggregateError` of them
+   * all. Destroy hooks of an errored world see the world in the error state.
    *
    * Do not await this from a system init or destroy hook: teardown waits for the hook, so it would wait
    * on itself. A call in the synchronous part of a hook rejects; after an `await`, use the hook's

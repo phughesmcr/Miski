@@ -101,7 +101,11 @@ export class SystemManager {
     return this.#publicRegistry;
   }
 
-  /** Refresh the public registry view after cold-path system registry changes. */
+  /**
+   * Refresh the public registry view after cold-path system registry changes.
+   * Every registration change must produce a new object: `Schedule` compares registry identity to notice
+   * unregistered systems.
+   */
   #refreshPublicRegistry(): void {
     this.#publicRegistry = Object.freeze(Object.assign(Object.create(null), this.#registry));
   }
@@ -323,7 +327,8 @@ export class SystemManager {
   }
 
   /**
-   * Destroy all systems
+   * Destroy all systems, continuing past failures.
+   * @throws The error, if one destroy failed; an `AggregateError` of every error, in order, if more than one did
    */
   async destroyAll(): Promise<void> {
     const errors: unknown[] = [];
@@ -337,7 +342,8 @@ export class SystemManager {
       });
     }
     await pending;
-    if (errors.length > 0) throw errors[0];
+    if (errors.length === 1) throw errors[0];
+    if (errors.length > 1) throw new AggregateError(errors, `${errors.length} systems failed to be destroyed`);
   }
 
   /**

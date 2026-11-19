@@ -176,6 +176,30 @@ Deno.test("world teardown unregisters failed hooks and still destroys remaining 
   assertEquals(world.state, "error", "Hook failure remains observable");
 });
 
+Deno.test("world teardown reports every destroy-hook failure as an AggregateError", async () => {
+  const tag = tagComponent("tag");
+  const world = new World({ capacity: 8, components: [tag] });
+  const failures = ["first", "second"].map((name) => new Error(`${name} destroy failed`));
+  for (const [i, name] of ["first", "good", "second"].entries()) {
+    world.systems.create(
+      new System({
+        name,
+        query: new Query({ all: [tag] }),
+        callback: () => {},
+        destroy: () => {
+          if (name !== "good") throw failures[i === 0 ? 0 : 1];
+        },
+      }),
+    );
+  }
+  await world.init();
+  const error = await world.destroy().then(() => undefined, (reason: unknown) => reason);
+  assert(error instanceof AggregateError, `Expected AggregateError, got ${String(error)}`);
+  assertEquals(error.message, "2 systems failed to be destroyed", "The message counts the failures");
+  assertEquals(error.errors, failures, "Every failure is kept, in order");
+  assertEquals(world.state, "error", "Hook failures remain observable");
+});
+
 Deno.test("concurrent individual system teardown runs a hook only once", async () => {
   const tag = tagComponent("tag");
   const world = new World({ capacity: 8, components: [tag] });
