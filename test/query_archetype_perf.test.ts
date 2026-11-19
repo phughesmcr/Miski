@@ -23,6 +23,19 @@ function sorted(iterable: Iterable<number>): number[] {
   return [...iterable].toSorted((a, b) => a - b);
 }
 
+/** Model oracle: active entities whose components satisfy the query's all / any / none terms, sorted. */
+function expectedMembers(world: World, query: Query): number[] {
+  const has = (component: DynamicComponent, entity: Entity) => world.components.entityHas(component, entity);
+  const members: number[] = [];
+  for (const entity of world.entities.getActiveSnapshot()) {
+    if (!query.all.every((component) => has(component, entity))) continue;
+    if (query.none.some((component) => has(component, entity))) continue;
+    if (query.any.length > 0 && !query.any.some((component) => has(component, entity))) continue;
+    members.push(entity);
+  }
+  return sorted(members);
+}
+
 type Rng = () => number;
 
 function rng(seed: number): Rng {
@@ -62,9 +75,8 @@ function record(world: World, trace: string[], label: string): void {
     for (let i = 0; i < list.count; i++) listed.push(list.entities[i]!, list.slots[i]!);
     trace.push(
       `${label}#${q} list=${listed.join(",")}` +
-        ` live=${[...world.archetypes.queryEntities(query)].join(",")}` +
-        ` entered=${[...world.archetypes.queryEntered(query)].join(",")}` +
-        ` exited=${[...world.archetypes.queryExited(query)].join(",")}`,
+        ` entered=${[...world.entities.queryEntered(query)].join(",")}` +
+        ` exited=${[...world.entities.queryExited(query)].join(",")}`,
     );
   }
 }
@@ -141,19 +153,18 @@ async function orderTrace(): Promise<string[]> {
 Deno.test("query views keep their exact iteration order through moves, batches and rollback", async () => {
   const trace = await orderTrace();
   assertEquals(trace.length, (24 + 4 + 2) * queries.length, "Trace length");
-  // Golden re-recorded when entity slots moved from LIFO to next-fit reuse (handles changed, view logic did not).
-  assertEquals(fnv1a(trace.join("\n")), "17364936", "Query view order diverged from the recorded golden trace");
+  // Golden re-recorded when entity slots moved from LIFO to next-fit reuse (handles changed, view logic did not),
+  // and again when the live archetype view (`queryEntities`) was removed from the trace.
+  assertEquals(fnv1a(trace.join("\n")), "3e39b65d", "Query view order diverged from the recorded golden trace");
 });
 
-/** Every listed handle must be the live handle for its slot, and match the archetype view entry for entry. */
+/** Every listed handle must be the live handle for its slot, and the list must hold exactly the model's members. */
 function assertListsCarryLiveHandles(world: World, label: string): void {
   for (let q = 0; q < queries.length; q++) {
     const list = world.entities.queryList(queries[q]!);
-    const live = [...world.archetypes.queryEntities(queries[q]!)];
-    assertStrictEquals(list.count, live.length, `${label}#${q} count`);
+    assertEquals(sorted(listIds(list)), expectedMembers(world, queries[q]!), `${label}#${q} members`);
     for (let i = 0; i < list.count; i++) {
       const entity = list.entities[i]!;
-      assertStrictEquals(entity, live[i], `${label}#${q}[${i}] handle`);
       assertStrictEquals(list.slots[i], entityIndex(entity), `${label}#${q}[${i}] slot`);
       assert(world.entities.isActive(entity), `${label}#${q}[${i}] is live`);
     }
@@ -260,8 +271,7 @@ Deno.test("refills stay exact when archetype lists are much larger than their po
   }
   const check = (label: string) => {
     const list = world.entities.queryList(withA);
-    const live = [...world.archetypes.queryEntities(withA)];
-    assertEquals(listIds(list), live, `${label}: list matches the archetype view`);
+    assertEquals(sorted(listIds(list)), expectedMembers(world, withA), `${label}: list holds exactly the members`);
     for (let i = 0; i < list.count; i++) assertStrictEquals(list.slots[i], entityIndex(list.entities[i]!), label);
   };
   check("full");
@@ -340,24 +350,24 @@ Deno.test("archetype query iterators are reused without sharing state", async ()
     entities.push(entity);
   }
 
-  const first = world.archetypes.queryEntities(withA);
+  const first = world.entities.queryEntered(withA);
   const live = [...first];
   assertEquals(sorted(live), sorted(entities), "Full pass");
   assertStrictEquals(first.next().done, true, "Exhausted iterator stays done until reused");
-  const second = world.archetypes.queryEntities(withA);
+  const second = world.entities.queryEntered(withA);
   assertStrictEquals(second, first, "An exhausted iterator is reused");
   assertEquals([...second], live, "A reused iterator restarts in the same order");
 
   // Early exit returns the iterator to the pool.
   let seen = 0;
-  for (const _entity of world.archetypes.queryEntered(withA)) {
+  for (const _entity of world.entities.queryEntered(withA)) {
     if (++seen === 2) break;
   }
-  assertEquals(sorted([...world.archetypes.queryEntered(withA)]), sorted(entities), "Entered after a break");
+  assertEquals(sorted([...world.entities.queryEntered(withA)]), sorted(entities), "Entered after a break");
 
   // Iterators opened together are independent.
-  const x = world.archetypes.queryEntities(withA);
-  const y = world.archetypes.queryEntities(withA);
+  const x = world.entities.queryEntered(withA);
+  const y = world.entities.queryEntered(withA);
   assert(x !== y, "Concurrent iterators are distinct");
   assertStrictEquals(x.next().value, live[0], "x starts at the first entity");
   assertStrictEquals(y.next().value, live[0], "y starts independently");
@@ -366,7 +376,7 @@ Deno.test("archetype query iterators are reused without sharing state", async ()
   y.return?.();
 
   // Like the generators, the query resolves lazily and sees state at first next().
-  const lazy = world.archetypes.queryExited(withA);
+  const lazy = world.entities.queryExited(withA);
   world.refresh();
   world.components.removeFromEntity(a, entities[0]!);
   assertEquals([...lazy], [entities[0]], "Exited reads the window when iteration starts");

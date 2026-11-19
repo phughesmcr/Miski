@@ -172,8 +172,11 @@
  * const positionComponent = new Component({ name: "position", schema: { x: Float32Array, y: Float32Array } });
  * const world = new World({ capacity: 1024, components: [positionComponent] });
  * const positionQuery = new Query({ all: [positionComponent] });
+ * // Each call returns its own pooled iterator over a snapshot, so nested loops over one query are safe.
  * for (const entity of world.entities.query(positionQuery)) {
- *   console.log(entity);
+ *   for (const other of world.entities.query(positionQuery)) {
+ *     if (entity !== other) console.log(entity, other);
+ *   }
  * }
  * ```
  *

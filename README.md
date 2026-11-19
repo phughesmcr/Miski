@@ -443,7 +443,7 @@ const q = new Query({
   include: [Facing],           // exposed, does not filter
 });
 
-const entities = world.entities.query(q);     // convenience iterator
+const entities = world.entities.query(q);     // convenience iterator, own cursor per call
 const list = world.entities.queryList(q);     // dense borrowed view
 
 for (let i = 0; i < list.count; i++) {
@@ -461,9 +461,15 @@ list.each((slot, entity) => {
 world.entities.querySnapshot(q);
 world.entities.toArray(list);
 
-world.archetypes.queryEntered(q);
-world.archetypes.queryExited(q);
+world.entities.queryEntered(q);
+world.entities.queryExited(q);
 ```
+
+Both `query(q)` and `queryList(q)` read a snapshot taken when they are called,
+so destroying or moving the current entity inside the loop skips nothing. Each
+`query(q)` / `getActive()` call returns its own pooled iterator, so nested loops
+over the same query work; it goes back to the pool when the loop ends or
+breaks, so don't call `next()` on it after it reports `done`.
 
 Entered / exited are relative to the current refresh window: entered means a
 member now but not at window start, exited the reverse. Moves between matching

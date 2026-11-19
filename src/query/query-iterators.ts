@@ -102,38 +102,6 @@ abstract class PooledQueryIterator implements IterableIterator<Entity> {
   }
 }
 
-/** Live entities of every archetype matching a query, archetype by archetype in list order. */
-class ArchetypeEntitiesIterator extends PooledQueryIterator {
-  #archetypeIndex = 0;
-  #archetypeCount = 0;
-  #archetype: Archetype | undefined;
-  #position = 0;
-
-  protected start(instance: QueryInstance): void {
-    this.#archetypeIndex = 0;
-    this.#archetypeCount = instance.archetypeCount;
-    this.#archetype = undefined;
-    this.#position = 0;
-  }
-
-  protected advance(instance: QueryInstance): boolean {
-    for (;;) {
-      let archetype = this.#archetype;
-      if (archetype === undefined) {
-        if (this.#archetypeIndex >= this.#archetypeCount) return false;
-        archetype = instance.archetypes[this.#archetypeIndex++]!;
-        this.#archetype = archetype;
-        this.#position = 0;
-      }
-      if (this.#position < archetype.getPopulationCount()) {
-        this.result.value = archetype.entityAt(this.#position++);
-        return true;
-      }
-      this.#archetype = undefined;
-    }
-  }
-}
-
 /** Entities that match the query now but did not when the refresh window began, in first-touch order. */
 class ArchetypeEnteredIterator extends PooledQueryIterator {
   #index = 0;
@@ -209,21 +177,14 @@ class QueryIteratorPool<T extends PooledQueryIterator> {
   }
 }
 
-/** Pooled iterators behind `world.archetypes.queryEntities` / `queryEntered` / `queryExited`. */
+/** Pooled iterators behind `world.entities.queryEntered` / `queryExited`. */
 export class ArchetypeQueryIterators {
-  readonly #entities: QueryIteratorPool<ArchetypeEntitiesIterator>;
   readonly #entered: QueryIteratorPool<ArchetypeEnteredIterator>;
   readonly #exited: QueryIteratorPool<ArchetypeExitedIterator>;
 
   constructor(host: ArchetypeQueryIteratorHost) {
-    this.#entities = new QueryIteratorPool(host, ArchetypeEntitiesIterator);
     this.#entered = new QueryIteratorPool(host, ArchetypeEnteredIterator);
     this.#exited = new QueryIteratorPool(host, ArchetypeExitedIterator);
-  }
-
-  /** Live entities of every archetype matching the query; each entity inhabits exactly one archetype. */
-  entities(query: Query): IterableIterator<Entity> {
-    return this.#entities.acquire(query);
   }
 
   /** Entities that match the query now but did not match it when the refresh window began. */

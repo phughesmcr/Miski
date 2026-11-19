@@ -154,6 +154,25 @@
   a cycle) never settles. Use the hook context after an `await`. The first
   argument is still the world itself. Exports `SystemHook` and
   `SystemHookContext`.
+- **Breaking:** remove `world.archetypes.queryEntities`. It walked archetype
+  storage live, so destroying or moving the current entity swap-removed another
+  one into its place and the loop skipped it (destroying each of 4 entities
+  visited 2), and a move into a later matching archetype could visit an entity
+  twice. Use `world.entities.query(q)` or `world.entities.queryList(q)`, which
+  iterate a snapshot taken when they are called.
+- **Breaking:** remove `world.archetypes.queryComponents`, a duplicate of
+  `world.components.query`.
+- **Breaking:** move `queryEntered` / `queryExited` from `world.archetypes` to
+  `world.entities`. `world.archetypes` keeps `getEntityArchetype` and
+  `isEntityInRoot`.
+- `world.entities.query(q)` and `world.entities.getActive()` return a separate
+  pooled iterator per call instead of one shared cursor, so nested loops over
+  the same query (or over `getActive()`, with any bounds) see every pair. A 4×4
+  nested loop over 4 entities used to yield 4 pairs. An iterator returns to its
+  pool when the loop finishes or breaks, so warm loops still allocate nothing;
+  don't call `next()` on one after it reports `done`. `query()` iterates the
+  query's retained result, so re-querying the same query after a mutation
+  inside the loop still changes what the outer loop sees.
 
 ## 1.0.0-beta.2 — 2026-11-18
 

@@ -123,7 +123,7 @@ Deno.test("exclusive relations replace their target and report the change", asyn
   const [parentA, parentB, child] = spawn(world, 3);
   const query = new Query({ all: [childOf] });
   world.relations.add(childOf, child!, parentA!);
-  assertEquals(ids(world.archetypes.queryEntered(query)), [child], "child entered the wildcard query");
+  assertEquals(ids(world.entities.queryEntered(query)), [child], "child entered the wildcard query");
   assertEquals(ids(world.relations.getChanged(childOf)), [child], "first target is a change");
   world.refresh();
   assertEquals(ids(world.relations.getChanged(childOf)), [], "refresh clears the changed window");
@@ -133,8 +133,8 @@ Deno.test("exclusive relations replace their target and report the change", asyn
   assertEquals(listIds(world.relations.getTargets(childOf, child!)), [parentB], "exactly one target");
   assertEquals(listIds(world.relations.getSources(childOf, parentA!)), [], "old parent lost its child");
   assertEquals(listIds(world.relations.getSources(childOf, parentB!)), [child], "new parent gained it");
-  assertEquals(ids(world.archetypes.queryEntered(query)), [], "a retarget is not an archetype move");
-  assertEquals(ids(world.archetypes.queryExited(query)), [], "nor an exit");
+  assertEquals(ids(world.entities.queryEntered(query)), [], "a retarget is not an archetype move");
+  assertEquals(ids(world.entities.queryExited(query)), [], "nor an exit");
   assertEquals(ids(world.relations.getChanged(childOf)), [child], "a retarget is reported as changed");
 });
 
@@ -150,15 +150,15 @@ Deno.test("relation presence drives wildcard queries and entered/exited windows"
   world.relations.add(likes, a!, b!);
   world.relations.add(likes, a!, c!);
   assertEquals(listIds(world.entities.queryList(liking)), [a], "a matches the wildcard");
-  assertEquals(ids(world.archetypes.queryEntered(liking)), [a], "entered once");
+  assertEquals(ids(world.entities.queryEntered(liking)), [a], "entered once");
   assertStrictEquals(world.components.entityHas(likes, a!), true, "entityHas reports the presence tag");
   world.refresh();
 
   world.relations.remove(likes, a!, b!);
-  assertEquals(ids(world.archetypes.queryExited(liking)), [], "still has a target");
+  assertEquals(ids(world.entities.queryExited(liking)), [], "still has a target");
   world.relations.remove(likes, a!, c!);
-  assertEquals(ids(world.archetypes.queryExited(liking)), [a], "last target removed: exited");
-  assertEquals(ids(world.archetypes.queryEntered(notLiking)), [a], "and entered the none query");
+  assertEquals(ids(world.entities.queryExited(liking)), [a], "last target removed: exited");
+  assertEquals(ids(world.entities.queryEntered(notLiking)), [a], "and entered the none query");
   assertEquals(ids(world.relations.getChanged(likes)), [], "a source without targets is not listed as changed");
 });
 
@@ -241,7 +241,7 @@ Deno.test("destroying a target auto-removes pairs and the presence tag", async (
   assertStrictEquals(world.entities.isActive(a!), true, "auto-remove keeps sources alive");
   assertStrictEquals(world.relations.has(likes, a!), false, "a lost its only target");
   assertEquals(listIds(world.relations.getTargets(likes, c!)), [a], "c keeps its other target");
-  assertEquals(ids(world.archetypes.queryExited(liking)), [a], "a exited the wildcard query");
+  assertEquals(ids(world.entities.queryExited(liking)), [a], "a exited the wildcard query");
   assertEquals(listIds(world.relations.getAllTargets(likes)), [a], "b is no longer a target");
 
   // Destroying a source unlinks it from its targets.
@@ -446,7 +446,7 @@ function observe(world: World, defs: ReturnType<typeof relations>, live: readonl
       all: slots(listIds(world.relations.getAllTargets(relation))),
       changed: slots(ids(world.relations.getChanged(relation))),
       query: slots(listIds(world.entities.queryList(new Query({ all: [relation] })))),
-      entered: slots(ids(world.archetypes.queryEntered(new Query({ all: [relation] })))),
+      entered: slots(ids(world.entities.queryEntered(new Query({ all: [relation] })))),
     });
   }
   const data = live.flatMap((s) => live.map((t) => world.relations.getData(defs.targets, s, t)));

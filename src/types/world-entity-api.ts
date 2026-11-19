@@ -27,7 +27,10 @@ export type WorldEntityAPI = {
   ): Entity;
   /** Destroy an entity */
   destroy(entity: Entity): void;
-  /** Get active handles within raw slot bounds: inclusive start (default 0), exclusive end (default capacity). */
+  /**
+   * Get active handles within raw slot bounds: inclusive start (default 0), exclusive end (default capacity).
+   * Returns a pooled per-call iterator over a snapshot taken now, so nested loops are independent.
+   */
   getActive(startSlot?: SlotIndex, endSlot?: SlotIndex): BorrowedEntityIterator;
   /** Get a stable snapshot within the same raw slot bounds as {@link getActive}. */
   getActiveSnapshot(startSlot?: SlotIndex, endSlot?: SlotIndex): Entity[];
@@ -39,10 +42,23 @@ export type WorldEntityAPI = {
   isActive(entity: Entity): boolean;
   /** Check if an entity is valid */
   isEntity(entity: Entity): boolean;
-  /** Query for entities */
+  /**
+   * Query for entities. Returns a pooled per-call iterator over the query's current result, so nested loops over
+   * the same query are independent and destroying or moving the current entity skips nothing.
+   */
   query(query: Query): BorrowedEntityIterator;
   /** Query for entities as a dense reusable list for index-based hot loops */
   queryList(query: Query): BorrowedEntityList;
+  /**
+   * Entities that match the query now but did not when the refresh window began (since the last
+   * `world.refresh()`), in first-touch order. Returns a pooled iterator that reads live world state on each step.
+   */
+  queryEntered(query: Query): IterableIterator<Entity>;
+  /**
+   * Entities that matched the query when the refresh window began but do not now, in first-touch order.
+   * Reports the window-start handle, which may since have been destroyed. Returns a pooled live iterator.
+   */
+  queryExited(query: Query): IterableIterator<Entity>;
   /** Query for entities as a stable allocating array snapshot */
   querySnapshot(query: Query): Entity[];
   /** Copy a borrowed entity list into a stable array */

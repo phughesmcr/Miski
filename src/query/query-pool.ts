@@ -1,5 +1,4 @@
 import { createEntityArray, createSlotArray, type EntityArray } from "@/entity/entity.ts";
-import { ReusableEntityIterator } from "@/entity/entity.ts";
 import type {
   BorrowedEntityIndices,
   BorrowedEntityListEachFn,
@@ -19,11 +18,10 @@ const BULK_COPY_SLACK = 64;
  * Retained backing store for the public borrowed QueryEntityList view.
  *
  * Buffers are sized by the largest result seen, not by world capacity: they start small and double on demand
- * (capped at capacity). Growing re-points {@link entities}, {@link slots} and the reusable iterator, so read
+ * (capped at capacity). Growing re-points {@link entities}, {@link slots} and {@link entityBuffer}, so read
  * them from the result after each refill rather than holding on to an older reference.
  */
 export class QueryEntityResult implements EntityResultSink {
-  #iterator: ReusableEntityIterator;
   #entityBuffer: Uint32Array;
   #slotBuffer: EntityArray;
   /** World entity capacity: the largest length a buffer ever needs, and the slot array's element width. */
@@ -42,7 +40,6 @@ export class QueryEntityResult implements EntityResultSink {
     this.#slotBuffer = createSlotArray(capacity, length);
     this.entities = this.#entityBuffer as unknown as BorrowedEntityIndices;
     this.slots = this.#slotBuffer as unknown as BorrowedSlotIndices;
-    this.#iterator = new ReusableEntityIterator(this.#entityBuffer);
   }
 
   /** Grow both buffers so they can hold `length` entries, keeping the first {@link count}. */
@@ -59,7 +56,6 @@ export class QueryEntityResult implements EntityResultSink {
     this.#slotBuffer = slots;
     this.entities = entities as unknown as BorrowedEntityIndices;
     this.slots = slots as unknown as BorrowedSlotIndices;
-    this.#iterator.indices = entities;
   }
 
   add(entity: Entity, slot: SlotIndex): void {
@@ -105,8 +101,9 @@ export class QueryEntityResult implements EntityResultSink {
     this.count = 0;
   }
 
-  iterate(): IterableIterator<Entity> {
-    return this.#iterator.reset(this.count);
+  /** The packed handle buffer behind {@link entities}; only entries before {@link count} are valid. */
+  get entityBuffer(): Uint32Array {
+    return this.#entityBuffer;
   }
 
   /**
@@ -124,8 +121,7 @@ export class QueryEntityResult implements EntityResultSink {
   /**
    * Iterate the valid packed entity handles.
    *
-   * Unlike {@link QueryEntityResult.iterate}, each call returns a fresh
-   * iterator, so nested iteration of the same list is safe.
+   * Each call returns a fresh generator, so nested iteration of the same list is safe.
    */
   *[Symbol.iterator](): IterableIterator<Entity> {
     for (let i = 0; i < this.count; i++) {

@@ -83,7 +83,6 @@ export type WorldApiHost = {
 
   snapshotIterator(iterator: IterableIterator<Entity> | undefined): Entity[] | undefined;
   copyEntityList(list: QueryEntityList): Entity[];
-  queryArchetypeEntities(query: Query): IterableIterator<Entity>;
   queryArchetypeEntered(query: Query): IterableIterator<Entity>;
   queryArchetypeExited(query: Query): IterableIterator<Entity>;
 };
@@ -102,22 +101,6 @@ function constructArchetypeAPI(host: WorldApiHost): WorldArchetypeAPI {
   return {
     getEntityArchetype: (entity: Entity) => host.archetypeManager.getEntityArchetype(entity)?.id,
     isEntityInRoot: (entity: Entity) => host.archetypeManager.isEntityInRoot(entity),
-    queryComponents: (query: Query) => {
-      host.assertInitialized();
-      return host.queryManager.components(query);
-    },
-    queryEntities: (query: Query) => {
-      host.assertInitialized();
-      return host.queryArchetypeEntities(query);
-    },
-    queryEntered: (query: Query) => {
-      host.assertInitialized();
-      return host.queryArchetypeEntered(query);
-    },
-    queryExited: (query: Query) => {
-      host.assertInitialized();
-      return host.queryArchetypeExited(query);
-    },
   };
 }
 
@@ -292,6 +275,14 @@ function constructEntityAPI(host: WorldApiHost): WorldEntityAPI {
     queryList: (query: Query) => {
       host.assertInitialized();
       return host.queryManager.entityList(query);
+    },
+    queryEntered: (query: Query) => {
+      host.assertInitialized();
+      return host.queryArchetypeEntered(query);
+    },
+    queryExited: (query: Query) => {
+      host.assertInitialized();
+      return host.queryArchetypeExited(query);
     },
     querySnapshot: (query: Query) => {
       host.assertInitialized();

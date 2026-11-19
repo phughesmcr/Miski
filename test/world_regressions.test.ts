@@ -82,17 +82,17 @@ Deno.test("query entered and exited entities remain visible until explicit refre
 
   world.components.addToEntity(position, entity);
   assertEquals(ids(world.entities.query(query)), [entity], "Expected entity to match position query");
-  assertEquals(ids(world.archetypes.queryEntered(query)), [entity], "Expected entity to appear in entered query");
+  assertEquals(ids(world.entities.queryEntered(query)), [entity], "Expected entity to appear in entered query");
 
   world.refresh();
-  assertEquals(ids(world.archetypes.queryEntered(query)), [], "Expected entered query to clear after refresh");
+  assertEquals(ids(world.entities.queryEntered(query)), [], "Expected entered query to clear after refresh");
 
   world.components.removeFromEntity(position, entity);
   assertEquals(ids(world.entities.query(query)), [], "Expected entity to stop matching position query");
-  assertEquals(ids(world.archetypes.queryExited(query)), [entity], "Expected entity to appear in exited query");
+  assertEquals(ids(world.entities.queryExited(query)), [entity], "Expected entity to appear in exited query");
 
   world.refresh();
-  assertEquals(ids(world.archetypes.queryExited(query)), [], "Expected exited query to clear after refresh");
+  assertEquals(ids(world.entities.queryExited(query)), [], "Expected exited query to clear after refresh");
 });
 
 Deno.test("failed refresh blocks lifecycle APIs like destroy errors", async () => {
@@ -172,11 +172,6 @@ Deno.test("none-only queries include active entities in the root archetype", asy
     ids(world.entities.query(active)),
     [rootEntity],
     "Expected componentless active entities to match none-only queries",
-  );
-  assertEquals(
-    ids(world.archetypes.queryEntities(active)),
-    [rootEntity],
-    "Expected archetype query path to agree with entity query path for root entities",
   );
 });
 
@@ -265,11 +260,6 @@ Deno.test("query registered after init sees existing matching entities", async (
     [entity],
     "Expected late query registration to see existing owner",
   );
-  assertEquals(
-    ids(world.archetypes.queryEntities(lateQuery)),
-    [entity],
-    "Expected late archetype query registration to see existing owner",
-  );
 });
 
 Deno.test("registering a new query preserves pending entered and exited visibility", async () => {
@@ -286,7 +276,7 @@ Deno.test("registering a new query preserves pending entered and exited visibili
     [],
     "Expected new velocity query to register",
   );
-  assertEquals(ids(world.archetypes.queryEntered(positionQuery)), [entity], "Expected entered state to remain visible");
+  assertEquals(ids(world.entities.queryEntered(positionQuery)), [entity], "Expected entered state to remain visible");
 
   world.refresh();
   world.components.removeFromEntity(position, entity);
@@ -295,7 +285,7 @@ Deno.test("registering a new query preserves pending entered and exited visibili
     [],
     "Expected new any query to register",
   );
-  assertEquals(ids(world.archetypes.queryExited(positionQuery)), [entity], "Expected exited state to remain visible");
+  assertEquals(ids(world.entities.queryExited(positionQuery)), [entity], "Expected exited state to remain visible");
 });
 
 Deno.test("clean refresh preserves query results and clears changed and transition state", async () => {
@@ -308,13 +298,13 @@ Deno.test("clean refresh preserves query results and clears changed and transiti
 
   assertEquals(ids(world.entities.query(query)), [entity], "Expected query to cache current owner");
   assertEquals(ids(world.components.getChanged(position)), [entity], "Expected ownership add to mark changed");
-  assertEquals(ids(world.archetypes.queryEntered(query)), [entity], "Expected transition to be visible before refresh");
+  assertEquals(ids(world.entities.queryEntered(query)), [entity], "Expected transition to be visible before refresh");
 
   world.refresh();
 
   assertEquals(ids(world.entities.query(query)), [entity], "Expected clean refresh to preserve query result behavior");
   assertEquals(ids(world.components.getChanged(position)), [], "Expected refresh to clear changed state");
-  assertEquals(ids(world.archetypes.queryEntered(query)), [], "Expected refresh to clear entered state");
+  assertEquals(ids(world.entities.queryEntered(query)), [], "Expected refresh to clear entered state");
 });
 
 Deno.test("component transitions update cached query results immediately", async () => {
@@ -389,7 +379,7 @@ Deno.test("queryExited ignores archetype exits while the entity still matches th
   world.components.removeFromEntity(velocity, entity);
 
   assertEquals(ids(world.entities.query(query)), [entity], "Expected entity to still match through position");
-  assertEquals(ids(world.archetypes.queryExited(query)), [], "Expected no query exit while still matching");
+  assertEquals(ids(world.entities.queryExited(query)), [], "Expected no query exit while still matching");
 });
 
 Deno.test("world.onReady rejects after the world has been destroyed", async () => {

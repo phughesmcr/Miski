@@ -85,8 +85,8 @@ function observe(world: World, revisions = true): unknown {
     data,
     queries: queries.map((query) => ({
       list: world.entities.querySnapshot(query),
-      entered: [...world.archetypes.queryEntered(query)],
-      exited: [...world.archetypes.queryExited(query)],
+      entered: [...world.entities.queryEntered(query)],
+      exited: [...world.entities.queryExited(query)],
       revision: revisions ? world.queryRevision(query) : 0,
     })),
   };

@@ -375,12 +375,12 @@ Deno.test("schedule run refreshes once at the end, like world.frame", async () =
     }),
     { phase: "spawn" },
   );
-  schedule.add(probeSystem("observer", enteredSeen, (ctx) => [...ctx.world.archetypes.queryEntered(query)]), {
+  schedule.add(probeSystem("observer", enteredSeen, (ctx) => [...ctx.world.entities.queryEntered(query)]), {
     phase: "observe",
   });
   schedule.run(0);
   assertStrictEquals(enteredSeen[0]!.length, 1, "entered is visible during the run");
-  assertEquals([...local.archetypes.queryEntered(query)], [], "the run refreshes the window at the end");
+  assertEquals([...local.entities.queryEntered(query)], [], "the run refreshes the window at the end");
   await local.destroy();
   await world.destroy();
 });
@@ -416,7 +416,7 @@ Deno.test("schedule refreshes, discards pending commands, and rethrows when a sy
   assertStrictEquals(caught, boom, "the system's error is rethrown unchanged");
   assert(world.entities.isActive(victim), "pending commands are discarded");
   assertStrictEquals(schedule.commands.pendingCount, 0, "the command buffer is empty");
-  assertEquals([...world.archetypes.queryEntered(query)], [], "the world was refreshed");
+  assertEquals([...world.entities.queryEntered(query)], [], "the world was refreshed");
   fail = false;
   schedule.run(0);
   assert(!world.entities.isActive(victim), "the schedule is usable after a failure");
@@ -579,7 +579,7 @@ Deno.test("schedule rethrows a command failure at a phase flush after applying t
   assert(caught instanceof Error && caught.message.includes("CommandBuffer set position"), "flush error rethrown");
   assertEquals(log, ["queuer"], "later phases do not run after a failed flush");
   assertStrictEquals(world.components.getEntityData(position, later).x, 2, "the rest of the phase's commands applied");
-  assertEquals([...world.archetypes.queryEntered(new Query({ all: [position] }))], [], "the world was refreshed");
+  assertEquals([...world.entities.queryEntered(new Query({ all: [position] }))], [], "the world was refreshed");
   fail = false;
   log.length = 0;
   schedule.run(0);

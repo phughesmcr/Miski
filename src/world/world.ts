@@ -191,14 +191,6 @@ export class World {
   }
 
   /**
-   * Live entities of every archetype matching the query; each entity inhabits exactly one archetype.
-   * Returns a pooled iterator, so warm passes allocate nothing.
-   */
-  #queryArchetypeEntities(query: Query): IterableIterator<Entity> {
-    return this.#archetypeQueryIterators.entities(query);
-  }
-
-  /**
    * Entities that match the query now but did not match it when the refresh window began.
    * Only slots that moved this window can qualify, so this walks the window's touched slots in first-touch order.
    */
@@ -475,7 +467,6 @@ export class World {
       destroyEntity: (entity) => this.#destroyEntity(entity),
       snapshotIterator: (iterator) => this.#snapshotIterator(iterator),
       copyEntityList: (list) => this.#copyEntityList(list),
-      queryArchetypeEntities: (query) => this.#queryArchetypeEntities(query),
       queryArchetypeEntered: (query) => this.#queryArchetypeEntered(query),
       queryArchetypeExited: (query) => this.#queryArchetypeExited(query),
     });

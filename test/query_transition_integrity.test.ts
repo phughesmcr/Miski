@@ -26,18 +26,18 @@ Deno.test("bundle spawn is atomic and never reports a false exit from the root a
   world.refresh();
 
   const soft = world.entities.createWith([[position, { x: 1 }]])!;
-  assertEquals(ids(world.archetypes.queryExited(missingPosition)), [], "createWith must not exit root");
-  assertEquals(ids(world.archetypes.queryEntered(missingPosition)), [], "createWith must not enter root");
-  assertEquals(ids(world.archetypes.queryEntered(hasPosition)), [soft], "createWith enters its final archetype");
+  assertEquals(ids(world.entities.queryExited(missingPosition)), [], "createWith must not exit root");
+  assertEquals(ids(world.entities.queryEntered(missingPosition)), [], "createWith must not enter root");
+  assertEquals(ids(world.entities.queryEntered(hasPosition)), [soft], "createWith enters its final archetype");
   assert(!world.archetypes.isEntityInRoot(soft), "Bundle spawn must land outside root");
 
   const strict = world.entities.createWithOrThrow([[position, { x: 2 }]]);
-  assertEquals(ids(world.archetypes.queryExited(missingPosition)), [], "createWithOrThrow must not exit root");
-  assertEquals(sorted(world.archetypes.queryEntered(hasPosition)), sorted([soft, strict]), "Both spawns entered");
+  assertEquals(ids(world.entities.queryExited(missingPosition)), [], "createWithOrThrow must not exit root");
+  assertEquals(sorted(world.entities.queryEntered(hasPosition)), sorted([soft, strict]), "Both spawns entered");
 
   const empty = world.entities.createWithOrThrow([]);
-  assertEquals(ids(world.archetypes.queryEntered(missingPosition)), [empty], "Empty bundle spawns into root");
-  assertEquals(ids(world.archetypes.queryExited(missingPosition)), [], "Empty bundle spawn is not an exit");
+  assertEquals(ids(world.entities.queryEntered(missingPosition)), [empty], "Empty bundle spawns into root");
+  assertEquals(ids(world.entities.queryExited(missingPosition)), [], "Empty bundle spawn is not an exit");
   await world.destroy();
 });
 
@@ -51,14 +51,14 @@ Deno.test("queryEntered ignores entities that never left the query", async () =>
   world.refresh();
 
   world.components.addToEntity(tag, entity);
-  assertEquals(ids(world.archetypes.queryEntered(query)), [], "Unrelated tag must not re-enter the query");
-  assertEquals(ids(world.archetypes.queryExited(query)), [], "Unrelated tag must not exit the query");
+  assertEquals(ids(world.entities.queryEntered(query)), [], "Unrelated tag must not re-enter the query");
+  assertEquals(ids(world.entities.queryExited(query)), [], "Unrelated tag must not exit the query");
 
   world.refresh();
   world.components.removeFromEntity(position, entity);
   world.components.addToEntity(position, entity);
-  assertEquals(ids(world.archetypes.queryEntered(query)), [], "Leave and return within a window is not an entry");
-  assertEquals(ids(world.archetypes.queryExited(query)), [], "Leave and return within a window is not an exit");
+  assertEquals(ids(world.entities.queryEntered(query)), [], "Leave and return within a window is not an entry");
+  assertEquals(ids(world.entities.queryExited(query)), [], "Leave and return within a window is not an exit");
   await world.destroy();
 });
 
@@ -75,24 +75,24 @@ Deno.test("query transitions are relative to the start of the refresh window", a
   world.refresh();
 
   world.components.addToEntity(velocity, entity);
-  assertEquals(ids(world.archetypes.queryEntered(movers)), [entity], "Adding velocity enters movers");
-  assertEquals(ids(world.archetypes.queryExited(missingVelocity)), [entity], "Adding velocity exits no-velocity");
-  assertEquals(ids(world.archetypes.queryEntered(anyQuery)), [], "any query was already matching");
-  assertEquals(ids(world.archetypes.queryExited(anyQuery)), [], "any query keeps matching");
+  assertEquals(ids(world.entities.queryEntered(movers)), [entity], "Adding velocity enters movers");
+  assertEquals(ids(world.entities.queryExited(missingVelocity)), [entity], "Adding velocity exits no-velocity");
+  assertEquals(ids(world.entities.queryEntered(anyQuery)), [], "any query was already matching");
+  assertEquals(ids(world.entities.queryExited(anyQuery)), [], "any query keeps matching");
 
   // Stay within `any` through several archetypes: still no transition.
   world.refresh();
   world.components.removeFromEntity(position, entity);
-  assertEquals(ids(world.archetypes.queryEntered(anyQuery)), [], "any entry must not appear on partial change");
-  assertEquals(ids(world.archetypes.queryExited(anyQuery)), [], "any exit must not appear on partial change");
+  assertEquals(ids(world.entities.queryEntered(anyQuery)), [], "any entry must not appear on partial change");
+  assertEquals(ids(world.entities.queryExited(anyQuery)), [], "any exit must not appear on partial change");
 
   // Spawned and destroyed inside one window: never observed at a window boundary.
   world.refresh();
   const transient = createEntity(world);
   world.components.addToEntity(position, transient);
   world.entities.destroy(transient);
-  assertEquals(ids(world.archetypes.queryEntered(new Query({ all: [position] }))), [], "Transient never entered");
-  assertEquals(ids(world.archetypes.queryExited(new Query({ all: [position] }))), [], "Transient never exited");
+  assertEquals(ids(world.entities.queryEntered(new Query({ all: [position] }))), [], "Transient never entered");
+  assertEquals(ids(world.entities.queryExited(new Query({ all: [position] }))), [], "Transient never exited");
 
   // A recycled slot reports the departed handle as exited and the replacement as entered.
   world.components.addToEntity(position, entity);
@@ -101,10 +101,10 @@ Deno.test("query transitions are relative to the start of the refresh window", a
   const replacement = createEntity(world);
   world.components.addToEntity(velocity, replacement);
   assert(replacement !== entity, "Recycled slot carries a new generation");
-  assertEquals(ids(world.archetypes.queryExited(movers)), [entity], "Departed handle was a mover at window start");
-  assertEquals(ids(world.archetypes.queryEntered(movers)), [], "Replacement is not a mover");
-  assertEquals(ids(world.archetypes.queryExited(new Query({ all: [position] }))), [entity], "Departed handle exits");
-  assertEquals(ids(world.archetypes.queryEntered(new Query({ all: [velocity] }))), [replacement], "Replacement enters");
+  assertEquals(ids(world.entities.queryExited(movers)), [entity], "Departed handle was a mover at window start");
+  assertEquals(ids(world.entities.queryEntered(movers)), [], "Replacement is not a mover");
+  assertEquals(ids(world.entities.queryExited(new Query({ all: [position] }))), [entity], "Departed handle exits");
+  assertEquals(ids(world.entities.queryEntered(new Query({ all: [velocity] }))), [replacement], "Replacement enters");
   await world.destroy();
 });
 
@@ -123,11 +123,11 @@ Deno.test("rollback restores window origins so later transitions stay window-rel
   const speculative = createEntity(world);
   world.components.addToEntity(position, speculative);
   restoreWorldRollbackPoint(world, point);
-  assertEquals(ids(world.archetypes.queryEntered(query)), [], "Speculative entry must be discarded");
-  assertEquals(ids(world.archetypes.queryExited(query)), [], "Speculative exit must be discarded");
+  assertEquals(ids(world.entities.queryEntered(query)), [], "Speculative entry must be discarded");
+  assertEquals(ids(world.entities.queryExited(query)), [], "Speculative exit must be discarded");
 
   world.components.removeFromEntity(position, member);
-  assertEquals(ids(world.archetypes.queryExited(query)), [member], "Window origin survives rollback");
+  assertEquals(ids(world.entities.queryExited(query)), [member], "Window origin survives rollback");
   await world.destroy();
 });
 
@@ -157,16 +157,16 @@ Deno.test("nested queryExited iteration yields each exited entity once", async (
 
   const seen: number[] = [];
   let innerCount = 0;
-  for (const entity of world.archetypes.queryExited(outer)) {
+  for (const entity of world.entities.queryExited(outer)) {
     seen.push(entity);
-    for (const _other of world.archetypes.queryExited(inner)) innerCount++;
+    for (const _other of world.entities.queryExited(inner)) innerCount++;
   }
   assertEquals(sorted(seen), sorted(entities), "Outer iteration must yield each exit exactly once");
   assertEquals(innerCount, entities.length * entities.length, "Inner iteration must stay complete");
   await world.destroy();
 });
 
-Deno.test("nested queryEntered and queryEntities iteration stay independent", async () => {
+Deno.test("nested queryEntered and query iteration stay independent", async () => {
   const position = vec2Component();
   const tag = tagComponent("tag");
   const world = await createTestWorld([position, tag], 16);
@@ -180,19 +180,21 @@ Deno.test("nested queryEntered and queryEntities iteration stay independent", as
   }
   const seenEntered: number[] = [];
   let enteredPairs = 0;
-  for (const entity of world.archetypes.queryEntered(query)) {
+  for (const entity of world.entities.queryEntered(query)) {
     seenEntered.push(entity);
-    for (const _other of world.archetypes.queryEntered(query)) enteredPairs++;
+    for (const _other of world.entities.queryEntered(query)) enteredPairs++;
   }
   assertEquals(sorted(seenEntered), sorted(entities), "Entered yields each entity once");
   assertEquals(enteredPairs, 16, "Nested entered iteration is complete");
 
   const seenLive: number[] = [];
-  for (const entity of world.archetypes.queryEntities(query)) {
+  let livePairs = 0;
+  for (const entity of world.entities.query(query)) {
     seenLive.push(entity);
-    for (const _other of world.archetypes.queryEntities(query)) { /* nested */ }
+    for (const _other of world.entities.query(query)) livePairs++;
   }
   assertEquals(sorted(seenLive), sorted(entities), "Live iteration yields each entity once");
+  assertEquals(livePairs, 16, "Nested query iteration is complete");
   await world.destroy();
 });
 
@@ -327,9 +329,8 @@ Deno.test("incremental query membership matches a brute-force model across rando
         }
       }
       assertEquals(sorted(world.entities.query(query)), sorted(expectedLive), "Live membership diverged");
-      assertEquals(sorted(world.archetypes.queryEntities(query)), sorted(expectedLive), "Archetype view diverged");
-      assertEquals(sorted(world.archetypes.queryEntered(query)), sorted(expectedEntered), "Entered diverged");
-      assertEquals(sorted(world.archetypes.queryExited(query)), sorted(expectedExited), "Exited diverged");
+      assertEquals(sorted(world.entities.queryEntered(query)), sorted(expectedEntered), "Entered diverged");
+      assertEquals(sorted(world.entities.queryExited(query)), sorted(expectedExited), "Exited diverged");
     }
   };
 

@@ -22,7 +22,14 @@ export type EntityResultSink = {
   add(entity: Entity, slot: SlotIndex): void;
 };
 
-/** A borrowed, reusable entity iterator. */
+/**
+ * A borrowed, pooled entity iterator.
+ *
+ * `world.entities.query()` and `getActive()` return a separate iterator per call, so nested loops are independent.
+ * It goes back to its pool when it is exhausted or closed early (`break`); do not call `next()` after it reported
+ * `done`, because by then it may be serving another caller. `query()` iterates the query's retained result, which a
+ * re-query of the same query after a mutation refills in place.
+ */
 export type BorrowedEntityIterator = IterableIterator<Entity>;
 
 /** Read-only numeric index view for borrowed packed entity IDs. */

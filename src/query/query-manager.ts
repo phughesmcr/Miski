@@ -7,6 +7,7 @@ import type { DynamicComponentInstance } from "@/types/component.ts";
 import type { Entity } from "@/entity/entity.ts";
 import type { QueryInstance, QueryInstanceList } from "@/types/query.ts";
 import type { ComponentInstanceGetter, QueryManagerDependencies } from "@/types/world-api.ts";
+import { EntityIteratorPool } from "@/entity/pooled-entity-iterator.ts";
 import { QueryEntityResult } from "./query-pool.ts";
 import type { NormalizedQueryComponentEntry, Query } from "./query.ts";
 
@@ -138,6 +139,9 @@ export class QueryManager {
   /** Reusable dense-list view over {@link #queries} - never reallocated. */
   readonly #queryList: { queries: QueryInstance[]; count: number };
 
+  /** Per-call iterators handed out by {@link entities}; they borrow each query's retained result buffer. */
+  readonly #iterators = new EntityIteratorPool();
+
   /** Capacity of each query's lazily allocated entity result. */
   readonly #capacity: number;
 
@@ -186,9 +190,13 @@ export class QueryManager {
     return instance.components;
   }
 
-  /** Get entities for a query */
+  /**
+   * Get entities for a query: a pooled per-call iterator over the query's retained result as it stands now, so
+   * nested loops over the same query each get their own cursor.
+   */
   entities(query: Query): IterableIterator<Entity> {
-    return this.entityList(query).iterate();
+    const list = this.entityList(query);
+    return this.#iterators.acquire().open(list.entityBuffer, list.count);
   }
 
   /** Get entities for a query as a dense reusable list */
