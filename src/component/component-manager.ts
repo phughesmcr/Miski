@@ -1,8 +1,7 @@
-import { getPartitionByteSize, Partition, PartitionedBuffer } from "@phughesmcr/partitionedbuffer";
+import { PartitionedBuffer } from "@phughesmcr/partitionedbuffer";
 
-import { $_COMPONENT_ID_KEY, $_PARTITION_KEY } from "@/constants.ts";
-import { createEntityArray, createSlotArray, type EntityArray, packEntity, type PackSlot } from "@/entity/entity.ts";
-import { ReusableEntityIterator, ReusableSlotPackIterator } from "@/entity/entity.ts";
+import { $_COMPONENT_ID_KEY } from "@/constants.ts";
+import { type EntityArray, packEntity, type PackSlot } from "@/entity/entity.ts";
 import {
   ComponentDataError,
   componentDisplayName,
@@ -13,41 +12,24 @@ import {
 } from "@/errors.ts";
 import type { DynamicComponent, DynamicComponentInstance } from "@/types/component.ts";
 import { type Entity, entityIndex } from "@/entity/entity.ts";
-import { cloneFieldValue, isFieldDescriptor } from "@/schema/field.ts";
 import { hasOwnProperty } from "@/utils.ts";
-import type {
-  ComponentData,
-  ComponentStorage,
-  SchemaOrNull,
-  TypedArray,
-  TypedArrayConstructor,
-} from "@/types/partitions.ts";
-import { ComponentInstance } from "./component-instance.ts";
+import type { ComponentData, SchemaOrNull } from "@/types/partitions.ts";
+import type { ComponentInstance } from "./component-instance.ts";
 import type { Component } from "./component.ts";
 import {
   captureComponentManagerSnapshot,
   type ComponentManagerSnapshot,
   type ComponentSnapshotRestoreHooks,
   restoreComponentManagerSnapshot,
-  type SaveableComponentState,
 } from "./component-snapshot.ts";
 import {
-  type ComponentStorageWriteState,
-  prepareEntityStorageData,
-  writeEntityStorageData,
-  writeEntityStorageRow,
-} from "./component-storage-write.ts";
-import {
-  codecDefault,
-  createFieldCodec,
-  decodeFieldValue,
-  encodeFieldValue,
-  type FieldCodec,
-  isSideField,
-  sideDefault,
-  type SideField,
-} from "./field-codec.ts";
-import { createColumnWriters, StorageProxy } from "./storage-proxy.ts";
+  type ComponentState,
+  createComponentState,
+  getComponentStorageSize,
+  type SparseColumn,
+} from "./component-state.ts";
+import { prepareEntityStorageData, writeEntityStorageData, writeEntityStorageRow } from "./component-storage-write.ts";
+import { decodeFieldValue, encodeFieldValue, sideDefault } from "./field-codec.ts";
 
 export type { ComponentManagerSnapshot };
 
@@ -59,36 +41,9 @@ export type ComponentTemplateRow = {
   readonly side: readonly unknown[];
 };
 
-/** Initial length of a component's owner/changed lists; they double on demand up to the list capacity. */
-const INITIAL_LIST_LENGTH = 16;
-
 function roundUpToMultiple(value: number, multiple: number): number {
   const remainder = value % multiple;
   return remainder === 0 ? value : value + multiple - remainder;
-}
-
-/**
- * Dense rows needed for a capped component's sparse storage, or `null` for dense (capacity-sized) storage.
- * A cap that can never bind (at or above world capacity) is stored densely, so it never over-allocates
- * and cannot be starved by stray raw writes.
- */
-function getSparseRowCount(component: DynamicComponent, capacity: number): number | null {
-  const maxEntities = component.maxEntities;
-  return maxEntities === null || maxEntities >= capacity ? null : maxEntities;
-}
-
-function getComponentStorageSize(component: DynamicComponent, capacity: number): number {
-  const schema = component[$_PARTITION_KEY].schema;
-  if (schema === null) return 0;
-  return getPartitionByteSize(schema, getSparseRowCount(component, capacity) ?? capacity);
-}
-
-/** The component's own partition, or a world-sized copy when its owner cap exceeds world capacity. */
-function getWorldPartition(component: DynamicComponent, capacity: number): DynamicComponent[typeof $_PARTITION_KEY] {
-  const partition = component[$_PARTITION_KEY];
-  const rows = getSparseRowCount(component, capacity);
-  if (rows === partition.maxOwners) return partition;
-  return new Partition({ name: component.name, schema: partition.schema, maxOwners: rows } as never);
 }
 
 /** A preflighted bundle entry ready for component-manager commit. */
@@ -98,79 +53,6 @@ export type ComponentBundleCommitEntry = {
   /** Optional data to merge into component storage. */
   data: Partial<Record<string, unknown>> | undefined;
 };
-
-/** Sparse (capped) storage column; every column of one component shares a single slot -> row index. */
-type SparseColumn = TypedArray & {
-  getEntity(entity: number): number | undefined;
-  setEntity(entity: number, value: number): void;
-  deleteEntity(entity: number): boolean;
-};
-
-type ComponentState = ComponentStorageWriteState & {
-  readonly instance: DynamicComponentInstance;
-  changedCount: number;
-  changedList?: EntityArray;
-  changedIterator?: ReusableSlotPackIterator;
-  changedPositions?: EntityArray;
-  readonly maxEntities: number;
-  ownerCount: number;
-  ownerList?: EntityArray;
-  ownerIterator?: ReusableSlotPackIterator;
-  ownerPositions?: EntityArray;
-  owners?: Uint8Array;
-  readonly usesSparseStorage: boolean;
-  /** Dense and sparse partition keys in stable registration order. */
-  readonly storageKeys: readonly string[];
-  /** Parallel storage columns for `storageKeys`. */
-  readonly storageColumns: readonly TypedArray[];
-  /** Monotonic revision for membership and value changes. */
-  revision: number;
-  /** World revision token assigned on the last change. */
-  lastChangedRevision: number;
-  /** One-element typed-array scratch buffers for value canonicalization. */
-  readonly coercionScratch: Record<string, TypedArray>;
-  /** Parallel scratch columns for `storageKeys` (avoids string-key lookup on write). */
-  readonly coercionScratchColumns: readonly TypedArray[];
-  /** `true` when any column is a `field.*` field (reads decode, removal releases side cells). */
-  readonly hasFieldColumns: boolean;
-};
-
-/** Slot-indexed string / object columns for one component, plus the lookups its state needs. */
-type SideColumns = {
-  readonly keys: string[];
-  readonly columns: unknown[][];
-  readonly fields: SideField[];
-  readonly index: Record<string, number>;
-};
-
-/** Build capacity-length side columns for a component's string / object fields. */
-function createSideColumns(component: DynamicComponent, capacity: number): SideColumns {
-  const keys: string[] = [];
-  const columns: unknown[][] = [];
-  const fields: SideField[] = [];
-  const index: Record<string, number> = Object.create(null);
-  const schema = component.schema as Record<string, unknown> | null;
-  if (schema !== null) {
-    for (const key of Object.keys(schema)) {
-      const property = schema[key];
-      if (!isFieldDescriptor(property) || !isSideField(property)) continue;
-      index[key] = keys.length;
-      keys.push(key);
-      fields.push(property);
-      columns.push(new Array<unknown>(capacity).fill(sideDefault(property)));
-    }
-  }
-  return { keys, columns, fields, index };
-}
-
-/** Storage for a component whose only fields are string / object columns (its buffer partition is empty). */
-function createSideOnlyStorage(partitions: Record<string, unknown[]>): ComponentStorage<SchemaOrNull> {
-  return {
-    byteOffset: 0,
-    byteLength: 0,
-    partitions: partitions as never,
-  };
-}
 
 /**
  * A component manager owns component registration, storage, ownership flags, owner iteration, and changed tracking.
@@ -183,10 +65,6 @@ export class ComponentManager {
   #buffer: PartitionedBuffer;
   /** The maximum number of entities this manager can track */
   #capacity: number;
-  /** Shared empty changed iterator returned for tag components */
-  #emptyChangedIterator: ReusableEntityIterator;
-  /** Shared empty owner iterator returned for components with no owners */
-  #emptyOwnerIterator: ReusableEntityIterator;
   /** The registry of component instances by name */
   #registryByName: Record<string, DynamicComponentInstance>;
   /** Frozen public registry view keyed by component name */
@@ -201,13 +79,10 @@ export class ComponentManager {
   #nextWorldRevision: () => number;
   /** Canonical entity liveness check supplied by the owning world. */
   #isActive: (entity: Entity) => boolean;
-  /** Pack slot -> entity at owner/changed iterator edges */
-  #packSlot: PackSlot;
   /** Tracking callbacks used by rollback restore (allocated once). */
-  readonly #snapshotHooks: ComponentSnapshotRestoreHooks<ComponentState> = {
-    ensureOwnershipState: (state, minOwners) => this.#ensureOwnershipState(state, minOwners),
-    ensureChangedState: (state, minChanged) => this.#ensureChangedState(state, minChanged),
-    reserveSparseSlot: (state, owners, slot) => this.#reserveSparseSlot(state, owners, slot),
+  readonly #snapshotHooks: ComponentSnapshotRestoreHooks = {
+    ownerFlags: (state) => this.#ownerFlags(state),
+    reserveSparseSlot: (state, flags, slot) => this.#reserveSparseSlot(state, flags, slot),
     bumpRevision: (state) => this.#bumpRevision(state),
   };
 
@@ -232,131 +107,30 @@ export class ComponentManager {
     this.#buffer = new PartitionedBuffer(size, capacity);
     this.#capacity = capacity;
     this.#nextWorldRevision = nextWorldRevision;
-    this.#packSlot = packSlot;
     this.#isActive = isActive;
-    // create the various registries
-    this.#emptyChangedIterator = new ReusableEntityIterator(createEntityArray(0));
-    this.#emptyOwnerIterator = new ReusableEntityIterator(createEntityArray(0));
     this.#registryByName = Object.create(null);
     this.#publicRegistry = {};
     this.#registryByComponentId = [];
     this.#states = [];
     this.#sideStates = [];
-    // register each component
     for (const component of components) {
-      const maxEntities = component.maxEntities;
-      // instance storage
-      const partition = getWorldPartition(component, capacity);
-      const bufferStorage = this.#buffer.addPartition(partition);
-      const instanceId = this.#states.length;
-      const coercionScratch: Record<string, TypedArray> = Object.create(null);
-      const storageKeys: string[] = [];
-      const storageColumns: TypedArray[] = [];
-      const coercionScratchColumns: TypedArray[] = [];
-      const storageCodecs: (FieldCodec | null)[] = [];
-      const storageDefaults: number[] = [];
-      const codecsByKey: Record<string, FieldCodec> = Object.create(null);
-      const logicalSchema = component.schema as Record<string, unknown> | null;
-      let usesSparseStorage = false;
-      if (bufferStorage !== null) {
-        const partitions = bufferStorage.partitions as Record<string, TypedArray>;
-        const physicalSchema = partition.schema as Record<string, TypedArrayConstructor>;
-        for (const key of Object.keys(partitions)) {
-          const column = partitions[key]!;
-          const scratchColumn = new physicalSchema[key]!(1);
-          const codec = createFieldCodec(logicalSchema?.[key]);
-          coercionScratch[key] = scratchColumn;
-          storageKeys.push(key);
-          storageColumns.push(column);
-          coercionScratchColumns.push(scratchColumn);
-          storageCodecs.push(codec);
-          storageDefaults.push(codecDefault(codec));
-          if (codec !== null) codecsByKey[key] = codec;
-          if (!ArrayBuffer.isView(column)) usesSparseStorage = true;
-        }
-      }
-      const side = createSideColumns(component, capacity);
-      let storage = bufferStorage as ComponentStorage<SchemaOrNull> | null;
-      if (side.keys.length > 0) {
-        // Side columns join the typed columns in `partitions`, so `storage.partitions[key]` reaches every field.
-        const partitions: Record<string, unknown[]> = storage === null ?
-          {} :
-          storage.partitions as unknown as Record<string, unknown[]>;
-        for (let i = 0; i < side.keys.length; i++) partitions[side.keys[i]!] = side.columns[i]!;
-        if (storage === null) storage = createSideOnlyStorage(partitions);
-      }
-      const hasCodecs = storageCodecs.some((codec) => codec !== null);
-      const hasFieldColumns = hasCodecs || side.keys.length > 0;
-      const sideFieldsByKey: Record<string, SideField> = Object.create(null);
-      for (let i = 0; i < side.keys.length; i++) sideFieldsByKey[side.keys[i]!] = side.fields[i]!;
-      const isEntityActive = (entity: Entity): boolean => this.#isActive(entity);
-      const decode = hasCodecs ?
-        (key: string, raw: unknown): unknown => {
-          const codec = codecsByKey[key];
-          return codec === undefined ? raw : decodeFieldValue(codec, raw as number, isEntityActive);
-        } :
-        undefined;
-      const writers = storage === null ? null : createColumnWriters({
-        storage,
-        componentName: component.name,
-        coercionScratch,
-        codecs: codecsByKey,
-        sideFields: sideFieldsByKey,
-        isEntityActive,
-        markChanged: (slot: number) => {
-          // Only owners are tracked: raw writes to non-owner slots are an unguarded escape hatch.
-          const state = this.#states[instanceId];
-          if (state !== undefined && state.owners?.[slot] === 1) this.#markChanged(state, slot);
-        },
-      });
-      const proxy = storage === null ? null : new StorageProxy({
-        storage,
-        writers: writers!,
-        codecs: codecsByKey,
-        isEntityActive,
-        has: (entity: Entity) => this.#entityOwnsInstanceId(instanceId, entity),
+      const id = this.#states.length;
+      const state = createComponentState(component, id, capacity, this.#buffer, {
         packSlot,
-        capacity,
+        isEntityActive: isActive,
+        has: (entity) => this.#entityOwnsInstanceId(id, entity),
+        markChanged: (entity) => this.#markInstanceIdChanged(id, entity),
+        markSlotChanged: (slot) => {
+          // Only owners are tracked: raw writes to non-owner slots are an unguarded escape hatch.
+          const state = this.#states[id];
+          if (state !== undefined && state.ownerFlags?.[slot] === 1) this.#markChanged(state, slot);
+        },
+        getRevision: () => this.#states[id]?.revision ?? 0,
       });
-      // register component instance
-      const instance = new ComponentInstance({
-        id: instanceId,
-        has: (entity: Entity): boolean => this.#entityOwnsInstanceId(instanceId, entity),
-        markChanged: (entity: Entity): boolean => this.#markInstanceIdChanged(instanceId, entity),
-        proxy,
-        storage,
-        writers,
-        capacity,
-        type: component,
-        getRevision: () => this.#states[instanceId]?.revision ?? 0,
-        decode,
-      } as never);
-      this.#states[instance.id] = {
-        changedCount: 0,
-        instance,
-        maxEntities: maxEntities ?? 0,
-        ownerCount: 0,
-        usesSparseStorage,
-        storageKeys,
-        storageColumns,
-        coercionScratchColumns,
-        revision: 0,
-        lastChangedRevision: 0,
-        coercionScratch,
-        storageCodecs,
-        storageDefaults,
-        sideKeys: side.keys,
-        sideColumns: side.columns,
-        sideFields: side.fields,
-        sideIndex: side.index,
-        sideScratch: new Array<unknown>(side.keys.length).fill(undefined),
-        sideInitial: new Array<unknown>(side.keys.length).fill(undefined),
-        isEntityActive,
-        hasFieldColumns,
-      };
-      if (side.keys.length > 0) this.#sideStates.push(this.#states[instance.id]!);
-      this.#registryByName[component.name] = instance;
-      this.#registryByComponentId[component[$_COMPONENT_ID_KEY]] = instance;
+      this.#states.push(state);
+      if (state.sideKeys.length > 0) this.#sideStates.push(state);
+      this.#registryByName[component.name] = state.instance;
+      this.#registryByComponentId[component[$_COMPONENT_ID_KEY]] = state.instance;
     }
     this.#publicRegistry = Object.freeze({ ...this.#registryByName });
   }
@@ -395,152 +169,63 @@ export class ComponentManager {
     return this.#publicRegistry;
   }
 
-  /** Get the dense list capacity needed for a component's owner/changed lists. */
-  #getListCapacity(state: ComponentState): number {
+  /** The owner flags of a component, allocated when it first gains an owner. */
+  #ownerFlags(state: ComponentState): Uint8Array {
+    let flags = state.ownerFlags;
+    if (flags === null) {
+      flags = new Uint8Array(this.#capacity);
+      state.ownerFlags = flags;
+    }
+    return flags;
+  }
+
+  /**
+   * Make `slot` a new owner: check the cap, stage absent side fields, map a capped row, then flag, list and bump.
+   * Every step that can throw (cap, `create()` / `clone()` hooks, row mapping) runs before ownership changes.
+   * @param template - Side values from a compiled template row, or `undefined` for per-owner defaults
+   */
+  #claimOwner(
+    state: ComponentState,
+    flags: Uint8Array,
+    slot: number,
+    data: Record<string, unknown> | undefined,
+    template: readonly unknown[] | undefined,
+  ): void {
     const maxEntities = state.maxEntities;
-    return Math.min(maxEntities === 0 ? this.#capacity : maxEntities, this.#capacity);
-  }
-
-  /** Allocate a list for at least `minLength` entries: doubling growth, capped at the component's list capacity. */
-  #allocateList(state: ComponentState, current: EntityArray | undefined, minLength: number): EntityArray {
-    const length = current === undefined ? INITIAL_LIST_LENGTH : current.length * 2;
-    const list = createSlotArray(
-      this.#capacity,
-      Math.min(Math.max(length, minLength), this.#getListCapacity(state)),
-    );
-    if (current !== undefined) list.set(current);
-    return list;
-  }
-
-  /**
-   * Allocate ownership tracking for a component only when it first gains an owner, and make room for `minOwners`.
-   * The owner list grows on demand; `owners` and `ownerPositions` are capacity-sized slot indexes.
-   */
-  #ensureOwnershipState(state: ComponentState, minOwners: number = 0): Uint8Array {
-    let owners = state.owners;
-    if (owners === undefined) {
-      owners = new Uint8Array(this.#capacity);
-      state.owners = owners;
-      state.ownerPositions = createSlotArray(this.#capacity);
+    if (maxEntities !== 0 && state.owners.count >= maxEntities) {
+      throw maxOwnersError(state.instance.type.name, maxEntities);
     }
-    const ownerList = state.ownerList;
-    if (ownerList === undefined || ownerList.length < minOwners) {
-      const grown = this.#allocateList(state, ownerList, minOwners);
-      state.ownerList = grown;
-      if (state.ownerIterator === undefined) state.ownerIterator = new ReusableSlotPackIterator(grown, this.#packSlot);
-      else state.ownerIterator.slots = grown;
-    }
-    return owners;
-  }
-
-  /** Append a storage slot to a component's dense owner list. */
-  #appendOwner(state: ComponentState, slot: number): void {
-    const ownerCount = state.ownerCount;
-    if (ownerCount === state.ownerList!.length) this.#ensureOwnershipState(state, ownerCount + 1);
-    state.ownerList![ownerCount] = slot;
-    state.ownerPositions![slot] = ownerCount;
-    state.ownerCount = ownerCount + 1;
-  }
-
-  /** Remove a slot from a dense list whose membership was already checked. Stale tail entries are never read. */
-  #removeFromDenseList(list: EntityArray, positions: EntityArray, count: number, slot: number): number {
-    const removeIndex = positions[slot]!;
-    const lastIndex = count - 1;
-    if (removeIndex !== lastIndex) {
-      const lastSlot = list[lastIndex]!;
-      list[removeIndex] = lastSlot;
-      positions[lastSlot] = removeIndex;
-    }
-    return lastIndex;
-  }
-
-  /**
-   * Claim ownership for an entity when it is not already owned.
-   * @returns `true` when ownership changed from unowned to owned
-   */
-  #acquireOwnership(state: ComponentState, owners: Uint8Array, slot: number): boolean {
-    const alreadyOwned = owners[slot] === 1;
-    if (alreadyOwned) return false;
-    owners[slot] = 1;
-    this.#appendOwner(state, slot);
-    return true;
-  }
-
-  /**
-   * Allocate changed tracking for data components only when a write marks them changed, and make room for
-   * `minChanged` entries. Membership is a sparse-set check against `changedPositions`/`changedList`.
-   * @returns the changed positions, or `undefined` for tag components
-   */
-  #ensureChangedState(state: ComponentState, minChanged: number = 0): EntityArray | undefined {
-    if (state.instance.storage === null) return undefined;
-    let positions = state.changedPositions;
-    if (positions === undefined) {
-      positions = createSlotArray(this.#capacity);
-      state.changedPositions = positions;
-    }
-    const changedList = state.changedList;
-    if (changedList === undefined || changedList.length < minChanged) {
-      const grown = this.#allocateList(state, changedList, minChanged);
-      state.changedList = grown;
-      if (state.changedIterator === undefined) {
-        state.changedIterator = new ReusableSlotPackIterator(grown, this.#packSlot);
-      } else {
-        state.changedIterator.slots = grown;
-      }
-    }
-    return positions;
-  }
-
-  /** Whether `slot` is in a component's current changed window. */
-  #isChanged(state: ComponentState, slot: number): boolean {
-    const positions = state.changedPositions;
-    if (positions === undefined) return false;
-    const position = positions[slot]!;
-    return position < state.changedCount && state.changedList![position] === slot;
+    if (state.sideKeys.length > 0) this.#stageSideInitial(state, data, template);
+    if (state.usesSparseStorage) this.#reserveSparseSlot(state, flags, slot);
+    flags[slot] = 1;
+    state.owners.add(slot);
+    this.#bumpRevision(state);
   }
 
   /** Mark a data component changed once per entity per refresh window. */
   #markChanged(state: ComponentState, slot: number): void {
     this.#bumpRevision(state);
-    if (this.#isChanged(state, slot)) return;
-    const changedCount = state.changedCount;
-    const positions = this.#ensureChangedState(state, changedCount + 1);
-    if (positions === undefined) return;
-    state.changedList![changedCount] = slot;
-    positions[slot] = changedCount;
-    state.changedCount = changedCount + 1;
+    const changed = state.changed;
+    if (state.instance.storage === null || changed.has(slot)) return;
+    changed.add(slot);
   }
 
   /** Mark a data component changed by instance id if the entity owns it. */
   #markInstanceIdChanged(instanceId: number, entity: Entity): boolean {
     const state = this.#states[instanceId];
-    if (state === undefined) return false;
-    const instance = state.instance;
-    if (instance === undefined || instance.storage === null) return false;
-    const slot = entityIndex(entity);
+    if (state === undefined || state.instance.storage === null) return false;
     if (!this.#entityOwnsInstanceId(instanceId, entity)) return false;
-    this.#markChanged(state, slot);
+    this.#markChanged(state, entityIndex(entity));
     return true;
-  }
-
-  /** Remove a data component from changed iteration if present. */
-  #unmarkChanged(state: ComponentState, slot: number): void {
-    if (!this.#isChanged(state, slot)) return;
-    state.changedCount = this.#removeFromDenseList(
-      state.changedList!,
-      state.changedPositions!,
-      state.changedCount,
-      slot,
-    );
   }
 
   /**
    * Map a capped component's dense row for `slot` before ownership changes, so a storage failure can never leave a
    * half-committed add. Raw writes to non-owner slots (direct partitions, proxy slot cursor) map rows too and
    * are never released by removal; when the dense rows run out they are reclaimed here, after which at most
-   * `ownerCount` rows are mapped and `ownerCount < maxEntities` guarantees room.
+   * `owners.count` rows are mapped and `owners.count < maxEntities` guarantees room.
    */
-  #reserveSparseSlot(state: ComponentState, owners: Uint8Array, slot: number): void {
+  #reserveSparseSlot(state: ComponentState, flags: Uint8Array, slot: number): void {
     const column = state.storageColumns[0] as SparseColumn;
     if (column.getEntity(slot) !== undefined) return;
     try {
@@ -551,7 +236,7 @@ export class ComponentManager {
     }
     const getEntity = column.getEntity;
     for (let other = 0; other < this.#capacity; other++) {
-      if (owners[other] !== 1 && other !== slot && getEntity(other) !== undefined) column.deleteEntity(other);
+      if (flags[other] !== 1 && other !== slot && getEntity(other) !== undefined) column.deleteEntity(other);
     }
     column.setEntity(slot, 0);
   }
@@ -566,17 +251,34 @@ export class ComponentManager {
   }
 
   /**
-   * Stage the values a new owner's absent side fields start at: `create()` for object fields that define it, else
-   * `""` / `null`. Runs before ownership changes, so a throwing `create()` leaves the component untouched.
+   * Stage the values a new owner's absent side fields start at, skipping fields `data` provides: a template value
+   * copied through the field's `clone` hook, else `create()` for object fields that define it, else `""` / `null`.
+   * Runs before ownership changes, so a throwing hook leaves the component untouched.
    */
-  #stageSideInitial(state: ComponentState, data: Record<string, unknown> | undefined): void {
+  #stageSideInitial(
+    state: ComponentState,
+    data: Record<string, unknown> | undefined,
+    template: readonly unknown[] | undefined,
+  ): void {
     const fields = state.sideFields;
+    const keys = state.sideKeys;
+    const initial = state.sideInitial;
     try {
       for (let i = 0; i < fields.length; i++) {
+        if (data !== undefined && hasOwnProperty(data, keys[i]!)) continue;
         const property = fields[i]!;
-        if (data !== undefined && hasOwnProperty(data, state.sideKeys[i]!)) continue;
-        const create = property.kind === "object" ? property.create : undefined;
-        state.sideInitial[i] = create === undefined ? sideDefault(property) : create();
+        const value = template === undefined ? undefined : template[i];
+        if (property.kind === "string") {
+          initial[i] = value === undefined ? sideDefault(property) : value;
+          continue;
+        }
+        if (value === undefined) {
+          const create = property.create;
+          initial[i] = create === undefined ? sideDefault(property) : create();
+          continue;
+        }
+        const clone = property.clone;
+        initial[i] = value === null || clone === undefined ? value : clone(value);
       }
     } catch (error) {
       // Values staged before the throw must not stay referenced.
@@ -592,7 +294,7 @@ export class ComponentManager {
   }
 
   /** Drop staged side values once committed, so they do not keep objects alive until {@link refresh}. */
-  #releaseSideScratch(state: ComponentStorageWriteState): void {
+  #releaseSideScratch(state: ComponentState): void {
     const scratch = state.sideScratch;
     for (let i = 0; i < scratch.length; i++) scratch[i] = undefined;
   }
@@ -637,28 +339,19 @@ export class ComponentManager {
     slot: number = entityIndex(entity),
     dataValidated: boolean = false,
   ): boolean {
-    const id = instance.id;
     if (slot >= this.#capacity) {
       throw new EntityNotFoundError(`Entity ${entity} is outside component capacity.`);
     }
-    const state = this.#states[id];
+    const state = this.#states[instance.id];
     if (state === undefined) return false;
     if (data !== undefined && !dataValidated) this.validateInstanceData(instance, data);
-    const owners = this.#ensureOwnershipState(state);
-    const storage = instance.storage;
-    const alreadyOwned = owners[slot] === 1;
-    const maxEntities = state.maxEntities;
-    if (!alreadyOwned && maxEntities !== 0 && state.ownerCount >= maxEntities) {
-      throw maxOwnersError(instance.type.name, maxEntities);
-    }
-    const stagesSide = !alreadyOwned && state.sideKeys.length > 0;
-    if (stagesSide) this.#stageSideInitial(state, data as Record<string, unknown> | undefined);
-    if (!alreadyOwned && state.usesSparseStorage) this.#reserveSparseSlot(state, owners, slot);
-    const ownershipChanged = this.#acquireOwnership(state, owners, slot);
-    if (ownershipChanged) this.#bumpRevision(state);
-    if (storage !== null) {
-      if (data !== undefined) {
-        const changed = writeEntityStorageData(state, data as Record<string, unknown>, slot, ownershipChanged);
+    const values = data as Record<string, unknown> | undefined;
+    const flags = this.#ownerFlags(state);
+    const ownershipChanged = flags[slot] !== 1;
+    if (ownershipChanged) this.#claimOwner(state, flags, slot, values, undefined);
+    if (instance.storage !== null) {
+      if (values !== undefined) {
+        const changed = writeEntityStorageData(state, values, slot, ownershipChanged);
         // A payload always marks a new owner changed, whatever the previous (default, stale, or unmapped) cell held.
         if (changed || ownershipChanged) this.#markChanged(state, slot);
       } else if (ownershipChanged) {
@@ -667,10 +360,9 @@ export class ComponentManager {
         this.#markChanged(state, slot);
       }
     }
-    if (stagesSide) this.#clearSideInitial(state);
+    if (ownershipChanged && state.sideKeys.length > 0) this.#clearSideInitial(state);
     // Data staged here is used once; batch callers stage once (`dataValidated`) and release after their last row.
-    if (data !== undefined && !dataValidated) this.#releaseSideScratch(state);
-
+    if (values !== undefined && !dataValidated) this.#releaseSideScratch(state);
     return ownershipChanged;
   }
 
@@ -697,60 +389,16 @@ export class ComponentManager {
   ): boolean {
     const state = this.#states[instance.id];
     if (state === undefined) return false;
-    const owners = this.#ensureOwnershipState(state);
-    if (owners[slot] === 1) return false;
-    const maxEntities = state.maxEntities;
-    if (maxEntities !== 0 && state.ownerCount >= maxEntities) {
-      throw maxOwnersError(instance.type.name, maxEntities);
-    }
-    const sideKeys = state.sideKeys;
-    const stagesSide = row !== null && sideKeys.length > 0;
-    // Run user hooks before ownership changes, so a throwing `create()` / `clone()` leaves the component untouched.
-    if (stagesSide) this.#stageTemplateSide(state, row.side, data);
-    if (state.usesSparseStorage) this.#reserveSparseSlot(state, owners, slot);
-    this.#acquireOwnership(state, owners, slot);
-    this.#bumpRevision(state);
-    if (instance.storage !== null && row !== null) {
+    const flags = this.#ownerFlags(state);
+    if (flags[slot] === 1) return false;
+    // Only data components have rows, so a tag (`row === null`) has no side fields to stage.
+    this.#claimOwner(state, flags, slot, data, row?.side);
+    if (row !== null) {
       writeEntityStorageRow(state, row.typed, data, slot);
-      if (stagesSide) {
-        const sideColumns = state.sideColumns;
-        for (let i = 0; i < sideKeys.length; i++) {
-          sideColumns[i]![slot] = data !== undefined && hasOwnProperty(data, sideKeys[i]!) ?
-            state.sideScratch[i] :
-            state.sideInitial[i];
-        }
-      }
+      if (state.sideKeys.length > 0) this.#clearSideInitial(state);
       this.#markChanged(state, slot);
     }
-    if (stagesSide) this.#clearSideInitial(state);
     return true;
-  }
-
-  /** Stage a new owner's side values from a template: overrides skip, given values clone, absent values `create()`. */
-  #stageTemplateSide(
-    state: ComponentState,
-    template: readonly unknown[],
-    data: Record<string, unknown> | undefined,
-  ): void {
-    const fields = state.sideFields;
-    const initial = state.sideInitial;
-    try {
-      for (let i = 0; i < fields.length; i++) {
-        if (data !== undefined && hasOwnProperty(data, state.sideKeys[i]!)) continue;
-        const property = fields[i]!;
-        const value = template[i];
-        if (value !== undefined) {
-          initial[i] = cloneFieldValue(property, value);
-          continue;
-        }
-        const create = property.kind === "object" ? property.create : undefined;
-        initial[i] = create === undefined ? sideDefault(property) : create();
-      }
-    } catch (error) {
-      // Values staged before the throw must not stay referenced.
-      this.#clearSideInitial(state);
-      throw error;
-    }
   }
 
   /**
@@ -854,7 +502,7 @@ export class ComponentManager {
   }
 
   #entityOwnsInstanceId(instanceId: number, entity: Entity): boolean {
-    return this.#isActive(entity) && this.#states[instanceId]?.owners?.[entityIndex(entity)] === 1;
+    return this.#isActive(entity) && this.#states[instanceId]?.ownerFlags?.[entityIndex(entity)] === 1;
   }
 
   /**
@@ -904,9 +552,7 @@ export class ComponentManager {
     if (!instance) return;
     const state = this.#states[instance.id];
     if (state === undefined) return;
-    const iterator = state.changedIterator;
-    if (iterator === undefined) return this.#emptyChangedIterator.reset(0);
-    return iterator.reset(state.changedCount);
+    return state.changed.iterator.reset(state.changed.count);
   }
 
   /**
@@ -922,7 +568,7 @@ export class ComponentManager {
     if (!instance) return;
     const state = this.#states[instance.id];
     if (state === undefined) return;
-    return (state.ownerIterator ?? this.#emptyOwnerIterator).reset(state.ownerCount);
+    return state.owners.iterator.reset(state.owners.count);
   }
 
   /**
@@ -938,7 +584,7 @@ export class ComponentManager {
   >(component: Component<TValue, TStorage> | string): number {
     const instance = this.getInstance(component);
     if (!instance) return 0;
-    return this.#states[instance.id]?.ownerCount ?? 0;
+    return this.#states[instance.id]?.owners.count ?? 0;
   }
 
   /**
@@ -963,9 +609,9 @@ export class ComponentManager {
       const maxEntities = state?.maxEntities ?? 0;
       if (
         state === undefined || maxEntities === 0 ||
-        (entity !== undefined && state.owners?.[entityIndex(entity)] === 1)
+        (entity !== undefined && state.ownerFlags?.[entityIndex(entity)] === 1)
       ) continue;
-      if (state.ownerCount >= maxEntities) {
+      if (state.owners.count >= maxEntities) {
         throw maxOwnersError(instance.type.name, maxEntities);
       }
     }
@@ -982,9 +628,9 @@ export class ComponentManager {
 
     let newOwners = 0;
     for (let i = 0; i < count; i++) {
-      if (state.owners?.[entityIndex(entities[i]! as Entity)] !== 1) newOwners++;
+      if (state.ownerFlags?.[entityIndex(entities[i]! as Entity)] !== 1) newOwners++;
     }
-    if (state.ownerCount + newOwners > maxEntities) {
+    if (state.owners.count + newOwners > maxEntities) {
       throw maxOwnersError(instance.type.name, maxEntities);
     }
   }
@@ -1129,7 +775,7 @@ export class ComponentManager {
    */
   refresh(): ComponentManager {
     // The changed window is a sparse set: resetting the count empties it without touching the lists.
-    for (let i = 0; i < this.#states.length; i++) this.#states[i]!.changedCount = 0;
+    for (let i = 0; i < this.#states.length; i++) this.#states[i]!.changed.clear();
     // Batch writes (one staging, many rows) leave staged side values behind; drop them so they do not keep objects alive.
     const sideStates = this.#sideStates;
     for (let i = 0; i < sideStates.length; i++) {
@@ -1158,16 +804,15 @@ export class ComponentManager {
     entity: Entity,
     slot: number = entityIndex(entity),
   ): boolean {
-    const id = instance.id;
-    const state = this.#states[id];
+    const state = this.#states[instance.id];
     if (state === undefined) return false;
-    const owners = state.owners;
-    const wasOwned = owners?.[slot] === 1;
-    if (!wasOwned) return false;
+    const flags = state.ownerFlags;
+    if (flags === null || flags[slot] !== 1) return false;
 
-    state.ownerCount = this.#removeFromDenseList(state.ownerList!, state.ownerPositions!, state.ownerCount, slot);
-    owners[slot] = 0;
-    if (instance.storage !== null) this.#unmarkChanged(state, slot);
+    state.owners.remove(slot);
+    flags[slot] = 0;
+    const changed = state.changed;
+    if (changed.has(slot)) changed.remove(slot);
     this.#bumpRevision(state);
     // Every column of a capped component shares one slot -> row index, so one delete unmaps the whole row.
     if (state.usesSparseStorage) (state.storageColumns[0] as SparseColumn).deleteEntity(slot);
@@ -1201,7 +846,7 @@ export class ComponentManager {
     const slot = entityIndex(entity);
     const changed = writeEntityStorageData(state, value as Record<string, unknown>, slot, false);
     this.#releaseSideScratch(state);
-    if (changed && state.owners?.[slot] === 1) this.#markChanged(state, slot);
+    if (changed && state.ownerFlags?.[slot] === 1) this.#markChanged(state, slot);
     return this;
   }
 
@@ -1211,7 +856,7 @@ export class ComponentManager {
   }
 
   /** Component states in registration (instance id) order, read by world saves. @internal */
-  get saveStates(): readonly SaveableComponentState[] {
+  get saveStates(): readonly ComponentState[] {
     return this.#states;
   }
 

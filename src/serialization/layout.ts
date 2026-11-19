@@ -1,4 +1,4 @@
-import type { SaveableComponentState } from "@/component/component-snapshot.ts";
+import type { ComponentState } from "@/component/component-state.ts";
 import { MIN_WORLD_CAPACITY } from "@/constants.ts";
 import { MAX_WORLD_CAPACITY } from "@/entity/entity.ts";
 import { isRelation, type Relation } from "@/relation/relation.ts";
@@ -102,7 +102,7 @@ function relationLayout(relation: Relation<never>): WorldSaveRelationLayout {
 }
 
 /** Describe the layout of a world's registered component states. */
-export function layoutOfStates(capacity: number, states: readonly SaveableComponentState[]): WorldSaveLayout {
+export function layoutOfStates(capacity: number, states: readonly ComponentState[]): WorldSaveLayout {
   const components: WorldSaveComponentLayout[] = new Array(states.length);
   for (let i = 0; i < states.length; i++) {
     const state = states[i]!;

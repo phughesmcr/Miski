@@ -1,5 +1,6 @@
 import type { Archetype } from "@/archetype/archetype.ts";
 import type { ComponentStateSnapshot } from "@/component/component-snapshot.ts";
+import type { SparseColumn } from "@/component/component-state.ts";
 import type { SideField } from "@/component/field-codec.ts";
 import { entityIndex } from "@/entity/entity.ts";
 import type { DynamicComponentInstance } from "@/types/component.ts";
@@ -50,8 +51,6 @@ export type WorldSaveLoadOptions = {
    */
   readonly migrate?: (document: WorldSaveDocument, target: WorldSaveLayout) => WorldSaveDocument;
 };
-
-type SparseColumn = { readonly getEntity: (slot: number) => number | undefined };
 
 /** One string / object column of a world, as a save reads it. */
 type SideColumn = {
@@ -143,7 +142,7 @@ function liveCount(context: SaveContext): number {
 function measureSide(
   context: SaveContext,
   c: number,
-  ownerList: ArrayLike<number> | undefined,
+  ownerList: ArrayLike<number>,
   owners: number,
 ): number {
   const columns = context.side[c]!;
@@ -151,7 +150,7 @@ function measureSide(
   for (let s = 0; s < columns.length; s++) {
     const side = columns[s]!;
     if (side.code === CODE_STRING) {
-      const heap = owners === 0 ? 0 : heapBytes(side.column, ownerList!, owners);
+      const heap = owners === 0 ? 0 : heapBytes(side.column, ownerList, owners);
       if (heap < 0) {
         throw new WorldSaveError(
           `Component ${side.label} holds a string with a lone surrogate, which UTF-8 cannot store.`,
@@ -165,7 +164,7 @@ function measureSide(
     // Raised before the loop, so a throwing hook still lets `releaseEncoded` drop the cells already stored.
     if (owners > context.encodedCount) context.encodedCount = owners;
     for (let j = 0; j < owners; j++) {
-      const value = side.column[ownerList![j]!];
+      const value = side.column[ownerList[j]!];
       if (value === null) {
         encoded[j] = null;
         continue;
@@ -222,11 +221,10 @@ function measure(context: SaveContext): number {
   const counts = source.componentCounts;
   for (let c = 0; c < states.length; c++) {
     const state = states[c]!;
-    counts[c * 2] = state.ownerCount;
-    counts[c * 2 + 1] = state.changedCount;
-    source.sideBytes[c] = context.side[c]!.length === 0 ?
-      0 :
-      measureSide(context, c, state.ownerList, state.ownerCount);
+    const owners = state.owners;
+    counts[c * 2] = owners.count;
+    counts[c * 2 + 1] = state.changed.count;
+    source.sideBytes[c] = context.side[c]!.length === 0 ? 0 : measureSide(context, c, owners.list, owners.count);
   }
   source.touched = archetypes.transitionWindow.touchedCount;
   const relations = context.relations;
@@ -317,37 +315,37 @@ class WorldSource extends SaveSource {
   }
 
   writeOwners(views: Views, offset: number, width: number, c: number): number {
-    const state = this.host.components.saveStates[c]!;
-    return writeSlots(views, offset, width, state.ownerList!, state.ownerCount);
+    const owners = this.host.components.saveStates[c]!.owners;
+    return writeSlots(views, offset, width, owners.list, owners.count);
   }
 
   writeChanged(views: Views, offset: number, width: number, c: number): number {
-    const state = this.host.components.saveStates[c]!;
-    return writeSlots(views, offset, width, state.changedList!, state.changedCount);
+    const changed = this.host.components.saveStates[c]!.changed;
+    return writeSlots(views, offset, width, changed.list, changed.count);
   }
 
   writeNumeric(views: Views, offset: number, c: number, t: number, code: number): void {
     const state = this.host.components.saveStates[c]!;
-    const owners = state.ownerCount;
-    const ownerList = state.ownerList!;
+    const owners = state.owners.count;
+    const ownerList = state.owners.list;
     const view = views.column(code);
     const start = offset / FIELD_TYPE_BYTES[code]!;
     const column = state.storageColumns[t]!;
     if (ArrayBuffer.isView(column)) {
       for (let j = 0; j < owners; j++) view[start + j] = (column as TypedArray)[ownerList[j]!]!;
     } else {
-      const getEntity = (column as unknown as SparseColumn).getEntity;
+      const getEntity = (column as SparseColumn).getEntity;
       for (let j = 0; j < owners; j++) view[start + j] = getEntity(ownerList[j]!)!;
     }
   }
 
   writeStrings(views: Views, offset: number, c: number, s: number): number {
-    const state = this.host.components.saveStates[c]!;
-    return writeStringCells(views, offset, this.side[c]![s]!.column, state.ownerList!, state.ownerCount);
+    const owners = this.host.components.saveStates[c]!.owners;
+    return writeStringCells(views, offset, this.side[c]![s]!.column, owners.list, owners.count);
   }
 
   writeObjects(views: Views, offset: number, c: number, s: number): number {
-    const owners = this.host.components.saveStates[c]!.ownerCount;
+    const owners = this.host.components.saveStates[c]!.owners.count;
     const encoded = this.side[c]![s]!.encoded!;
     const end = writeObjectCells(views, offset, encoded, owners);
     // Drop the cells once written, so a finished save keeps no encoded values alive.
