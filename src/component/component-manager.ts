@@ -69,8 +69,16 @@ export class ComponentManager {
   #registryByName: Record<string, DynamicComponentInstance>;
   /** Frozen public registry view keyed by component name */
   #publicRegistry: Readonly<Record<string, DynamicComponentInstance>>;
-  /** Component instances indexed by component definition id */
-  #registryByComponentId: DynamicComponentInstance[];
+  /**
+   * Component instances indexed by `definition id - #idBase`, or `null` when this world's definition ids are too
+   * spread out for a compact array. Definition ids are process-global, so indexing by the raw id would leave a
+   * holey (or dictionary-mode) array in a long-lived process.
+   */
+  #registryByIdOffset: (DynamicComponentInstance | undefined)[] | null;
+  /** Smallest registered definition id: the offset of {@link #registryByIdOffset}. */
+  #idBase: number;
+  /** Component instances by definition, used when {@link #registryByIdOffset} is `null`. */
+  #registryByComponent: Map<DynamicComponent, DynamicComponentInstance> | null;
   /** Component ownership and changed state indexed by component instance id */
   #states: ComponentState[];
   /** States with string / object fields, whose staged side values refresh releases */
@@ -110,7 +118,6 @@ export class ComponentManager {
     this.#isActive = isActive;
     this.#registryByName = Object.create(null);
     this.#publicRegistry = {};
-    this.#registryByComponentId = [];
     this.#states = [];
     this.#sideStates = [];
     for (const component of components) {
@@ -130,9 +137,34 @@ export class ComponentManager {
       this.#states.push(state);
       if (state.sideKeys.length > 0) this.#sideStates.push(state);
       this.#registryByName[component.name] = state.instance;
-      this.#registryByComponentId[component[$_COMPONENT_ID_KEY]] = state.instance;
     }
     this.#publicRegistry = Object.freeze({ ...this.#registryByName });
+    // Index instances by definition id. A packed, offset array is the fastest lookup; it is used whenever the ids
+    // span little more than the component count (the usual case: components defined together, then worlds built).
+    let idBase = 0;
+    let span = 0;
+    if (components.length > 0) {
+      let maxId = -Infinity;
+      idBase = Infinity;
+      for (const component of components) {
+        const id = component[$_COMPONENT_ID_KEY];
+        if (id < idBase) idBase = id;
+        if (id > maxId) maxId = id;
+      }
+      span = maxId - idBase + 1;
+    }
+    this.#idBase = idBase;
+    if (span <= components.length * 4 + 64) {
+      // Filled by `push` so the array stays packed.
+      const byOffset: (DynamicComponentInstance | undefined)[] = [];
+      for (let i = 0; i < span; i++) byOffset.push(undefined);
+      for (const state of this.#states) byOffset[state.instance.type[$_COMPONENT_ID_KEY] - idBase] = state.instance;
+      this.#registryByIdOffset = byOffset;
+      this.#registryByComponent = null;
+    } else {
+      this.#registryByIdOffset = null;
+      this.#registryByComponent = new Map(this.#states.map((state) => [state.instance.type, state.instance]));
+    }
   }
 
   /** Latest world revision assigned to any of the supplied component instances. */
@@ -492,7 +524,10 @@ export class ComponentManager {
     if (typeof component === "string") {
       return this.#registryByName[component];
     }
-    return this.#registryByComponentId[component[$_COMPONENT_ID_KEY]];
+    const byOffset = this.#registryByIdOffset;
+    if (byOffset === null) return this.#registryByComponent!.get(component);
+    const index = component[$_COMPONENT_ID_KEY] - this.#idBase;
+    return index >= 0 && index < byOffset.length ? byOffset[index] : undefined;
   }
 
   /** Validate and stage storage-canonical values before a world mutation. @internal */

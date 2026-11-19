@@ -6,6 +6,7 @@ import {
   Component,
   ComponentDataError,
   ComponentOwnershipError,
+  type DynamicComponent,
   entityIndex,
   NotRegisteredError,
   SpecError,
@@ -221,5 +222,25 @@ Deno.test("bundle and batch commits keep canonical scratch values isolated by co
       { x: Math.fround(4.4), y: Math.fround(5.5) },
       "Batch repeats staged canonical payload",
     );
+  }
+});
+
+Deno.test("component lookup works whether the world's definition ids are compact or spread out", async () => {
+  const first = vec2Component("spreadFirst");
+  const unregistered = tagComponent("spreadUnregistered");
+  // Definition ids are process-global: many definitions between two components spread a world's ids out.
+  for (let i = 0; i < 500; i++) tagComponent(`spreadFiller${i}`);
+  const last = vec2Component("spreadLast");
+  for (const components of [[first, unregistered], [first, last]] as DynamicComponent[][]) {
+    const world = await createTestWorld(components, 8);
+    const entity = createEntity(world);
+    for (const component of components) {
+      assert(world.components.isRegistered(component), `${component.name} is registered`);
+      world.components.addToEntity(component as never, entity);
+      assert(world.components.entityHas(component, entity), `${component.name} is found by definition`);
+    }
+    const missing = components.includes(last) ? unregistered : last;
+    assert(!world.components.isRegistered(missing), `${missing.name} is not registered`);
+    assertEquals(world.components.getInstance(missing), undefined, "an unregistered lookup is undefined");
   }
 });
