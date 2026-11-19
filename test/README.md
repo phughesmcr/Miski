@@ -41,7 +41,11 @@ Runtime tests live in `*.test.ts` files and run via `deno test` (see `deno.json`
 | `command_buffer.test.ts` | `CommandBuffer`: deferred spawn/destroy/add/set/remove, pending handles, partial payloads, inactive targets, drain-on-error flushes, wide and non-numeric fields, every field kind at flush, dead entity refs written as null, prefab default parity, growth |
 | `command_buffer_relations.test.ts` | `CommandBuffer` relate/unrelate (pending entities at either end, skipped dead ends, queue-time validation, annotated failures), relation components rejected when queued, and pending entities as `field.entity()` values |
 | `slot_set.test.ts` | `SlotSet`: lazy allocation, doubling growth up to its maximum, swap-remove, clear and assign without stale members |
-| `world_save.test.ts` | Whole-world saves: twin-world load differential, `saveWorld` into a reused buffer, header/layout, mismatch and migrate, corruption fuzz, JSON round-trip, no aliasing |
+| `slot_allocator.test.ts` | `SlotAllocator`: next-fit acquire and wrap, -1 when full, no-op release, clamped `occupiedIndicesInto`, live vs copied words, `restore` masking, cursor validation and replay |
+| `relation_list.test.ts` | `RelationList`: parallel entity / slot / row / depth buffers, doubling growth capped at capacity, 8- vs 16-bit slots, `clear`, reusable `iterate()`, `each()`, nested iteration |
+| `transition_window.test.ts` | `TransitionWindow`: first touch wins, stale and untouched handles have no origin, first-touch order, `clear`, `capture` / `restore` as an independent copy |
+| `field_codec.test.ts` | Field codecs: which descriptors lower to bool / enum / entity, side-field defaults, encode validation and error messages, decoding dead references as `null`, side-value validation |
+| `world_save.test.ts` | Whole-world saves: twin-world load differential, `saveWorld` into a reused buffer, header/layout, mismatch and migrate, corruption fuzz (random bytes, every header/layout bit, seeded bit flips in a world with every column kind and relations), JSON round-trip, no aliasing |
 | `world_save_fields.test.ts` | World saves of `field.*` columns: string and object round-trips, encode/decode hook rules, null objects, missing hooks, throwing decode leaves the world untouched, unencodable strings, bool/enum/entity round-trips and range checks, field tags in layouts, label-order and kind mismatches, masked next generations, documents, corruption fuzz, continued behavior |
 | `world_save_relations.test.ts` | World saves of relations: twin-world differential (getTargets / getSources / traverse order, rows, changed, continued behavior, byte-identical re-saves), load over a busy world, layout entries and option mismatches, JSON shape and round-trip, document rejections, binary target checks, relation-section corruption fuzz, `saveWorld` into a reused buffer and migrate |
 | `release_integrity.test.ts` | Runtime, `deno.json`, README install snippet, and CHANGELOG version consistency (reads `README.md` and `CHANGELOG.md`; `deno task test` grants `--allow-read` for just those files) |
@@ -81,7 +85,8 @@ They use `@ts-expect-error` to assert that invalid access is rejected at compile
 `deno task smoke:consumers` runs separately from the Deno unit suite. It builds
 the current source as a local npm tarball, installs it in separate clean npm
 and Bun projects, checks public declarations and gameplay, then exercises the
-standalone browser bundle in real Chromium. Node/npm/Bun and an external
+standalone browser bundle in real Chromium. Its consumer script is
+`consumer-fixture.mjs`, plain JavaScript that is linted but not run by `deno test`. Node/npm/Bun and an external
 Playwright installation with Chromium are required; set
 `MISKI_PLAYWRIGHT_MODULE` to Playwright's `index.mjs` path. All consumer files
 are temporary and no registry publish occurs.

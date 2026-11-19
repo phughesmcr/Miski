@@ -15,9 +15,11 @@ import {
   type DynamicComponent,
   type Entity,
   entityIndex,
+  field,
   loadWorld,
   Query,
   readWorldSaveHeader,
+  Relation,
   saveWorld,
   World,
   WorldRollbackScope,
@@ -440,6 +442,132 @@ Deno.test("corrupt saves throw and leave the target untouched; accepted saves st
   for (let cut = 0; cut < bytes.byteLength; cut += 8) {
     assertThrows(() => loadWorld(target.world, bytes.subarray(0, cut)), WorldSaveError, "");
   }
+});
+
+/** Every column kind (numeric, half float, bool, enum, entity, string, object) plus relations, for the bit-flip fuzz. */
+const everyKind = [
+  new Component({
+    name: "unit",
+    schema: {
+      hp: Uint16Array,
+      speed: Float16Array,
+      alive: field.bool(),
+      state: field.enum(["idle", "run", "dead"]),
+      target: field.entity(),
+      label: field.string(),
+      path: field.object<number[]>({
+        encode: (path) => JSON.stringify(path),
+        decode: (encoded) => JSON.parse(encoded as string) as number[],
+      }),
+    },
+  }),
+  new Component({ name: "marker" }),
+  new Relation({ name: "childOf", exclusive: true, acyclic: true, schema: { weight: Float32Array } }),
+  new Relation({ name: "likes", schema: { rank: Int16Array } }),
+  new Relation({ name: "follows" }),
+] as unknown as DynamicComponent[];
+
+async function everyKindWorld(): Promise<World> {
+  const world = new World({ capacity: 32, components: everyKind });
+  await world.init();
+  return world;
+}
+
+/** Build an every-kind world with live, destroyed and re-used slots, pair data and a pending transition window. */
+async function populatedEveryKindWorld(random: Rng): Promise<World> {
+  const [unit, marker, childOf, likes, follows] = everyKind as unknown as [
+    Component<never>,
+    Component<null>,
+    Relation<never>,
+    Relation<never>,
+    Relation<null>,
+  ];
+  const world = await everyKindWorld();
+  const live: Entity[] = [];
+  for (let i = 0; i < 24; i++) {
+    const e = world.entities.createOrThrow();
+    if (random() % 4 !== 0) {
+      world.components.addToEntity(unit, e, {
+        hp: random() % 1000,
+        speed: (random() % 64) / 8,
+        alive: (random() & 1) === 1,
+        state: ["idle", "run", "dead"][random() % 3],
+        target: live.length > 0 ? live[random() % live.length] : null,
+        label: ["", "a", "caf\u00e9", "\u{1f680}"][random() % 4],
+        path: random() % 3 === 0 ? null : [random() % 9, random() % 9],
+      } as never);
+    }
+    if (random() % 3 === 0) world.components.addToEntity(marker, e);
+    if (live.length > 0) {
+      const other = live[random() % live.length]!;
+      if (random() % 2 === 0) world.relations.add(childOf, e, other, { weight: random() % 10 } as never);
+      if (random() % 2 === 0) world.relations.add(likes, e, other, { rank: (random() % 200) - 100 } as never);
+      if (random() % 3 === 0) world.relations.add(follows, other, e);
+    }
+    live.push(e);
+    if (i % 6 === 5) world.refresh();
+  }
+  for (let i = 0; i < 4; i++) {
+    const e = live[random() % live.length]!;
+    if (world.entities.isActive(e)) world.entities.destroy(e);
+  }
+  world.refresh();
+  for (let i = 0; i < 3; i++) world.components.addToEntity(marker, world.entities.createOrThrow());
+  return world;
+}
+
+Deno.test("bit flips in a save with every column kind and relations load or throw WorldSaveError, never half-load", async () => {
+  const bytes = saveWorld(await populatedEveryKindWorld(rng(31)));
+  const target = await populatedEveryKindWorld(rng(32));
+  const before = saveWorld(target);
+  const layoutEnd = 40 + new Uint32Array(bytes.buffer, bytes.byteOffset, 10)[5]!;
+  assert(layoutEnd > 40 && layoutEnd < bytes.byteLength, "the save has a layout block and sections after it");
+  let accepted = 0;
+  let rejected = 0;
+
+  const attempt = async (corrupt: Uint8Array, label: string): Promise<boolean> => {
+    try {
+      loadWorld(target, corrupt);
+    } catch (error) {
+      assert(error instanceof WorldSaveError, `${label}: expected WorldSaveError, got ${String(error)}`);
+      assert(bytesEqual(saveWorld(target), before), `${label}: a rejected load changed the world`);
+      rejected++;
+      return false;
+    }
+    // An accepted load must leave a world that keeps working and round-trips through another world.
+    accepted++;
+    const resaved = saveWorld(target);
+    const twin = await everyKindWorld();
+    loadWorld(twin, resaved);
+    assert(bytesEqual(saveWorld(twin), resaved), `${label}: an accepted load does not round-trip`);
+    const e = target.entities.create();
+    if (e !== undefined) target.entities.destroy(e);
+    target.refresh();
+    loadWorld(target, before);
+    return true;
+  };
+  const flipped = (bits: number[]): Uint8Array => {
+    const corrupt = bytes.slice();
+    for (const bit of bits) corrupt[bit >>> 3]! ^= 1 << (bit & 7);
+    return corrupt;
+  };
+
+  // Every bit of the header and the hashed layout block: none may load.
+  for (let bit = 0; bit < layoutEnd * 8; bit++) {
+    assert(!(await attempt(flipped([bit]), `header/layout bit ${bit}`)), `header/layout bit ${bit} was accepted`);
+  }
+  // Seeded flips through the section table and payloads: one bit, then short bursts.
+  const bodyBits = (bytes.byteLength - layoutEnd) * 8;
+  for (const seed of [1, 2, 3, 4, 5, 6]) {
+    const random = rng(seed);
+    for (let trial = 0; trial < 400; trial++) {
+      const count = trial < 250 ? 1 : 2 + (random() % 3);
+      const bits = Array.from({ length: count }, () => layoutEnd * 8 + (random() % bodyBits));
+      await attempt(flipped(bits), `seed ${seed} trial ${trial} bits ${bits.join(",")}`);
+    }
+  }
+  assert(rejected > accepted, `most flips are rejected (${rejected} rejected, ${accepted} accepted)`);
+  assert(accepted > 0, "some flips land in plain data and load");
 });
 
 Deno.test("the JSON view round-trips losslessly, including non-finite and negative-zero floats", async () => {
