@@ -250,26 +250,6 @@ export class ArchetypeManager {
   }
 
   /**
-   * Called by `world.init()`
-   *
-   * Initialize the ArchetypeManager
-   * @returns this
-   */
-  init(): this {
-    this.#slotArchetypes.length = this.#capacity;
-    return this;
-  }
-
-  /**
-   * Get the archetype an entity occupied when the current refresh window began.
-   * @param entity The Entity
-   * @returns The archetype, or `undefined` if the entity did not exist at window start
-   */
-  getWindowOrigin(entity: Entity): Archetype | undefined {
-    return this.#window.originOf(entity);
-  }
-
-  /**
    * Check if an Entity is in the root archetype
    * @param entity The Entity
    * @returns `true` if the Entity is in the root archetype, `false` otherwise

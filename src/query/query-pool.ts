@@ -4,7 +4,6 @@ import type {
   BorrowedEntityListEachFn,
   BorrowedSlotIndices,
   Entity,
-  EntityResultSink,
   SlotIndex,
 } from "@/entity/entity.ts";
 
@@ -21,7 +20,7 @@ const BULK_COPY_SLACK = 64;
  * (capped at capacity). Growing re-points {@link entities}, {@link slots} and {@link entityBuffer}, so read
  * them from the result after each refill rather than holding on to an older reference.
  */
-export class QueryEntityResult implements EntityResultSink {
+export class QueryEntityResult {
   #entityBuffer: Uint32Array;
   #slotBuffer: EntityArray;
   /** World entity capacity: the largest length a buffer ever needs, and the slot array's element width. */
@@ -36,7 +35,7 @@ export class QueryEntityResult implements EntityResultSink {
   constructor(capacity: number) {
     this.#capacity = capacity;
     const length = Math.min(capacity, INITIAL_RESULT_LENGTH);
-    this.#entityBuffer = createEntityArray(capacity, length);
+    this.#entityBuffer = createEntityArray(length);
     this.#slotBuffer = createSlotArray(capacity, length);
     this.entities = this.#entityBuffer as unknown as BorrowedEntityIndices;
     this.slots = this.#slotBuffer as unknown as BorrowedSlotIndices;
@@ -48,7 +47,7 @@ export class QueryEntityResult implements EntityResultSink {
     let next = Math.max(this.#entityBuffer.length * 2, 1);
     while (next < length) next *= 2;
     next = Math.min(next, Math.max(this.#capacity, length));
-    const entities = createEntityArray(this.#capacity, next);
+    const entities = createEntityArray(next);
     const slots = createSlotArray(this.#capacity, next);
     entities.set(this.#entityBuffer.subarray(0, this.count));
     slots.set(this.#slotBuffer.subarray(0, this.count));

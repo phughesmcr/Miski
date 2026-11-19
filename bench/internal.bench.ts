@@ -83,11 +83,10 @@ const renderableQueryInstance = createQueryInstance(
 const archetypeBitfield = bitfieldFor(componentCount, positionInstance, velocityInstance);
 const movementArchetype = new Archetype(SMALL_CAPACITY, [positionInstance, velocityInstance], archetypeBitfield);
 for (let entity = 0; entity < SMALL_CAPACITY; entity++) {
-  movementArchetype.addEntity(asEntity(entity));
+  movementArchetype.addSlot(entity);
 }
 
 const archetypeResult = new QueryEntityResult(SMALL_CAPACITY);
-const visitedEntities = new BooleanArray(SMALL_CAPACITY);
 const transitionArchetype = new Archetype(
   SMALL_CAPACITY,
   [positionInstance, velocityInstance],
@@ -95,7 +94,6 @@ const transitionArchetype = new Archetype(
 );
 
 const archetypeManager = new ArchetypeManager(SMALL_CAPACITY, componentCount);
-archetypeManager.init();
 const archetypeQueryList = {
   queries: [movementQueryInstance, renderableQueryInstance],
   count: 2,
@@ -341,33 +339,25 @@ Deno.bench({
 });
 
 Deno.bench({
-  name: "Archetype add/remove entity bookkeeping",
+  name: "Archetype add/remove slot bookkeeping",
   group: "internal archetypes",
   fn: () => {
-    transitionArchetype.addEntity(asEntity(17));
-    transitionArchetype.removeEntity(asEntity(17));
+    transitionArchetype.addSlot(17);
+    transitionArchetype.removeSlot(17);
   },
 });
 
 Deno.bench({
-  name: "Archetype writeEntitiesIntoResult",
+  name: "QueryEntityResult appendDense archetype population",
   group: "internal archetypes",
   fn: () => {
     archetypeResult.clear();
-    movementArchetype.writeEntitiesIntoResult(archetypeResult);
+    archetypeResult.appendDense(
+      movementArchetype.slotList,
+      movementArchetype.handleList,
+      movementArchetype.getPopulationCount(),
+    );
     entitySink ^= archetypeResult.count;
-  },
-});
-
-Deno.bench({
-  name: "Archetype writeEntitiesIntoResult with dedupe",
-  group: "internal archetypes",
-  fn: () => {
-    archetypeResult.clear();
-    visitedEntities.clear();
-    movementArchetype.writeEntitiesIntoResult(archetypeResult, visitedEntities);
-    entitySink ^= archetypeResult.count;
-    visitedEntities.clear();
   },
 });
 

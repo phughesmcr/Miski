@@ -20,11 +20,6 @@ export type SlotIndex = number & { readonly __slotBrand: unique symbol };
 /** Integer array type used for dense entity/slot ID lists. */
 export type EntityArray = Uint8Array | Uint16Array | Uint32Array;
 
-/** Mutable sink that accepts dense entity IDs during query materialization. */
-export type EntityResultSink = {
-  add(entity: Entity, slot: SlotIndex): void;
-};
-
 /**
  * A borrowed, pooled entity iterator.
  *
@@ -154,7 +149,7 @@ export type PackSlot = (slot: number) => Entity;
  * Allocate a typed array for packed entity handles.
  * Packed handles always require Uint32 storage.
  */
-export function createEntityArray(_capacity: number, length: number = _capacity): Uint32Array {
+export function createEntityArray(length: number): Uint32Array {
   return new Uint32Array(length);
 }
 
@@ -162,9 +157,8 @@ export function createEntityArray(_capacity: number, length: number = _capacity)
  * Allocate a typed array for raw slot indices sized to world capacity.
  */
 export function createSlotArray(capacity: number, length: number = capacity): EntityArray {
-  if (capacity <= 0x100) return new Uint8Array(length);
-  if (capacity <= 0x1_0000) return new Uint16Array(length);
-  return new Uint32Array(length);
+  // `MAX_WORLD_CAPACITY` is 0x1_0000, so every slot index fits in 16 bits.
+  return capacity <= 0x100 ? new Uint8Array(length) : new Uint16Array(length);
 }
 
 export class ReusableEntityIterator implements IterableIterator<Entity> {

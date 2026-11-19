@@ -1,9 +1,13 @@
 import { BooleanArray } from "@phughesmcr/booleanarray";
 import { ID_KEY } from "@/constants.ts";
-import { createEntityArray, createSlotArray, type EntityArray, packEntity } from "@/entity/entity.ts";
-import { asSlotIndex, type Entity, entityIndex, type PackSlot } from "@/entity/entity.ts";
-import { EntityNotFoundError, formatEntityNotActive } from "@/errors.ts";
-import type { EntityResultSink } from "@/entity/entity.ts";
+import {
+  createEntityArray,
+  createSlotArray,
+  type Entity,
+  type EntityArray,
+  packEntity,
+  type PackSlot,
+} from "@/entity/entity.ts";
 import type { DynamicComponentInstance } from "@/types/component.ts";
 import type { QueryInstance } from "@/types/query.ts";
 
@@ -52,10 +56,10 @@ export class Archetype {
   #transitionCapacity: number;
 
   /** Dense currently-active storage slots in this archetype (grows on demand) */
-  #entityList: EntityArray;
+  #slotList: EntityArray;
 
   /**
-   * Packed handles parallel to {@link #entityList}, so query refills copy instead of re-packing.
+   * Packed handles parallel to {@link #slotList}, so query refills copy instead of re-packing.
    * A slot's generation only changes while it is outside every archetype (create packs before the slot joins one,
    * destroy leaves before the generation moves, rollback restores generations before populations), so a handle
    * packed when its slot joins stays current until the slot leaves.
@@ -153,8 +157,8 @@ export class Archetype {
     this.id = bitfield.buffer.toString();
     this.components = components;
     this.#candidateCache = new Map();
-    this.#entityList = createSlotArray(capacity, Math.min(capacity, INITIAL_LIST_LENGTH));
-    this.#handleList = createEntityArray(capacity, this.#entityList.length);
+    this.#slotList = createSlotArray(capacity, Math.min(capacity, INITIAL_LIST_LENGTH));
+    this.#handleList = createEntityArray(this.#slotList.length);
     this.#positions = positions;
     this.#populationCount = 0;
     this.#transitionCapacity = Math.max(transitionCapacity, bitfield.size ?? 0, components.length);
@@ -162,54 +166,21 @@ export class Archetype {
     this.removeTransitions = new Array(this.#transitionCapacity);
   }
 
-  #requireEntitySlot(entity: Entity, slot: number): void {
-    if (slot !== entityIndex(entity) || slot >= this.#entityCapacity || this.#packSlot(slot) !== entity) {
-      throw new EntityNotFoundError(formatEntityNotActive(entity));
-    }
-  }
-
   /**
    * Grow the dense list so it can hold `length` entries.
    * @internal
    */
   reserve(length: number): void {
-    if (length <= this.#entityList.length) return;
-    let next = this.#entityList.length * 2;
+    if (length <= this.#slotList.length) return;
+    let next = this.#slotList.length * 2;
     while (next < length) next *= 2;
     const grown = Math.min(next, this.#entityCapacity);
     const expanded = createSlotArray(this.#entityCapacity, grown);
-    expanded.set(this.#entityList.subarray(0, this.#populationCount));
-    this.#entityList = expanded;
-    const handles = createEntityArray(this.#entityCapacity, grown);
+    expanded.set(this.#slotList.subarray(0, this.#populationCount));
+    this.#slotList = expanded;
+    const handles = createEntityArray(grown);
     handles.set(this.#handleList.subarray(0, this.#populationCount));
     this.#handleList = handles;
-  }
-
-  #activateEntity(slot: number): boolean {
-    if (this.hasSlot(slot)) return false;
-    const position = this.#populationCount;
-    if (position === this.#entityList.length) this.reserve(position + 1);
-    this.#entityList[position] = slot;
-    this.#handleList[position] = this.#packSlot(slot);
-    this.#positions[slot] = position;
-    this.#populationCount = position + 1;
-    this.stamp = ++this.#clock.tick;
-    return true;
-  }
-
-  #deactivateEntity(slot: number): boolean {
-    if (!this.hasSlot(slot)) return false;
-    const removeIndex = this.#positions[slot]!;
-    const lastIndex = this.#populationCount - 1;
-    if (removeIndex !== lastIndex) {
-      const lastSlot = this.#entityList[lastIndex]!;
-      this.#entityList[removeIndex] = lastSlot;
-      this.#handleList[removeIndex] = this.#handleList[lastIndex]!;
-      this.#positions[lastSlot] = removeIndex;
-    }
-    this.#populationCount = lastIndex;
-    this.stamp = ++this.#clock.tick;
-    return true;
   }
 
   /**
@@ -218,35 +189,40 @@ export class Archetype {
    */
   hasSlot(slot: number): boolean {
     const position = this.#positions[slot]!;
-    return position < this.#populationCount && this.#entityList[position] === slot;
+    return position < this.#populationCount && this.#slotList[position] === slot;
   }
 
   /**
-   * Add an Entity to the Archetype
-   * @param entity - The Entity to add
-   * @param slot - Optional precomputed storage slot (`entityIndex(entity)`)
-   * @returns The Archetype with the Entity added
-   */
-  addEntity(entity: Entity, slot: number = entityIndex(entity)): Archetype {
-    this.#requireEntitySlot(entity, slot);
-    this.#activateEntity(slot);
-    return this;
-  }
-
-  /**
-   * Add a storage slot the caller has already validated as a live entity's slot.
+   * Add a storage slot the caller has already validated as a live entity's slot (no-op if already here).
    * @internal
    */
   addSlot(slot: number): void {
-    this.#activateEntity(slot);
+    if (this.hasSlot(slot)) return;
+    const position = this.#populationCount;
+    if (position === this.#slotList.length) this.reserve(position + 1);
+    this.#slotList[position] = slot;
+    this.#handleList[position] = this.#packSlot(slot);
+    this.#positions[slot] = position;
+    this.#populationCount = position + 1;
+    this.stamp = ++this.#clock.tick;
   }
 
   /**
-   * Remove a storage slot the caller has already validated as a live entity's slot.
+   * Remove a storage slot (no-op if it is not here); the last slot takes its place.
    * @internal
    */
   removeSlot(slot: number): void {
-    this.#deactivateEntity(slot);
+    if (!this.hasSlot(slot)) return;
+    const removeIndex = this.#positions[slot]!;
+    const lastIndex = this.#populationCount - 1;
+    if (removeIndex !== lastIndex) {
+      const lastSlot = this.#slotList[lastIndex]!;
+      this.#slotList[removeIndex] = lastSlot;
+      this.#handleList[removeIndex] = this.#handleList[lastIndex]!;
+      this.#positions[lastSlot] = removeIndex;
+    }
+    this.#populationCount = lastIndex;
+    this.stamp = ++this.#clock.tick;
   }
 
   /**
@@ -255,7 +231,7 @@ export class Archetype {
    * @internal
    */
   get slotList(): EntityArray {
-    return this.#entityList;
+    return this.#slotList;
   }
 
   /**
@@ -275,53 +251,11 @@ export class Archetype {
   }
 
   /**
-   * Add multiple storage slots to the archetype.
-   * @param slots - Dense storage slots
-   * @param start - First index to read
-   * @param count - Number of slots to read
-   * @returns The number of newly active entities
-   */
-  addEntities(slots: EntityArray, start: number, count: number): number {
-    this.reserve(this.#populationCount + count);
-    let added = 0;
-    const end = start + count;
-    for (let i = start; i < end; i++) {
-      if (this.#activateEntity(slots[i]!)) added++;
-    }
-    return added;
-  }
-
-  /**
    * Get the number of entities currently associated with this Archetype
    * @returns The number of entities in the Archetype
    */
   getPopulationCount(): number {
     return this.#populationCount;
-  }
-
-  /**
-   * Add this archetype's entities to a dense query result, optionally skipping entities already seen.
-   * @param out - The destination dense result to update
-   * @param visited - Optional bitfield used to deduplicate entities across archetypes
-   * @returns The destination result
-   */
-  writeEntitiesIntoResult(out: EntityResultSink, visited?: BooleanArray): EntityResultSink {
-    const packSlot = this.#packSlot;
-    if (visited) {
-      for (let i = 0; i < this.#populationCount; i++) {
-        const slot = this.#entityList[i]!;
-        if (visited.get(slot)) continue;
-        out.add(packSlot(slot), asSlotIndex(slot));
-        visited.set(slot, true);
-      }
-      return out;
-    }
-
-    for (let i = 0; i < this.#populationCount; i++) {
-      const slot = this.#entityList[i]!;
-      out.add(packSlot(slot), asSlotIndex(slot));
-    }
-    return out;
   }
 
   /**
@@ -339,19 +273,11 @@ export class Archetype {
   }
 
   /**
-   * Live dense population in iteration order; only the first {@link getPopulationCount} entries are valid.
-   * @internal
-   */
-  get populationSlots(): EntityArray {
-    return this.#entityList;
-  }
-
-  /**
    * Copy the dense population in iteration order, for rollback.
    * @internal
    */
   capturePopulation(): EntityArray {
-    return this.#entityList.slice(0, this.#populationCount);
+    return this.#slotList.slice(0, this.#populationCount);
   }
 
   /**
@@ -361,7 +287,7 @@ export class Archetype {
   restorePopulation(slots: EntityArray): void {
     this.#populationCount = 0;
     this.reserve(slots.length);
-    this.#entityList.set(slots);
+    this.#slotList.set(slots);
     // Generations are restored first, so packing now yields the restored handles.
     const handles = this.#handleList;
     const packSlot = this.#packSlot;
@@ -379,7 +305,7 @@ export class Archetype {
    * @internal
    */
   forgetSlots(table: Array<Archetype | undefined>): void {
-    const list = this.#entityList;
+    const list = this.#slotList;
     for (let i = 0; i < this.#populationCount; i++) table[list[i]!] = undefined;
   }
 
@@ -390,33 +316,5 @@ export class Archetype {
   clearPopulation(): void {
     this.#populationCount = 0;
     this.stamp = ++this.#clock.tick;
-  }
-
-  /**
-   * Remove an Entity from an Archetype
-   * @param entity - The Entity to remove
-   * @param slot - Optional precomputed storage slot (`entityIndex(entity)`)
-   * @returns The Archetype with the Entity removed
-   */
-  removeEntity(entity: Entity, slot: number = entityIndex(entity)): Archetype {
-    this.#requireEntitySlot(entity, slot);
-    this.#deactivateEntity(slot);
-    return this;
-  }
-
-  /**
-   * Remove multiple storage slots from the archetype.
-   * @param slots - Dense storage slots
-   * @param start - First index to read
-   * @param count - Number of slots to read
-   * @returns The number of entities that were active before removal
-   */
-  removeEntities(slots: EntityArray, start: number, count: number): number {
-    let removed = 0;
-    const end = start + count;
-    for (let i = start; i < end; i++) {
-      if (this.#deactivateEntity(slots[i]!)) removed++;
-    }
-    return removed;
   }
 }

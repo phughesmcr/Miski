@@ -482,7 +482,6 @@ export class World {
 
   async #runInit(): Promise<void> {
     try {
-      this.#archetypeManager.init();
       this.#state = "initialized";
       await this.#systemManager.init();
       // A late hook registered by an init hook may have failed; surface its error, not a generic one.

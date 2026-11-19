@@ -128,7 +128,7 @@ export class EntityManager {
     const iterator = this.#activeIterators.acquire();
     let entities = iterator.indices;
     if (entities.length < occupied) {
-      entities = createEntityArray(this.#capacity, this.#growActiveLength(entities.length, occupied));
+      entities = createEntityArray(this.#growActiveLength(entities.length, occupied));
     }
     const count = this.#slots.occupiedIndicesInto(slots, startSlot, endSlot);
     for (let i = 0; i < count; i++) {
