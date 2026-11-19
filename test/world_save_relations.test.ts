@@ -100,7 +100,7 @@ function observe(world: World, defs: Defs): unknown {
       const tr = rowsOf(targets);
       const sources = r.getSources(def, e);
       const data = t.map((target) => r.getData(def, e, target as Entity));
-      const rowOf = t.map((target) => r.getInstance(def).rowOf(e, target as Entity));
+      const rowOf = t.map((target) => r.getInstanceOrThrow(def).rowOf(e, target as Entity));
       const subtree = r.traverse(def, e);
       return {
         e,
@@ -110,7 +110,7 @@ function observe(world: World, defs: Defs): unknown {
         sr: rowsOf(sources),
         data,
         rowOf,
-        has: r.has(def, e),
+        has: r.hasAny(def, e),
         first: r.getTarget(def, e),
         subtree: list(subtree),
         depths: Array.from({ length: subtree.count }, (_, i) => subtree.depths[i]),

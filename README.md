@@ -55,7 +55,7 @@ for modern JavaScript — no leftovers.
 - Entity relations and hierarchies: pair data, reverse lookups, cascades, traversal
 - Component-subset checkpoints and speculative world rollback
 - `Schedule`: phases, `before` / `after` ordering, fixed timestep, run conditions
-- `CommandBuffer`: deferred spawn / destroy / add / set / remove, applied per phase
+- `CommandBuffer`: deferred spawn / destroy / add / set / remove / relate / unrelate, applied per phase
 - Deterministic whole-world saves, binary or lossless JSON
 - Schema compile + stable FNV hash for tooling and saves
 - :page_with_curl: MIT licensed — share freely, keep the wrappers on
@@ -547,7 +547,7 @@ world.relations.add(Targets, archer, orc, { weight: 0.5 });
 world.relations.getTarget(ChildOf, child); // parent
 world.relations.getSources(ChildOf, parent); // children, borrowed list
 world.relations.getTargets(Targets, archer); // borrowed list with data rows
-world.relations.queryList(new Query({ all: [Position] }), Targets, orc); // filtered sources
+world.relations.queryList(Targets, orc, new Query({ all: [Position] })); // filtered sources
 world.entities.queryList(new Query({ all: [Position], none: [ChildOf] })); // roots
 
 const tree = world.relations.traverse(ChildOf); // parents first, cached
@@ -557,7 +557,8 @@ for (let i = 0; i < tree.count; i++) visit(tree.entities[i]!, tree.depths[i]!);
 - **Storage.** Pairs live in an index beside the archetypes, not as one
   component per target, so many targets never fragment archetypes. Every list
   is in insertion order. Pair data is SoA columns indexed by pair row
-  (`getInstance(R).partitions.weight[list.rows[i]]`).
+  (`getInstanceOrThrow(R).partitions.weight[list.rows[i]]`; `getInstance(R)`
+  returns `undefined` for an unregistered relation).
 - **Exclusive vs multi.** An exclusive relation keeps one target per source and
   stores its data row at the source slot. A multi-target relation draws rows
   from a pool that doubles when full. Adding a pair that already exists keeps
@@ -566,6 +567,9 @@ for (let i = 0; i < tree.count; i++) visit(tree.entities[i]!, tree.depths[i]!);
   `onDeleteTarget: "cascade"` it destroys their sources as well, iteratively
   and safely through cycles. A source that loses its last target loses the tag
   and exits the relation's queries.
+- **Removing and testing pairs.** `remove(R, source, target)` and
+  `has(R, source, target)` act on one pair; `removeAll(R, source)` and
+  `hasAny(R, source)` act on every target of `source`.
 - **Changes.** `relations.getChanged(R)` lists sources whose pairs or pair data
   changed in this refresh window. `queryRevision` bumps on any pair change.
 - **Handles.** Targets are generational handles. A stale target never matches,
@@ -695,14 +699,21 @@ commands.add(Active, bullet);          // pending handles work until the flush
 commands.set(Position, entity, { x: 1 }); // omitted fields keep their values
 commands.remove(Velocity, entity);
 commands.destroy(other);
+const turret = commands.spawn([[Aim, { target: bullet }]]); // field.entity() values may be pending
+commands.relate(ChildOf, turret, ship);  // either end may be pending
+commands.unrelate(Targets, archer, orc);
 commands.flush();                      // applies in queue order
 ```
 
 Queuing validates components and copies data at once, so data objects can be
 reused straight away and bad data throws at the call site. Flushing applies
 each command as the direct call would (`createWith`, `destroy`,
-`addToEntity`, `setEntityData`, `removeFromEntity`), except that commands for
-entities no longer active are skipped. `set` on an active entity that has lost
+`addToEntity`, `setEntityData`, `removeFromEntity`, `relations.add`,
+`relations.remove`), except that commands for entities no longer active are
+skipped (for `relate` / `unrelate`, if either entity is no longer active). A
+pending `field.entity()` value resolves to the spawned entity; like a queued
+reference to an entity that died before the flush, it is written as `null` if
+its spawn failed. `set` on an active entity that has lost
 the component still throws, as the direct call does. A flush never stops
 partway: if a command throws, every other command still applies, then the first
 error is rethrown, naming the failing command. Commands on the entity of a

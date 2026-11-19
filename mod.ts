@@ -551,6 +551,7 @@ export type {
 
 // --- Scheduling ---
 export { CommandBuffer } from "@/scheduler/command-buffer.ts";
+export type { CommandBundle, CommandBundleEntryFor, CommandData } from "@/scheduler/command-buffer.ts";
 export { Schedule } from "@/scheduler/schedule.ts";
 export type {
   PendingEntity,

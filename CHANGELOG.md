@@ -2,6 +2,36 @@
 
 ## Unreleased
 
+- **Breaking:** `world.relations.getInstance(relation)` returns `undefined`
+  for an unregistered relation, like `components.getInstance`. The throwing
+  form is now `getInstanceOrThrow(relation)`. Both return one cached view per
+  relation instead of allocating a new object and closure on every call.
+- **Breaking:** `world.relations.remove(relation, source, target)` requires
+  `target`. Use `removeAll(relation, source)` (it returns the number of pairs
+  removed) to drop every target; `remove(r, s)` returned `removeAll(r, s) > 0`.
+- **Breaking:** `world.relations.has(relation, source, target)` requires
+  `target`. The no-target form is the new `hasAny(relation, source)`.
+- **Breaking:** `world.relations.queryList` is relation-first like every other
+  relation call: `queryList(relation, target, query)` (was
+  `queryList(query, relation, target)`).
+- `CommandBuffer.relate(relation, source, target, data?)` and
+  `unrelate(relation, source, target)` queue `world.relations.add` and
+  `remove`. Either end may be a pending entity from `spawn` on the same buffer.
+  At flush, a pair whose source or target is no longer active is skipped, and
+  errors (a cycle, say) are annotated with the pair. Queuing and flushing them
+  does not allocate.
+- Fix: a pending entity from `CommandBuffer.spawn` used as a `field.entity()`
+  value (in `spawn`, `add` or `set` data) now resolves to the spawned entity at
+  flush. Before, it reached the world's validation as a negative handle and the
+  command failed, so a parent and a child pointing at it could not be spawned
+  in one buffer. If the spawn failed or its entity was destroyed earlier in the
+  flush, the field is written as `null`, like other dead queued references. A
+  pending handle from another buffer or an earlier flush now throws a
+  `SpecError` when queued. `CommandBuffer` data parameters use the new
+  `CommandData` / `CommandBundle` types, which accept `PendingEntity` in
+  `field.entity()` fields.
+- `CommandBuffer` component commands that are given a relation now say to use
+  `relate` / `unrelate`.
 - Fix world-save loads from a Node `Buffer` whose `byteOffset` is not a
   multiple of 8 (common for pooled `fs.readFileSync` Buffers): `loadWorld`,
   `readWorldSaveHeader` and `worldSaveToJSON` threw "Not a Miski world save

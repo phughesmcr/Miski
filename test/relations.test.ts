@@ -78,8 +78,8 @@ Deno.test("multi-target relations keep insertion order on both sides", async () 
   assertEquals(listIds(world.relations.getTargets(likes, a!)), [b, c], "targets of a in insertion order");
   assertEquals(listIds(world.relations.getSources(likes, b!)), [a, d], "sources of b in insertion order");
   assertStrictEquals(world.relations.has(likes, a!, c!), true, "a likes c");
-  assertStrictEquals(world.relations.has(likes, a!), true, "a likes something");
-  assertStrictEquals(world.relations.has(likes, c!), false, "c likes nothing");
+  assertStrictEquals(world.relations.hasAny(likes, a!), true, "a likes something");
+  assertStrictEquals(world.relations.hasAny(likes, c!), false, "c likes nothing");
   assertStrictEquals(world.relations.getTarget(likes, a!), b, "first target");
   assertStrictEquals(world.relations.getTarget(likes, c!), undefined, "no target");
 
@@ -91,7 +91,7 @@ Deno.test("multi-target relations keep insertion order on both sides", async () 
 
   world.relations.add(likes, a!, d!);
   assertStrictEquals(world.relations.removeAll(likes, a!), 2, "removeAll returns the removed pair count");
-  assertStrictEquals(world.relations.has(likes, a!), false, "a has no targets");
+  assertStrictEquals(world.relations.hasAny(likes, a!), false, "a has no targets");
   assertEquals(listIds(world.relations.getAllTargets(likes)), [b], "c and d are no longer targets");
 });
 
@@ -111,11 +111,19 @@ Deno.test("borrowed relation lists expose storage slots and data rows", async ()
   world.relations.add(targets, a!, b!, { weight: 1.5, priority: 3 });
   world.relations.add(targets, a!, c!, { weight: 2.5 });
   const pairs = world.relations.getTargets(targets, a!);
-  const instance = world.relations.getInstance(targets);
+  const instance = world.relations.getInstanceOrThrow(targets);
   const weight = instance.partitions.weight;
   assertEquals([weight[pairs.rows[0]!], weight[pairs.rows[1]!]], [1.5, 2.5], "rows index the data columns");
   assertStrictEquals(instance.rowOf(a!, c!), pairs.rows[1], "rowOf resolves the pair row");
   assertStrictEquals(instance.rowOf(b!, c!), -1, "rowOf is -1 for a missing pair");
+  assertStrictEquals(world.relations.getInstance(targets), instance, "getInstance returns the cached view");
+  assertStrictEquals(world.relations.getInstanceOrThrow(targets), instance, "both forms share one view");
+  world.relations.add(targets, b!, c!);
+  world.relations.add(targets, c!, a!);
+  assertStrictEquals(instance.partitions.weight, world.relations.getInstance(targets)!.partitions.weight, "view stays");
+  const stranger = new Relation({ name: "stranger" });
+  assertStrictEquals(world.relations.getInstance(stranger), undefined, "unregistered relation reads undefined");
+  assertThrows(() => world.relations.getInstanceOrThrow(stranger), NotRegisteredError, "stranger");
 });
 
 Deno.test("exclusive relations replace their target and report the change", async () => {
@@ -196,7 +204,7 @@ Deno.test("relation pair storage grows beyond its initial size", async () => {
   for (let i = 0; i < others.length; i++) world.relations.add(targets, source, others[i]!, { weight: i });
   const list = world.relations.getTargets(targets, source);
   assertStrictEquals(list.count, 200, "all pairs stored");
-  const weight = world.relations.getInstance(targets).partitions.weight;
+  const weight = world.relations.getInstanceOrThrow(targets).partitions.weight;
   for (let i = 0; i < list.count; i++) {
     assertStrictEquals(list.entities[i], others[i], `target ${i} in order`);
     assertStrictEquals(weight[list.rows[i]!], i, `data ${i} survives growth`);
@@ -239,7 +247,7 @@ Deno.test("destroying a target auto-removes pairs and the presence tag", async (
 
   world.entities.destroy(b!);
   assertStrictEquals(world.entities.isActive(a!), true, "auto-remove keeps sources alive");
-  assertStrictEquals(world.relations.has(likes, a!), false, "a lost its only target");
+  assertStrictEquals(world.relations.hasAny(likes, a!), false, "a lost its only target");
   assertEquals(listIds(world.relations.getTargets(likes, c!)), [a], "c keeps its other target");
   assertEquals(ids(world.entities.queryExited(liking)), [a], "a exited the wildcard query");
   assertEquals(listIds(world.relations.getAllTargets(likes)), [a], "b is no longer a target");
@@ -268,7 +276,7 @@ Deno.test("cascade relations destroy sources with their target", async () => {
   );
   assertStrictEquals(world.entities.isActive(b!), true, "sibling survives");
   assertEquals(listIds(world.relations.getSources(childOf, root!)), [b], "root keeps the surviving child");
-  assertStrictEquals(world.relations.has(likes, outsider!), false, "non-cascade pairs into the subtree are removed");
+  assertStrictEquals(world.relations.hasAny(likes, outsider!), false, "non-cascade pairs into the subtree are removed");
   assertStrictEquals(world.entities.isActive(outsider!), true, "outsider survives");
   assertStrictEquals(world.entities.getActiveCount(), 3, "root, b and outsider remain");
 });
@@ -298,7 +306,7 @@ Deno.test("acyclic relations reject self-pairs and cycles", async () => {
   world.relations.add(childOf, c!, b!);
   assertThrows(() => world.relations.add(childOf, a!, a!), RangeError, "cycle");
   assertThrows(() => world.relations.add(childOf, a!, c!), RangeError, "cycle");
-  assertStrictEquals(world.relations.has(childOf, a!), false, "rejected add left no pair");
+  assertStrictEquals(world.relations.hasAny(childOf, a!), false, "rejected add left no pair");
   // Moving a node elsewhere in its own branch is still allowed.
   world.relations.add(childOf, c!, a!);
   assertStrictEquals(world.relations.getTarget(childOf, c!), a, "reparented");
@@ -327,11 +335,11 @@ Deno.test("queryList filters a target's sources by a query", async () => {
   world.components.addToEntity(hidden, c!);
   for (const source of [c, b, a]) world.relations.add(likes, source!, target!);
   const visible = new Query({ all: [position], none: [hidden] });
-  assertEquals(listIds(world.relations.queryList(visible, likes, target!)), [a], "only visible positioned sources");
+  assertEquals(listIds(world.relations.queryList(likes, target!, visible)), [a], "only visible positioned sources");
   const all = new Query({ all: [likes] });
-  assertEquals(listIds(world.relations.queryList(all, likes, target!)), [c, b, a], "source order is kept");
+  assertEquals(listIds(world.relations.queryList(likes, target!, all)), [c, b, a], "source order is kept");
   world.entities.destroy(target!);
-  assertStrictEquals(world.relations.queryList(all, likes, target!).count, 0, "stale target yields nothing");
+  assertStrictEquals(world.relations.queryList(likes, target!, all).count, 0, "stale target yields nothing");
 });
 
 Deno.test("hierarchy traversal is parents-first with depth", async () => {
@@ -403,7 +411,7 @@ Deno.test("checkpoints capture and restore relation pairs and data", async () =>
   world.relations.remove(targets, a!, b!);
   world.relations.setData(targets, a!, c!, { weight: 9 });
   world.relations.add(targets, a!, p!);
-  world.relations.remove(childOf, a!);
+  world.relations.removeAll(childOf, a!);
   world.applyCheckpoint(checkpoint);
   assertEquals(listIds(world.relations.getTargets(targets, a!)), [b, c], "targets and their order restored");
   assertEquals(world.relations.getData(targets, a!, c!)?.weight, 2, "data restored");
@@ -420,10 +428,10 @@ Deno.test("checkpoints refuse to restore a pair that would now close a cycle", a
   const [a, b] = spawn(world, 2);
   world.relations.add(childOf, a, b);
   const checkpoint = world.captureCheckpoint([a], childOf);
-  world.relations.remove(childOf, a);
+  world.relations.removeAll(childOf, a);
   world.relations.add(childOf, b, a); // b is outside the checkpoint; restoring a -> b would close a cycle
   assertThrows(() => world.applyCheckpoint(checkpoint), RangeError, "cycle");
-  assertStrictEquals(world.relations.has(childOf, a), false, "failed apply mutated nothing");
+  assertStrictEquals(world.relations.hasAny(childOf, a), false, "failed apply mutated nothing");
   assertStrictEquals(world.relations.getTarget(childOf, b), a, "the outside pair is untouched");
 });
 
