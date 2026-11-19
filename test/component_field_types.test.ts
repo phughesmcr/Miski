@@ -13,13 +13,13 @@ import {
   EntityNotFoundError,
   field,
   isFieldDescriptor,
-  isValidComponentSpec,
   Prefab,
   Query,
   SpecError,
   System,
   WorldRollbackScope,
 } from "../mod.ts";
+import { isValidComponentSpec } from "../src/component/component.ts";
 import { ComponentManager } from "../src/component/component-manager.ts";
 import { type WorldSaveHost, worldSaveHost } from "../src/serialization/host.ts";
 import { createEntity, createTestWorld, Mesh } from "./fixtures.ts";

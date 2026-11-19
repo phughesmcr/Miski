@@ -1,3 +1,4 @@
+import type { Archetype } from "@/archetype/archetype.ts";
 import type { ArchetypeManager } from "@/archetype/archetype-manager.ts";
 import type { Component } from "@/component/component.ts";
 import type { ComponentInstance } from "@/component/component-instance.ts";
@@ -178,16 +179,14 @@ export class WorldMutations {
         count,
         this.#bundleAdded,
       );
-      if (addedCount > 0) {
-        this.#archetypeManager.addComponentSet(entity, this.#bundleAdded, addedCount);
-      } else {
-        this.#archetypeManager.createEntity(entity);
-      }
-      this.#notifyEntityLifecycle();
-      this.invalidateCommittedTransition(true);
+      this.publishCreatedEntity(entity, this.#bundleAdded, addedCount, undefined);
       return entity;
     } catch (error) {
-      if (entity !== undefined) this.#rollbackCreatedEntity(entity, count);
+      if (entity !== undefined) {
+        // Strip every staged component: `#bundleAdded` is incomplete when the component commit throws partway.
+        for (let i = 0; i < count; i++) this.#bundleAdded[i] = this.#bundleEntries[i]!.instance;
+        this.discardCreatedEntity(entity, this.#bundleAdded, count);
+      }
       throw error;
     } finally {
       this.#clearBundleEntries();
@@ -393,7 +392,7 @@ export class WorldMutations {
 
       if (this.#relationInstances[instance.id] === 1) {
         this.#clearBundleEntries();
-        this.#assertNotRelation(instance);
+        throw relationComponentError(instance.type.name);
       }
 
       if (this.#bundleSeenComponents[instance.id] === 1) {
@@ -440,15 +439,39 @@ export class WorldMutations {
   }
 
   /**
-   * Roll back a newly-created entity after an unexpected bundle commit failure.
-   * Strips every staged bundle component rather than walking the entity's archetype, which is unassigned when
-   * the component commit itself throws partway (ownership and sparse rows may already be committed).
-   * Must run before {@link #clearBundleEntries}.
+   * Place a newly created entity, whose components are already attached, in its archetype and publish it.
+   * `create(bundle)` and prefab instantiation both finish each entity here.
+   * @param added - The entity's components, in archetype-transition order
+   * @param count - Active prefix length of `added`
+   * @param target - The archetype an identical earlier entity landed in, to skip resolving it again
+   * @returns the entity's archetype
    */
-  #rollbackCreatedEntity(entity: Entity, count: number): void {
+  publishCreatedEntity(
+    entity: Entity,
+    added: readonly DynamicComponentInstance[],
+    count: number,
+    target: Archetype | undefined,
+  ): Archetype {
+    let archetype: Archetype;
+    if (count === 0) archetype = this.#archetypeManager.createEntity(entity);
+    else if (target === undefined) archetype = this.#archetypeManager.addComponentSet(entity, added, count);
+    else archetype = this.#archetypeManager.set(target, entity);
+    this.#notifyEntityLifecycle();
+    this.invalidateCommittedTransition(true);
+    return archetype;
+  }
+
+  /**
+   * Strip and destroy an entity created by a call that then failed unexpectedly.
+   * Strips every listed component rather than walking the entity's archetype, which is unassigned when the
+   * component commit itself throws partway (ownership and sparse rows may already be committed).
+   * @param instances - Every component the call meant to attach
+   * @param count - Active prefix length of `instances`
+   */
+  discardCreatedEntity(entity: Entity, instances: readonly DynamicComponentInstance[], count: number): void {
     let changed = this.#archetypeManager.getEntityArchetype(entity) !== undefined;
     for (let i = 0; i < count; i++) {
-      if (this.#componentManager.removeInstanceFromEntity(this.#bundleEntries[i]!.instance, entity)) changed = true;
+      if (this.#componentManager.removeInstanceFromEntity(instances[i]!, entity)) changed = true;
     }
     this.#archetypeManager.destroyEntity(entity);
     if (this.#entityManager.isActive(entity)) {

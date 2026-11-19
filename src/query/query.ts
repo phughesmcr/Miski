@@ -152,13 +152,6 @@ function validateQuerySpec(spec: unknown): NormalizedQueryEntrySpec | undefined 
 }
 
 /**
- * Type guard for QuerySpec
- * @param spec The specification object to check
- * @returns `true` if the spec is valid, `false` otherwise
- */
-export const isValidQuerySpec = (spec: unknown): spec is QueryInputSpec => validateQuerySpec(spec) !== undefined;
-
-/**
  * A Query is a collection of Components that can be used to find Entities.
  *
  * Create queries once, at startup, and reuse them: a query lives as long as the world. The first time a world

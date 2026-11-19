@@ -8,7 +8,7 @@ import type { SystemManager } from "@/system/system-manager.ts";
 import type { Query } from "@/query/query.ts";
 import type { DynamicComponent } from "@/types/component.ts";
 import type { Entity, QueryEntityList, SlotIndex } from "@/entity/entity.ts";
-import type { ComponentData, SchemaOrNull, SchemaValues } from "@/types/partitions.ts";
+import type { ComponentData, ComponentValue, SchemaOrNull } from "@/types/partitions.ts";
 import type {
   ComponentBundle,
   ComponentBundleEntryInput,
@@ -102,16 +102,16 @@ function constructComponentAPI(host: WorldApiHost): WorldComponentAPI {
     addToEntity: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
       component: ComponentReference<TValue, TStorage>,
       entity: Entity,
-      data?: Partial<SchemaValues<TValue>> | undefined,
+      data?: Partial<ComponentValue<TValue>> | undefined,
     ) => {
       host.assertInitialized();
-      // SchemaValues<T> values are always numeric; storage internals speak plain numbers.
+      // ComponentValue<T> values are always numeric; storage internals speak plain numbers.
       host.mutations.addComponentToEntity(component, entity, data as ComponentDataInput<TValue> | undefined);
     },
     addToEntities: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
       component: ComponentReference<TValue, TStorage>,
       entities: QueryEntityList,
-      data?: Partial<SchemaValues<TValue>> | undefined,
+      data?: Partial<ComponentValue<TValue>> | undefined,
     ) => {
       host.assertInitialized();
       return host.mutations.addComponentToEntities(
@@ -196,10 +196,10 @@ function constructComponentAPI(host: WorldApiHost): WorldComponentAPI {
     setEntityData: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
       component: ComponentReference<TValue, TStorage>,
       entity: Entity,
-      value: Partial<SchemaValues<TValue>>,
+      value: Partial<ComponentValue<TValue>>,
     ) => {
       host.assertInitialized();
-      // SchemaValues<T> values are always numeric; storage internals speak plain numbers.
+      // ComponentValue<T> values are always numeric; storage internals speak plain numbers.
       host.setComponentEntityData(component, entity, value as ComponentDataInput<TValue>);
     },
   };

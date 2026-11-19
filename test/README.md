@@ -61,6 +61,9 @@ Runtime tests live in `*.test.ts` files and run via `deno test` (see `deno.json`
 - `createEntity(world)` — create an entity and assert success
 - `createTestWorld(components, capacity?)` — construct, init, and return a world
 
+Tests import the public API from `../mod.ts`. Helpers that are not public (`mergeComponentSchemas`,
+`isValidComponentSpec`, manager classes) are imported from their `../src/` module.
+
 Assertion helpers live in `helpers.ts`. `assertEquals` compares structurally (`Object.is` for primitives, so `NaN`
 equals `NaN` and `-0` differs from `0`; element-wise for arrays and typed arrays; a missing key differs from an
 `undefined` one).

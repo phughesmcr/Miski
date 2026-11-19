@@ -61,8 +61,7 @@ export type RelationsFromMap<R extends RelationMap> = {
  * Configuration for a typed named-map ECS world.
  *
  * Declare components either inline (`components` and optional `tags`) or as one precompiled `schema` from
- * `compileComponentSchema` / `mergeComponentSchemas`, which keeps that schema's component identities and
- * hash. The two forms are exclusive.
+ * `compileComponentSchema`, which keeps that schema's component identities and hash. The two forms are exclusive.
  */
 export type EcsWorldConfig<
   M extends SchemaComponentMap,

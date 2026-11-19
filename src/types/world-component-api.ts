@@ -4,7 +4,7 @@ import type { Entity, QueryEntityList } from "@/entity/entity.ts";
 import type { Query } from "@/query/query.ts";
 import type { ComponentBundle, ComponentBundleEntryInput } from "@/types/component-bundle.ts";
 import type { DynamicComponent, DynamicComponentInstance } from "@/types/component.ts";
-import type { ComponentData, SchemaOrNull, SchemaValues } from "@/types/partitions.ts";
+import type { ComponentData, ComponentValue, SchemaOrNull } from "@/types/partitions.ts";
 
 /**
  * The public Component management API.
@@ -35,7 +35,7 @@ export type WorldComponentAPI = {
   addToEntity<TValue extends Exclude<SchemaOrNull, null>, TStorage extends Exclude<SchemaOrNull, null> = TValue>(
     component: Component<TValue, TStorage>,
     entity: Entity,
-    data?: Partial<SchemaValues<TValue>>,
+    data?: Partial<ComponentValue<TValue>>,
   ): void;
   /**
    * Add a component to every entity in a dense query list, updating data for entities that already own it (upsert)
@@ -52,7 +52,7 @@ export type WorldComponentAPI = {
   addToEntities<TValue extends Exclude<SchemaOrNull, null>, TStorage extends Exclude<SchemaOrNull, null> = TValue>(
     component: Component<TValue, TStorage>,
     entities: QueryEntityList,
-    data?: Partial<SchemaValues<TValue>>,
+    data?: Partial<ComponentValue<TValue>>,
   ): number;
   /**
    * Add or update a component bundle on one active entity.
@@ -253,7 +253,7 @@ export type WorldComponentAPI = {
   setEntityData<TValue extends Exclude<SchemaOrNull, null>, TStorage extends Exclude<SchemaOrNull, null> = TValue>(
     component: Component<TValue, TStorage>,
     entity: Entity,
-    value: Partial<SchemaValues<TValue>>,
+    value: Partial<ComponentValue<TValue>>,
   ): void;
 };
 

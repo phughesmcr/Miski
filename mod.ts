@@ -373,7 +373,7 @@
  */
 
 // --- Core ---
-export { Component, isValidComponentSpec } from "@/component/component.ts";
+export { Component } from "@/component/component.ts";
 export {
   AlreadyRegisteredError,
   ArgumentError,
@@ -389,7 +389,7 @@ export {
   WorldStateError,
 } from "@/errors.ts";
 export { Prefab } from "@/prefab/prefab.ts";
-export { isValidQuerySpec, Query } from "@/query/query.ts";
+export { Query } from "@/query/query.ts";
 export { isRelation, Relation } from "@/relation/relation.ts";
 export type {
   DataRelationSpec,
@@ -410,8 +410,6 @@ export type {
 export { System } from "@/system/system.ts";
 export { World } from "@/world/world.ts";
 export { WorldRollbackScope } from "@/rollback/rollback.ts";
-export { isValidWorldSpec } from "@/world/utils.ts";
-export { isValidName } from "@/utils.ts";
 export {
   asEntity,
   asSlotIndex,
@@ -423,12 +421,7 @@ export {
 
 // --- Tooling ---
 export { canonicalizeStoredValue } from "@/value/canonicalize.ts";
-export {
-  compileComponentSchema,
-  componentSchemaHash,
-  defineComponentSchema,
-  mergeComponentSchemas,
-} from "@/schema/schema.ts";
+export { compileComponentSchema, componentSchemaHash, defineComponentSchema } from "@/schema/schema.ts";
 export { createEcsWorld, EcsWorld } from "@/world/ecs-world.ts";
 export { cloneFieldValue, field, isFieldDescriptor } from "@/schema/field.ts";
 export type {
@@ -512,15 +505,12 @@ export type {
   Entity,
   FieldSchema,
   InferredDataComponentSpec,
-  Partition,
-  PartitionStorage,
   QueryEntityList,
   QuerySpec,
   RegistryFromMaps,
   Schema,
   SchemaComponentMap,
   SchemaOrNull,
-  SchemaValues,
   SlotIndex,
   SpawnSpec,
   StorageFromMap,

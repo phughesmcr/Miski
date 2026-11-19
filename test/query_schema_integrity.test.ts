@@ -6,13 +6,13 @@ import {
   Component,
   componentSchemaHash,
   createEcsWorld,
-  mergeComponentSchemas,
   NotRegisteredError,
   Query,
   SpecError,
   System,
 } from "../mod.ts";
 import { $_COMPONENT_ID_KEY } from "../src/constants.ts";
+import { mergeComponentSchemas } from "../src/schema/schema.ts";
 import { createSystemInstance } from "../src/system/system.ts";
 import { assert, assertEquals, assertStrictEquals, assertThrows, listIds } from "./helpers.ts";
 import { createTestWorld, vec2Component } from "./fixtures.ts";
