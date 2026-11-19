@@ -11,7 +11,7 @@ import { EntityIteratorPool } from "../src/entity/pooled-entity-iterator.ts";
 import { QueryManager } from "../src/query/query-manager.ts";
 import { QueryMembership } from "../src/query/query-membership.ts";
 import { Query } from "../src/query/query.ts";
-import { QueryEntityResult } from "../src/query/query-pool.ts";
+import { QueryEntityResult } from "../src/query/query-result.ts";
 import type { DynamicComponentInstance, QueryInstance } from "../src/types.ts";
 import type { ComponentInstance } from "../mod.ts";
 import { createBenchmarkComponents, MEDIUM_CAPACITY, SMALL_CAPACITY, type Vec2 } from "./fixtures.ts";

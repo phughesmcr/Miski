@@ -5,17 +5,15 @@ import { ID_KEY } from "@/constants.ts";
 import { componentDisplayName, formatComponentNotRegistered, NotRegisteredError } from "@/errors.ts";
 import type { DynamicComponentInstance } from "@/types/component.ts";
 import type { Entity } from "@/entity/entity.ts";
-import type { QueryInstance, QueryInstanceList } from "@/types/query.ts";
+import type { QueryInstance } from "@/types/query.ts";
 import type { ComponentInstanceGetter, QueryManagerDependencies } from "@/types/world-api.ts";
 import { EntityIteratorPool } from "@/entity/pooled-entity-iterator.ts";
-import { QueryEntityResult } from "./query-pool.ts";
+import { QueryEntityResult } from "./query-result.ts";
 import type { NormalizedQueryComponentEntry, Query } from "./query.ts";
 import { type MembershipSource, QueryMembership } from "./query-membership.ts";
 
 type QueryComponent = Parameters<ComponentInstanceGetter>[0][number];
 type RegisteredComponentInstance = DynamicComponentInstance;
-
-export type { QueryInstanceList };
 
 function getRegisteredInstances(
   getInstances: ComponentInstanceGetter,

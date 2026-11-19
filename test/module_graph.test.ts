@@ -15,7 +15,8 @@ const FORBIDDEN_EDGES: ForbiddenEdge[] = [
   {
     source: archetypeSource,
     file: "src/archetype/archetype.ts",
-    importPattern: /@\/query\/(query|query-pool|query-manager|query-cache)\.ts/,
+    importPattern:
+      /@\/query\/(query|query-result|query-pool|query-iterators|query-membership|query-manager|query-cache)\.ts/,
     reason: "archetype storage must not depend on query runtime modules",
   },
   {

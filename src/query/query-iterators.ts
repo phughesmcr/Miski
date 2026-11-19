@@ -3,6 +3,7 @@ import type { TransitionWindow } from "@/archetype/transition-window.ts";
 import type { Entity } from "@/entity/entity.ts";
 import type { QueryInstance } from "@/types/query.ts";
 import type { Query } from "./query.ts";
+import { type IteratorReleaser, QueryIteratorPool } from "./query-pool.ts";
 
 /** World state the archetype query iterators read. */
 export type ArchetypeQueryIteratorHost = {
@@ -18,9 +19,6 @@ export type ArchetypeQueryIteratorHost = {
   packSlot(slot: number): Entity;
 };
 
-/** Where an iterator goes back to when it finishes. */
-type IteratorReleaser = { release(iterator: PooledQueryIterator): void };
-
 /**
  * Base for the pooled, allocation-free replacements of the archetype query generators.
  *
@@ -33,13 +31,13 @@ type IteratorReleaser = { release(iterator: PooledQueryIterator): void };
  */
 abstract class PooledQueryIterator implements IterableIterator<Entity> {
   protected readonly host: ArchetypeQueryIteratorHost;
-  readonly #pool: IteratorReleaser;
+  readonly #pool: IteratorReleaser<PooledQueryIterator>;
   #query: Query | undefined;
   #inUse: boolean = false;
   protected instance: QueryInstance | undefined;
   protected readonly result: IteratorResult<Entity>;
 
-  constructor(host: ArchetypeQueryIteratorHost, pool: IteratorReleaser) {
+  constructor(host: ArchetypeQueryIteratorHost, pool: IteratorReleaser<PooledQueryIterator>) {
     this.host = host;
     this.#pool = pool;
     this.result = { value: undefined as unknown as Entity, done: false };
@@ -150,41 +148,20 @@ class ArchetypeExitedIterator extends PooledQueryIterator {
   }
 }
 
-type IteratorConstructor<T extends PooledQueryIterator> = new (
-  host: ArchetypeQueryIteratorHost,
-  pool: IteratorReleaser,
-) => T;
-
-/** Stack of idle iterators of one kind. */
-class QueryIteratorPool<T extends PooledQueryIterator> {
-  readonly #host: ArchetypeQueryIteratorHost;
-  readonly #create: IteratorConstructor<T>;
-  readonly #idle: T[] = [];
-  #idleCount = 0;
-
-  constructor(host: ArchetypeQueryIteratorHost, create: IteratorConstructor<T>) {
-    this.#host = host;
-    this.#create = create;
-  }
-
-  acquire(query: Query): IterableIterator<Entity> {
-    const iterator = this.#idleCount > 0 ? this.#idle[--this.#idleCount]! : new this.#create(this.#host, this);
-    return iterator.open(query);
-  }
-
-  release(iterator: PooledQueryIterator): void {
-    this.#idle[this.#idleCount++] = iterator as T;
-  }
-}
-
 /** Pooled iterators behind `world.entities.queryEntered` / `queryExited`. */
 export class ArchetypeQueryIterators {
-  readonly #entered: QueryIteratorPool<ArchetypeEnteredIterator>;
-  readonly #exited: QueryIteratorPool<ArchetypeExitedIterator>;
+  readonly #entered: QueryIteratorPool<ArchetypeQueryIteratorHost, ArchetypeEnteredIterator>;
+  readonly #exited: QueryIteratorPool<ArchetypeQueryIteratorHost, ArchetypeExitedIterator>;
 
   constructor(host: ArchetypeQueryIteratorHost) {
-    this.#entered = new QueryIteratorPool(host, ArchetypeEnteredIterator);
-    this.#exited = new QueryIteratorPool(host, ArchetypeExitedIterator);
+    this.#entered = new QueryIteratorPool<ArchetypeQueryIteratorHost, ArchetypeEnteredIterator>(
+      host,
+      ArchetypeEnteredIterator,
+    );
+    this.#exited = new QueryIteratorPool<ArchetypeQueryIteratorHost, ArchetypeExitedIterator>(
+      host,
+      ArchetypeExitedIterator,
+    );
   }
 
   /** Entities that match the query now but did not match it when the refresh window began. */

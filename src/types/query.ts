@@ -1,6 +1,6 @@
 import type { BooleanArray } from "@phughesmcr/booleanarray";
 
-import type { QueryEntityResult } from "@/query/query-pool.ts";
+import type { QueryEntityResult } from "@/query/query-result.ts";
 import type { Archetype } from "@/archetype/archetype.ts";
 import type { ComponentMap, DynamicComponent, DynamicComponentInstance } from "@/types/component.ts";
 

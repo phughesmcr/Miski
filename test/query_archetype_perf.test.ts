@@ -15,7 +15,7 @@ import { ArchetypeManager } from "../src/archetype/archetype-manager.ts";
 import { ComponentManager } from "../src/component/component-manager.ts";
 import { EntityManager } from "../src/entity/entity-manager.ts";
 import { QueryManager } from "../src/query/query-manager.ts";
-import { QueryEntityResult } from "../src/query/query-pool.ts";
+import { QueryEntityResult } from "../src/query/query-result.ts";
 import { createEntity, createTestWorld, tagComponent, vec2Component } from "./fixtures.ts";
 import { assert, assertEquals, assertStrictEquals, assertThrows, listIds } from "./helpers.ts";
 
