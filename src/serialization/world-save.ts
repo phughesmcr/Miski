@@ -207,8 +207,14 @@ function measureSide(
 function releaseEncoded(context: SaveContext): void {
   const count = context.encodedCount;
   if (count === 0) return;
-  for (const columns of context.side) {
-    for (const side of columns) side.encoded?.fill(null, 0, Math.min(count, side.encoded.length));
+  // Indexed loops: `for...of` allocates an iterator and a result per step until the function is optimized.
+  const side = context.side;
+  for (let c = 0; c < side.length; c++) {
+    const columns = side[c]!;
+    for (let s = 0; s < columns.length; s++) {
+      const encoded = columns[s]!.encoded;
+      if (encoded !== null) encoded.fill(null, 0, Math.min(count, encoded.length));
+    }
   }
   context.encodedCount = 0;
 }
@@ -350,8 +356,12 @@ class WorldSource extends SaveSource {
   }
 
   writeObjects(views: Views, offset: number, c: number, s: number): number {
-    const state = this.host.components.saveStates[c]!;
-    return writeObjectCells(views, offset, this.side[c]![s]!.encoded!, state.ownerCount);
+    const owners = this.host.components.saveStates[c]!.ownerCount;
+    const encoded = this.side[c]![s]!.encoded!;
+    const end = writeObjectCells(views, offset, encoded, owners);
+    // Drop the cells once written, so a finished save keeps no encoded values alive.
+    encoded.fill(null, 0, owners);
+    return end;
   }
 
   writeWindowSlots(views: Views, offset: number, width: number): void {
@@ -437,16 +447,21 @@ export function saveWorldInto(world: World, target: Uint8Array): number {
   if ((target.byteOffset & 7) !== 0) {
     throw new RangeError("World save target must be 8-byte aligned (byteOffset % 8 === 0).");
   }
+  let total: number;
   try {
-    const total = measure(context);
+    total = measure(context);
     if (target.byteLength < total) {
       throw new RangeError(`World save needs ${total} bytes; target has ${target.byteLength} bytes.`);
     }
     writeSave(context.source, context.writeViews.get(target.buffer), target.byteOffset, total);
-    return total;
-  } finally {
+  } catch (error) {
     releaseEncoded(context);
+    throw error;
   }
+  // writeSave dropped every encoded cell as it wrote it. Not calling releaseEncoded here keeps the hot path off a
+  // function that reaches its optimized tier late.
+  context.encodedCount = 0;
+  return total;
 }
 
 /**
