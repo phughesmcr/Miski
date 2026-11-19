@@ -3,19 +3,7 @@
 // deno-lint-ignore-file no-console
 
 import { getHeapSpaceStatistics, getHeapStatistics } from "node:v8";
-import {
-  CommandBuffer,
-  Component,
-  entityIndex,
-  field,
-  loadWorld,
-  measureWorldSave,
-  Prefab,
-  Query,
-  saveWorld,
-  saveWorldInto,
-  World,
-} from "../mod.ts";
+import { CommandBuffer, Component, entityIndex, field, loadWorld, Prefab, Query, saveWorld, World } from "../mod.ts";
 import type { ComponentInstance, Entity } from "../mod.ts";
 import {
   countEntities,
@@ -99,6 +87,10 @@ const WORLD_LOAD_BUDGET_BYTES_PER_ITER = 12_000;
 // Object fields are saved through user encode hooks (exempt from the zero-allocation rule). This codec returns a
 // stored string, so the budget covers Miski's own cost: none, measured 0 B/iter on 1,024 objects.
 const OBJECT_SAVE_BUDGET_BYTES_PER_ITER = ZERO_ALLOC_BUDGET_BYTES_PER_ITER;
+// A relation load rebuilds each store's pair index (O(pairs) typed arrays), so it scales with the 16K saved pairs.
+// Measured about 508 KiB/iter (851 KiB before validation's target order was reused). Few iterations: the arrays are
+// external memory, and past ~64 MiB in a round V8 collects them mid-round, which hides them from this count.
+const RELATION_LOAD_BUDGET_BYTES_PER_ITER = 600_000;
 const checkMode = Deno.args.includes("--check");
 // `--only=<text>` runs just the scenarios whose name contains <text>, to check one without the others warming it up.
 const onlyFilter = Deno.args.find((arg) => arg.startsWith("--only="))?.slice("--only=".length);
@@ -319,16 +311,17 @@ function budgeted(name: string, iterations: number, fn: () => void): Scenario {
 
 const mixed = await populateMixedWorld(MEDIUM_CAPACITY);
 // Serialization: a reused caller buffer and a self-load over the mixed 8K world.
-const saveTarget = new Uint8Array(measureWorldSave(mixed.world) + 1024);
+const saveTarget = new Uint8Array(saveWorld(mixed.world).byteLength + 1024);
 const savedMixed = saveWorld(mixed.world);
 // String saves: measured and written as UTF-8 without allocating. Object saves run user encode hooks per object.
 const named = await populateNamedWorld(MEDIUM_CAPACITY);
-const namedSaveTarget = new Uint8Array(measureWorldSave(named.world) + 1024);
+const namedSaveTarget = new Uint8Array(saveWorld(named.world).byteLength + 1024);
 const meshed = await populateNamedWorld(MEDIUM_CAPACITY, true);
-const meshedSaveTarget = new Uint8Array(measureWorldSave(meshed.world) + 1024);
+const meshedSaveTarget = new Uint8Array(saveWorld(meshed.world).byteLength + 1024);
 // Relation saves: pair pools, pair lists and pair data are written straight from the relation stores.
 const relationSave = await populateRelationWorld(MEDIUM_CAPACITY, 4_096);
-const relationSaveTarget = new Uint8Array(measureWorldSave(relationSave.world) + 1024);
+const relationSaveTarget = new Uint8Array(saveWorld(relationSave.world).byteLength + 1024);
+const savedRelations = saveWorld(relationSave.world);
 const movement = await populateMovementWorld(MEDIUM_CAPACITY);
 const fixedArityMovement = await populateMovementWorld(MEDIUM_CAPACITY, undefined, 1);
 const lifecycle = await populateSparseLifecycleWorld(MEDIUM_CAPACITY);
@@ -1171,26 +1164,26 @@ const scenarios: Scenario[] = [
     rel.world.refresh();
   }),
   {
-    ...budgeted("saveWorldInto 8K mixed world - reused buffer", 4_000, () => {
-      numericSink ^= saveWorldInto(mixed.world, saveTarget);
+    ...budgeted("saveWorld 8K mixed world - reused buffer", 4_000, () => {
+      numericSink ^= saveWorld(mixed.world, saveTarget).byteLength;
     }),
     // Let the writer reach its optimized tier first; earlier tiers allocate feedback and code once.
     warmupIterations: 30_000,
   },
   {
-    ...budgeted("saveWorldInto 8K world with strings - reused buffer", 4_000, () => {
-      numericSink ^= saveWorldInto(named.world, namedSaveTarget);
+    ...budgeted("saveWorld 8K world with strings - reused buffer", 4_000, () => {
+      numericSink ^= saveWorld(named.world, namedSaveTarget).byteLength;
     }),
     warmupIterations: 30_000,
   },
   {
-    ...budgeted("saveWorldInto 8K world with relations - reused buffer", 4_000, () => {
-      numericSink ^= saveWorldInto(relationSave.world, relationSaveTarget);
+    ...budgeted("saveWorld 8K world with relations - reused buffer", 4_000, () => {
+      numericSink ^= saveWorld(relationSave.world, relationSaveTarget).byteLength;
     }),
     warmupIterations: 30_000,
   },
   {
-    name: "saveWorldInto 8K world with strings + objects - reused buffer",
+    name: "saveWorld 8K world with strings + objects - reused buffer",
     iterations: 2_000,
     // Like the saves above: writeSave and measure run once per save and only reach TurboFan after ~7.5K and ~10K
     // calls (again after the first object-column save deoptimizes them). With less warmup their compiled code lands
@@ -1198,7 +1191,7 @@ const scenarios: Scenario[] = [
     warmupIterations: 30_000,
     maxSteadyStateBeforeGcBytesPerIter: OBJECT_SAVE_BUDGET_BYTES_PER_ITER,
     fn: () => {
-      numericSink ^= saveWorldInto(meshed.world, meshedSaveTarget);
+      numericSink ^= saveWorld(meshed.world, meshedSaveTarget).byteLength;
     },
   },
   {
@@ -1208,6 +1201,15 @@ const scenarios: Scenario[] = [
     maxSteadyStateBeforeGcBytesPerIter: WORLD_LOAD_BUDGET_BYTES_PER_ITER,
     fn: () => {
       loadWorld(mixed.world, savedMixed);
+    },
+  },
+  {
+    name: "loadWorld 8K world with 4K-node relations - self-load",
+    iterations: 30,
+    warmupIterations: 100,
+    maxSteadyStateBeforeGcBytesPerIter: RELATION_LOAD_BUDGET_BYTES_PER_ITER,
+    fn: () => {
+      loadWorld(relationSave.world, savedRelations);
     },
   },
 ];

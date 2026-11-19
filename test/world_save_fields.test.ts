@@ -10,19 +10,17 @@
 
 import {
   Component,
-  describeWorldSaveLayout,
   type DynamicComponent,
   type Entity,
   field,
   loadWorld,
-  measureWorldSave,
   saveWorld,
-  saveWorldInto,
   World,
   type WorldSaveDocument,
   WorldSaveError,
-  worldSaveFromJSON,
-  worldSaveToJSON,
+  worldSaveFromDocument,
+  worldSaveLayout,
+  worldSaveToDocument,
 } from "../mod.ts";
 import { assert, assertEquals, assertStrictEquals, assertThrows } from "./helpers.ts";
 
@@ -170,7 +168,6 @@ Deno.test("string and object fields round-trip into a fresh world, which re-save
   const source = await worldOf(components(log));
   populate(source, rng(1));
   const bytes = saveWorld(source);
-  assertStrictEquals(measureWorldSave(source), bytes.byteLength, "measure matches the written length");
   assert(!log.nullSeen, "encode is never called with null");
 
   const loadLog = newLog();
@@ -236,9 +233,8 @@ Deno.test("an object field without encode / decode cannot be saved or loaded, na
   const bytes = saveWorld(plain);
   const entryPoints: [string, () => unknown][] = [
     ["saveWorld", () => saveWorld(world)],
-    ["saveWorldInto", () => saveWorldInto(world, new Uint8Array(1 << 16))],
-    ["measureWorldSave", () => measureWorldSave(world)],
-    ["describeWorldSaveLayout", () => describeWorldSaveLayout(world)],
+    ["saveWorld into a buffer", () => saveWorld(world, new Uint8Array(1 << 16))],
+    ["worldSaveLayout", () => worldSaveLayout(world)],
     ["loadWorld", () => loadWorld(world, bytes)],
   ];
   for (const [, run] of entryPoints) assertThrows(run, WorldSaveError, "meshed.mesh");
@@ -290,7 +286,7 @@ Deno.test("invalid encode results and unencodable strings throw before anything 
     world.entities.createWithOrThrow([[component(world, "odd") as Component<never>, { value: 1 } as never]] as never);
     assertThrows(() => saveWorld(world), WorldSaveError, "odd.value");
     const target = new Uint8Array(1 << 12).fill(0xaa);
-    assertThrows(() => saveWorldInto(world, target), WorldSaveError, "odd.value");
+    assertThrows(() => saveWorld(world, target), WorldSaveError, "odd.value");
     assert(target.every((byte) => byte === 0xaa), `${label}: nothing written`);
   }
   const world = await worldOf([new Component({ name: "named", schema: { text: field.string() } })]);
@@ -305,9 +301,9 @@ Deno.test("the JSON view round-trips strings and objects losslessly", async () =
   const source = await worldOf(components(log));
   populate(source, rng(4));
   const bytes = saveWorld(source);
-  const document = worldSaveToJSON(bytes);
+  const document = worldSaveToDocument(bytes);
   const text = JSON.stringify(document);
-  const again = worldSaveFromJSON(JSON.parse(text) as WorldSaveDocument);
+  const again = worldSaveFromDocument(JSON.parse(text) as WorldSaveDocument);
   assert(bytesEqual(again, bytes), "bytes -> JSON -> bytes is identical");
 
   const unitDoc = document.components["unit"]!;
@@ -323,7 +319,7 @@ Deno.test("the JSON view rejects malformed string and object cells", async () =>
   const log = newLog();
   const source = await worldOf(components(log));
   populate(source, rng(5));
-  const document = worldSaveToJSON(saveWorld(source));
+  const document = worldSaveToDocument(saveWorld(source));
   const edits: [string, (doc: { components: Record<string, { values: Record<string, unknown[]> }> }) => void][] = [
     ["number in a string field", (doc) => doc.components["unit"]!.values["label"]![0] = 1],
     ["lone surrogate", (doc) => doc.components["unit"]!.values["label"]![0] = "\udc00"],
@@ -337,7 +333,7 @@ Deno.test("the JSON view rejects malformed string and object cells", async () =>
     edit(copy);
     let rejected = false;
     try {
-      worldSaveFromJSON(copy);
+      worldSaveFromDocument(copy);
     } catch (error) {
       assert(error instanceof WorldSaveError, `${label}: expected WorldSaveError, got ${String(error)}`);
       rejected = true;
@@ -415,15 +411,15 @@ Deno.test("a loaded world keeps behaving like the saved one under the same opera
   assert(bytesEqual(saveWorld(loaded), saveWorld(source)), "same save after continued use");
 });
 
-Deno.test("saveWorldInto writes string saves into a reused buffer", async () => {
+Deno.test("saveWorld writes string saves into a reused buffer", async () => {
   const source = await worldOf(components(newLog()));
   populate(source, rng(10));
   const expected = saveWorld(source);
   const target = new Uint8Array(expected.byteLength + 64);
   target.fill(0xff); // every pad byte must be written, not inherited
   for (let i = 0; i < 3; i++) {
-    const written = saveWorldInto(source, target);
-    assertStrictEquals(written, expected.byteLength, "written length");
-    assert(bytesEqual(target.subarray(0, written), expected), "same bytes as saveWorld");
+    const written = saveWorld(source, target);
+    assertStrictEquals(written.buffer, target.buffer, "written into the target");
+    assert(bytesEqual(written, expected), "same bytes as a fresh save");
   }
 });

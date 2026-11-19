@@ -10,20 +10,18 @@
 
 import {
   Component,
-  describeWorldSaveLayout,
   type DynamicComponent,
   type Entity,
   loadWorld,
-  measureWorldSave,
   Query,
   Relation,
   saveWorld,
-  saveWorldInto,
   World,
   type WorldSaveDocument,
   WorldSaveError,
-  worldSaveFromJSON,
-  worldSaveToJSON,
+  worldSaveFromDocument,
+  worldSaveLayout,
+  worldSaveToDocument,
 } from "../mod.ts";
 import { assert, assertEquals, assertThrows } from "./helpers.ts";
 
@@ -258,7 +256,7 @@ Deno.test("relations: loading replaces a busy world's pairs, pool and changed li
 Deno.test("relations: the layout records relation options and pair data types", async () => {
   const defs = defsOf();
   const world = await worldOf(defs);
-  const layout = describeWorldSaveLayout(world);
+  const layout = worldSaveLayout(world);
   assertEquals(layout.components[1], {
     name: "childOf",
     maxEntities: null,
@@ -338,7 +336,7 @@ Deno.test("relations: the JSON view round-trips pairs losslessly and reads plain
   world.relations.add(defs.likes, b, d, { weight: 3, rank: 4 });
   world.relations.remove(defs.likes, a, c);
   const bytes = saveWorld(world);
-  const document = worldSaveToJSON(bytes);
+  const document = worldSaveToDocument(bytes);
   const likes = document.relations!["likes"]!;
   assertEquals(likes.highWater, 3, "pool high water");
   assertEquals(likes.freeRows, [0], "freed row");
@@ -360,21 +358,21 @@ Deno.test("relations: the JSON view round-trips pairs losslessly and reads plain
     { highWater: 0, freeRows: [], sources: [], targets: [], changed: [] },
     "empty relation",
   );
-  const again = worldSaveFromJSON(JSON.parse(JSON.stringify(document)));
+  const again = worldSaveFromDocument(JSON.parse(JSON.stringify(document)));
   assert(bytesEqual(again, bytes), "JSON view is lossless");
 
   // A larger random world too.
   const big = await worldOf(defs);
   runOps(rng(11), [big], defs, 600, "big");
   const bigBytes = saveWorld(big);
-  assert(bytesEqual(worldSaveFromJSON(JSON.parse(JSON.stringify(worldSaveToJSON(bigBytes)))), bigBytes), "big");
+  assert(bytesEqual(worldSaveFromDocument(JSON.parse(JSON.stringify(worldSaveToDocument(bigBytes)))), bigBytes), "big");
 });
 
 /** Edit a copy of a document and check that it is rejected with a message including `includes`. */
 function rejects(document: WorldSaveDocument, includes: string, edit: (doc: WorldSaveDocument) => void): void {
   const copy = JSON.parse(JSON.stringify(document)) as WorldSaveDocument;
   edit(copy);
-  assertThrows(() => worldSaveFromJSON(copy), WorldSaveError, includes);
+  assertThrows(() => worldSaveFromDocument(copy), WorldSaveError, includes);
 }
 
 /** Storage slot of a handle. */
@@ -390,7 +388,7 @@ Deno.test("relations: inconsistent relation documents are rejected", async () =>
   world.relations.add(defs.likes, a, d, { weight: 1, rank: 1 });
   world.relations.add(defs.likes, b, d, { weight: 1, rank: 1 });
   world.relations.remove(defs.likes, a, c);
-  const document = worldSaveToJSON(saveWorld(world));
+  const document = worldSaveToDocument(saveWorld(world));
   type Pair = { row: number; target: number; data?: Record<string, unknown> };
   type R = {
     highWater: number;
@@ -403,7 +401,7 @@ Deno.test("relations: inconsistent relation documents are rejected", async () =>
   const [sa, sb, sc, sd] = [slot(a), slot(b), slot(c), slot(d)];
 
   // Sanity: the unedited copy is accepted.
-  worldSaveFromJSON(JSON.parse(JSON.stringify(document)));
+  worldSaveFromDocument(JSON.parse(JSON.stringify(document)));
 
   rejects(document, "relations must be an object", (doc) => delete (doc as { relations?: unknown }).relations);
   rejects(document, 'relations["likes"] must be an object', (doc) => {
@@ -564,14 +562,15 @@ Deno.test("relations: corrupt relation sections are rejected or load a world tha
   assert(accepted > 0 && accepted < 600, "some corruptions load (and keep working), most are rejected");
 });
 
-Deno.test("relations: saveWorldInto reuses a buffer and migrate carries relations", async () => {
+Deno.test("relations: saveWorld reuses a buffer and migrate carries relations", async () => {
   const defs = defsOf();
   const world = await worldOf(defs);
   runOps(rng(4), [world], defs, 300, "source");
-  const buffer = new Uint8Array(measureWorldSave(world) + 64);
+  const buffer = new Uint8Array(saveWorld(world).byteLength + 64);
   buffer.fill(0xff); // every pad byte must be written, not inherited
-  const written = saveWorldInto(world, buffer);
-  assert(bytesEqual(buffer.subarray(0, written), saveWorld(world)), "saveWorldInto matches saveWorld");
+  const written = saveWorld(world, buffer);
+  assert(written.buffer === buffer.buffer, "written into the buffer");
+  assert(bytesEqual(written, saveWorld(world)), "a save into a buffer matches a fresh save");
 
   // A newer world appends a tag; migrate the document by adding its empty entry.
   const extra = new Component({ name: "extra" });

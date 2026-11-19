@@ -19,7 +19,7 @@ Runtime tests live in `*.test.ts` files and run via `deno test` (see `deno.json`
 | `world_integrity.test.ts` | Atomic spawn/checkpoints, historical exits, rollback identities, slot bounds |
 | `world_lifecycle_integrity.test.ts` | Async readiness, teardown concurrency, failure cleanup, `await using` disposal during destroy, in-flight init and failed init |
 | `rollback_scope.test.ts` | `WorldRollbackScope` with `using`: restore when left without `commit()` (also on throw), commit, explicit restore, disposal on destroyed and errored worlds |
-| `float16_column.test.ts` | `Float16Array` columns: writes, canonicalization, saves, JSON view, rollback |
+| `float16_column.test.ts` | `Float16Array` columns: writes, canonicalization, saves, documents, rollback |
 | `rollback_checkpoint_integrity.test.ts` | One rollback scope, consumed/foreign rollback points, foreign checkpoints, >32-component round-trips |
 | `component_storage_integrity.test.ts` | Capped (dense-row) storage under stray non-owner writes, ownership acquisition, cap clamping, column constructors |
 | `component_rollback_memory.test.ts` | Capped owners and dense rows through rollback and removal, sparse changed window, `getActive` scratch growth, 16-bit-capacity rollback |
@@ -40,14 +40,14 @@ Runtime tests live in `*.test.ts` files and run via `deno test` (see `deno.json`
 | `relations_cross.test.ts` | Relations with prefabs and field types: relation entries rejected in prefabs and overrides, numeric-only pair data, rollback and checkpoints restoring side columns and pairs together |
 | `feature_review.test.ts` | Post-merge review regressions: save field-value and masked-generation checks, nested `instantiateMany` lists, relation checkpoint order and undefined pair data, command buffers rejecting relations when queued |
 | `scheduler_cross.test.ts` | Command buffers with field types, relations and prefabs: every field kind at flush, dead entity refs written as null, drain-then-rethrow, relation tags rejected when queued |
-| `serialization_cross.test.ts` | World saves with field types: bool/enum/entity round-trips, field tags in layouts, label-order and kind mismatches, JSON view, object fields without hooks rejected on every entry point |
+| `serialization_cross.test.ts` | World saves with field types: bool/enum/entity round-trips, field tags in layouts, label-order and kind mismatches, documents, object fields without hooks rejected on every entry point |
 | `relations.test.ts` | Relations: pairs, order, data, exclusive/acyclic, cleanup and cascades, traversal, guards, checkpoints, rollback, `createEcsWorld` |
 | `relations_model.test.ts` | Seeded random relation operations (including cascades and rollback) checked against a plain-array model |
 | `schedule.test.ts` | `Schedule`: phase and constraint order, cycles, fixed timestep, context, run conditions, refresh and error semantics, per-phase command flushes, clock save/restore with rollback |
 | `command_buffer.test.ts` | `CommandBuffer`: deferred spawn/destroy/add/set/remove, pending handles, partial payloads, inactive targets, drain-on-error flushes, wide and non-numeric fields, growth |
-| `world_save.test.ts` | Whole-world saves: twin-world load differential, `saveWorldInto`, header/layout, mismatch and migrate, corruption fuzz, JSON round-trip, no aliasing |
-| `world_save_fields.test.ts` | World saves of string and object fields: round-trips into fresh worlds, encode/decode hook rules, null objects, missing hooks, throwing decode leaves the world untouched, unencodable strings, JSON view, corruption fuzz, continued behavior |
-| `world_save_relations.test.ts` | World saves of relations: twin-world differential (getTargets / getSources / traverse order, rows, changed, continued behavior, byte-identical re-saves), load over a busy world, layout entries and option mismatches, JSON shape and round-trip, document rejections, binary target checks, relation-section corruption fuzz, `saveWorldInto` and migrate |
+| `world_save.test.ts` | Whole-world saves: twin-world load differential, `saveWorld` into a reused buffer, header/layout, mismatch and migrate, corruption fuzz, JSON round-trip, no aliasing |
+| `world_save_fields.test.ts` | World saves of string and object fields: round-trips into fresh worlds, encode/decode hook rules, null objects, missing hooks, throwing decode leaves the world untouched, unencodable strings, documents, corruption fuzz, continued behavior |
+| `world_save_relations.test.ts` | World saves of relations: twin-world differential (getTargets / getSources / traverse order, rows, changed, continued behavior, byte-identical re-saves), load over a busy world, layout entries and option mismatches, JSON shape and round-trip, document rejections, binary target checks, relation-section corruption fuzz, `saveWorld` into a reused buffer and migrate |
 | `release_integrity.test.ts` | Runtime, `deno.json`, README install snippet, and CHANGELOG version consistency (reads `README.md` and `CHANGELOG.md`; `deno task test` grants `--allow-read` for just those files) |
 
 ## Shared fixtures

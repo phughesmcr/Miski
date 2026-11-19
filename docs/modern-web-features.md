@@ -140,8 +140,8 @@ not per entity (see row 16).
   `max(BYTES_PER_ELEMENT, 8)`, so no layout change is needed. Then in Miski:
   - add it to `SUPPORTED_COLUMN_CONSTRUCTORS` and the error message (`component.ts:21-35,193`);
   - append `"f16"` to the hashed, append-only `CONSTRUCTOR_TAGS` (`schema.ts:22`);
-  - in `serialization/format.ts`, add field type code 12 to `FIELD_TYPE_NAMES/BYTES/CONSTRUCTORS`, `Views` and
-    `column()`;
+  - in `serialization/format.ts`, add field type code 12 to `NUMERIC_FIELD_TYPES` (which also feeds `Views` and
+    `column()`);
   - flip the "Float16 rejected" test (`test/component_storage_integrity.test.ts:150-180`).
 
   `FORMAT_VERSION` stays 1, and older Miski versions reject f16 saves cleanly. Bench on x86 without F16C before

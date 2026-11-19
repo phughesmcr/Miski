@@ -332,8 +332,8 @@
  *   loadWorld,
  *   saveWorld,
  *   World,
- *   worldSaveFromJSON,
- *   worldSaveToJSON,
+ *   worldSaveFromDocument,
+ *   worldSaveToDocument,
  * } from "@phughesmcr/miski";
  *
  * const position = new Component({ name: "position", schema: { x: Float32Array, y: Float32Array } });
@@ -350,9 +350,14 @@
  * // Load replaces the world's state with the save.
  * loadWorld(world, base);
  *
- * // A lossless JSON view of the same save.
- * const text = JSON.stringify(worldSaveToJSON(next));
- * loadWorld(world, worldSaveFromJSON(JSON.parse(text)));
+ * // Reuse one buffer: the save is a view of its start, and steady-state saves allocate nothing.
+ * let buffer: Uint8Array = new Uint8Array(4096);
+ * const view = saveWorld(world, buffer);
+ * if (view.buffer !== buffer.buffer) buffer = view; // it did not fit; keep the larger save's buffer
+ *
+ * // A save as a plain JSON-safe document, and back.
+ * const text = JSON.stringify(worldSaveToDocument(next));
+ * loadWorld(world, worldSaveFromDocument(JSON.parse(text)));
  * ```
  */
 
@@ -434,15 +439,8 @@ export type {
   StringField,
 } from "@/schema/field.ts";
 export type { RelationMap, RelationOptions, RelationsFromMap } from "@/world/ecs-world.ts";
-export {
-  describeWorldSaveLayout,
-  loadWorld,
-  measureWorldSave,
-  readWorldSaveHeader,
-  saveWorld,
-  saveWorldInto,
-} from "@/serialization/world-save.ts";
-export { worldSaveFromJSON, worldSaveToJSON } from "@/serialization/document.ts";
+export { loadWorld, readWorldSaveHeader, saveWorld, worldSaveLayout } from "@/serialization/world-save.ts";
+export { worldSaveFromDocument, worldSaveToDocument } from "@/serialization/document.ts";
 export { WorldSaveError } from "@/serialization/format.ts";
 export type { WorldSaveHeader, WorldSaveLoadOptions } from "@/serialization/world-save.ts";
 export type {

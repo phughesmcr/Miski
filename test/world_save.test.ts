@@ -11,22 +11,20 @@
 import {
   captureWorldRollbackPoint,
   Component,
-  describeWorldSaveLayout,
   type DynamicComponent,
   type Entity,
   entityIndex,
   loadWorld,
-  measureWorldSave,
   Query,
   readWorldSaveHeader,
   restoreWorldRollbackPoint,
   saveWorld,
-  saveWorldInto,
   World,
   type WorldSaveDocument,
   WorldSaveError,
-  worldSaveFromJSON,
-  worldSaveToJSON,
+  worldSaveFromDocument,
+  worldSaveLayout,
+  worldSaveToDocument,
   WorldStateError,
 } from "../mod.ts";
 import { Buffer } from "node:buffer";
@@ -268,30 +266,52 @@ Deno.test("load bumps query revisions forward", async () => {
   assert(target.queryRevision(query) > before, "Revision tokens must move forward on load");
 });
 
-Deno.test("saveWorldInto writes the same bytes into a caller buffer and reports the length", async () => {
+Deno.test("saveWorld into a caller buffer writes the same bytes and returns a view of them", async () => {
   const h: Harness = { world: await createWorld(64), live: [] };
   churn(h, rng(11), 200);
   const expected = saveWorld(h.world);
-  const length = measureWorldSave(h.world);
-  assertStrictEquals(length, expected.byteLength, "measure must match the save length");
+  const length = expected.byteLength;
   assertStrictEquals(length % 8, 0, "Saves are 8-byte aligned");
 
   const backing = new ArrayBuffer(length + 64);
   const target = new Uint8Array(backing, 16, length + 8);
   target.fill(0xaa);
-  assertStrictEquals(saveWorldInto(h.world, target), length, "saveWorldInto returns bytes written");
-  assert(bytesEqual(target.subarray(0, length), expected), "saveWorldInto must match saveWorld");
+  const view = saveWorld(h.world, target);
+  assertStrictEquals(view.buffer, backing, "the save is written into the caller's buffer");
+  assertStrictEquals(view.byteOffset, 16, "the view starts at the target");
+  assertStrictEquals(view.byteLength, length, "the view is exactly the save");
+  assert(bytesEqual(view, expected), "a save into a buffer must match a fresh save");
   assertStrictEquals(target[length], 0xaa, "Bytes past the save are untouched");
+  assertStrictEquals(saveWorld(h.world, target), view, "an unchanged length reuses the returned view");
+
+  // The cached view is reused only for the same buffer, offset and length.
+  const shifted = saveWorld(h.world, new Uint8Array(backing, 24, length + 8));
+  assert(shifted !== view && shifted.byteOffset === 24, "another offset gets its own view");
+  const otherBacking = new ArrayBuffer(length + 64);
+  const other = saveWorld(h.world, new Uint8Array(otherBacking, 16, length + 8));
+  assert(other.buffer === otherBacking && bytesEqual(other, expected), "another buffer gets its own view");
+  const back = saveWorld(h.world, target);
+  assert(back.buffer === backing && back.byteOffset === 16, "returning to the first target views it again");
+
+  const exact = new Uint8Array(length);
+  assertStrictEquals(saveWorld(h.world, exact), exact, "an exactly sized target is returned as is");
 
   // Reusing one roomy buffer after more mutation stays correct.
   const roomy = new Uint8Array(length * 4);
-  saveWorldInto(h.world, roomy);
+  saveWorld(h.world, roomy);
   churn(h, rng(12), 50);
-  const again = saveWorldInto(h.world, roomy);
-  assert(bytesEqual(roomy.subarray(0, again), saveWorld(h.world)), "Reused target must hold the new save");
+  const again = saveWorld(h.world, roomy);
+  assertStrictEquals(again.buffer, roomy.buffer, "still written into the reused buffer");
+  assert(bytesEqual(again, saveWorld(h.world)), "Reused target must hold the new save");
 
-  assertThrows(() => saveWorldInto(h.world, new Uint8Array(8)), RangeError, "bytes");
-  assertThrows(() => saveWorldInto(h.world, new Uint8Array(backing, 4, length)), RangeError, "aligned");
+  // Too small: a fresh buffer, the caller's left alone.
+  const small = new Uint8Array(8).fill(0xaa);
+  const fresh = saveWorld(h.world, small);
+  assert(fresh.buffer !== small.buffer, "a target that is too small is not written");
+  assert(small.every((byte) => byte === 0xaa), "nothing written into the small target");
+  assert(bytesEqual(fresh, saveWorld(h.world)), "the fresh save is complete");
+
+  assertThrows(() => saveWorld(h.world, new Uint8Array(backing, 4, length)), RangeError, "aligned");
 });
 
 Deno.test("readWorldSaveHeader describes a save without a world", async () => {
@@ -300,10 +320,9 @@ Deno.test("readWorldSaveHeader describes a save without a world", async () => {
   world.entities.createOrThrow();
   const bytes = saveWorld(world);
   const header = readWorldSaveHeader(bytes);
-  assertStrictEquals(header.formatVersion, 1, "format version");
   assertStrictEquals(header.byteLength, bytes.byteLength, "byte length");
   assertStrictEquals(header.entityCount, 2, "entity count");
-  assertEquals(header.layout, describeWorldSaveLayout(world), "layout");
+  assertEquals(header.layout, worldSaveLayout(world), "layout");
   assertStrictEquals(header.layout.capacity, 33, "capacity");
   assertEquals(
     header.layout.components.map((component) => component.name),
@@ -326,7 +345,7 @@ Deno.test("saves load from misaligned Uint8Arrays and node:buffer Buffers", asyn
   const bytes = saveWorld(source.world);
   const expected = observe(source.world);
   const header = readWorldSaveHeader(bytes);
-  const json = worldSaveToJSON(bytes);
+  const json = worldSaveToDocument(bytes);
   const n = bytes.byteLength;
 
   for (let offset = 0; offset < 8; offset++) {
@@ -340,7 +359,7 @@ Deno.test("saves load from misaligned Uint8Arrays and node:buffer Buffers", asyn
     for (const [kind, input] of inputs) {
       const label = `${kind} at offset ${offset}`;
       assertEquals(readWorldSaveHeader(input), header, `${label}: header`);
-      assertEquals(worldSaveToJSON(input), json, `${label}: JSON view`);
+      assertEquals(worldSaveToDocument(input), json, `${label}: JSON view`);
       const target = await createWorld(64);
       loadWorld(target, input);
       assertEquals(observe(target), expected, `${label}: load`);
@@ -436,9 +455,9 @@ Deno.test("the JSON view round-trips losslessly, including non-finite and negati
   kg.kg[slot] = Number.NEGATIVE_INFINITY;
 
   const bytes = saveWorld(h.world);
-  const doc = worldSaveToJSON(bytes);
+  const doc = worldSaveToDocument(bytes);
   const reparsed = JSON.parse(JSON.stringify(doc)) as WorldSaveDocument;
-  assert(bytesEqual(worldSaveFromJSON(reparsed), bytes), "bytes -> JSON -> bytes must be identical");
+  assert(bytesEqual(worldSaveFromDocument(reparsed), bytes), "bytes -> JSON -> bytes must be identical");
   assertStrictEquals(doc.format, "miski-world", "format tag");
   assertStrictEquals(doc.layout.capacity, 33, "capacity");
   assert(Array.isArray(doc.archetypes) && doc.archetypes.length >= 1, "archetypes listed");
@@ -469,7 +488,7 @@ Deno.test("migrate hooks run only on a layout mismatch and their result is valid
   loadWorld(newWorld, bytes, {
     migrate: (doc, target) => {
       calls++;
-      assertEquals(target, describeWorldSaveLayout(newWorld), "migrate receives the target layout");
+      assertEquals(target, worldSaveLayout(newWorld), "migrate receives the target layout");
       const old = doc.components["pos"]!;
       const values = old.values!;
       return {
@@ -517,4 +536,18 @@ Deno.test("a loaded world shares no memory with the save bytes", async () => {
   churn(target, rng(14), 200);
   target.world.refresh();
   assert(bytesEqual(bytes, pristine), "Using the loaded world must not write into the save");
+});
+
+Deno.test("documents keep a field named __proto__ as an own key", async () => {
+  const unit = new Component({ name: "unit", schema: { v: Float32Array } });
+  const world = new World({ capacity: 8, components: [unit] });
+  await world.init();
+  world.components.addToEntity(unit, world.entities.createOrThrow(), { v: 3 });
+  // World names cannot be `__proto__`, but documents and save bytes are untrusted input.
+  const text = JSON.stringify(worldSaveToDocument(saveWorld(world))).replaceAll('"v"', '"__proto__"');
+  const bytes = worldSaveFromDocument(JSON.parse(text));
+  const values = worldSaveToDocument(bytes).components["unit"]!.values!;
+  assert(Object.hasOwn(values, "__proto__"), "the field is an own key");
+  assertEquals(Object.getPrototypeOf(values), Object.prototype, "the record keeps a plain prototype");
+  assertEquals(JSON.stringify(values), '{"__proto__":[3]}', "the values survive");
 });
