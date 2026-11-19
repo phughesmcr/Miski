@@ -203,8 +203,7 @@
 - **Breaking:** remove `world.archetypes.queryComponents`, a duplicate of
   `world.components.query`.
 - **Breaking:** move `queryEntered` / `queryExited` from `world.archetypes` to
-  `world.entities`. `world.archetypes` keeps `getEntityArchetype` and
-  `isEntityInRoot`.
+  `world.entities`.
 - `world.entities.query(q)` and `world.entities.getActive()` return a separate
   pooled iterator per call instead of one shared cursor, so nested loops over
   the same query (or over `getActive()`, with any bounds) see every pair. A 4×4
@@ -236,9 +235,9 @@
   string, is removed.
 - **Breaking:** remove `world.entities.isEntity`. It was a slot range check,
   not a liveness check; use `isActive`.
-- **Breaking:** remove `EntityManager.fromJSON`, `EntityManager.stringify`,
-  `EntityManager.requireSlot` and the `EntityManagerSerialized` type, a legacy
-  serialization format superseded by world saves.
+- Internal: remove the unexported `EntityManager.fromJSON` / `stringify` JSON
+  format (superseded by world saves), `EntityManager.requireSlot` and the
+  `EntityManagerSerialized` type.
 - **Breaking (types):** `world.entities.toArray` is typed to take any
   `QueryEntityList` (it already accepted one at runtime), not only a
   `BorrowedEntityList`.
