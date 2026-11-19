@@ -1,3 +1,4 @@
+import { SpecError } from "@/errors.ts";
 import type { Entity } from "@/entity/entity.ts";
 
 /** The non-numeric field kinds a component schema may declare with {@link field}. */
@@ -158,15 +159,15 @@ const STRING_FIELD: StringField = brand({ kind: "string", tag: "string" });
 
 function createEnumField<const L extends readonly string[]>(labels: L): EnumField<L[number]> {
   if (!Array.isArray(labels) || labels.length === 0) {
-    throw new TypeError("field.enum() needs at least one label.");
+    throw new SpecError("field.enum() needs at least one label.");
   }
   if (labels.length > MAX_ENUM_LABELS) {
-    throw new RangeError(`field.enum() supports at most ${MAX_ENUM_LABELS} labels.`);
+    throw new SpecError(`field.enum() supports at most ${MAX_ENUM_LABELS} labels.`);
   }
   const seen = new Set<string>();
   for (const label of labels) {
-    if (typeof label !== "string") throw new TypeError("field.enum() labels must be strings.");
-    if (seen.has(label)) throw new TypeError(`field.enum() has a duplicate label "${label}".`);
+    if (typeof label !== "string") throw new SpecError("field.enum() labels must be strings.");
+    if (seen.has(label)) throw new SpecError(`field.enum() has a duplicate label "${label}".`);
     seen.add(label);
   }
   const frozen = Object.freeze([...labels]) as readonly L[number][];
@@ -178,17 +179,17 @@ const OBJECT_FIELD_HOOKS = ["create", "clone", "encode", "decode"] as const;
 
 function createObjectField<T>(options?: ObjectFieldOptions<T>): ObjectField<T> {
   if (options !== undefined && (typeof options !== "object" || options === null)) {
-    throw new TypeError("field.object() options must be an object.");
+    throw new SpecError("field.object() options must be an object.");
   }
   const descriptor: Record<string, unknown> = { kind: "object", tag: "object" };
   for (const hook of OBJECT_FIELD_HOOKS) {
     const fn = options?.[hook];
     if (fn === undefined) continue;
-    if (typeof fn !== "function") throw new TypeError(`field.object() ${hook} must be a function.`);
+    if (typeof fn !== "function") throw new SpecError(`field.object() ${hook} must be a function.`);
     descriptor[hook] = fn;
   }
   if ((descriptor["encode"] === undefined) !== (descriptor["decode"] === undefined)) {
-    throw new TypeError("field.object() needs both encode and decode, or neither.");
+    throw new SpecError("field.object() needs both encode and decode, or neither.");
   }
   return brand(descriptor as unknown as ObjectField<unknown>) as ObjectField<T>;
 }

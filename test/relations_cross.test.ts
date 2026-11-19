@@ -1,6 +1,15 @@
 /// <reference lib="deno.ns" />
 
-import { Component, type DynamicComponent, field, Prefab, Relation, SpecError, WorldRollbackScope } from "../mod.ts";
+import {
+  ArgumentError,
+  Component,
+  type DynamicComponent,
+  field,
+  Prefab,
+  Relation,
+  SpecError,
+  WorldRollbackScope,
+} from "../mod.ts";
 import { createTestWorld } from "./fixtures.ts";
 import { assertEquals, assertThrows } from "./helpers.ts";
 
@@ -19,16 +28,16 @@ Deno.test("relations x field types: relation pair data rejects field descriptors
 });
 
 Deno.test("relations x prefabs: a prefab rejects relation components at definition", () => {
-  assertThrows(() => new Prefab({ components: [[childOf]] }), TypeError, "relation");
+  assertThrows(() => new Prefab({ components: [[childOf]] }), SpecError, "relation");
   const base = new Prefab({ components: [[unit]] });
-  assertThrows(() => new Prefab({ extends: base, components: [[likes]] }), TypeError, "relation");
+  assertThrows(() => new Prefab({ extends: base, components: [[likes]] }), SpecError, "relation");
 });
 
 Deno.test("relations x prefabs: instantiate overrides reject relation components and change nothing", async () => {
   const world = await createTestWorld(components);
   const prefab = new Prefab({ components: [[unit, { hp: 3 }]] });
-  assertThrows(() => world.entities.instantiate(prefab, [[childOf]]), TypeError, "relation");
-  assertThrows(() => world.entities.instantiateMany(prefab, 2, [[likes]]), TypeError, "relation");
+  assertThrows(() => world.entities.instantiate(prefab, [[childOf]]), ArgumentError, "relation");
+  assertThrows(() => world.entities.instantiateMany(prefab, 2, [[likes]]), ArgumentError, "relation");
   assertEquals(world.entities.getActiveCount(), 0, "Rejected overrides allocate nothing");
   // Relations are attached after instantiation, through world.relations.
   const parent = world.entities.createOrThrow();

@@ -1,7 +1,9 @@
 /// <reference lib="deno.ns" />
 
 import {
+  ArgumentError,
   asEntity,
+  CapacityError,
   Component,
   ComponentDataError,
   ComponentOwnershipError,
@@ -36,7 +38,7 @@ Deno.test("component maxEntities limits the number of owners", async () => {
 
   assertThrows(
     () => world.components.addToEntity(player, second),
-    RangeError,
+    CapacityError,
     'Component "player" can only be added to 1 entities',
   );
   assertEquals(ids(world.components.getOwners(player)), [first], "Expected only the first entity to own player");
@@ -481,7 +483,7 @@ Deno.test("batch component add capacity failures leave all state unchanged", asy
   };
   assertThrows(
     () => world.components.addToEntities(player, list),
-    RangeError,
+    CapacityError,
     'Component "player" can only be added to 1 entities',
   );
 
@@ -506,7 +508,7 @@ Deno.test("batch component transitions reject duplicate entity targets before mu
   };
   assertThrows(
     () => world.components.addToEntities(velocity, duplicateList, { x: 3, y: 4 }),
-    RangeError,
+    ArgumentError,
     "Duplicate entity",
   );
 

@@ -1,4 +1,4 @@
-import { Component, WorldRollbackScope, WorldStateError } from "../mod.ts";
+import { ArgumentError, Component, WorldRollbackScope, WorldStateError } from "../mod.ts";
 import { createEntity, createTestWorld, vec2Component } from "./fixtures.ts";
 import { assert, assertEquals, assertThrows } from "./helpers.ts";
 
@@ -55,7 +55,7 @@ Deno.test("component checkpoints cannot be applied to a different world", async 
   assertEquals(sourceEntity, targetEntity, "Both worlds issue the same first handle");
 
   const checkpoint = source.captureCheckpoint([sourceEntity], position);
-  assertThrows(() => target.applyCheckpoint(checkpoint), Error, "different world");
+  assertThrows(() => target.applyCheckpoint(checkpoint), ArgumentError, "different world");
   assertEquals(
     target.components.getEntityDataOrThrow(position, targetEntity),
     { x: 7, y: 8 },

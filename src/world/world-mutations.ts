@@ -19,6 +19,7 @@ import {
 } from "@/entity/entity.ts";
 import type { EntityManager } from "@/entity/entity-manager.ts";
 import {
+  ArgumentError,
   CapacityError,
   componentDisplayName,
   EntityNotFoundError,
@@ -318,11 +319,11 @@ export class WorldMutations {
   /** Preflight a borrowed dense entity list before an atomic batch mutation. */
   #preflightBatchEntities(entities: QueryEntityList): number {
     if (!entities || !entities.entities || !entities.slots) {
-      throw new TypeError("Batch entity list must include entity and slot buffers.");
+      throw new ArgumentError("Batch entity list must include entity and slot buffers.");
     }
     const count = entities.count;
     if (!Number.isInteger(count) || count < 0 || count > this.#batchSlots.length) {
-      throw new RangeError(`Batch entity list count ${count} is outside world capacity.`);
+      throw new ArgumentError(`Batch entity list count ${count} is outside world capacity.`);
     }
 
     for (let i = 0; i < count; i++) {
@@ -334,11 +335,11 @@ export class WorldMutations {
       const slot = entityIndex(entity);
       if (entities.slots[i] !== slot) {
         this.#clearBatchEntities(i);
-        throw new RangeError(`Batch entity ${entity} has an invalid storage slot.`);
+        throw new ArgumentError(`Batch entity ${entity} has an invalid storage slot.`);
       }
       if (this.#batchSeen[slot] === 1) {
         this.#clearBatchEntities(i);
-        throw new RangeError(`Duplicate entity ${entity} in batch entity list.`);
+        throw new ArgumentError(`Duplicate entity ${entity} in batch entity list.`);
       }
       this.#batchSeen[slot] = 1;
       this.#batchSlots[i] = slot;

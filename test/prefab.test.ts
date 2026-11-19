@@ -1,6 +1,7 @@
 /// <reference lib="deno.ns" />
 
 import {
+  ArgumentError,
   CapacityError,
   Component,
   ComponentDataError,
@@ -12,6 +13,7 @@ import {
   NotRegisteredError,
   Prefab,
   Query,
+  SpecError,
   World,
   WorldRollbackScope,
   WorldStateError,
@@ -169,12 +171,12 @@ Deno.test("Prefab rejects invalid definitions", () => {
   assertThrows(() => new Prefab({ components: [[position, { x: Number.NaN }]] }), ComponentDataError, "finite");
   assertThrows(() => new Prefab({ components: [[position, { x: "1" }]] } as never), ComponentDataError, "finite");
   assertThrows(() => new Prefab({ components: [[enemy, {}]] } as never), ComponentDataError, "no data storage");
-  assertThrows(() => new Prefab({ components: [[enemy], [enemy]] }), RangeError, "Duplicate");
+  assertThrows(() => new Prefab({ components: [[enemy], [enemy]] }), SpecError, "Duplicate");
   assertThrows(() => new Prefab({ components: [[position, { x: 1e300 }]] }), ComponentDataError, "storage range");
-  assertThrows(() => new Prefab({ components: [position] } as never), TypeError, "tuple");
-  assertThrows(() => new Prefab({ components: [[{}]] } as never), TypeError, "Component");
-  assertThrows(() => new Prefab({ components: {} } as never), TypeError, "array");
-  assertThrows(() => new Prefab({ extends: {}, components: [] } as never), TypeError, "Prefab");
+  assertThrows(() => new Prefab({ components: [position] } as never), SpecError, "tuple");
+  assertThrows(() => new Prefab({ components: [[{}]] } as never), SpecError, "Component");
+  assertThrows(() => new Prefab({ components: {} } as never), SpecError, "array");
+  assertThrows(() => new Prefab({ extends: {}, components: [] } as never), SpecError, "Prefab");
 });
 
 // --- Single instantiate ---
@@ -236,9 +238,9 @@ Deno.test("instantiate is atomic: rejected calls allocate nothing and publish no
   const before = observe(a);
   assertThrows(() => a.entities.instantiate(goblin, [[position, { z: 1 }]] as never), ComponentDataError, "z");
   assertThrows(() => a.entities.instantiate(goblin, [[position, { x: Number.NaN }]]), ComponentDataError, "finite");
-  assertThrows(() => a.entities.instantiate(goblin, [[enemy], [enemy]]), RangeError, "Duplicate");
+  assertThrows(() => a.entities.instantiate(goblin, [[enemy], [enemy]]), ArgumentError, "Duplicate");
   assertThrows(() => a.entities.instantiate(goblin, [[enemy, {}]] as never), ComponentDataError, "no data");
-  assertThrows(() => a.entities.instantiate(goblin, [position] as never), TypeError, "tuple");
+  assertThrows(() => a.entities.instantiate(goblin, [position] as never), ArgumentError, "tuple");
   const unregistered = new Prefab({ components: [[vec2Component("ghost")]] });
   assertThrows(() => a.entities.instantiate(unregistered), NotRegisteredError, "ghost");
   const ghostOverride = [[vec2Component("ghost2")]] as const;
@@ -248,8 +250,8 @@ Deno.test("instantiate is atomic: rejected calls allocate nothing and publish no
   a.entities.instantiateOrThrow(lonely);
   b.entities.createOrThrow([[leader]]);
   const afterLeader = observe(a);
-  assertThrows(() => a.entities.instantiate(lonely), RangeError, "leader");
-  assertThrows(() => a.entities.instantiate(goblin, [[leader]]), RangeError, "leader");
+  assertThrows(() => a.entities.instantiate(lonely), CapacityError, "leader");
+  assertThrows(() => a.entities.instantiate(goblin, [[leader]]), CapacityError, "leader");
   assertEquals(observe(a), afterLeader, "capped rejection left no trace");
   assert(JSON.stringify(before) !== JSON.stringify(afterLeader), "sanity: the leader instance is observable");
   assertEquals(observe(a), observe(b), "rejections are invisible");
@@ -278,7 +280,7 @@ Deno.test("instantiate supports capped (sparse) components and defaults", async 
   const second = world.entities.instantiateOrThrow(bigBoss, [[boss, { speed: 1 }]]);
   assertEquals(world.components.getEntityDataOrThrow(boss, first), { level: 9, speed: 2.5 }, "sparse defaults");
   assertEquals(world.components.getEntityDataOrThrow(boss, second), { level: 9, speed: 1 }, "sparse override merge");
-  assertThrows(() => world.entities.instantiate(bigBoss), RangeError, "bossStats");
+  assertThrows(() => world.entities.instantiate(bigBoss), CapacityError, "bossStats");
   world.entities.destroy(first);
   const third = world.entities.instantiateOrThrow(bigBoss);
   assertEquals(world.components.getEntityDataOrThrow(boss, third), { level: 9, speed: 2.5 }, "freed sparse row reused");
@@ -342,11 +344,11 @@ Deno.test("instantiateMany is all-or-nothing", async () => {
   assertStrictEquals(a.entities.instantiateMany(goblin, 8), undefined, "not enough room for 8");
   assertThrows(() => a.entities.instantiateManyOrThrow(goblin, 8), CapacityError, "capacity");
   const twoBosses = new Prefab({ components: [[boss, { level: 1 }]] });
-  assertThrows(() => a.entities.instantiateMany(twoBosses, 3), RangeError, "bossStats");
-  assertThrows(() => a.entities.instantiateMany(goblin, 3, [[leader]]), RangeError, "leader");
+  assertThrows(() => a.entities.instantiateMany(twoBosses, 3), CapacityError, "bossStats");
+  assertThrows(() => a.entities.instantiateMany(goblin, 3, [[leader]]), CapacityError, "leader");
   assertThrows(() => a.entities.instantiateMany(goblin, 2, [[position, { q: 1 }]] as never), ComponentDataError, "q");
-  assertThrows(() => a.entities.instantiateMany(goblin, -1), RangeError, "count");
-  assertThrows(() => a.entities.instantiateMany(goblin, 1.5), RangeError, "count");
+  assertThrows(() => a.entities.instantiateMany(goblin, -1), ArgumentError, "count");
+  assertThrows(() => a.entities.instantiateMany(goblin, 1.5), ArgumentError, "count");
   assertEquals(observe(a), before, "rejected bulk calls left no trace");
   assertStrictEquals(peekNextHandle(a), peekNextHandle(b), "no generation consumed");
 
@@ -415,9 +417,9 @@ Deno.test("EcsWorld.prefab and instantiate use named specs", async () => {
   assertStrictEquals(list.count, 3, "bulk");
   assert(game.world.components.entityHas("Flying", list.entities[2]!), "bulk override tag");
 
-  assertThrows(() => game.prefab({ Unknown: true } as never), Error, "Unknown component");
-  assertThrows(() => game.prefab({ Enemy: false } as never), TypeError, "must be spawned with true");
-  assertThrows(() => game.instantiate(orc, { Nope: { x: 1 } } as never), Error, "Unknown component");
+  assertThrows(() => game.prefab({ Unknown: true } as never), NotRegisteredError, "Unknown component");
+  assertThrows(() => game.prefab({ Enemy: false } as never), ComponentDataError, "must be spawned with true");
+  assertThrows(() => game.instantiate(orc, { Nope: { x: 1 } } as never), NotRegisteredError, "Unknown component");
   const plain = game.instantiateOrThrow(orc);
   assertEquals(game.world.components.getEntityDataOrThrow("Position", plain), { x: 1, y: 0 }, "no stale override");
 });

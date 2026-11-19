@@ -1,4 +1,4 @@
-import { EntityNotFoundError, formatEntityNotActive } from "@/errors.ts";
+import { ArgumentError, EntityNotFoundError, formatEntityNotActive, SpecError } from "@/errors.ts";
 import {
   asSlotIndex,
   createEntityArray,
@@ -40,15 +40,14 @@ export class EntityManager {
   /**
    * Create a new EntityManager
    * @param capacity - The maximum number of entities allowed in the pool (inclusive)
-   * @throws {TypeError} - If the capacity is not a Uint32 number
-   * @throws {RangeError} - If the capacity is not a positive integer or above 0 and below {@link EntityManager.MAX_CAPACITY}
+   * @throws {SpecError} - If the capacity is not a positive integer no greater than {@link EntityManager.MAX_CAPACITY}
    */
   constructor(capacity: number) {
     if (isUint32(capacity) === false) {
-      throw new TypeError("EntityManager capacity must be a number (uint32)");
+      throw new SpecError("EntityManager capacity must be a number (uint32)");
     }
     if (capacity <= 0 || capacity > EntityManager.MAX_CAPACITY) {
-      throw new RangeError(
+      throw new SpecError(
         `EntityManager capacity must be a positive integer, above 0 and below ${EntityManager.MAX_CAPACITY}`,
       );
     }
@@ -110,14 +109,14 @@ export class EntityManager {
    * get their own cursor and buffer
    * @param startSlot - Inclusive raw slot lower bound (default 0)
    * @param endSlot - Exclusive raw slot upper bound (default capacity)
-   * @throws {TypeError} - If either bound is not an integer
+   * @throws {ArgumentError} - If either bound is not an integer
    */
   getActive(
     startSlot: SlotIndex = asSlotIndex(0),
     endSlot: SlotIndex = asSlotIndex(this.#capacity),
   ): IterableIterator<Entity> {
     if (!Number.isInteger(startSlot) || !Number.isInteger(endSlot)) {
-      throw new TypeError(`Active entity bounds must be integer slot indices (got ${startSlot}, ${endSlot}).`);
+      throw new ArgumentError(`Active entity bounds must be integer slot indices (got ${startSlot}, ${endSlot}).`);
     }
     // Buffers are sized to the live population (an upper bound on any range), doubling up to capacity.
     const occupied = this.#slots.occupiedCount;

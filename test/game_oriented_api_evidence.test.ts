@@ -1,6 +1,7 @@
 /// <reference lib="deno.ns" />
 
 import {
+  ArgumentError,
   CapacityError,
   Component,
   ComponentDataError,
@@ -306,7 +307,7 @@ Deno.test("bundle validation rejects duplicate, unregistered, inactive, tag-data
         [Facing, { dir: 0 }],
         [Facing, { dir: 1 }],
       ]),
-    RangeError,
+    ArgumentError,
     "Duplicate component",
   );
   assert(!world.components.entityHas(Facing, entity), "Expected duplicate bundle to leave ownership unchanged");
@@ -351,7 +352,7 @@ Deno.test("bundle validation rejects duplicate, unregistered, inactive, tag-data
   cappedWorld.components.addBundle(first, [[limited, { value: 1 }]]);
   assertThrows(
     () => cappedWorld.entities.create([[limited, { value: 2 }]]),
-    RangeError,
+    CapacityError,
     "can only be added",
   );
   assertStrictEquals(

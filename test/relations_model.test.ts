@@ -1,6 +1,6 @@
 /// <reference lib="deno.ns" />
 
-import { type Entity, Query, Relation, type World, WorldRollbackScope } from "../mod.ts";
+import { type Entity, Query, Relation, RelationCycleError, type World, WorldRollbackScope } from "../mod.ts";
 import { createTestWorld } from "./fixtures.ts";
 import { assertEquals, listIds } from "./helpers.ts";
 
@@ -196,7 +196,7 @@ async function runSeed(seed: number, steps: number): Promise<void> {
         try {
           world.relations.add(defs[index]!, s, t, { weight });
         } catch (error) {
-          threw = error instanceof RangeError;
+          threw = error instanceof RelationCycleError;
         }
         assertEquals(threw, true, `${label}: cycle rejected`);
       } else {

@@ -167,6 +167,15 @@ Every creation method follows one rule: the plain name returns `undefined` when
 the world is full, and the `OrThrow` name throws `CapacityError`. Invalid input
 (unknown components, bad payloads, owner caps) throws from both.
 
+Every failure Miski throws is a `MiskiError`, so `isMiskiError(error)` tells
+library failures apart from errors your own hooks throw. The subclasses name the
+cause: `SpecError` (a schema, field, component, prefab, relation or world
+definition), `ArgumentError` (a malformed call argument), `ComponentDataError`
+(a bad payload), `CapacityError` (the world or a component's `maxEntities` is
+full), `EntityNotFoundError`, `NotRegisteredError`, `ComponentOwnershipError`,
+`RelationCycleError`, `AlreadyRegisteredError`, `WorldStateError` and
+`WorldSaveError`.
+
 > :warning: **House rule.** Components are fixed at world creation — the kitchen
 > closes after `new World`. Call `world.refresh()` (or wrap a tick in
 > `world.frame`) so entered / exited / changed stay fresh.

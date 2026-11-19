@@ -1,7 +1,9 @@
 /// <reference lib="deno.ns" />
 
 import {
+  ArgumentError,
   ComponentDataError,
+  ComponentOwnershipError,
   createEcsWorld,
   type Entity,
   entityIndex,
@@ -9,6 +11,7 @@ import {
   NotRegisteredError,
   Query,
   Relation,
+  RelationCycleError,
   SpecError,
   World,
   WorldRollbackScope,
@@ -183,7 +186,11 @@ Deno.test("relation data: add, read, write, changed", async () => {
   assertStrictEquals(world.relations.readDataInto(targets, a!, c!, out), true, "pair exists");
   assertEquals(out, { weight: 0, priority: 2 }, "partial writes keep other fields");
   assertEquals(ids(world.relations.getChanged(targets)), [a], "data writes mark the source changed");
-  assertThrows(() => world.relations.setData(targets, b!, c!, { weight: 1 }), RangeError, 'No "targets" pair');
+  assertThrows(
+    () => world.relations.setData(targets, b!, c!, { weight: 1 }),
+    ComponentOwnershipError,
+    'No "targets" pair',
+  );
   assertThrows(
     () => world.relations.add(targets, a!, b!, { weight: Number.NaN }),
     ComponentDataError,
@@ -302,8 +309,8 @@ Deno.test("acyclic relations reject self-pairs and cycles", async () => {
   const [a, b, c] = spawn(world, 3);
   world.relations.add(childOf, b!, a!);
   world.relations.add(childOf, c!, b!);
-  assertThrows(() => world.relations.add(childOf, a!, a!), RangeError, "cycle");
-  assertThrows(() => world.relations.add(childOf, a!, c!), RangeError, "cycle");
+  assertThrows(() => world.relations.add(childOf, a!, a!), RelationCycleError, "cycle");
+  assertThrows(() => world.relations.add(childOf, a!, c!), RelationCycleError, "cycle");
   assertStrictEquals(world.relations.hasAny(childOf, a!), false, "rejected add left no pair");
   // Moving a node elsewhere in its own branch is still allowed.
   world.relations.add(childOf, c!, a!);
@@ -314,13 +321,13 @@ Deno.test("generic component APIs refuse relation presence components", async ()
   const { world, likes } = await relationWorld();
   const [a, b] = spawn(world, 2);
   world.relations.add(likes, a!, b!);
-  assertThrows(() => world.components.addToEntity(likes, b!), TypeError, "world.relations");
-  assertThrows(() => world.components.removeFromEntity(likes, a!), TypeError, "world.relations");
-  assertThrows(() => world.components.addBundle(b!, [[likes]]), TypeError, "world.relations");
-  assertThrows(() => world.entities.create([[position, { x: 1, y: 1 }], [likes]]), TypeError, "world.relations");
+  assertThrows(() => world.components.addToEntity(likes, b!), ArgumentError, "world.relations");
+  assertThrows(() => world.components.removeFromEntity(likes, a!), ArgumentError, "world.relations");
+  assertThrows(() => world.components.addBundle(b!, [[likes]]), ArgumentError, "world.relations");
+  assertThrows(() => world.entities.create([[position, { x: 1, y: 1 }], [likes]]), ArgumentError, "world.relations");
   const list = world.entities.queryList(new Query({ all: [likes] }));
-  assertThrows(() => world.components.removeFromEntities(likes, list), TypeError, "world.relations");
-  assertThrows(() => world.components.addToEntities(likes, list), TypeError, "world.relations");
+  assertThrows(() => world.components.removeFromEntities(likes, list), ArgumentError, "world.relations");
+  assertThrows(() => world.components.addToEntities(likes, list), ArgumentError, "world.relations");
   assertStrictEquals(world.entities.getActiveCount(), 2, "the rejected create(bundle) allocated nothing");
   assertEquals(listIds(world.relations.getTargets(likes, a!)), [b], "relation state untouched");
 });
@@ -428,7 +435,7 @@ Deno.test("checkpoints refuse to restore a pair that would now close a cycle", a
   const checkpoint = world.captureCheckpoint([a], childOf);
   world.relations.removeAll(childOf, a);
   world.relations.add(childOf, b, a); // b is outside the checkpoint; restoring a -> b would close a cycle
-  assertThrows(() => world.applyCheckpoint(checkpoint), RangeError, "cycle");
+  assertThrows(() => world.applyCheckpoint(checkpoint), RelationCycleError, "cycle");
   assertStrictEquals(world.relations.hasAny(childOf, a), false, "failed apply mutated nothing");
   assertStrictEquals(world.relations.getTarget(childOf, b), a, "the outside pair is untouched");
 });

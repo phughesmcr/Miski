@@ -5,7 +5,8 @@
  * @license     MIT
  *
  * Public surface tiers:
- * - **Core** - World, Component, Query, System, entity handles, errors
+ * - **Core** - World, Component, Query, System, entity handles, errors (every library failure is a `MiskiError`;
+ *   test with `isMiskiError`)
  * - **Hot-path** - dense `queryList`, direct `instance.storage.partitions` writes, `frame`
  * - **Tooling** - `createEcsWorld`, schema hash, checkpoints, rollback, world saves, canonicalize
  * - **Scheduling** - `Schedule` (phases, ordering, fixed timestep), `CommandBuffer`
@@ -372,14 +373,15 @@
 export { Component, isValidComponentSpec } from "@/component/component.ts";
 export {
   AlreadyRegisteredError,
+  ArgumentError,
   CapacityError,
   ComponentDataError,
   ComponentOwnershipError,
   EntityNotFoundError,
   isMiskiError,
   MiskiError,
-  NoComponentsFoundError,
   NotRegisteredError,
+  RelationCycleError,
   SpecError,
   WorldStateError,
 } from "@/errors.ts";

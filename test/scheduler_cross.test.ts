@@ -1,6 +1,7 @@
 /// <reference lib="deno.ns" />
 
 import {
+  ArgumentError,
   CommandBuffer,
   Component,
   ComponentDataError,
@@ -93,7 +94,7 @@ Deno.test("command buffer x relations: relation presence tags are rejected when 
   const world = await createTestWorld(components);
   const commands = new CommandBuffer(world);
   const a = world.entities.createOrThrow();
-  assertThrows(() => commands.add(childOf, a), TypeError, "relation");
+  assertThrows(() => commands.add(childOf, a), ArgumentError, "relation");
   commands.add(unit, a, { hp: 9 });
   commands.flush();
   assert(!world.components.entityHas(childOf, a), "Relation tag not added without a pair");

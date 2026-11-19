@@ -18,7 +18,8 @@ export type WorldEntityAPI = {
    * capacity is checked, and the entity goes straight into its final archetype.
    * @returns the new entity, or `undefined` if the world is at capacity. Handle `0` is valid, so compare with
    * `=== undefined`, not truthiness.
-   * @throws {NotRegisteredError | TypeError | RangeError | ComponentDataError} - If the bundle is invalid
+   * @throws {NotRegisteredError | ArgumentError | CapacityError | ComponentDataError} - If the bundle is invalid or
+   * exceeds a component's owner cap
    */
   create<const TBundle extends readonly ComponentBundleEntryInput[] = readonly []>(
     bundle?: TBundle & ComponentBundle<TBundle>,

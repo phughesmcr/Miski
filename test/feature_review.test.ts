@@ -3,6 +3,7 @@
 // Regressions from the post-merge review of field types, relations, the scheduler, prefabs and world saves.
 
 import {
+  ArgumentError,
   CommandBuffer,
   Component,
   type DynamicComponent,
@@ -136,8 +137,8 @@ Deno.test("command buffers reject relation components when queuing, not at flush
   const world = await createTestWorld(components, 16);
   const commands = new CommandBuffer(world);
   const entity = world.entities.createOrThrow();
-  assertThrows(() => commands.add(childOf, entity), TypeError, "relation");
-  assertThrows(() => commands.remove(childOf, entity), TypeError, "relation");
-  assertThrows(() => commands.spawn([[tag], [childOf]]), TypeError, "relation");
+  assertThrows(() => commands.add(childOf, entity), ArgumentError, "relation");
+  assertThrows(() => commands.remove(childOf, entity), ArgumentError, "relation");
+  assertThrows(() => commands.spawn([[tag], [childOf]]), ArgumentError, "relation");
   assertStrictEquals(commands.pendingCount, 0, "Nothing queued");
 });

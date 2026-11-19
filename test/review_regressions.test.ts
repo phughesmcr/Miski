@@ -1,6 +1,6 @@
 /// <reference lib="deno.ns" />
 
-import { asSlotIndex, entityIndex, Query, SpecError, World, WorldRollbackScope } from "../mod.ts";
+import { ArgumentError, asSlotIndex, entityIndex, Query, SpecError, World, WorldRollbackScope } from "../mod.ts";
 import { createTestWorld, tagComponent, vec2Component } from "./fixtures.ts";
 import { assert, assertEquals, assertThrows } from "./helpers.ts";
 
@@ -101,8 +101,8 @@ Deno.test("rollback restore keeps the entity allocation cursor", async () => {
 Deno.test("getActive rejects non-integer bounds with a library error and keeps capacity as an exclusive end", async () => {
   const world = await createTestWorld([tagComponent("a")], 8);
   for (let i = 0; i < 4; i++) world.entities.createOrThrow();
-  assertThrows(() => world.entities.getActive(asSlotIndex(Number.NaN)), TypeError, "integer slot indices");
-  assertThrows(() => world.entities.getActive(asSlotIndex(0), asSlotIndex(2.5)), TypeError, "integer slot indices");
+  assertThrows(() => world.entities.getActive(asSlotIndex(Number.NaN)), ArgumentError, "integer slot indices");
+  assertThrows(() => world.entities.getActive(asSlotIndex(0), asSlotIndex(2.5)), ArgumentError, "integer slot indices");
   assertEquals(
     world.entities.getActiveSnapshot(asSlotIndex(1), asSlotIndex(world.entities.capacity)).map(entityIndex),
     [1, 2, 3],

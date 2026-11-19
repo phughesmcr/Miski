@@ -72,26 +72,34 @@ export const AlreadyRegisteredError: typeof MiskiError = createErrorClass(
 /** An error thrown when the world is in an invalid state */
 export const WorldStateError: typeof MiskiError = createErrorClass("WorldStateError", "World is in an invalid state");
 
-/** An error thrown when an entity does not own the requested component */
+/** An error thrown when an entity does not own the requested component or relation pair */
 export const ComponentOwnershipError: typeof MiskiError = createErrorClass(
   "ComponentOwnershipError",
   "Entity does not own component",
 );
 
-/** An error thrown when a component has no data storage */
+/** An error thrown when component or relation data is invalid, or a component has no data storage */
 export const ComponentDataError: typeof MiskiError = createErrorClass(
   "ComponentDataError",
   "Component has no data storage",
 );
 
-/** An error thrown when a query returned no components */
-export const NoComponentsFoundError: typeof MiskiError = createErrorClass(
-  "NoComponentsFoundError",
-  "Query returned no components",
-);
-
 /** An error thrown when something is not registered */
 export const NotRegisteredError: typeof MiskiError = createErrorClass("NotRegisteredError", "Not registered");
 
-/** An error thrown when the world's entity capacity is exhausted */
+/** An error thrown when the world's entity capacity, or a component's `maxEntities` owner cap, is exhausted */
 export const CapacityError: typeof MiskiError = createErrorClass("CapacityError", "World is at capacity");
+
+/** An error thrown when a call argument is malformed, such as a bundle, a batch list, a delta time or a handle */
+export const ArgumentError: typeof MiskiError = createErrorClass("ArgumentError", "Invalid argument");
+
+/** An error thrown when adding a pair to an acyclic relation would form a cycle */
+export const RelationCycleError: typeof MiskiError = createErrorClass(
+  "RelationCycleError",
+  "Relation pair would form a cycle",
+);
+
+/** Build the {@link CapacityError} for a component whose `maxEntities` owner cap would be exceeded */
+export function maxOwnersError(componentName: string, maxEntities: number): MiskiError {
+  return new CapacityError(`Component "${componentName}" can only be added to ${maxEntities} entities.`);
+}

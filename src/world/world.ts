@@ -678,7 +678,9 @@ export class World {
    *
    * @throws {EntityNotFoundError} - If a captured entity is no longer alive
    * @throws {CapacityError} - If a capped component would exceed its owner limit
-   * @throws {Error} - If the checkpoint was captured from another world, a payload is invalid, or a hook throws
+   * @throws {ArgumentError} - If the checkpoint was captured from another world
+   * @throws {ComponentDataError} - If a payload is invalid
+   * @throws {unknown} - Whatever a hook throws, unchanged
    */
   applyCheckpoint(checkpoint: ComponentCheckpoint): void {
     this.#assertInitialized();
