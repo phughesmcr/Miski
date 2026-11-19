@@ -66,7 +66,8 @@ Mutation pipeline (keep these boundaries when changing code):
 
 Borrowed vs snapshot iterators:
 
-- Hot paths return **borrowed** dense views (`queryList`, `getChanged`, `getOwners`, `getActive`) that are valid only until the next world mutation or `refresh`
+- Hot paths return **borrowed** dense views (`queryList`, `getChanged`, `getOwners`) that are valid only until the next world mutation or `refresh`
+- `query` and `getActive` return a pooled iterator per call, so nested loops are independent; it returns to its pool when the loop ends or breaks. `getActive` copies its handles; `query` reads the query's retained result, which re-querying after a mutation refills
 - `*Snapshot` / `querySnapshot` / `toArray` helpers allocate stable copies for tools, tests, and non-frame-critical code
 
 Layout sketch: `src/{world,component,entity,query,system,archetype,checkpoint,rollback,schema,value}/`. Demos live in `example/`; throughput and GC budgets in `bench/`. See [`test/README.md`](test/README.md) for how tests map to API domains.
