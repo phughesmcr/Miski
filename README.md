@@ -670,7 +670,7 @@ function loop(dt: number) {
   world is refreshed, and the first command error is rethrown. Callbacks run
   synchronously.
 - **Saves and rollback.** Supported between `run()` calls only. The
-  schedule's clock is not part of a world save or rollback point: keep
+  schedule's clock is not part of a world save or rollback scope: keep
   `schedule.getClock()` (plain data) alongside it, and after restoring call
   `schedule.setClock(clock)`. An `accumulator` of a whole `fixedStep` or more
   is reduced to its remainder (the whole steps are dropped). The schedule flushes its commands every phase,

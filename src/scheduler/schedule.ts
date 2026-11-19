@@ -109,7 +109,7 @@ function referenceNames(references: unknown, owner: string, relation: string): s
  * - **Destroyed systems** leave the schedule: once a system is unregistered from the world (destroyed, or its init
  *   failed), the schedule drops it, as if `remove()` had been called. Re-registering it does not re-add it.
  *
- * The schedule's clock and pending commands are not part of rollback points.
+ * The schedule's clock and pending commands are not part of rollback scopes.
  */
 export class Schedule {
   readonly #world: World;
@@ -214,7 +214,7 @@ export class Schedule {
   }
 
   /**
-   * A copy of the schedule's clock, as plain data. Save it with a world save or rollback point and pass it to
+   * A copy of the schedule's clock, as plain data. Save it with a world save or rollback scope and pass it to
    * {@link setClock} when restoring, so the schedule resumes exactly where it was.
    */
   getClock(): ScheduleClock {
