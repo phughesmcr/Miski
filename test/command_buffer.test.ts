@@ -8,21 +8,41 @@ import {
   ComponentDataError,
   ComponentOwnershipError,
   defineComponentSchema,
+  type DynamicComponent,
   type Entity,
   entityIndex,
+  EntityNotFoundError,
+  field,
   NotRegisteredError,
   type PendingEntity,
+  Prefab,
   Query,
+  Relation,
   SpecError,
   World,
 } from "../mod.ts";
-import { createEntity, createTestWorld, tagComponent, vec2Component } from "./fixtures.ts";
+import { createEntity, createTestWorld, Mesh, tagComponent, vec2Component } from "./fixtures.ts";
 import { assert, assertEquals, assertStrictEquals, assertThrows, ids } from "./helpers.ts";
 
 const position = vec2Component("position");
 const velocity = vec2Component("velocity");
 const tag = tagComponent("tag");
 const unregistered = tagComponent("unregistered");
+
+/** A unit with every field kind, for the field-type flush tests. */
+const unit = new Component({
+  name: "unit",
+  schema: {
+    hp: Uint16Array,
+    alive: field.bool(),
+    state: field.enum(["idle", "run"]),
+    target: field.entity(),
+    label: field.string(),
+    mesh: field.object<Mesh>(),
+  },
+});
+const childOf = new Relation({ name: "childOf", exclusive: true });
+const fieldComponents: DynamicComponent[] = [unit, childOf];
 
 async function setup(capacity = 16): Promise<{ world: World; commands: CommandBuffer }> {
   const world = await createTestWorld([position, velocity, tag], capacity);
@@ -394,4 +414,80 @@ Deno.test("command buffer passes non-numeric schema fields through a side column
   const owners = world.components.getOwnersSnapshot(point)!;
   assertEquals(world.components.getEntityDataOrThrow(point, owners[owners.length - 1]!), { x: 4, y: 0 }, "spawn path");
   await world.destroy();
+});
+
+Deno.test("command buffer x field types: every field kind applies at flush", async () => {
+  const world = await createTestWorld(fieldComponents);
+  const commands = new CommandBuffer(world);
+  const other = world.entities.createOrThrow();
+  const entity = world.entities.createOrThrow();
+  const mesh = new Mesh([3]);
+  commands.add(unit, entity, { hp: 4, alive: true, state: "run", target: other, label: "x", mesh });
+  commands.flush();
+  const data = world.components.getEntityDataOrThrow(unit, entity);
+  assertEquals(
+    { ...data, mesh: undefined },
+    { hp: 4, alive: true, state: "run", target: other, label: "x", mesh: undefined },
+    "Every field written",
+  );
+  assertStrictEquals(data.mesh, mesh, "Object fields are passed by reference");
+  commands.set(unit, entity, { label: "y", alive: false });
+  commands.flush();
+  assertEquals(world.components.getEntityDataOrThrow(unit, entity).label, "y", "set applies side fields");
+  assertEquals(world.components.getEntityDataOrThrow(unit, entity).alive, false, "set applies bool fields");
+});
+
+Deno.test("command buffer x field types: an entity ref whose target died before flush is written as null", async () => {
+  const world = await createTestWorld(fieldComponents);
+  const commands = new CommandBuffer(world);
+  const target = world.entities.createOrThrow();
+  const a = world.entities.createOrThrow();
+  const b = world.entities.createOrThrow();
+  commands.add(unit, a, { hp: 1, target });
+  commands.destroy(target);
+  commands.add(unit, b, { hp: 2, target });
+  commands.flush(); // must not throw
+  assertEquals(
+    world.components.getEntityDataOrThrow(unit, a).target,
+    null,
+    "Ref killed later in the same flush reads null",
+  );
+  assertEquals(world.components.getEntityDataOrThrow(unit, b), {
+    hp: 2,
+    alive: false,
+    state: "idle",
+    target: null,
+    label: "",
+    mesh: null,
+  }, "Dead target written as null; the rest of the payload applies");
+  // Direct guarded writes still reject dead handles.
+  assertThrows(() => world.components.setEntityData(unit, a, { target }), EntityNotFoundError, "");
+});
+
+Deno.test("command buffer x field types: a bad field value drains the queue, then rethrows", async () => {
+  const world = await createTestWorld(fieldComponents);
+  const commands = new CommandBuffer(world);
+  const a = world.entities.createOrThrow();
+  const b = world.entities.createOrThrow();
+  commands.add(unit, a, { state: "fly" as "idle" });
+  commands.add(unit, b, { label: "ok" });
+  assertThrows(() => commands.flush(), ComponentDataError, "unit");
+  assertEquals(world.components.entityHas(unit, a), false, "Failed command left its entity unchanged");
+  assertEquals(world.components.getEntityDataOrThrow(unit, b).label, "ok", "Later commands still applied");
+  assertStrictEquals(commands.pendingCount, 0, "Queue drained");
+});
+
+Deno.test("command buffer x prefabs: spawned bundles and prefab instances agree on field defaults", async () => {
+  const world = await createTestWorld(fieldComponents);
+  const commands = new CommandBuffer(world);
+  const prefab = new Prefab({ components: [[unit, { hp: 5, label: "p" }]] });
+  commands.spawn([[unit, { hp: 5, label: "p" }]]);
+  commands.flush();
+  const spawned = world.components.getOwnersSnapshot(unit)![0]!;
+  const instance = world.entities.instantiateOrThrow(prefab);
+  assertEquals(
+    world.components.getEntityDataOrThrow(unit, spawned),
+    world.components.getEntityDataOrThrow(unit, instance),
+    "Same values either way",
+  );
 });

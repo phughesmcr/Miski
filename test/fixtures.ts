@@ -45,3 +45,36 @@ export async function createTestWorld(
   await world.init();
   return world;
 }
+
+export type GridPosValue = { x: number; y: number };
+export type GridPosStorage = { x: Int16ArrayConstructor; y: Int16ArrayConstructor };
+export type FacingValue = { dir: 0 | 1 | 2 | 3 };
+export type FacingStorage = { dir: Uint8ArrayConstructor };
+type HealthValue = { hp: number };
+type HealthStorage = { hp: Uint16ArrayConstructor };
+
+/** Grid-game components with branded value types: position, facing, a drawable tag, health and a door tag. */
+export function gameComponents(): {
+  GridPos: Component<GridPosValue, GridPosStorage>;
+  Facing: Component<FacingValue, FacingStorage>;
+  Drawable: Component<null>;
+  Health: Component<HealthValue, HealthStorage>;
+  Door: Component<null>;
+} {
+  return {
+    GridPos: new Component<GridPosValue, GridPosStorage>({
+      name: "gridPos",
+      schema: { x: Int16Array, y: Int16Array },
+    }),
+    Facing: new Component<FacingValue, FacingStorage>({
+      name: "facing",
+      schema: { dir: Uint8Array },
+    }),
+    Drawable: new Component<null>({ name: "drawable" }),
+    Health: new Component<HealthValue, HealthStorage>({
+      name: "health",
+      schema: { hp: Uint16Array },
+    }),
+    Door: new Component<null>({ name: "door" }),
+  };
+}

@@ -2,7 +2,7 @@
 
 import { type DynamicComponent, type Entity, entityIndex, Query, type World, WorldRollbackScope } from "../mod.ts";
 import { createTestWorld, tagComponent, vec2Component } from "./fixtures.ts";
-import { assertEquals } from "./helpers.ts";
+import { assert, assertEquals } from "./helpers.ts";
 
 type Rng = () => number;
 
@@ -138,4 +138,79 @@ Deno.test("committing a rollback scope leaves allocation and iteration order unt
     step(subject, b, components.length);
     assertEquals(observe(subject.world), observe(control.world), `Continuation diverged at step ${i}`);
   }
+});
+
+function medianMs(fn: () => void, runs = 15): number {
+  const times: number[] = [];
+  for (let i = 0; i < runs; i++) {
+    const start = performance.now();
+    fn();
+    times.push(performance.now() - start);
+  }
+  times.sort((a, b) => a - b);
+  return times[runs >> 1]!;
+}
+
+type RollbackCost = { readonly commit: number; readonly restore: number };
+
+async function rollbackCost(capacity: number): Promise<RollbackCost> {
+  const position = vec2Component("position");
+  const velocity = vec2Component("velocity");
+  const world = await createTestWorld([position, velocity], capacity);
+  for (let i = 0; i < 1000; i++) {
+    world.entities.createOrThrow([[position, { x: i, y: i }], [velocity, { x: 1, y: 1 }]]);
+  }
+  const commit = medianMs(() => new WorldRollbackScope(world).commit());
+  const restore = medianMs(() => new WorldRollbackScope(world).restore());
+  await world.destroy();
+  return { commit, restore };
+}
+
+Deno.test("rollback cost does not scale with world capacity", async () => {
+  await rollbackCost(1024); // warm up
+  const small = await rollbackCost(1024);
+  const large = await rollbackCost(65536);
+  // Same 1000 entities at 64x the capacity. Typed-array copies stay under ~0.6 ms here; the old
+  // JSON/Array.from copies of every slot took ~7 ms to capture and ~15 ms to restore.
+  for (const phase of ["commit", "restore"] as const) {
+    assert(
+      large[phase] < small[phase] * 10 + 1.5,
+      `capture + ${phase} at 65536 took ${large[phase].toFixed(2)} ms vs ${small[phase].toFixed(2)} ms at 1024`,
+    );
+  }
+});
+
+Deno.test("rollback restore keeps query iteration order for reordered archetypes", async () => {
+  const a = tagComponent("a");
+  const world = await createTestWorld([a], 16);
+  const entities = [0, 1, 2].map(() => world.entities.createOrThrow([[a]]));
+  world.components.removeFromEntity(a, entities[0]!);
+  world.components.addToEntity(a, entities[0]!);
+  world.refresh();
+
+  const query = new Query({ all: [a] });
+  const order = (): number[] => {
+    const list = world.entities.queryList(query);
+    return Array.from({ length: list.count }, (_, i) => list.slots[i]!);
+  };
+  const before = order();
+  new WorldRollbackScope(world).restore();
+  assertEquals(order(), before, "A no-op rollback must not reorder query iteration");
+});
+
+Deno.test("rollback restore keeps the entity allocation cursor", async () => {
+  const control = await createTestWorld([tagComponent("a")], 16);
+  const subject = await createTestWorld([tagComponent("a")], 16);
+  for (const world of [control, subject]) {
+    const entities = [0, 1, 2, 3, 4].map(() => world.entities.createOrThrow());
+    world.entities.destroy(entities[1]!);
+    world.entities.destroy(entities[3]!);
+  }
+  const point = new WorldRollbackScope(subject);
+  subject.entities.createOrThrow();
+  subject.entities.createOrThrow();
+  point.restore();
+
+  const next = (world: World): number[] => [0, 1, 2].map(() => entityIndex(world.entities.createOrThrow()));
+  assertEquals(next(subject), next(control), "Rollback must restore the next slots handed out");
 });

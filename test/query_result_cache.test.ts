@@ -17,7 +17,7 @@ import { EntityManager } from "../src/entity/entity-manager.ts";
 import { QueryManager } from "../src/query/query-manager.ts";
 import { QueryEntityResult } from "../src/query/query-result.ts";
 import { createEntity, createTestWorld, tagComponent, vec2Component } from "./fixtures.ts";
-import { assert, assertEquals, assertStrictEquals, assertThrows, listIds } from "./helpers.ts";
+import { assert, assertEquals, assertStrictEquals, assertThrows, ids, listIds } from "./helpers.ts";
 
 function sorted(iterable: Iterable<number>): number[] {
   return [...iterable].toSorted((a, b) => a - b);
@@ -459,4 +459,46 @@ Deno.test("systems see every match after their query result grows", async () => 
   update();
   assertEquals(seen, [[expected[0]!], expected], "The second run sees the grown result");
   await world.destroy();
+});
+
+Deno.test("query entity results retain their buffer across invalidation", async () => {
+  const position = vec2Component();
+  const world = await createTestWorld([position], 8);
+  const query = new Query({ all: [position] });
+  const bindings = world.components.query(query);
+  const first = world.entities.queryList(query);
+  assertStrictEquals(world.entities.queryList(query), first, "unchanged queries reuse the result");
+  const entity = world.entities.createOrThrow();
+  world.components.addToEntity(position, entity, { x: 1, y: 2 });
+  const filled = world.entities.queryList(query);
+  assertStrictEquals(filled, first, "invalidated queries refill the retained result");
+  assertEquals(listIds(filled), [entity], "refill reflects membership");
+  assertStrictEquals(world.components.query(query), bindings, "immutable bindings are retained independently");
+  const snapshot = world.entities.querySnapshot(query);
+  world.entities.destroy(entity);
+  assertStrictEquals(world.entities.queryList(query), first, "removal also retains the result");
+  assertEquals(listIds(first), [], "removal clears the valid prefix");
+  assertEquals(snapshot, [entity], "snapshots retain stable identity after mutation");
+  await world.destroy();
+});
+
+Deno.test("component query cache access does not freshen stale entity query results", async () => {
+  const position = vec2Component();
+  const velocity = vec2Component("velocity");
+  const world = await createTestWorld([position, velocity], 8);
+
+  const entity = createEntity(world);
+  const moving = new Query({ all: [position, velocity] });
+
+  world.components.addToEntity(position, entity, { x: 1, y: 2 });
+  assertEquals(ids(world.entities.query(moving)), [], "Expected moving query to cache an empty result");
+
+  world.components.addToEntity(velocity, entity, { x: 3, y: 4 });
+  world.components.query(moving);
+
+  assertEquals(
+    ids(world.entities.query(moving)),
+    [entity],
+    "Expected component query cache access to leave entity cache invalidation intact",
+  );
 });

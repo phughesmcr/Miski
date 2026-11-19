@@ -3,16 +3,28 @@
 import {
   ArgumentError,
   CapacityError,
+  Component,
+  type ComponentBundleEntryInput,
   ComponentDataError,
   type Entity,
+  EntityNotFoundError,
+  NotRegisteredError,
   Query,
   SpecError,
   type World,
   WorldRollbackScope,
 } from "../mod.ts";
 import { Archetype } from "../src/archetype/archetype.ts";
-import { createEntity, createTestWorld, tagComponent, vec2Component } from "./fixtures.ts";
-import { assert, assertEquals, assertThrows, ids } from "./helpers.ts";
+import {
+  createEntity,
+  createTestWorld,
+  gameComponents,
+  type GridPosStorage,
+  type GridPosValue,
+  tagComponent,
+  vec2Component,
+} from "./fixtures.ts";
+import { assert, assertEquals, assertStrictEquals, assertThrows, ids, listIds } from "./helpers.ts";
 
 function sorted(values: Iterable<number>): number[] {
   return [...values].sort((a, b) => a - b);
@@ -249,6 +261,11 @@ Deno.test("full-world bundle creation reports payload errors before capacity err
     "outside its storage range",
   );
   assertThrows(
+    () => world.entities.createOrThrow([[position, { x: Number.MAX_VALUE }]]),
+    ComponentDataError,
+    "outside its storage range",
+  );
+  assertThrows(
     () => world.entities.createOrThrow([[position, { nope: 1 } as never]]),
     ComponentDataError,
     "nope",
@@ -363,4 +380,251 @@ Deno.test("incremental query membership matches a brute-force model across rando
   }
   verify(active);
   await world.destroy();
+});
+
+Deno.test("bundles and spawn APIs preflight before mutation and move once to the final archetype", async () => {
+  const { Drawable, Facing, GridPos, Health } = gameComponents();
+  const world = await createTestWorld([GridPos, Facing, Drawable, Health], 8);
+  const intermediate = new Query({ all: [GridPos], none: [Drawable] });
+  assertEquals(listIds(world.entities.queryList(intermediate)), [], "Expected intermediate query to be registered");
+
+  const entity = createEntity(world);
+  world.components.addBundle(entity, [
+    [GridPos, { x: 1, y: 2 }],
+    [Facing, { dir: 1 }],
+    [Drawable],
+  ]);
+
+  assertEquals(world.components.getEntityDataOrThrow(GridPos, entity), { x: 1, y: 2 }, "Expected bundle data");
+  assertEquals(world.components.getEntityDataOrThrow(Facing, entity), { dir: 1 }, "Expected branded bundle data");
+  assertEquals(ids(world.components.getChanged(GridPos)), [entity], "Expected bundle data to be changed");
+  assertEquals(ids(world.components.getChanged(Facing)), [entity], "Expected branded bundle data to be changed");
+  assertEquals(
+    ids(world.entities.queryExited(intermediate)),
+    [],
+    "Expected bundle add to skip intermediate archetype transitions",
+  );
+
+  world.refresh();
+  world.components.addBundle(entity, [
+    [GridPos, { x: 5 }],
+    [Drawable],
+  ]);
+  assertEquals(world.components.getEntityDataOrThrow(GridPos, entity), { x: 5, y: 2 }, "Expected bundle upsert");
+  assertEquals(ids(world.components.getChanged(GridPos)), [entity], "Expected upsert data to mark changed");
+
+  const spawned = world.entities.create([
+    [GridPos, { x: 9, y: 10 }],
+    [Facing, { dir: 2 }],
+    [Drawable],
+  ]);
+  assert(spawned !== undefined, "Expected create(bundle) to return an entity");
+  assertEquals(
+    world.components.getEntityDataOrThrow(Facing, spawned),
+    { dir: 2 },
+    "Expected create(bundle) bundle data",
+  );
+
+  const spawnedOrThrow = world.entities.createOrThrow([
+    [GridPos, { x: 11, y: 12 }],
+    [Health, { hp: 100 }],
+  ]);
+  assertEquals(
+    world.components.getEntityDataOrThrow(Health, spawnedOrThrow),
+    { hp: 100 },
+    "Expected create(bundle)OrThrow data",
+  );
+});
+
+Deno.test("bundle validation rejects duplicate, unregistered, inactive, tag-data, capped, and full-world cases atomically", async () => {
+  const { Drawable, Facing, GridPos } = gameComponents();
+  const unregistered = new Component<GridPosValue, GridPosStorage>({
+    name: "unregisteredGridPos",
+    schema: { x: Int16Array, y: Int16Array },
+  });
+  const world = await createTestWorld([GridPos, Facing, Drawable], 8);
+  const entity = createEntity(world);
+  const inactive = createEntity(world);
+  world.components.addBundle(entity, [[GridPos, { x: 1, y: 2 }]]);
+  world.refresh();
+  world.entities.destroy(inactive);
+
+  assertThrows(
+    () =>
+      world.components.addBundle(entity, [
+        [Facing, { dir: 0 }],
+        [Facing, { dir: 1 }],
+      ]),
+    ArgumentError,
+    "Duplicate component",
+  );
+  assert(!world.components.entityHas(Facing, entity), "Expected duplicate bundle to leave ownership unchanged");
+
+  assertThrows(
+    () => world.components.addBundle(entity, [[unregistered, { x: 9, y: 9 }]]),
+    NotRegisteredError,
+    "not registered",
+  );
+  assertEquals(
+    world.components.getEntityDataOrThrow(GridPos, entity),
+    { x: 1, y: 2 },
+    "Expected unregistered bundle atomicity",
+  );
+
+  assertThrows(
+    () => world.components.addBundle(inactive, [[Facing, { dir: 2 }]]),
+    EntityNotFoundError,
+    "is not active",
+  );
+  assertThrows(
+    () =>
+      (
+        world.components.addBundle as unknown as (
+          target: number,
+          bundle: readonly ComponentBundleEntryInput[],
+        ) => void
+      )(entity, [[Drawable, {}]] as unknown as readonly ComponentBundleEntryInput[]),
+    ComponentDataError,
+    "has no data storage",
+  );
+  assert(!world.components.entityHas(Drawable, entity), "Expected tag-data bundle to leave ownership unchanged");
+
+  const limited = new Component<{ value: number }, { value: Uint8ArrayConstructor }>({
+    name: "limited",
+    schema: { value: Uint8Array },
+    maxOwners: 1,
+  });
+  const cappedWorld = await createTestWorld([limited], 8);
+  const first = createEntity(cappedWorld);
+  const beforeActive = cappedWorld.entities.getActiveCount();
+  cappedWorld.components.addBundle(first, [[limited, { value: 1 }]]);
+  assertThrows(
+    () => cappedWorld.entities.create([[limited, { value: 2 }]]),
+    CapacityError,
+    "can only be added",
+  );
+  assertStrictEquals(
+    cappedWorld.entities.getActiveCount(),
+    beforeActive,
+    "Expected failed create(bundle) to roll back the new entity",
+  );
+
+  const fullWorld = await createTestWorld([GridPos], 8);
+  for (let i = 0; i < 8; i++) {
+    fullWorld.entities.createOrThrow();
+  }
+  assertStrictEquals(fullWorld.entities.create([[GridPos, { x: 1, y: 1 }]]), undefined, "Expected soft cap");
+  assertThrows(
+    () => fullWorld.entities.createOrThrow([[GridPos, { x: 1, y: 1 }]]),
+    CapacityError,
+    "capacity",
+  );
+});
+
+Deno.test("query entered and exited entities remain visible until explicit refresh", async () => {
+  const position = vec2Component();
+  const velocity = vec2Component("velocity");
+  const world = await createTestWorld([position, velocity], 8);
+
+  const entity = createEntity(world);
+  const query = new Query({ all: [position] });
+
+  world.components.addToEntity(position, entity);
+  assertEquals(ids(world.entities.query(query)), [entity], "Expected entity to match position query");
+  assertEquals(ids(world.entities.queryEntered(query)), [entity], "Expected entity to appear in entered query");
+
+  world.refresh();
+  assertEquals(ids(world.entities.queryEntered(query)), [], "Expected entered query to clear after refresh");
+
+  world.components.removeFromEntity(position, entity);
+  assertEquals(ids(world.entities.query(query)), [], "Expected entity to stop matching position query");
+  assertEquals(ids(world.entities.queryExited(query)), [entity], "Expected entity to appear in exited query");
+
+  world.refresh();
+  assertEquals(ids(world.entities.queryExited(query)), [], "Expected exited query to clear after refresh");
+});
+
+Deno.test("registering a new query preserves pending entered and exited visibility", async () => {
+  const position = vec2Component();
+  const velocity = vec2Component("velocity");
+  const world = await createTestWorld([position, velocity], 8);
+
+  const entity = createEntity(world);
+  const positionQuery = new Query({ all: [position] });
+
+  world.components.addToEntity(position, entity, { x: 1, y: 2 });
+  assertEquals(
+    ids(world.entities.query(new Query({ all: [velocity] }))),
+    [],
+    "Expected new velocity query to register",
+  );
+  assertEquals(ids(world.entities.queryEntered(positionQuery)), [entity], "Expected entered state to remain visible");
+
+  world.refresh();
+  world.components.removeFromEntity(position, entity);
+  assertEquals(
+    ids(world.entities.query(new Query({ any: [position, velocity] }))),
+    [],
+    "Expected new any query to register",
+  );
+  assertEquals(ids(world.entities.queryExited(positionQuery)), [entity], "Expected exited state to remain visible");
+});
+
+Deno.test("clean refresh preserves query results and clears changed and transition state", async () => {
+  const position = vec2Component();
+  const world = await createTestWorld([position], 8);
+
+  const entity = createEntity(world);
+  const query = new Query({ all: [position] });
+  world.components.addToEntity(position, entity, { x: 1, y: 2 });
+
+  assertEquals(ids(world.entities.query(query)), [entity], "Expected query to cache current owner");
+  assertEquals(ids(world.components.getChanged(position)), [entity], "Expected ownership add to mark changed");
+  assertEquals(ids(world.entities.queryEntered(query)), [entity], "Expected transition to be visible before refresh");
+
+  world.refresh();
+
+  assertEquals(ids(world.entities.query(query)), [entity], "Expected clean refresh to preserve query result behavior");
+  assertEquals(ids(world.components.getChanged(position)), [], "Expected refresh to clear changed state");
+  assertEquals(ids(world.entities.queryEntered(query)), [], "Expected refresh to clear entered state");
+});
+
+Deno.test("component transitions update cached query results immediately", async () => {
+  const position = vec2Component();
+  const velocity = vec2Component("velocity");
+  const world = await createTestWorld([position, velocity], 8);
+
+  const entity = createEntity(world);
+  world.components.addToEntity(position, entity, { x: 1, y: 2 });
+  world.refresh();
+
+  const moving = new Query({ all: [position, velocity] });
+  assertEquals(ids(world.entities.query(moving)), [], "Expected initial cached query to be empty");
+
+  world.components.addToEntity(velocity, entity, { x: 3, y: 4 });
+  assertEquals(ids(world.entities.query(moving)), [entity], "Expected add transition to update cached query");
+
+  world.components.removeFromEntity(velocity, entity);
+  assertEquals(ids(world.entities.query(moving)), [], "Expected remove transition to update cached query");
+});
+
+Deno.test("queryExited ignores archetype exits while the entity still matches the query", async () => {
+  const position = vec2Component();
+  const velocity = vec2Component("velocity");
+  const renderable = tagComponent("renderable");
+  const world = await createTestWorld([position, velocity, renderable], 8);
+
+  const entity = createEntity(world);
+  const query = new Query({ any: [position, velocity] });
+
+  world.components.addToEntity(position, entity);
+  world.components.addToEntity(velocity, entity);
+  world.components.addToEntity(renderable, entity);
+  world.refresh();
+
+  world.components.removeFromEntity(renderable, entity);
+  world.components.removeFromEntity(velocity, entity);
+
+  assertEquals(ids(world.entities.query(query)), [entity], "Expected entity to still match through position");
+  assertEquals(ids(world.entities.queryExited(query)), [], "Expected no query exit while still matching");
 });

@@ -1,9 +1,10 @@
 /// <reference lib="deno.ns" />
 
-import { Query, System, World, WorldStateError } from "../mod.ts";
+import { asEntity, Query, System, World, WorldStateError } from "../mod.ts";
 import type { SystemHook } from "../mod.ts";
-import { tagComponent } from "./fixtures.ts";
-import { assert, assertEquals, assertRejects, assertThrows } from "./helpers.ts";
+import { createTestWorld, tagComponent, vec2Component } from "./fixtures.ts";
+import { assert, assertEquals, assertRejects, assertThrows, ids } from "./helpers.ts";
+import { ArchetypeManager } from "../src/archetype/archetype-manager.ts";
 
 Deno.test("world teardown closes system registration and rejects concurrent teardown", async () => {
   const tag = tagComponent("tag");
@@ -808,4 +809,38 @@ Deno.test("async disposal rejects during a running destroy() and works after in-
   assertEquals(failed.state, "error", "Failed init leaves the error state");
   await failed[Symbol.asyncDispose]();
   assertEquals(failed.state, "destroyed", "Disposal cleans up an errored world");
+});
+
+Deno.test("failed refresh blocks lifecycle APIs like destroy errors", async () => {
+  const position = vec2Component();
+  const query = new Query({ all: [position] });
+  const originalRefresh = ArchetypeManager.prototype.refresh;
+
+  const world = await createTestWorld([position]);
+
+  ArchetypeManager.prototype.refresh = function refresh(): ArchetypeManager {
+    throw new Error("refresh failed");
+  };
+
+  try {
+    assertThrows(() => world.refresh(), Error, "refresh failed");
+    assertEquals(world.state, "error", "Expected failed refresh to move world into error state");
+    assertThrows(() => world.entities.create(), WorldStateError, "World has encountered an error");
+    assertThrows(
+      () => world.components.addToEntity(position, asEntity(0)),
+      WorldStateError,
+      "World has encountered an error",
+    );
+    assertThrows(() => ids(world.entities.query(query)), WorldStateError, "World has encountered an error");
+  } finally {
+    ArchetypeManager.prototype.refresh = originalRefresh;
+  }
+});
+
+Deno.test("world.onReady rejects after the world has been destroyed", async () => {
+  const position = vec2Component();
+  const world = await createTestWorld([position], 8);
+  await world.destroy();
+
+  await assertRejects(() => world.onReady(), WorldStateError, 'state is "destroyed"');
 });

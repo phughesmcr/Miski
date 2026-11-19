@@ -1,19 +1,25 @@
 /// <reference lib="deno.ns" />
 
 import {
+  ArgumentError,
   asEntity,
+  canonicalizeStoredValue,
+  CapacityError,
   compileComponentSchema,
   Component,
   ComponentDataError,
   ComponentOwnershipError,
   type DynamicComponent,
   entityIndex,
+  EntityNotFoundError,
   NotRegisteredError,
+  Query,
+  type QueryEntityList,
   SpecError,
   WorldRollbackScope,
 } from "../mod.ts";
 import { createEntity, createTestWorld, tagComponent, vec2Component } from "./fixtures.ts";
-import { assert, assertEquals, assertThrows, ids } from "./helpers.ts";
+import { assert, assertEquals, assertStrictEquals, assertThrows, ids } from "./helpers.ts";
 
 Deno.test("component schemas reject proxy cursor fields at every constructor boundary", () => {
   for (const key of ["entity", "slot"]) {
@@ -243,4 +249,328 @@ Deno.test("component lookup works whether the world's definition ids are compact
     assert(!world.components.isRegistered(missing), `${missing.name} is not registered`);
     assertEquals(world.components.getInstance(missing), undefined, "an unregistered lookup is undefined");
   }
+});
+
+Deno.test("canonicalizeStoredValue coerces through typed storage", () => {
+  const scratch = new Int8Array(1);
+  assertStrictEquals(canonicalizeStoredValue("Face", "dir", -0, scratch), 0, "-0 becomes 0");
+  assertStrictEquals(
+    canonicalizeStoredValue("Face", "dir", 999, scratch),
+    -25,
+    "Int8 truncates overflow to stored bits",
+  );
+  assertThrows(
+    () => canonicalizeStoredValue("Face", "dir", Number.NaN, scratch),
+    ComponentDataError,
+    "finite number",
+  );
+  const floatScratch = new Float32Array(1);
+  assertThrows(
+    () => canonicalizeStoredValue("Pos", "x", Number.POSITIVE_INFINITY, floatScratch),
+    ComponentDataError,
+    "finite number",
+  );
+});
+
+Deno.test("public component writes reject invalid data instead of silently discarding it", async () => {
+  const position = vec2Component();
+  const renderable = tagComponent("renderable");
+  const renderableAsData = renderable as unknown as typeof position;
+  const world = await createTestWorld([position, renderable], 8);
+  const entity = createEntity(world);
+
+  assertThrows(
+    () => world.components.addToEntity(renderableAsData, entity, {}),
+    ComponentDataError,
+    "has no data storage",
+  );
+  assertThrows(
+    () => world.components.addToEntity(position, entity, { z: 1 } as never),
+    ComponentDataError,
+    'does not define data field "z"',
+  );
+  assertThrows(
+    () => world.components.addToEntity(position, entity, { constructor: 1 } as never),
+    ComponentDataError,
+    'does not define data field "constructor"',
+  );
+
+  world.components.addToEntity(position, entity, { x: 1, y: 2 });
+
+  assertThrows(
+    () => world.components.setEntityData(position, entity, { x: undefined } as never),
+    ComponentDataError,
+    'data field "x" cannot be undefined',
+  );
+  assertThrows(
+    () => world.components.setEntityData(position, entity, { constructor: 1 } as never),
+    ComponentDataError,
+    'does not define data field "constructor"',
+  );
+  const inheritedData = Object.create({ x: 99, z: 3 }) as Partial<{ x: number; y: number }>;
+  world.components.setEntityData(position, entity, inheritedData);
+  assertThrows(
+    () =>
+      world.components.addToEntities(
+        renderableAsData,
+        { count: 1, entities: [entity], slots: [entityIndex(entity)] },
+        {},
+      ),
+    ComponentDataError,
+    "has no data storage",
+  );
+  assertEquals(
+    world.components.getEntityDataOrThrow(position, entity),
+    { x: 1, y: 2 },
+    "Expected failed and inherited-property writes to be inert",
+  );
+});
+
+Deno.test("components cannot be added to inactive entities", async () => {
+  const position = vec2Component();
+  const world = await createTestWorld([position], 8);
+
+  assert(!world.entities.isActive(asEntity(3)), "Expected entity 3 to be inactive");
+  assertThrows(
+    () => world.components.addToEntity(position, asEntity(3), { x: 1, y: 2 }),
+    EntityNotFoundError,
+    "Entity 3 is not active.",
+  );
+
+  assertEquals(ids(world.entities.query(new Query({ all: [position] }))), [], "Expected inactive entity to not match");
+});
+
+Deno.test("component removal rejects inactive entities and stays idempotent for active non-owners", async () => {
+  const position = vec2Component();
+  const velocity = vec2Component("velocity");
+  const world = await createTestWorld([position, velocity], 8);
+
+  const owner = createEntity(world);
+  const nonOwner = createEntity(world);
+  world.components.addToEntity(position, owner, { x: 1, y: 2 });
+  world.components.addToEntity(position, nonOwner, { x: 3, y: 4 });
+  world.components.addToEntity(velocity, owner, { x: 5, y: 6 });
+
+  assertThrows(
+    () => world.components.removeFromEntity(velocity, asEntity(7)),
+    EntityNotFoundError,
+    "Entity 7 is not active.",
+  );
+
+  world.components.removeFromEntity(velocity, nonOwner);
+  assert(world.components.entityHas(position, nonOwner), "Expected non-owner removal to leave other ownership intact");
+  assert(!world.components.entityHas(velocity, nonOwner), "Expected non-owner to remain without velocity");
+
+  const list: QueryEntityList = {
+    count: 2,
+    entities: new Uint32Array([owner, nonOwner]),
+    slots: new Uint32Array([owner, nonOwner]),
+  };
+  assertEquals(world.components.removeFromEntities(velocity, list), 1, "Expected only actual owners to be removed");
+  assert(!world.components.entityHas(velocity, owner), "Expected owner to lose velocity");
+  assert(world.components.entityHas(position, owner), "Expected batch removal to leave other ownership intact");
+});
+
+Deno.test("batch component removal rejects inactive entities without partial mutation", async () => {
+  const position = vec2Component();
+  const world = await createTestWorld([position], 8);
+
+  const first = createEntity(world);
+  world.components.addToEntity(position, first, { x: 1, y: 2 });
+
+  const list: QueryEntityList = {
+    count: 2,
+    entities: new Uint32Array([first, 7]),
+    slots: new Uint32Array([first, 7]),
+  };
+  assertThrows(
+    () => world.components.removeFromEntities(position, list),
+    EntityNotFoundError,
+    "Entity 7 is not active.",
+  );
+  assert(world.components.entityHas(position, first), "Expected failed batch removal to leave ownership intact");
+  assertEquals(
+    ids(world.entities.query(new Query({ all: [position] }))),
+    [first],
+    "Expected query state to stay intact",
+  );
+});
+
+Deno.test("batch component add capacity failures leave all state unchanged", async () => {
+  const player = tagComponent("player", { maxOwners: 1 });
+  const world = await createTestWorld([player], 8);
+
+  const first = createEntity(world);
+  const second = createEntity(world);
+
+  const list: QueryEntityList = {
+    count: 2,
+    entities: new Uint32Array([first, second]),
+    slots: new Uint32Array([first, second]),
+  };
+  assertThrows(
+    () => world.components.addToEntities(player, list),
+    CapacityError,
+    'Component "player" can only be added to 1 entities',
+  );
+
+  assert(!world.components.entityHas(player, first), "Expected first entity to remain without player");
+  assert(!world.components.entityHas(player, second), "Expected second entity to remain without player");
+  assertEquals(ids(world.components.getOwners(player)), [], "Expected owners to remain unchanged");
+  assertEquals(ids(world.entities.query(new Query({ all: [player] }))), [], "Expected query state to remain unchanged");
+});
+
+Deno.test("batch component transitions reject duplicate entity targets before mutation", async () => {
+  const position = vec2Component();
+  const velocity = vec2Component("velocity");
+  const world = await createTestWorld([position, velocity], 8);
+
+  const entity = createEntity(world);
+  world.components.addToEntity(position, entity, { x: 1, y: 2 });
+
+  const duplicateList: QueryEntityList = {
+    count: 2,
+    entities: new Uint32Array([entity, entity]),
+    slots: new Uint32Array([entity, entity]),
+  };
+  assertThrows(
+    () => world.components.addToEntities(velocity, duplicateList, { x: 3, y: 4 }),
+    ArgumentError,
+    "Duplicate entity",
+  );
+
+  assert(!world.components.entityHas(velocity, entity), "Expected duplicate batch add to leave ownership unchanged");
+  assertEquals(ids(world.entities.query(new Query({ all: [position, velocity] }))), [], "Expected query state intact");
+});
+
+Deno.test("public component data APIs reject inactive, unregistered, tag, and non-owner access", async () => {
+  const position = vec2Component();
+  const velocity = vec2Component("velocity");
+  const tag = tagComponent("tag");
+  const unregistered = vec2Component("unregistered");
+  const world = await createTestWorld([position, velocity, tag], 8);
+
+  const owner = createEntity(world);
+  const nonOwner = createEntity(world);
+  world.components.addToEntity(position, owner, { x: 1, y: 2 });
+  world.components.addToEntity(tag, owner);
+
+  assertThrows(
+    () => world.components.getEntityDataOrThrow(position, asEntity(7)),
+    EntityNotFoundError,
+    "Entity 7 is not active.",
+  );
+  assertThrows(
+    () => world.components.setEntityData(position, asEntity(7), { x: 3, y: 4 }),
+    EntityNotFoundError,
+    "Entity 7 is not active.",
+  );
+  assertThrows(
+    () => world.components.getEntityDataOrThrow(unregistered, owner),
+    NotRegisteredError,
+    "not registered",
+  );
+  assertThrows(
+    () => world.components.setEntityData(unregistered, owner, { x: 3, y: 4 }),
+    NotRegisteredError,
+    "not registered",
+  );
+  assertThrows(
+    () => world.components.getEntityDataOrThrow(tag, owner),
+    ComponentDataError,
+    "has no data storage",
+  );
+  assertThrows(
+    () => world.components.setEntityData(tag as unknown as typeof position, owner, {}),
+    ComponentDataError,
+    "has no data storage",
+  );
+  assertThrows(
+    () => world.components.getEntityDataOrThrow(velocity, nonOwner),
+    ComponentOwnershipError,
+    "does not own component",
+  );
+  assertThrows(
+    () => world.components.setEntityData(velocity, nonOwner, { x: 3, y: 4 }),
+    ComponentOwnershipError,
+    "does not own component",
+  );
+});
+
+Deno.test("failed guarded data access does not mark changed state or mutate storage", async () => {
+  const position = vec2Component();
+  const world = await createTestWorld([position], 8);
+
+  const owner = createEntity(world);
+  const nonOwner = createEntity(world);
+  world.components.addToEntity(position, owner, { x: 1, y: 2 });
+  const instance = world.components.getInstance(position);
+  assert(instance !== undefined && instance.storage !== null, "Expected position storage");
+  const storage = instance.storage.partitions;
+  storage.x[nonOwner] = 9;
+  storage.y[nonOwner] = 10;
+  world.refresh();
+
+  assertThrows(
+    () => world.components.setEntityData(position, nonOwner, { x: 99, y: 100 }),
+    ComponentOwnershipError,
+    "does not own component",
+  );
+  assertThrows(
+    () => world.components.getEntityDataOrThrow(position, nonOwner),
+    ComponentOwnershipError,
+    "does not own component",
+  );
+  assertEquals(
+    world.components.getEntityDataOrThrow(position, owner),
+    { x: 1, y: 2 },
+    "Expected owner data to be intact",
+  );
+  assertEquals(
+    { x: storage.x[nonOwner], y: storage.y[nonOwner] },
+    { x: 9, y: 10 },
+    "Expected raw storage to be intact",
+  );
+  assertEquals(ids(world.components.getChanged(position)), [], "Expected failed guarded access to stay untracked");
+});
+
+Deno.test("components.getInstanceOrThrow returns registered instances and exposes storage", async () => {
+  const position = vec2Component();
+  const tag = tagComponent("tag");
+  const world = await createTestWorld([position, tag], 8);
+
+  const instance = world.components.getInstanceOrThrow(position);
+  assert(instance === world.components.getInstance(position), "Expected getInstanceOrThrow to match getInstance");
+  assert(instance.storage?.partitions != null, "Expected schema component partitions");
+
+  const tagInstance = world.components.getInstanceOrThrow(tag);
+  assertEquals(tagInstance.storage, null, "Expected tag component storage to be null");
+
+  assertThrows(
+    () => world.components.getInstanceOrThrow("missing"),
+    NotRegisteredError,
+    'Component "missing" is not registered in this world.',
+  );
+});
+
+Deno.test("direct typed-array storage remains an unguarded data access escape hatch", async () => {
+  const position = vec2Component();
+  const world = await createTestWorld([position], 8);
+
+  const entity = createEntity(world);
+  const instance = world.components.getInstance(position);
+  assert(instance !== undefined && instance.storage !== null, "Expected position storage");
+
+  instance.storage.partitions.x[entityIndex(entity)] = 12;
+  instance.storage.partitions.y[entityIndex(entity)] = 13;
+  assertEquals(
+    { x: instance.storage.partitions.x[entityIndex(entity)], y: instance.storage.partitions.y[entityIndex(entity)] },
+    { x: 12, y: 13 },
+    "Expected raw storage writes to work without ownership checks",
+  );
+  assertThrows(
+    () => world.components.getEntityDataOrThrow(position, entity),
+    ComponentOwnershipError,
+    "does not own component",
+  );
 });

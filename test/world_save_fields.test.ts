@@ -1,9 +1,10 @@
 /// <reference lib="deno.ns" />
 
 /**
- * World saves of string and object fields.
+ * World saves of `field.*` columns.
  *
- * Strings are stored as UTF-8 and objects through their `encode` / `decode` hooks. A world loaded from a save must
+ * Bool, enum and entity fields are range-checked on load and recorded as field tags in the layout. Strings are stored
+ * as UTF-8 and objects through their `encode` / `decode` hooks. A world loaded from a save must
  * read the same values, keep behaving like the saved world, and re-save to identical bytes. Loads stay
  * validate-then-mutate: every decode hook runs before the world changes.
  */
@@ -426,5 +427,149 @@ Deno.test("saveWorld writes string saves into a reused buffer", async () => {
     const written = saveWorld(source, target);
     assertStrictEquals(written.buffer, target.buffer, "written into the target");
     assert(bytesEqual(written, expected), "same bytes as a fresh save");
+  }
+});
+
+// ---------------------------------------------------------------- bool, enum and entity fields
+
+/** A unit with an enum, a bool and an entity ref, for the field-value range checks. */
+function refUnitOf() {
+  return new Component({
+    name: "unit",
+    schema: { state: field.enum(["a", "b", "c"]), alive: field.bool(), target: field.entity() },
+  });
+}
+
+// deno-lint-ignore no-explicit-any
+type SaveDocument = any;
+
+async function savedUnitDocument(): Promise<SaveDocument> {
+  const unit = refUnitOf();
+  const world = await worldOf([unit], 16);
+  const target = world.entities.createOrThrow();
+  world.entities.createOrThrow([[unit, { state: "b", alive: true, target }]]);
+  return worldSaveToDocument(saveWorld(world));
+}
+
+async function assertRejected(document: SaveDocument, message: string, label: string): Promise<void> {
+  const world = await worldOf([refUnitOf()], 16);
+  const kept = world.entities.createOrThrow();
+  assertThrows(() => loadWorld(world, worldSaveFromDocument(document)), WorldSaveError, message);
+  assertEquals(world.entities.isActive(kept), true, `${label}: a rejected load leaves the world untouched`);
+}
+
+Deno.test("world saves reject field values outside their field type", async () => {
+  const cases: [string, (values: Record<string, number[]>) => void][] = [
+    ["enum index past the labels", (values) => values["state"]![0] = 3],
+    ["bool other than 0 or 1", (values) => values["alive"]![0] = 7],
+    ["negative entity ref other than -1", (values) => values["target"]![0] = -5],
+  ];
+  for (const [label, corrupt] of cases) {
+    const document = await savedUnitDocument();
+    corrupt(document.components.unit.values);
+    await assertRejected(document, "outside its type", label);
+  }
+});
+
+Deno.test("world saves reject a next generation that matches a live handle after masking", async () => {
+  const document = await savedUnitDocument();
+  const slot = document.entities.slots[0];
+  document.entities.nextGenerations[slot] = document.entities.generations[0] + 0x8000;
+  await assertRejected(document, "reissue its handle", "masked generation");
+});
+
+/** A 16-slot world, the capacity the bool / enum / entity save tests were written against. */
+function smallWorldOf(list: DynamicComponent[]): Promise<World> {
+  return worldOf(list, 16);
+}
+
+function unitOf(labels: readonly string[] = ["idle", "run", "dead"], alive: unknown = field.bool()) {
+  return new Component({
+    name: "unit",
+    schema: {
+      hp: Uint16Array,
+      alive: alive as ReturnType<typeof field.bool>,
+      state: field.enum(labels),
+      target: field.entity(),
+    },
+  });
+}
+
+Deno.test("saves x field types: bool, enum and entity fields round-trip into a fresh world", async () => {
+  const unit = unitOf();
+  const source = await smallWorldOf([unit]);
+  const target = source.entities.createOrThrow();
+  const doomed = source.entities.createOrThrow();
+  const a = source.entities.createOrThrow([[unit, { hp: 3, alive: true, state: "run", target }]]);
+  const b = source.entities.createOrThrow([[unit, { state: "dead", target: doomed }]]);
+  source.entities.destroy(doomed);
+  source.refresh();
+  const bytes = saveWorld(source);
+
+  const loaded = await smallWorldOf([unitOf()]);
+  loadWorld(loaded, bytes);
+  const loadedUnit = loaded.components.getInstance("unit")!.type as typeof unit;
+  assertEquals(
+    loaded.components.getEntityDataOrThrow(loadedUnit, a),
+    { hp: 3, alive: true, state: "run", target },
+    "Live values and live ref restored",
+  );
+  assertEquals(
+    loaded.components.getEntityDataOrThrow(loadedUnit, b).target,
+    null,
+    "A ref to a dead entity still reads null",
+  );
+  assertEquals(loaded.components.getEntityDataOrThrow(loadedUnit, b).state, "dead", "Enum label restored");
+});
+
+Deno.test("saves x field types: the layout records field tags", async () => {
+  const world = await smallWorldOf([unitOf()]);
+  const fields = worldSaveLayout(world).components[0]!.fields!;
+  assertEquals(
+    fields.map((f) => f.type),
+    ["u16", "bool", 'enum:["idle","run","dead"]', "entity"],
+    "Field tags replace the physical column types",
+  );
+});
+
+Deno.test("saves x field types: enum label order and bool-vs-u8 mismatches are rejected, world untouched", async () => {
+  const sourceUnit = unitOf();
+  const source = await smallWorldOf([sourceUnit]);
+  source.entities.createOrThrow([[sourceUnit, { state: "run" }]]);
+  const bytes = saveWorld(source);
+
+  const reordered = await smallWorldOf([unitOf(["run", "idle", "dead"])]);
+  const kept = reordered.entities.createOrThrow();
+  assertThrows(() => loadWorld(reordered, bytes), WorldSaveError, "layout");
+  assertEquals(reordered.entities.isActive(kept), true, "Rejected load leaves the world untouched");
+
+  const numeric = await smallWorldOf([unitOf(undefined, Uint8Array)]);
+  assertThrows(() => loadWorld(numeric, bytes), WorldSaveError, "layout");
+});
+
+Deno.test("saves x field types: the JSON view round-trips field tags", async () => {
+  const unit = unitOf();
+  const source = await smallWorldOf([unit]);
+  source.entities.createOrThrow([[unit, { alive: true, state: "dead" }]]);
+  const bytes = saveWorld(source);
+  const document = worldSaveToDocument(bytes);
+  const again = worldSaveFromDocument(JSON.parse(JSON.stringify(document)));
+  assertEquals(Array.from(again), Array.from(bytes), "JSON view is lossless");
+});
+
+Deno.test("saves x field types: unsupported worlds throw on every entry point", async () => {
+  const cases: [string, DynamicComponent][] = [
+    ["meshed.mesh", new Component({ name: "meshed", schema: { hp: Uint8Array, mesh: field.object() } })],
+  ];
+  const plain = await smallWorldOf([unitOf()]);
+  const bytes = saveWorld(plain);
+  for (const [label, component] of cases) {
+    const world = await smallWorldOf([unitOf(), component]);
+    const kept = world.entities.createOrThrow();
+    assertThrows(() => saveWorld(world), WorldSaveError, label);
+    assertThrows(() => saveWorld(world, new Uint8Array(1 << 16)), WorldSaveError, label);
+    assertThrows(() => worldSaveLayout(world), WorldSaveError, label);
+    assertThrows(() => loadWorld(world, bytes), WorldSaveError, label);
+    assertEquals(world.entities.isActive(kept), true, `${label}: rejected load leaves the world untouched`);
   }
 });

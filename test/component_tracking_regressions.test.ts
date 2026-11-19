@@ -1,9 +1,28 @@
 /// <reference lib="deno.ns" />
 
-import { type Entity, entityIndex, Query } from "../mod.ts";
+import {
+  Component,
+  ComponentDataError,
+  ComponentOwnershipError,
+  type Entity,
+  entityIndex,
+  EntityNotFoundError,
+  NotRegisteredError,
+  Query,
+  World,
+  WorldStateError,
+} from "../mod.ts";
 import { ComponentManager } from "../src/component/component-manager.ts";
-import { createEntity, createTestWorld, tagComponent, vec2Component } from "./fixtures.ts";
-import { assert, assertEquals, assertStrictEquals, ids } from "./helpers.ts";
+import {
+  createEntity,
+  createTestWorld,
+  type FacingStorage,
+  type FacingValue,
+  gameComponents,
+  tagComponent,
+  vec2Component,
+} from "./fixtures.ts";
+import { assert, assertEquals, assertStrictEquals, assertThrows, ids } from "./helpers.ts";
 
 const sorted = (values: number[]): number[] => [...values].sort((a, b) => a - b);
 
@@ -119,4 +138,106 @@ Deno.test("a bundle spawn that fails mid-commit strips already-committed compone
   world.components.addToEntity(capped, reused, { x: 3 });
   world.components.addToEntity(capped, createEntity(world), { x: 4 });
   assertStrictEquals(ids(world.components.getOwners(capped)).length, 2, "The full owner cap is still available");
+});
+
+Deno.test("instance and world changed marking are ownership guarded and allocation-free reads preserve out on false", async () => {
+  const { Door, Drawable, Facing, GridPos } = gameComponents();
+  const unregistered = new Component<FacingValue, FacingStorage>({
+    name: "unregisteredFacing",
+    schema: { dir: Uint8Array },
+  });
+  const inactiveWorld = new World({ capacity: 8, components: [Facing] });
+  const world = await createTestWorld([GridPos, Facing, Drawable, Door], 8);
+  const owner = createEntity(world);
+  const nonOwner = createEntity(world);
+  const inactive = createEntity(world);
+  world.entities.destroy(inactive);
+  world.components.addBundle(owner, [
+    [GridPos, { x: 1, y: 2 }],
+    [Facing, { dir: 0 }],
+    [Drawable],
+  ]);
+
+  const facing = world.components.getInstanceOrThrow(Facing);
+  const drawable = world.components.getInstanceOrThrow(Drawable);
+  world.refresh();
+
+  facing.storage.partitions.dir[entityIndex(owner)] = 3;
+  assertEquals(ids(world.components.getChanged(Facing)), [], "Expected direct partition write not to mark changed");
+  assertStrictEquals(facing.markChanged(owner), true, "Expected owner data instance marking to succeed");
+  assertStrictEquals(facing.markChanged(owner), true, "Expected duplicate owner marking to stay successful");
+  assertEquals(ids(world.components.getChanged(Facing)), [owner], "Expected changed list to include owner once");
+  assertStrictEquals(facing.markChanged(nonOwner), false, "Expected non-owner instance marking to fail");
+  assertStrictEquals(drawable.markChanged(owner), false, "Expected tag instance marking to fail");
+
+  world.refresh();
+  world.components.markChanged(Facing, owner);
+  assertEquals(ids(world.components.getChanged(Facing)), [owner], "Expected world markChanged to mark owner");
+  assertThrows(
+    () => world.components.markChanged(Facing, nonOwner),
+    ComponentOwnershipError,
+    "does not own component",
+  );
+  assertThrows(
+    () => world.components.markChanged(Facing, inactive),
+    EntityNotFoundError,
+    "is not active",
+  );
+  assertThrows(
+    () => world.components.markChanged(Drawable, owner),
+    ComponentDataError,
+    "has no data storage",
+  );
+  assertThrows(
+    () => world.components.markChanged(unregistered, owner),
+    NotRegisteredError,
+    "not registered",
+  );
+  assertThrows(
+    () => inactiveWorld.components.markChanged(Facing, owner),
+    WorldStateError,
+    "initialized",
+  );
+
+  const out = { dir: 99, extra: 7 };
+  assertStrictEquals(world.components.readEntityDataInto(Facing, owner, out), true, "Expected readInto success");
+  assertEquals(out, { dir: 3, extra: 7 }, "Expected readInto to overwrite component keys only");
+
+  const unchanged = { dir: 11, extra: 5 };
+  assertStrictEquals(
+    world.components.readEntityDataInto(Facing, nonOwner, unchanged),
+    false,
+    "Expected non-owner readInto to return false",
+  );
+  assertEquals(unchanged, { dir: 11, extra: 5 }, "Expected non-owner readInto to leave out unchanged");
+  assertStrictEquals(
+    world.components.readEntityDataInto(Facing, inactive, unchanged),
+    false,
+    "Expected inactive readInto to return false",
+  );
+  assertEquals(unchanged, { dir: 11, extra: 5 }, "Expected inactive readInto to leave out unchanged");
+  assertStrictEquals(
+    world.components.readEntityDataInto(Drawable, owner, unchanged),
+    false,
+    "Expected tag readInto to return false",
+  );
+  assertThrows(
+    () => world.components.readEntityDataInto(unregistered, owner, unchanged),
+    NotRegisteredError,
+    "not registered",
+  );
+});
+
+Deno.test("setEntityData marks the component changed when storage is updated", async () => {
+  const position = vec2Component();
+  const world = await createTestWorld([position], 8);
+
+  const entity = createEntity(world);
+  world.components.addToEntity(position, entity, { x: 1, y: 2 });
+  world.refresh();
+
+  world.components.setEntityData(position, entity, { x: 3, y: 4 });
+
+  assertEquals(world.components.getEntityDataOrThrow(position, entity), { x: 3, y: 4 }, "Expected storage to update");
+  assertEquals(ids(world.components.getChanged(position)), [entity], "Expected setEntityData to mark changed");
 });
