@@ -149,22 +149,22 @@ Deno.test("command buffer rejects pending handles from an earlier flush or anoth
   const { world, commands } = await setup();
   const stale = commands.spawn();
   commands.flush();
-  assertThrows(() => commands.add(tag, stale), SpecError, "pending");
+  assertThrows(() => commands.add(tag, stale), ArgumentError, "pending");
   const other = new CommandBuffer(world);
   other.spawn();
   const foreign = other.spawn();
-  assertThrows(() => commands.destroy(foreign), SpecError, "pending");
-  assertThrows(() => commands.destroy(-1 as PendingEntity), SpecError, "pending");
+  assertThrows(() => commands.destroy(foreign), ArgumentError, "pending");
+  assertThrows(() => commands.destroy(-1 as PendingEntity), ArgumentError, "pending");
   const cleared = commands.spawn();
   commands.clear();
-  assertThrows(() => commands.destroy(cleared), SpecError, "pending");
+  assertThrows(() => commands.destroy(cleared), ArgumentError, "pending");
   await world.destroy();
 });
 
 Deno.test("command buffer rejects real handles outside the world's slot range", async () => {
   const { world, commands } = await setup(16);
   for (const handle of [16, 0x10010, 0x80000000, 1.5]) {
-    assertThrows(() => commands.destroy(handle as Entity), SpecError, "Invalid entity handle");
+    assertThrows(() => commands.destroy(handle as Entity), ArgumentError, "Invalid entity handle");
   }
   commands.destroy(15 as Entity); // in range: accepted at queue time, skipped at flush if inactive
   commands.clear();
@@ -200,7 +200,7 @@ Deno.test("command buffer validates components and data when queued", async () =
   assertThrows(() => commands.set(tag as never, entity, {}), ComponentDataError, "tag");
   assertThrows(() => commands.spawn([[unregistered]]), NotRegisteredError, "unregistered");
   assertThrows(() => commands.spawn([[position], [position]] as never), ArgumentError, "position");
-  assertThrows(() => commands.destroy(1.5 as Entity), SpecError, "entity");
+  assertThrows(() => commands.destroy(1.5 as Entity), ArgumentError, "entity");
   assertStrictEquals(commands.pendingCount, 0, "rejected commands are not queued");
   await world.destroy();
 });

@@ -144,7 +144,8 @@ not per entity (see row 16).
     `column()`);
   - flip the "Float16 rejected" test (`test/component_storage_integrity.test.ts:150-180`).
 
-  `FORMAT_VERSION` stays 1, and older Miski versions reject f16 saves cleanly. Bench on x86 without F16C before
+  `FORMAT_VERSION` is 2 (bumped for beta.3, which added f16 columns and the relation section), so older Miski
+  versions reject these saves cleanly. Bench on x86 without F16C before
   recommending it, because f16 may be software-emulated there.
 - **AsyncContext:** add `fromAsyncContext() ?? createStorage()` to `hook-scope.ts`. It casts `globalThis` to a local
   structural type, so it passes `deno check` without `any` (TS has no lib type yet). It is dead code on every current

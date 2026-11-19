@@ -8,7 +8,9 @@
   are unchanged.
   - Two new classes: `ArgumentError` (a malformed call argument: bundle shape, a
     component repeated or a relation passed in a bundle, batch entity lists,
-    `Schedule.run(dt)` / `setClock`, prefab counts, foreign checkpoints) and
+    `Schedule.run(dt)` / `setClock`, an unknown `Schedule.getOrder` phase,
+    invalid or stale `CommandBuffer` entity handles, prefab counts, foreign
+    checkpoints) and
     `RelationCycleError` (an acyclic relation would form a cycle).
   - Schema, `field.*`, `Component`, `Prefab` and `createEcsWorld` config errors
     throw `SpecError`; non-object payloads and data reads on tags throw

@@ -12,7 +12,6 @@ import {
   type PendingEntity,
   Relation,
   RelationCycleError,
-  SpecError,
   World,
 } from "../mod.ts";
 import { createTestWorld, tagComponent } from "./fixtures.ts";
@@ -91,8 +90,8 @@ Deno.test("command buffer validates relation commands when queued", async () => 
   assertThrows(() => commands.relate(likes, a, b, { strength: 1 } as never), ComponentDataError, "strength");
   assertThrows(() => commands.relate(likes, a, b, { weight: Number.NaN }), ComponentDataError, "finite");
   assertThrows(() => commands.relate(likes, a, b, 5 as never), ComponentDataError, "object");
-  assertThrows(() => commands.relate(likes, a, -1 as PendingEntity), SpecError, "pending");
-  assertThrows(() => commands.unrelate(likes, -1 as PendingEntity, b), SpecError, "pending");
+  assertThrows(() => commands.relate(likes, a, -1 as PendingEntity), ArgumentError, "pending");
+  assertThrows(() => commands.unrelate(likes, -1 as PendingEntity, b), ArgumentError, "pending");
   assertThrows(() => commands.add(likes as never, a), ArgumentError, "relate and unrelate");
   assertStrictEquals(commands.pendingCount, 0, "rejected commands queue nothing");
   // A relation first seen (and cached) through a rejected component command still works with relate.
@@ -193,10 +192,10 @@ Deno.test("command buffer writes null for pending field refs whose spawn died or
   commands.add(node, holder, { hp: 1, parent: killed });
   commands.flush();
   assertStrictEquals(world.components.getEntityDataOrThrow(node, holder).parent, null, "spawn destroyed before use");
-  assertThrows(() => commands.add(node, holder, { parent: killed }), SpecError, "pending");
-  assertThrows(() => commands.add(node, holder, { parent: -1 as never }), SpecError, "pending");
+  assertThrows(() => commands.add(node, holder, { parent: killed }), ArgumentError, "pending");
+  assertThrows(() => commands.add(node, holder, { parent: -1 as never }), ArgumentError, "pending");
   commands.spawn(); // the new epoch has a spawn at the stale handle's index; only the epoch check rejects it
-  assertThrows(() => commands.add(node, holder, { parent: killed }), SpecError, "pending");
+  assertThrows(() => commands.add(node, holder, { parent: killed }), ArgumentError, "pending");
   commands.clear();
 
   while (world.entities.getAvailableCount() > 0) world.entities.createOrThrow();

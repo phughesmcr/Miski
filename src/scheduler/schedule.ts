@@ -363,11 +363,12 @@ export class Schedule {
 
   /**
    * The names of a phase's systems in run order.
-   * @throws {SpecError} If the phase is unknown or the ordering constraints are invalid
+   * @throws {ArgumentError} If the phase is unknown
+   * @throws {SpecError} If the ordering constraints are invalid
    */
   getOrder(phase: string): string[] {
     const index = this.#phaseIndex.get(phase);
-    if (index === undefined) throw new SpecError(`Unknown schedule phase "${String(phase)}"`);
+    if (index === undefined) throw new ArgumentError(`Unknown schedule phase "${String(phase)}"`);
     this.#sync();
     if (this.#dirty) this.#build();
     return this.#plan[index]!.map((entry) => entry.name);

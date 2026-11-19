@@ -208,7 +208,7 @@ export class CommandBuffer {
    * @throws {NotRegisteredError} If a component is not registered in the world
    * @throws {ArgumentError} If a component is a relation or appears twice in the bundle
    * @throws {ComponentDataError} If data names an unknown field or a numeric field value is not a finite number
-   * @throws {SpecError} If a `field.entity()` value is a pending entity this buffer did not spawn since its last flush
+   * @throws {ArgumentError} If a `field.entity()` value is a pending entity this buffer did not spawn since its last flush
    */
   spawn<const TBundle extends readonly ComponentBundleEntryInput[]>(
     bundle?: TBundle & CommandBundle<TBundle>,
@@ -265,7 +265,7 @@ export class CommandBuffer {
   /**
    * Queue the destruction of an entity.
    * @param entity The entity, or a pending entity from {@link spawn}
-   * @throws {SpecError} If `entity` is not a valid handle for this world or buffer
+   * @throws {ArgumentError} If `entity` is not a valid handle for this world or buffer
    */
   destroy(entity: Entity | PendingEntity): void {
     this.#assertNotFlushing();
@@ -282,7 +282,7 @@ export class CommandBuffer {
    * @throws {NotRegisteredError} If the component is not registered in the world
    * @throws {ArgumentError} If the component is a relation
    * @throws {ComponentDataError} If data names an unknown field or a numeric field value is not a finite number
-   * @throws {SpecError} If `entity`, or a pending `field.entity()` value, is not a valid handle for this world or buffer
+   * @throws {ArgumentError} If `entity`, or a pending `field.entity()` value, is not a valid handle for this world or buffer
    */
   add(component: Component<null, null>, entity: Entity | PendingEntity): void;
   /**
@@ -308,7 +308,7 @@ export class CommandBuffer {
    * @throws {NotRegisteredError} If the component is not registered in the world
    * @throws {ArgumentError} If the component is a relation
    * @throws {ComponentDataError} If the component is a tag, data names an unknown field, or a numeric value is not finite
-   * @throws {SpecError} If `entity`, or a pending `field.entity()` value, is not a valid handle for this world or buffer
+   * @throws {ArgumentError} If `entity`, or a pending `field.entity()` value, is not a valid handle for this world or buffer
    */
   set<TValue extends Exclude<SchemaOrNull, null>, TStorage extends Exclude<SchemaOrNull, null> = TValue>(
     component: Component<TValue, TStorage>,
@@ -324,7 +324,7 @@ export class CommandBuffer {
    * @param entity The entity, or a pending entity from {@link spawn}
    * @throws {NotRegisteredError} If the component is not registered in the world
    * @throws {ArgumentError} If the component is a relation
-   * @throws {SpecError} If `entity` is not a valid handle for this world or buffer
+   * @throws {ArgumentError} If `entity` is not a valid handle for this world or buffer
    */
   remove<TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
     component: Component<TValue, TStorage>,
@@ -347,7 +347,7 @@ export class CommandBuffer {
    * @throws {ArgumentError} If `relation` is not a relation
    * @throws {ComponentDataError} If `data` is not an object
    * @throws {ComponentDataError} If data names an unknown field or a value is not a finite number
-   * @throws {SpecError} If `source` or `target` is not a valid handle for this world or buffer
+   * @throws {ArgumentError} If `source` or `target` is not a valid handle for this world or buffer
    */
   relate<TSchema extends SchemaOrNull>(
     relation: Relation<TSchema>,
@@ -365,7 +365,7 @@ export class CommandBuffer {
    * @param target The target entity, or a pending entity from {@link spawn}
    * @throws {NotRegisteredError} If the relation is not registered in the world
    * @throws {ArgumentError} If `relation` is not a relation
-   * @throws {SpecError} If `source` or `target` is not a valid handle for this world or buffer
+   * @throws {ArgumentError} If `source` or `target` is not a valid handle for this world or buffer
    */
   unrelate(relation: AnyRelation, source: Entity | PendingEntity, target: Entity | PendingEntity): void {
     this.#queuePair(OP_UNRELATE, relation, source, target, undefined);
@@ -635,10 +635,10 @@ export class CommandBuffer {
   /** Validate a target handle; real entities pass through, pending handles must belong to this buffer and epoch. */
   #validateTarget(entity: Entity | PendingEntity | number): number {
     const value = entity as number;
-    if (!Number.isInteger(value)) throw new SpecError(`Invalid entity handle ${String(entity)}`);
+    if (!Number.isInteger(value)) throw new ArgumentError(`Invalid entity handle ${String(entity)}`);
     if (value >= 0) {
       if (!isEntityInRange(value, this.#world.entities.capacity)) {
-        throw new SpecError(`Invalid entity handle ${value} for this world`);
+        throw new ArgumentError(`Invalid entity handle ${value} for this world`);
       }
       return value;
     }
@@ -646,7 +646,7 @@ export class CommandBuffer {
     const index = packed & PENDING_INDEX_MASK;
     const epoch = Math.floor(packed / (PENDING_INDEX_MASK + 1));
     if (epoch !== this.#epoch || index >= this.#spawnCount) {
-      throw new SpecError(
+      throw new ArgumentError(
         `Invalid pending entity ${value}: it was not spawned by this CommandBuffer since its last flush or clear`,
       );
     }

@@ -121,6 +121,7 @@ Deno.test("schedule reports cycles with the cycle path", async () => {
   schedule.add(logSystem("c", log), { after: ["b"] });
   schedule.add(logSystem("free", log));
   assertThrows(() => schedule.getOrder("update"), SpecError, "a -> b -> c -> a");
+  assertThrows(() => schedule.getOrder("nope"), ArgumentError, "Unknown schedule phase");
   assertThrows(() => schedule.run(0), SpecError, "cycle");
   assertEquals(log, [], "no system runs when the order cannot be built");
   await world.destroy();
