@@ -381,7 +381,7 @@ Deno.test("proxy and instance get/set decode and validate field values", async (
   assert(world.components.readEntityDataInto(unit, entity, out), "readEntityDataInto reads owners");
   assertEquals(out, { hp: 0, alive: true, state: "run", target, label: "", mesh }, "readEntityDataInto decodes");
   assertStrictEquals(out.mesh, mesh, "readEntityDataInto copies refs");
-  assertEquals(world.components.getEntityData(unit, entity), out, "readEntityData decodes");
+  assertEquals(world.components.getEntityData(unit, entity), out, "getEntityData decodes");
 });
 
 Deno.test("entity refs read as null once the target is destroyed or its slot reused", async () => {

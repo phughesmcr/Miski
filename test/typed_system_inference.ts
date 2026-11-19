@@ -106,9 +106,9 @@ expectType<ComponentInstance<Vec2>>(requiredStringPosition);
 const stringReadPosition = world.components.getEntityData("position", 0 as Entity);
 expectType<ComponentData<SchemaOrNull> | undefined>(stringReadPosition);
 // @ts-expect-error string component lookup cannot infer a schema for data reads.
-world.components.readEntityData<Vec2>("position", 0 as Entity);
-// @ts-expect-error string component lookup cannot infer a schema for throwing data reads.
 world.components.getEntityData<Vec2>("position", 0 as Entity);
+// @ts-expect-error string component lookup cannot infer a schema for throwing data reads.
+world.components.getEntityDataOrThrow<Vec2>("position", 0 as Entity);
 
 const namedSystem = world.systems.get("manualTypedMovement");
 expectType<SystemInstance<SystemCallback> | undefined>(namedSystem);
@@ -233,7 +233,7 @@ brandedWorld.components.setEntityData(position, brandedEntity, { x: 1.5 });
 // -- Non-throwing reads preserve the schema keys and add undefined.
 const readResult = brandedWorld.components.getEntityData(gridPos, brandedEntity);
 expectType<Record<"x" | "y", number> | undefined>(readResult);
-// @ts-expect-error readEntityData results must be narrowed before property access.
+// @ts-expect-error getEntityData results must be narrowed before property access.
 readResult.x;
 
 const readOut = { x: 0, y: 0, label: "kept" };

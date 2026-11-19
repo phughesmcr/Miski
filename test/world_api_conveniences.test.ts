@@ -5,7 +5,7 @@ import type { Entity } from "../mod.ts";
 import { assert, assertEquals, assertStrictEquals, assertThrows } from "./helpers.ts";
 import { createEntity, createTestWorld, tagComponent, vec2Component } from "./fixtures.ts";
 
-Deno.test("readEntityData returns data for an owning entity", async () => {
+Deno.test("getEntityData returns data for an owning entity", async () => {
   const position = vec2Component();
   const world = await createTestWorld([position]);
   const entity = createEntity(world);
@@ -15,7 +15,7 @@ Deno.test("readEntityData returns data for an owning entity", async () => {
   assertEquals(world.components.getEntityData(position, entity), { x: 3, y: 4 }, "Expected owner data");
 });
 
-Deno.test("readEntityData returns undefined instead of throwing for non-owners", async () => {
+Deno.test("getEntityData returns undefined instead of throwing for non-owners", async () => {
   const position = vec2Component();
   const world = await createTestWorld([position]);
   const entity = createEntity(world);
@@ -23,7 +23,7 @@ Deno.test("readEntityData returns undefined instead of throwing for non-owners",
   assertStrictEquals(world.components.getEntityData(position, entity), undefined, "Expected undefined for non-owner");
 });
 
-Deno.test("readEntityData returns undefined for inactive entities", async () => {
+Deno.test("getEntityData returns undefined for inactive entities", async () => {
   const position = vec2Component();
   const world = await createTestWorld([position]);
   const entity = createEntity(world);
@@ -38,7 +38,7 @@ Deno.test("readEntityData returns undefined for inactive entities", async () => 
   );
 });
 
-Deno.test("readEntityData returns undefined for tag components", async () => {
+Deno.test("getEntityData returns undefined for tag components", async () => {
   const renderable = tagComponent("renderable");
   const world = await createTestWorld([renderable]);
   const entity = createEntity(world);
@@ -52,7 +52,7 @@ Deno.test("readEntityData returns undefined for tag components", async () => {
   );
 });
 
-Deno.test("readEntityData still throws for unregistered components", async () => {
+Deno.test("getEntityData still throws for unregistered components", async () => {
   const position = vec2Component();
   const unregistered = vec2Component("unregistered");
   const world = await createTestWorld([position]);

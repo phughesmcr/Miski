@@ -786,7 +786,7 @@ const scenarios: Scenario[] = [
     mixed.world.components.setEntityData(mixed.components.position, mutationEntity, positionData);
   }),
   {
-    name: "getEntityData allocating object materialization",
+    name: "getEntityDataOrThrow allocating object materialization",
     iterations: 100_000,
     maxSteadyStateBeforeGcBytesPerIter: GET_ENTITY_DATA_BUDGET_BYTES_PER_ITER,
     fn: () => {
