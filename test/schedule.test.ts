@@ -593,7 +593,11 @@ Deno.test("schedule rethrows a command failure at a phase flush after applying t
   }
   assert(caught instanceof Error && caught.message.includes("CommandBuffer set position"), "flush error rethrown");
   assertEquals(log, ["queuer"], "later phases do not run after a failed flush");
-  assertStrictEquals(world.components.getEntityData(position, later).x, 2, "the rest of the phase's commands applied");
+  assertStrictEquals(
+    world.components.getEntityDataOrThrow(position, later).x,
+    2,
+    "the rest of the phase's commands applied",
+  );
   assertEquals([...world.entities.queryEntered(new Query({ all: [position] }))], [], "the world was refreshed");
   fail = false;
   log.length = 0;
@@ -901,7 +905,7 @@ Deno.test("schedule resumes identically after a rollback restore between runs pl
         const rows: string[] = [];
         for (let i = 0; i < entities.count; i++) {
           const entity = entities.entities[i]!;
-          const data = ctx.world.components.getEntityData(position, entity);
+          const data = ctx.world.components.getEntityDataOrThrow(position, entity);
           // Slots, not handles: generations keep moving forward across a restore.
           rows.push(`${entities.slots[i]}:${data.x}:${data.y}`);
           if (data.x > 3) ctx.commands.destroy(entity);

@@ -4,6 +4,7 @@ import {
   asEntity,
   asSlotIndex,
   CapacityError,
+  ComponentDataError,
   type Entity,
   entityIndex,
   Query,
@@ -134,15 +135,19 @@ Deno.test("checkpoint restores tags and capped memberships atomically, including
   world.components.addToEntity(capped, b, { x: 8 });
   world.components.removeFromEntity(tag, a);
   world.applyCheckpoint(checkpoint);
-  assertEquals(world.components.getEntityData(position, a).x, 1, "Value must restore alongside membership");
-  assertEquals(world.components.getEntityData(capped, a).x, 3, "Capped membership can transfer back");
+  assertEquals(world.components.getEntityDataOrThrow(position, a).x, 1, "Value must restore alongside membership");
+  assertEquals(world.components.getEntityDataOrThrow(capped, a).x, 3, "Capped membership can transfer back");
   assert(world.components.entityHas(tag, a), "Present tag must restore without a data payload");
   assert(!world.components.entityHas(capped, b), "Speculative captured owner must be removed");
   world.components.removeFromEntity(capped, a);
   world.components.addToEntity(capped, outside);
   world.components.setEntityData(position, a, { x: 9 });
   assertThrows(() => world.applyCheckpoint(checkpoint), Error, "maximum owner count");
-  assertEquals(world.components.getEntityData(position, a).x, 9, "Failed checkpoint must preserve preceding values");
+  assertEquals(
+    world.components.getEntityDataOrThrow(position, a).x,
+    9,
+    "Failed checkpoint must preserve preceding values",
+  );
   assert(world.components.entityHas(capped, outside), "Failed checkpoint must preserve external ownership");
   await world.destroy();
 });
@@ -195,7 +200,7 @@ Deno.test("failed spawn preflight preserves lifecycle windows, revisions, and ha
 
   assertThrows(
     () => world.entities.createWithOrThrow([[position, { x: Number.MAX_VALUE }]]),
-    TypeError,
+    ComponentDataError,
     "outside its storage range",
   );
   assertThrows(() => world.entities.createWith([[capped]]), RangeError, "can only be added");
@@ -218,12 +223,12 @@ Deno.test("full-world bundle creation reports payload errors before capacity err
   const entities = Array.from({ length: world.entities.capacity }, () => world.entities.createOrThrow());
   assertThrows(
     () => world.entities.createWith([[position, { x: Number.MAX_VALUE }]]),
-    TypeError,
+    ComponentDataError,
     "outside its storage range",
   );
   assertThrows(
     () => world.entities.createWithOrThrow([[position, { x: Number.MAX_VALUE }]]),
-    TypeError,
+    ComponentDataError,
     "outside its storage range",
   );
   assertEquals(

@@ -22,7 +22,11 @@ Deno.test("a newly owned data component is changed whether or not a payload was 
     components.addToEntity(position, b, {});
     components.addToEntity(position, c, { x: 0 });
     assertEquals(sorted(ids(components.getChanged(position))), sorted([a, b, c]), `${label}: addToEntity`);
-    assertEquals(components.getEntityData(position, a), { x: 0, y: 0 }, `${label}: no-payload add zero-initializes`);
+    assertEquals(
+      components.getEntityDataOrThrow(position, a),
+      { x: 0, y: 0 },
+      `${label}: no-payload add zero-initializes`,
+    );
 
     // A no-payload re-add on an existing owner is not a change.
     world.refresh();
@@ -77,7 +81,7 @@ Deno.test("a bundle spawn that fails mid-commit strips already-committed compone
   const capped = vec2Component("capped", { maxEntities: 2 });
   const position = vec2Component("position");
   const world = await createTestWorld([capped, position], 8);
-  const cappedInstance = world.components.require(capped);
+  const cappedInstance = world.components.getInstanceOrThrow(capped);
   const cappedColumn = cappedInstance.storage!.partitions["x"] as unknown as ArrayLike<number | undefined>;
   world.refresh();
 

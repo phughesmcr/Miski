@@ -418,10 +418,10 @@ export class World {
     this.#checkpointHost = {
       isEntityAlive: (entity) => this.#entityManager.isActive(entity),
       entityHasComponent: (entity, component) => this.#componentManager.entityHas(component, entity),
-      getComponentInstance: (component) => this.#componentManager.require(component),
+      getComponentInstance: (component) => this.#componentManager.getInstanceOrThrow(component),
       getOwnerCount: (component) => this.#componentManager.getOwnerCount(component),
       validateComponentData: (component, properties) =>
-        this.#mutations.validateComponentData(this.#componentManager.require(component), properties),
+        this.#mutations.validateComponentData(this.#componentManager.getInstanceOrThrow(component), properties),
       setComponentEntityData: (entity, component, properties) =>
         this.#setComponentEntityData(component, entity, properties),
       addComponentToEntity: (entity, component, properties) =>

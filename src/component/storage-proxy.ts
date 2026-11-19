@@ -32,7 +32,7 @@ export type ColumnWritersSpec = {
 };
 
 /**
- * Build one allocation-free writer per column. The proxy setters and `ComponentInstance.set` / `setAt` share these,
+ * Build one allocation-free writer per column. The proxy setters and `ComponentInstance.set` share these,
  * so every single-field write applies the same validation, encoding and change tracking.
  * @returns a null-prototype map from field name to writer
  */

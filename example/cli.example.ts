@@ -204,8 +204,8 @@ const world = new World({
 await world.init();
 
 // Prefer `.storage.partitions` for SoA access; index by query-list slots, not packed handles.
-const { partitions: positionStore } = world.components.require(position).storage;
-const { partitions: energyStore } = world.components.require(energy).storage;
+const { partitions: positionStore } = world.components.getInstanceOrThrow(position).storage;
+const { partitions: energyStore } = world.components.getInstanceOrThrow(energy).storage;
 
 // Reusable scratch for cross-query spatial lookups (avoids per-frame array allocations).
 const scratchEntities = new Uint32Array(CAPACITY);

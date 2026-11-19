@@ -45,7 +45,7 @@ expectType<Exact<ComponentData<ComponentSchema<typeof vec2>>, { x: number; y: nu
 const Unit = new Component({ name: "unit", schema: unitSchema });
 const world = new World({ capacity: 16, components: [Unit] });
 const entity = world.entities.createOrThrow();
-const instance = world.components.require(Unit);
+const instance = world.components.getInstanceOrThrow(Unit);
 
 const hpColumn: Uint16Array = instance.storage.partitions.hp;
 const aliveColumn: Uint8Array = instance.storage.partitions.alive;
@@ -54,7 +54,7 @@ const targetColumn: Int32Array = instance.storage.partitions.target;
 const labelColumn: string[] = instance.storage.partitions.label;
 const meshColumn: (Mesh | null)[] = instance.storage.partitions.mesh;
 
-const data = world.components.getEntityData(Unit, entity);
+const data = world.components.getEntityDataOrThrow(Unit, entity);
 const alive: boolean = data.alive;
 const state: "idle" | "run" | "dead" = data.state;
 const target: Entity | null = data.target;
@@ -91,15 +91,7 @@ const game = createEcsWorld({
 game.spawn({ Unit: { state: "a", mesh: new Mesh() } });
 // @ts-expect-error createEcsWorld payloads are typed per field.
 game.spawn({ Unit: { state: "c" } });
-const gameMeshes: (Mesh | null)[] = game.storage.Unit.partitions.mesh;
+const gameMeshes: (Mesh | null)[] = game.storage.Unit.storage.partitions.mesh;
 
 void [hpColumn, aliveColumn, stateColumn, targetColumn, labelColumn, meshColumn];
 void [alive, state, target, mesh, proxyState, viaGet, viaGetHp, gameMeshes];
-
-// Raw storage get / set stay keyed per column.
-const rawHp: number | undefined = instance.storage.get("hp", 0);
-const rawLabel: string | undefined = instance.storage.get("label", 0);
-instance.storage.set("mesh", 0, new Mesh());
-// @ts-expect-error numeric columns take numbers.
-instance.storage.set("hp", 0, "x");
-void [rawHp, rawLabel];

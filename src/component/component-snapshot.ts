@@ -1,5 +1,4 @@
 import type { EntityArray } from "@/entity/entity.ts";
-import { cloneFieldValue } from "@/schema/field.ts";
 import type { DynamicComponentInstance } from "@/types/component.ts";
 import type { TypedArray, TypedArrayConstructor } from "@/types/partitions.ts";
 import { sideDefault, type SideField } from "./field-codec.ts";
@@ -115,7 +114,16 @@ export function captureComponentManagerSnapshot(
         const property = state.sideFields[c]!;
         const values = new Array<unknown>(count);
         // Objects with a clone hook are copied once here; restore installs the copies, since a point restores once.
-        for (let j = 0; j < count; j++) values[j] = cloneFieldValue(property, column[owners[j]!]);
+        // Resolve the hook per column (as `cloneFieldValue` would per cell), then copy without re-checking.
+        const clone = property.kind === "object" ? property.clone : undefined;
+        if (clone === undefined) {
+          for (let j = 0; j < count; j++) values[j] = column[owners[j]!];
+        } else {
+          for (let j = 0; j < count; j++) {
+            const value = column[owners[j]!];
+            values[j] = value === null ? value : clone(value);
+          }
+        }
         captured[c] = values;
       }
       sideRows = captured;

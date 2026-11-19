@@ -47,12 +47,16 @@ Deno.test("saves x field types: bool, enum and entity fields round-trip into a f
   loadWorld(loaded, bytes);
   const loadedUnit = loaded.components.getInstance("unit")!.type as typeof unit;
   assertEquals(
-    loaded.components.getEntityData(loadedUnit, a),
+    loaded.components.getEntityDataOrThrow(loadedUnit, a),
     { hp: 3, alive: true, state: "run", target },
     "Live values and live ref restored",
   );
-  assertEquals(loaded.components.getEntityData(loadedUnit, b).target, null, "A ref to a dead entity still reads null");
-  assertEquals(loaded.components.getEntityData(loadedUnit, b).state, "dead", "Enum label restored");
+  assertEquals(
+    loaded.components.getEntityDataOrThrow(loadedUnit, b).target,
+    null,
+    "A ref to a dead entity still reads null",
+  );
+  assertEquals(loaded.components.getEntityDataOrThrow(loadedUnit, b).state, "dead", "Enum label restored");
 });
 
 Deno.test("saves x field types: the layout records field tags", async () => {

@@ -392,7 +392,7 @@ function checkAgainstModel(world: World, model: Model, where: string): void {
       const expected = owned.get(name);
       if (has && expected) {
         assertEquals(
-          world.components.getEntityData(component as never, entity) as unknown,
+          world.components.getEntityDataOrThrow(component as never, entity) as unknown,
           expected,
           `${where}: ${entity} ${name} data`,
         );
@@ -443,7 +443,7 @@ function observe(world: World): string {
       parts.push(`${component.name} changed=${slots(world.components.getChangedSnapshot(component) ?? [])}`);
       for (const entity of owners) {
         parts.push(
-          `${entityIndex(entity)}:${JSON.stringify(world.components.getEntityData(component as never, entity))}`,
+          `${entityIndex(entity)}:${JSON.stringify(world.components.getEntityDataOrThrow(component as never, entity))}`,
         );
       }
     }

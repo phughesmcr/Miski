@@ -73,7 +73,7 @@ function observe(world: World, revisions = true): unknown {
     if (component.schema === null) continue;
     const rows: Record<string, unknown> = {};
     for (const entity of owners[component.name]!) {
-      rows[entity] = world.components.getEntityData(component as Component<never>, entity as Entity);
+      rows[entity] = world.components.getEntityDataOrThrow(component as Component<never>, entity as Entity);
     }
     data[component.name] = rows;
   }
@@ -170,7 +170,7 @@ Deno.test("Prefab rejects invalid definitions", () => {
   assertThrows(() => new Prefab({ components: [[position, { x: "1" }]] } as never), ComponentDataError, "finite");
   assertThrows(() => new Prefab({ components: [[enemy, {}]] } as never), ComponentDataError, "no data storage");
   assertThrows(() => new Prefab({ components: [[enemy], [enemy]] }), RangeError, "Duplicate");
-  assertThrows(() => new Prefab({ components: [[position, { x: 1e300 }]] }), TypeError, "storage range");
+  assertThrows(() => new Prefab({ components: [[position, { x: 1e300 }]] }), ComponentDataError, "storage range");
   assertThrows(() => new Prefab({ components: [position] } as never), TypeError, "tuple");
   assertThrows(() => new Prefab({ components: [[{}]] } as never), TypeError, "Component");
   assertThrows(() => new Prefab({ components: {} } as never), TypeError, "array");
@@ -208,21 +208,25 @@ Deno.test("instantiate merges per-field overrides over prefab defaults and may a
     [flying],
   ]);
   assertStrictEquals(e, twin, "handle");
-  assertEquals(a.components.getEntityData(position, e), { x: 7, y: -2 }, "unspecified field keeps prefab default");
-  assertEquals(a.components.getEntityData(velocity, e), { x: 0, y: 3 }, "extra component zero-fills");
+  assertEquals(
+    a.components.getEntityDataOrThrow(position, e),
+    { x: 7, y: -2 },
+    "unspecified field keeps prefab default",
+  );
+  assertEquals(a.components.getEntityDataOrThrow(velocity, e), { x: 0, y: 3 }, "extra component zero-fills");
   assert(a.components.entityHas(flying, e), "extra tag");
   assertEquals(observe(a), observe(b), "override instantiate matches createWith");
 
   // Overrides are per call: the next instance gets plain prefab defaults.
   const plain = a.entities.instantiateOrThrow(goblin);
-  assertEquals(a.components.getEntityData(position, plain), { x: 1.5, y: -2 }, "no stale override");
+  assertEquals(a.components.getEntityDataOrThrow(position, plain), { x: 1.5, y: -2 }, "no stale override");
   assert(!a.components.entityHas(velocity, plain) && !a.components.entityHas(flying, plain), "no stale extras");
 });
 
 Deno.test("instantiate overrides are canonicalized like any public write", async () => {
   const world = await createTestWorld(allComponents);
   const e = world.entities.instantiateOrThrow(goblin, [[stats, { level: 257, speed: 0.1 }]]);
-  assertEquals(world.components.getEntityData(stats, e), { level: 1, speed: Math.fround(0.1) }, "canonical");
+  assertEquals(world.components.getEntityDataOrThrow(stats, e), { level: 1, speed: Math.fround(0.1) }, "canonical");
 });
 
 Deno.test("instantiate is atomic: rejected calls allocate nothing and publish nothing", async () => {
@@ -272,12 +276,12 @@ Deno.test("instantiate supports capped (sparse) components and defaults", async 
   const bigBoss = new Prefab({ extends: goblin, components: [[boss, { level: 9, speed: 2.5 }]] });
   const first = world.entities.instantiateOrThrow(bigBoss);
   const second = world.entities.instantiateOrThrow(bigBoss, [[boss, { speed: 1 }]]);
-  assertEquals(world.components.getEntityData(boss, first), { level: 9, speed: 2.5 }, "sparse defaults");
-  assertEquals(world.components.getEntityData(boss, second), { level: 9, speed: 1 }, "sparse override merge");
+  assertEquals(world.components.getEntityDataOrThrow(boss, first), { level: 9, speed: 2.5 }, "sparse defaults");
+  assertEquals(world.components.getEntityDataOrThrow(boss, second), { level: 9, speed: 1 }, "sparse override merge");
   assertThrows(() => world.entities.instantiate(bigBoss), RangeError, "bossStats");
   world.entities.destroy(first);
   const third = world.entities.instantiateOrThrow(bigBoss);
-  assertEquals(world.components.getEntityData(boss, third), { level: 9, speed: 2.5 }, "freed sparse row reused");
+  assertEquals(world.components.getEntityDataOrThrow(boss, third), { level: 9, speed: 2.5 }, "freed sparse row reused");
 });
 
 Deno.test("prefabs are world-independent and never occupy slots", async () => {
@@ -286,8 +290,8 @@ Deno.test("prefabs are world-independent and never occupy slots", async () => {
   assertStrictEquals(original.entities.getActiveCount(), 0, "defining prefabs allocates nothing");
   const e1 = reordered.entities.instantiateOrThrow(goblin);
   const e2 = original.entities.instantiateOrThrow(goblin);
-  assertEquals(reordered.components.getEntityData(stats, e1), { level: 3, speed: 0 }, "reordered registration");
-  assertEquals(original.components.getEntityData(stats, e2), { level: 3, speed: 0 }, "original registration");
+  assertEquals(reordered.components.getEntityDataOrThrow(stats, e1), { level: 3, speed: 0 }, "reordered registration");
+  assertEquals(original.components.getEntityDataOrThrow(stats, e2), { level: 3, speed: 0 }, "original registration");
   assertStrictEquals(reordered.entities.getActiveCount(), 1, "only the instance is active");
   assertEquals(reordered.entities.querySnapshot(new Query({ none: [flying] })), [e1], "none-only query sees instance");
 });
@@ -324,9 +328,9 @@ Deno.test("instantiateMany matches N createWith calls and returns a borrowed lis
 Deno.test("instantiateMany list supports per-instance tweaks through slots", async () => {
   const world = await createTestWorld(allComponents);
   const list = world.entities.instantiateMany(goblin, 4)!;
-  const x = world.components.require(position).storage.partitions.x;
+  const x = world.components.getInstanceOrThrow(position).storage.partitions.x;
   for (let i = 0; i < list.count; i++) x[list.slots[i]!] = i * 10;
-  const values = world.entities.toArray(list).map((e) => world.components.getEntityData(position, e).x);
+  const values = world.entities.toArray(list).map((e) => world.components.getEntityDataOrThrow(position, e).x);
   assertEquals(values, [0, 10, 20, 30], "per-instance writes");
 });
 
@@ -402,9 +406,9 @@ Deno.test("EcsWorld.prefab and instantiate use named specs", async () => {
   assertEquals(bat.components.map((c) => c.name), ["Position", "Health", "Enemy", "Flying"], "extends");
 
   const e = game.instantiate(orc, { Position: { y: 5 } });
-  assertEquals(game.world.components.getEntityData("Position", e), { x: 1, y: 5 }, "named override merges");
+  assertEquals(game.world.components.getEntityDataOrThrow("Position", e), { x: 1, y: 5 }, "named override merges");
   const flyer = game.instantiate(bat);
-  assertEquals(game.world.components.getEntityData("Health", flyer), { hp: 2 }, "child default");
+  assertEquals(game.world.components.getEntityDataOrThrow("Health", flyer), { hp: 2 }, "child default");
   assert(game.world.components.entityHas("Enemy", flyer), "inherited tag");
 
   const list = game.instantiateMany(orc, 3, { Flying: true });
@@ -415,7 +419,7 @@ Deno.test("EcsWorld.prefab and instantiate use named specs", async () => {
   assertThrows(() => game.prefab({ Enemy: false } as never), TypeError, "must be spawned with true");
   assertThrows(() => game.instantiate(orc, { Nope: { x: 1 } } as never), Error, "Unknown component");
   const plain = game.instantiate(orc);
-  assertEquals(game.world.components.getEntityData("Position", plain), { x: 1, y: 0 }, "no stale override");
+  assertEquals(game.world.components.getEntityDataOrThrow("Position", plain), { x: 1, y: 0 }, "no stale override");
 });
 
 Deno.test("instantiate called from an override getter does not clobber the outer call", async () => {
@@ -429,10 +433,10 @@ Deno.test("instantiate called from an override getter does not clobber the outer
   };
   const outer = world.entities.instantiateOrThrow(goblin, [[position, data as { x: number }]]);
   assert(inner !== undefined, "inner ran");
-  assertEquals(world.components.getEntityData(position, outer), { x: 3, y: -2 }, "outer override");
+  assertEquals(world.components.getEntityDataOrThrow(position, outer), { x: 3, y: -2 }, "outer override");
   assert(!world.components.entityHas(velocity, outer), "inner extras did not leak into outer");
-  assertEquals(world.components.getEntityData(velocity, inner), { x: 8, y: 0 }, "inner override");
-  assertEquals(world.components.getEntityData(position, inner), { x: 1.5, y: -2 }, "inner defaults");
+  assertEquals(world.components.getEntityDataOrThrow(velocity, inner), { x: 8, y: 0 }, "inner override");
+  assertEquals(world.components.getEntityDataOrThrow(position, inner), { x: 1.5, y: -2 }, "inner defaults");
 });
 
 // Keep the bundle type exercised so the prefab and createWith inputs stay structurally identical.

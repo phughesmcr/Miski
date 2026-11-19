@@ -82,7 +82,7 @@ function observe(world: World): unknown {
     changed: slots(world.components.getChanged(position)),
     data: slots(world.components.getOwners(position)).map((slot) => {
       const entity = world.entities.getActiveSnapshot().find((candidate) => entityIndex(candidate) === slot)!;
-      return world.components.getEntityData(position, entity);
+      return world.components.getEntityDataOrThrow(position, entity);
     }),
   };
 }

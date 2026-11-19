@@ -98,14 +98,14 @@ Deno.test("include exposes optional component instances without filtering render
     name: "renderEvidence",
     query: renderQuery,
     callback: (renderComponents, entities): void => {
-      const posX = renderComponents.pos.partitions.x;
-      const posY = renderComponents.pos.partitions.y;
-      const facing = renderComponents.facing.partitions.dir;
+      const posX = renderComponents.pos.storage.partitions.x;
+      const posY = renderComponents.pos.storage.partitions.y;
+      const facing = renderComponents.facing.storage.partitions.dir;
       for (let i = 0; i < entities.count; i++) {
         const entity = entities.entities[i]!;
         const slot = entities.slots[i]!;
         const dir = renderComponents.facing.has(entity) ? facing[slot] : 0;
-        const hp = renderComponents.health.has(entity) ? renderComponents.health.partitions.hp[slot] : 0;
+        const hp = renderComponents.health.has(entity) ? renderComponents.health.storage.partitions.hp[slot] : 0;
         rendered.push(`${entity}:${posX[slot]},${posY[slot]}:${dir}:${hp}`);
       }
     },
@@ -163,11 +163,11 @@ Deno.test("instance and world changed marking are ownership guarded and allocati
     [Drawable],
   ]);
 
-  const facing = world.components.require(Facing);
-  const drawable = world.components.require(Drawable);
+  const facing = world.components.getInstanceOrThrow(Facing);
+  const drawable = world.components.getInstanceOrThrow(Drawable);
   world.refresh();
 
-  facing.partitions.dir[entityIndex(owner)] = 3;
+  facing.storage.partitions.dir[entityIndex(owner)] = 3;
   assertEquals(ids(world.components.getChanged(Facing)), [], "Expected direct partition write not to mark changed");
   assertStrictEquals(facing.markChanged(owner), true, "Expected owner data instance marking to succeed");
   assertStrictEquals(facing.markChanged(owner), true, "Expected duplicate owner marking to stay successful");
@@ -246,8 +246,8 @@ Deno.test("bundles and spawn APIs preflight before mutation and move once to the
     [Drawable],
   ]);
 
-  assertEquals(world.components.getEntityData(GridPos, entity), { x: 1, y: 2 }, "Expected bundle data");
-  assertEquals(world.components.getEntityData(Facing, entity), { dir: 1 }, "Expected branded bundle data");
+  assertEquals(world.components.getEntityDataOrThrow(GridPos, entity), { x: 1, y: 2 }, "Expected bundle data");
+  assertEquals(world.components.getEntityDataOrThrow(Facing, entity), { dir: 1 }, "Expected branded bundle data");
   assertEquals(ids(world.components.getChanged(GridPos)), [entity], "Expected bundle data to be changed");
   assertEquals(ids(world.components.getChanged(Facing)), [entity], "Expected branded bundle data to be changed");
   assertEquals(
@@ -261,7 +261,7 @@ Deno.test("bundles and spawn APIs preflight before mutation and move once to the
     [GridPos, { x: 5 }],
     [Drawable],
   ]);
-  assertEquals(world.components.getEntityData(GridPos, entity), { x: 5, y: 2 }, "Expected bundle upsert");
+  assertEquals(world.components.getEntityDataOrThrow(GridPos, entity), { x: 5, y: 2 }, "Expected bundle upsert");
   assertEquals(ids(world.components.getChanged(GridPos)), [entity], "Expected upsert data to mark changed");
 
   const spawned = world.entities.createWith([
@@ -270,13 +270,17 @@ Deno.test("bundles and spawn APIs preflight before mutation and move once to the
     [Drawable],
   ]);
   assert(spawned !== undefined, "Expected createWith to return an entity");
-  assertEquals(world.components.getEntityData(Facing, spawned), { dir: 2 }, "Expected createWith bundle data");
+  assertEquals(world.components.getEntityDataOrThrow(Facing, spawned), { dir: 2 }, "Expected createWith bundle data");
 
   const spawnedOrThrow = world.entities.createWithOrThrow([
     [GridPos, { x: 11, y: 12 }],
     [Health, { hp: 100 }],
   ]);
-  assertEquals(world.components.getEntityData(Health, spawnedOrThrow), { hp: 100 }, "Expected createWithOrThrow data");
+  assertEquals(
+    world.components.getEntityDataOrThrow(Health, spawnedOrThrow),
+    { hp: 100 },
+    "Expected createWithOrThrow data",
+  );
 });
 
 Deno.test("bundle validation rejects duplicate, unregistered, inactive, tag-data, capped, and full-world cases atomically", async () => {
@@ -309,7 +313,7 @@ Deno.test("bundle validation rejects duplicate, unregistered, inactive, tag-data
     "not registered",
   );
   assertEquals(
-    world.components.getEntityData(GridPos, entity),
+    world.components.getEntityDataOrThrow(GridPos, entity),
     { x: 1, y: 2 },
     "Expected unregistered bundle atomicity",
   );

@@ -132,7 +132,7 @@ const schedule = new Schedule(world).add(movement);
 
 schedule.run(1 / 60); // runs every system, then refreshes entered / exited / changed
 
-console.log(world.components.getEntityData(Position, entity));
+console.log(world.components.getEntityDataOrThrow(Position, entity));
 // → { x: ~0.0167, y: ~0.0083 }
 ```
 
@@ -266,7 +266,7 @@ const Unit = new Component({
 });
 
 world.components.addToEntity(Unit, entity, { state: "run", target: enemy });
-world.components.getEntityData(Unit, entity);
+world.components.getEntityDataOrThrow(Unit, entity);
 // { hp: 0, alive: false, state: "run", target: enemy, label: "", mesh: Mesh }
 ```
 
@@ -281,8 +281,8 @@ world.components.getEntityData(Unit, entity);
 Guarded writes (`addToEntity`, `setEntityData`, bundles, the proxy,
 `instance.set`) check each value's type, and `undefined` is never accepted.
 Entity fields accept a live entity or `null`; a destroyed handle throws
-`EntityNotFoundError`. Reads (`getEntityData`, `readEntityDataInto`, the proxy,
-`instance.get` / `getAt`) decode raw values; an entity field reads `null` once
+`EntityNotFoundError`. Reads (`getEntityData*`, `readEntityDataInto`, the
+proxy, `instance.get`) decode raw values; an entity field reads `null` once
 its target is destroyed, even if the slot is reused. Raw partitions hold the
 encoded values, and string / object columns are capacity-length JS arrays
 indexed by slot, as numeric ones are. Removing the component or destroying its
@@ -310,36 +310,52 @@ const list = world.entities.queryList(new Query({ all: [Position] }));
 world.components.addToEntities(Active, list);
 ```
 
-**Hot-path writes** — when every nanosecond counts, go straight to the SoA
-partitions. House rule: **`slots` for storage, `entities` for identity.**
+**Reading and writing values** — three tiers, fastest first. Pick the
+slowest one your loop can afford.
+
+| Tier               | Read / write                                                                       | Guards                                        |
+| ------------------ | ---------------------------------------------------------------------------------- | --------------------------------------------- |
+| (a) hot path       | `instance.storage.partitions[key][slot]`                                           | none: raw values, no change tracking          |
+| (b) guarded cursor | `instance.proxy` (`proxy.entity = e; proxy.x`), `instance.get` / `instance.set`    | ownership, validation, encoding, changed      |
+| (c) world calls    | `getEntityData` / `getEntityDataOrThrow`, `readEntityDataInto`, `setEntityData`    | (b) plus liveness and registration            |
+
+House rule for tier (a): **`slots` for storage, `entities` for identity.**
 Index partitions by storage slot (`entityIndex(entity)` or `queryList` /
-system `slots`), never by the packed handle. `.partitions` is a friendly
-alias of `.storage.partitions`.
+system `slots`), never by the packed handle.
 
 > Brands on `Entity` / `SlotIndex` catch swaps at function APIs (`destroy`,
-> `getAt`, …). Raw `TypedArray` indexing still accepts either number — do not
-> write `partitions.x[entity]`.
+> `instance.get`, …). Raw `TypedArray` indexing still accepts either number —
+> do not write `partitions.x[entity]`.
 
 ```ts
 import { entityIndex } from "@phughesmcr/miski";
 
-const instance = world.components.getInstance(Position)!;
+const instance = world.components.getInstanceOrThrow(Position);
+
+// (a) Hot path: raw SoA columns. Mark changed yourself if anyone watches.
 instance.storage.partitions.x[entityIndex(entity)] = 1;
 instance.markChanged(entity); // ownership-guarded
 
-// Safer (slower) — proxy tracks changed + typeguards
+// (b) Guarded cursor: tracks changed and typeguards each value
 instance.proxy.entity = entity;
 instance.proxy.x = 1;
+instance.set(entity, "y", 2); // one field, leaves the proxy where it was
+instance.get(entity, "y"); // 2
 
-// Public guarded APIs — the polite path
-world.components.getEntityData(Position, entity);
+// (c) World-level guarded calls: the polite path
+world.components.getEntityData(Position, entity); // { x, y } | undefined
+world.components.getEntityDataOrThrow(Position, entity); // throws if absent
 world.components.setEntityData(Position, entity, { x: 10, y: 20 });
 world.components.markChanged(Position, entity);
 
 // Zero-alloc read into a reused object — no disposable cups
 const out = { x: 0, y: 0 };
-world.components.readEntityDataInto(Position, entity, out);
+world.components.readEntityDataInto(Position, entity, out); // false if absent
 ```
+
+Across `world.components`, a plain name returns `undefined` (or `false`) when
+the thing is absent, and the `OrThrow` name throws: `getInstance` /
+`getInstanceOrThrow`, `getEntityData` / `getEntityDataOrThrow`.
 
 `getChanged(...)` resets each `world.refresh()` — a fresh tray every frame.
 Attaching a data component marks it changed, with or without a payload. Tags
@@ -405,7 +421,7 @@ world.entities.instantiate(boss); // Entity | undefined when full
 
 // Bulk, all or nothing: a borrowed list, valid until the next mutation.
 const pack = world.entities.instantiateManyOrThrow(goblin, 128);
-const { x } = world.components.require(Position).storage.partitions;
+const { x } = world.components.getInstanceOrThrow(Position).storage.partitions;
 for (let i = 0; i < pack.count; i++) x[pack.slots[i]!] = i * 2; // per-instance tweaks
 ```
 

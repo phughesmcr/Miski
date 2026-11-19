@@ -14,7 +14,7 @@ import {
 import { createEntity, createTestWorld, vec2Component } from "./fixtures.ts";
 import { assert, assertEquals, assertThrows, ids } from "./helpers.ts";
 
-type RawWrite = "partitions" | "proxy-slot" | "setAt";
+type RawWrite = "partitions" | "proxy-slot";
 
 /** Write to a (non-owner) slot through each documented raw/cursor path. */
 function strayWrite(
@@ -25,19 +25,17 @@ function strayWrite(
 ): void {
   if (how === "partitions") {
     (instance.storage!.partitions as Record<string, Float32Array>)["x"]![slot] = value;
-  } else if (how === "proxy-slot") {
+  } else {
     instance.proxy!.slot = asSlotIndex(slot);
     (instance.proxy as unknown as Record<string, number>)["x"] = value;
-  } else {
-    instance.setAt(asSlotIndex(slot), "x", value);
   }
 }
 
-for (const how of ["partitions", "proxy-slot", "setAt"] as const) {
+for (const how of ["partitions", "proxy-slot"] as const) {
   Deno.test(`capped add survives stray non-owner writes (${how}) without half-committing`, async () => {
     const position = vec2Component("position", { maxEntities: 2 });
     const world = await createTestWorld([position], 8);
-    const instance = world.components.require(position);
+    const instance = world.components.getInstanceOrThrow(position);
     const [a, b, c, d] = [createEntity(world), createEntity(world), createEntity(world), createEntity(world)];
     world.refresh();
 
@@ -48,7 +46,7 @@ for (const how of ["partitions", "proxy-slot", "setAt"] as const) {
     // Both dense rows were consumed by stray writes; adds must still succeed and fully commit.
     world.components.addToEntity(position, c, { x: 1, y: 2 });
     assert(world.components.entityHas(position, c), "Add must grant ownership");
-    assertEquals(world.components.getEntityData(position, c), { x: 1, y: 2 }, "Owner data must be stored");
+    assertEquals(world.components.getEntityDataOrThrow(position, c), { x: 1, y: 2 }, "Owner data must be stored");
     assertEquals(ids(world.entities.queryList(new Query({ all: [position] }))), [c], "Archetype/query must see owner");
     assertEquals(ids(world.components.getChanged(position)), [c], "Only owners appear in getChanged");
 
@@ -66,17 +64,17 @@ for (const how of ["partitions", "proxy-slot", "setAt"] as const) {
 Deno.test("capped bundle, createWith and addToEntities survive stray non-owner writes", async () => {
   const position = vec2Component("position", { maxEntities: 2 });
   const world = await createTestWorld([position], 8);
-  const instance = world.components.require(position);
+  const instance = world.components.getInstanceOrThrow(position);
   const strays = [createEntity(world), createEntity(world)];
   strayWrite("partitions", instance, entityIndex(strays[0]!), 5);
   strayWrite("partitions", instance, entityIndex(strays[1]!), 6);
 
   const created = world.entities.createWithOrThrow([[position, { x: 3, y: 4 }]]);
-  assertEquals(world.components.getEntityData(position, created), { x: 3, y: 4 }, "createWith commits fully");
+  assertEquals(world.components.getEntityDataOrThrow(position, created), { x: 3, y: 4 }, "createWith commits fully");
 
   const bundled = createEntity(world);
   world.components.addBundle(bundled, [[position, { x: 9, y: 9 }]]);
-  assertEquals(world.components.getEntityData(position, bundled), { x: 9, y: 9 }, "addBundle commits fully");
+  assertEquals(world.components.getEntityDataOrThrow(position, bundled), { x: 9, y: 9 }, "addBundle commits fully");
   assertEquals(ids(world.components.getOwners(position)).length, 2, "Both owners counted");
 });
 
@@ -84,11 +82,15 @@ Deno.test("stray non-owner writes are discarded when ownership is acquired", asy
   for (const maxEntities of [undefined, 2]) {
     const position = vec2Component("position", { maxEntities });
     const world = await createTestWorld([position], 8);
-    const instance = world.components.require(position);
+    const instance = world.components.getInstanceOrThrow(position);
     const entity = createEntity(world);
     strayWrite("partitions", instance, entityIndex(entity), 42);
     world.components.addToEntity(position, entity);
-    assertEquals(world.components.getEntityData(position, entity), { x: 0, y: 0 }, "New ownership starts at zero");
+    assertEquals(
+      world.components.getEntityDataOrThrow(position, entity),
+      { x: 0, y: 0 },
+      "New ownership starts at zero",
+    );
   }
 });
 
@@ -104,7 +106,7 @@ Deno.test("acquiring ownership with data marks changed identically in dense and 
     world.refresh();
 
     // Payload equal to the previous owner's leftover value.
-    const instance = world.components.require(position);
+    const instance = world.components.getInstanceOrThrow(position);
     const first = createEntity(world);
     world.components.addToEntity(position, first, { x: 5 });
     world.components.removeFromEntity(position, first);
@@ -134,7 +136,7 @@ Deno.test("owner caps above world capacity are clamped to capacity", async () =>
   for (const entity of entities) world.components.addToEntity(huge, entity, { x: 1 });
   assertEquals(ids(world.components.getOwners(huge)).length, 8, "Cap above capacity never binds before capacity");
   assertEquals(
-    world.components.getEntityData(huge, entities[7]!),
+    world.components.getEntityDataOrThrow(huge, entities[7]!),
     { x: 1, y: 0 },
     "Clamped storage reads and writes normally",
   );

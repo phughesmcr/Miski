@@ -23,10 +23,10 @@ function mixedComponent(): Component<
   return new Component({ name: "mixed", schema: { x: Float32Array, alive: field.bool(), label: field.string() } });
 }
 
-Deno.test("set / setAt write without moving the shared proxy cursor", async () => {
+Deno.test("instance.set writes without moving the shared proxy cursor", async () => {
   const mixed = mixedComponent();
   const world = await createTestWorld([mixed]);
-  const instance = world.components.require(mixed);
+  const instance = world.components.getInstanceOrThrow(mixed);
   const a = createEntity(world);
   const b = createEntity(world);
   world.components.addToEntity(mixed, a, { x: 1, alive: false, label: "a" });
@@ -34,44 +34,41 @@ Deno.test("set / setAt write without moving the shared proxy cursor", async () =
   const proxy = instance.proxy!;
   proxy.entity = a;
 
-  // Numeric, codec (bool) and side (string) columns through both entry points.
+  // Numeric, codec (bool) and side (string) columns.
   instance.set(b, "x", 9);
   instance.set(b, "alive", true);
   instance.set(b, "label", "bee");
   assertEquals(proxy.entity, a, "set leaves the cursor on its entity");
-  instance.setAt(entityIndex(b) as SlotIndex, "x", 10);
-  instance.setAt(entityIndex(b) as SlotIndex, "alive", false);
-  instance.setAt(entityIndex(b) as SlotIndex, "label", "bea");
-  assertEquals(proxy.entity, a, "setAt leaves the cursor on its entity");
-  assertEquals(proxy.slot, entityIndex(a), "setAt leaves the cursor slot");
+  instance.set(b, "x", 10);
+  instance.set(b, "alive", false);
+  instance.set(b, "label", "bea");
+  assertEquals(proxy.entity, a, "set leaves the cursor on its entity");
+  assertEquals(proxy.slot, entityIndex(a), "set leaves the cursor slot");
 
   // The cursor kept entity mode, so its ownership guard still applies.
   assertEquals(proxy.x, 1, "proxy still reads a");
   assertEquals(proxy.label, "a", "proxy still reads a's side column");
-  assertEquals(world.components.getEntityData(mixed, b), { x: 10, alive: false, label: "bea" }, "b was written");
+  assertEquals(world.components.getEntityDataOrThrow(mixed, b), { x: 10, alive: false, label: "bea" }, "b was written");
   world.components.removeFromEntity(mixed, a);
   assertThrows(() => proxy.x, ComponentOwnershipError, "does not own");
 
   // Rejected writes leave the cursor alone too.
   proxy.entity = b;
   assertThrows(() => instance.set(a, "x", 1), ComponentOwnershipError, "does not own");
-  assertThrows(() => instance.set(b, "x", Number.NaN), TypeError, "");
+  assertThrows(() => instance.set(b, "x", Number.NaN), ComponentDataError, "finite number");
   assertThrows(() => instance.set(b, "alive", 1 as never), ComponentDataError, "must be a boolean");
   assertThrows(() => instance.set(b, "label", 1 as never), ComponentDataError, "");
   assertThrows(() => instance.set(b, "nope", 1), ComponentDataError, "does not define");
   assertThrows(() => instance.set(b, "toString", 1), ComponentDataError, "does not define");
   assertThrows(() => instance.set(asEntity(1_000), "x", 1), EntityNotFoundError, "");
-  assertThrows(() => instance.setAt(-1 as SlotIndex, "x", 1), EntityNotFoundError, "");
-  assertThrows(() => instance.setAt(0.5 as SlotIndex, "x", 1), EntityNotFoundError, "");
-  assertThrows(() => instance.setAt(8 as SlotIndex, "x", 1), EntityNotFoundError, "");
   assertEquals(proxy.entity, b, "rejected writes leave the cursor");
   await world.destroy();
 });
 
-Deno.test("set / setAt mark owners changed and bump the revision once per real change", async () => {
+Deno.test("instance.set marks owners changed and bump the revision once per real change", async () => {
   const mixed = mixedComponent();
   const world = await createTestWorld([mixed]);
-  const instance = world.components.require(mixed);
+  const instance = world.components.getInstanceOrThrow(mixed);
   const a = createEntity(world);
   world.components.addToEntity(mixed, a, { x: 1, alive: false, label: "a" });
   const before = instance.revision;
@@ -80,19 +77,19 @@ Deno.test("set / setAt mark owners changed and bump the revision once per real c
   instance.set(a, "x", 3);
   assertEquals(instance.revision, before + 1, "a real change bumps the revision");
   assert(ids(world.components.getChanged(mixed)).includes(a), "a is marked changed");
-  instance.setAt(entityIndex(a) as SlotIndex, "label", "z");
-  assertEquals(instance.revision, before + 2, "setAt bumps the revision");
-  assertEquals(instance.get(a, "label") as unknown, "z", "setAt wrote the side column");
+  instance.set(a, "label", "z");
+  assertEquals(instance.revision, before + 2, "a side-column write bumps the revision");
+  assertEquals(instance.get(a, "label") as unknown, "z", "set wrote the side column");
   await world.destroy();
 });
 
-Deno.test("set / setAt cover enum, entity and object columns and skip tracking for non-owner slots", async () => {
+Deno.test("instance.set covers enum, entity and object columns; non-owner slot writes skip tracking", async () => {
   const rich = new Component({
     name: "rich",
     schema: { state: field.enum(["idle", "run"]), target: field.entity(), mesh: field.object<{ id: number }>() },
   });
   const world = await createTestWorld([rich]);
-  const instance = world.components.require(rich);
+  const instance = world.components.getInstanceOrThrow(rich);
   const a = createEntity(world);
   const t = createEntity(world);
   const free = createEntity(world);
@@ -101,7 +98,7 @@ Deno.test("set / setAt cover enum, entity and object columns and skip tracking f
   const mesh = { id: 1 };
   instance.set(a, "state", "run");
   instance.set(a, "target", t);
-  instance.setAt(entityIndex(a) as SlotIndex, "mesh", mesh);
+  instance.set(a, "mesh", mesh);
   assertEquals(instance.proxy!.entity, a, "cursor unchanged");
   assertEquals(instance.get(a, "state") as unknown, "run", "enum written");
   assertEquals(instance.get(a, "target") as unknown, t, "entity written");
@@ -111,10 +108,12 @@ Deno.test("set / setAt cover enum, entity and object columns and skip tracking f
   world.entities.destroy(t);
   assertEquals(instance.get(a, "target") as unknown, null, "stale entity decodes to null");
 
+  assertThrows(() => instance.set(free, "state", "run"), ComponentOwnershipError, "does not own");
   const revision = instance.revision;
-  instance.setAt(entityIndex(free) as SlotIndex, "state", "run");
-  assertEquals(instance.revision, revision, "non-owner setAt does not bump the revision");
-  assert(!ids(world.components.getChanged(rich)).includes(free), "non-owner setAt is not marked changed");
+  instance.proxy!.slot = entityIndex(free) as SlotIndex;
+  instance.proxy!.state = "run";
+  assertEquals(instance.revision, revision, "non-owner slot writes do not bump the revision");
+  assert(!ids(world.components.getChanged(rich)).includes(free), "non-owner slot writes are not marked changed");
   await world.destroy();
 });
 

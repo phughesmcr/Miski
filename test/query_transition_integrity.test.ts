@@ -1,6 +1,6 @@
 /// <reference lib="deno.ns" />
 
-import { CapacityError, type Entity, Query, SpecError, type World, WorldRollbackScope } from "../mod.ts";
+import { CapacityError, ComponentDataError, type Entity, Query, SpecError, type World, WorldRollbackScope } from "../mod.ts";
 import { Archetype } from "../src/archetype/archetype.ts";
 import { createEntity, createTestWorld, tagComponent, vec2Component } from "./fixtures.ts";
 import { assert, assertEquals, assertThrows, ids } from "./helpers.ts";
@@ -234,7 +234,7 @@ Deno.test("full-world bundle creation reports payload errors before capacity err
   assertThrows(() => world.entities.createWith(42 as never), TypeError, "Bundle");
   assertThrows(
     () => world.entities.createWith([[position, { x: Number.MAX_VALUE }]]),
-    TypeError,
+    ComponentDataError,
     "outside its storage range",
   );
   assertThrows(

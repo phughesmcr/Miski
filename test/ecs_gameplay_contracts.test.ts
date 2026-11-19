@@ -59,7 +59,7 @@ Deno.test("world enforces entity capacity and reuses destroyed entity slots with
 
   world.components.addToEntity(position, replacement);
   assertEquals(
-    world.components.getEntityData(position, replacement),
+    world.components.getEntityDataOrThrow(position, replacement),
     { x: 0, y: 0 },
     "Expected recycled component storage to be reinitialized when ownership is reacquired",
   );
@@ -75,7 +75,7 @@ Deno.test("component data APIs expose initial data, mutation, and per-frame dens
   world.components.addToEntity(renderable, entity);
 
   assertEquals(
-    world.components.getEntityData(position, entity),
+    world.components.getEntityDataOrThrow(position, entity),
     { x: 1.5, y: -2 },
     "Expected initial data to be stored",
   );
@@ -92,7 +92,7 @@ Deno.test("component data APIs expose initial data, mutation, and per-frame dens
   world.components.setEntityData(position, entity, { x: 4, y: 9 });
 
   assertEquals(
-    world.components.getEntityData(position, entity),
+    world.components.getEntityDataOrThrow(position, entity),
     { x: 4, y: 9 },
     "Expected setEntityData to update storage",
   );
@@ -125,7 +125,7 @@ Deno.test("component proxy tracks only real writes and direct storage access rem
 
   proxy.y = 100;
   assertEquals(
-    world.components.getEntityData(position, entity),
+    world.components.getEntityDataOrThrow(position, entity),
     { x: 99, y: 100 },
     "Expected proxy write to update data",
   );
@@ -199,17 +199,21 @@ Deno.test("manual typed query and system expose keyed component instances in cal
     callback: (components, entities, dt: number) => {
       for (let i = 0; i < entities.count; i++) {
         const slot = entities.slots[i]!;
-        components.position.partitions.x[slot] = components.position.partitions.x[slot]! +
-          components.velocity.partitions.x[slot]! * dt;
-        components.position.partitions.y[slot] = components.position.partitions.y[slot]! +
-          components.velocity.partitions.y[slot]! * dt;
+        components.position.storage.partitions.x[slot] = components.position.storage.partitions.x[slot]! +
+          components.velocity.storage.partitions.x[slot]! * dt;
+        components.position.storage.partitions.y[slot] = components.position.storage.partitions.y[slot]! +
+          components.velocity.storage.partitions.y[slot]! * dt;
       }
     },
   });
 
   const updateMovement = world.systems.register(movement);
   updateMovement(2);
-  assertEquals(world.components.getEntityData(position, first), { x: 7, y: 10 }, "Expected typed manual system update");
+  assertEquals(
+    world.components.getEntityDataOrThrow(position, first),
+    { x: 7, y: 10 },
+    "Expected typed manual system update",
+  );
 });
 
 Deno.test("equivalent query filters preserve distinct callback component keys", async () => {
@@ -217,7 +221,7 @@ Deno.test("equivalent query filters preserve distinct callback component keys", 
   const world = await createTestWorld([position]);
 
   ids(world.entities.query(new Query({ all: { position } })));
-  const positionInstance = world.components.require(position);
+  const positionInstance = world.components.getInstanceOrThrow(position);
   let callbackRan = false;
   const aliasedMovement = new System({
     name: "aliasedMovement",
@@ -267,7 +271,11 @@ Deno.test("systems receive matching component instances, borrowed entity lists, 
 
   const updateMovement = world.systems.register(movement);
   updateMovement(2);
-  assertEquals(world.components.getEntityData(position, first), { x: 12, y: 16 }, "Expected first movement update");
+  assertEquals(
+    world.components.getEntityDataOrThrow(position, first),
+    { x: 12, y: 16 },
+    "Expected first movement update",
+  );
 
   const second = createEntity(world);
   world.components.addToEntity(position, second, { x: 0, y: 0 });
@@ -281,11 +289,15 @@ Deno.test("systems receive matching component instances, borrowed entity lists, 
     "Expected system query to see entities added after system creation",
   );
   assertEquals(
-    world.components.getEntityData(position, first),
+    world.components.getEntityDataOrThrow(position, first),
     { x: 13, y: 14 },
     "Expected first entity to update again",
   );
-  assertEquals(world.components.getEntityData(position, second), { x: 3, y: 4 }, "Expected second entity to update");
+  assertEquals(
+    world.components.getEntityDataOrThrow(position, second),
+    { x: 3, y: 4 },
+    "Expected second entity to update",
+  );
   assertStrictEquals(world.systems.get(movement), updateMovement, "Expected systems to be retrievable by prototype");
   assertStrictEquals(world.systems.get("movement"), updateMovement, "Expected systems to be retrievable by name");
 });
@@ -326,8 +338,16 @@ Deno.test("typed systems receive keyed component records and borrowed entity lis
   updateMovement(1);
 
   assertEquals(seen, [[first], [first, second]], "Expected each invocation to receive a fresh entity iterator");
-  assertEquals(world.components.getEntityData(position, first), { x: 10, y: 2 }, "Expected first entity updates");
-  assertEquals(world.components.getEntityData(position, second), { x: 11, y: 0 }, "Expected second entity updates");
+  assertEquals(
+    world.components.getEntityDataOrThrow(position, first),
+    { x: 10, y: 2 },
+    "Expected first entity updates",
+  );
+  assertEquals(
+    world.components.getEntityDataOrThrow(position, second),
+    { x: 11, y: 0 },
+    "Expected second entity updates",
+  );
 });
 
 Deno.test("system lifecycle hooks run during world initialization and destruction", async () => {
@@ -858,12 +878,12 @@ Deno.test("a component definition can back independent worlds without shared own
     "Expected second world singleton ownership",
   );
   assertEquals(
-    firstWorld.components.getEntityData(health, firstPlayer),
+    firstWorld.components.getEntityDataOrThrow(health, firstPlayer),
     { current: 75, max: 100 },
     "Expected first data",
   );
   assertEquals(
-    secondWorld.components.getEntityData(health, secondPlayer),
+    secondWorld.components.getEntityDataOrThrow(health, secondPlayer),
     { current: 20, max: 25 },
     "Expected second data",
   );

@@ -319,14 +319,6 @@ Deno.bench({
 });
 
 Deno.bench({
-  name: "ComponentManager getEntityComponents scan",
-  group: "internal component manager",
-  fn: () => {
-    objectSink = componentManager.getEntityComponents(dataEntity);
-  },
-});
-
-Deno.bench({
   name: "ComponentManager refresh changed flags",
   group: "internal component manager",
   fn: () => {

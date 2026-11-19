@@ -52,13 +52,17 @@ Deno.test("relations x field types: one rollback restores side columns and relat
   point.restore();
 
   assertEquals(
-    world.components.getEntityData(unit, child),
+    world.components.getEntityDataOrThrow(unit, child),
     { hp: 2, target: parent, alive: true, label: "child" },
     "Field values restored, including the entity ref to the revived parent",
   );
   assertEquals(world.relations.getTarget(childOf, child), parent, "Relation pair restored");
   assertEquals(world.relations.getTargets(likes, parent).count, 0, "Speculative pair dropped");
-  assertEquals(world.components.getEntityData(unit, parent).label, "parent", "Destroyed entity's side cells restored");
+  assertEquals(
+    world.components.getEntityDataOrThrow(unit, parent).label,
+    "parent",
+    "Destroyed entity's side cells restored",
+  );
 });
 
 Deno.test("relations x field types: an entity field reads null after its target dies in a cascade", async () => {
@@ -70,7 +74,11 @@ Deno.test("relations x field types: an entity field reads null after its target 
   world.entities.destroy(root);
   world.refresh();
   assertEquals(world.entities.isActive(leaf), false, "Cascade destroyed the child");
-  assertEquals(world.components.getEntityData(unit, watcher).target, null, "Ref to the cascaded entity reads null");
+  assertEquals(
+    world.components.getEntityDataOrThrow(unit, watcher).target,
+    null,
+    "Ref to the cascaded entity reads null",
+  );
 });
 
 Deno.test("relations x field types: a checkpoint restores field columns and relation pairs together", async () => {
@@ -82,7 +90,7 @@ Deno.test("relations x field types: a checkpoint restores field columns and rela
   world.components.setEntityData(unit, child, { label: "b", target: null });
   world.relations.remove(childOf, child, parent);
   world.applyCheckpoint(checkpoint);
-  assertEquals(world.components.getEntityData(unit, child).label, "a", "String field restored");
-  assertEquals(world.components.getEntityData(unit, child).target, parent, "Entity field restored");
+  assertEquals(world.components.getEntityDataOrThrow(unit, child).label, "a", "String field restored");
+  assertEquals(world.components.getEntityDataOrThrow(unit, child).target, parent, "Entity field restored");
   assertEquals(world.relations.getTarget(childOf, child), parent, "Relation pair restored");
 });

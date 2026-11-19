@@ -17,7 +17,7 @@ Deno.test("EcsWorld.spawn reuses scratch without leaking components or data betw
   assert(!ecs.world.components.entityHas("Velocity", second), "second entity gets no stale Velocity");
   assert(!ecs.world.components.entityHas("Player", second), "second entity gets no stale tag");
   assertEquals(
-    ecs.world.components.getEntityData("Position", second),
+    ecs.world.components.getEntityDataOrThrow("Position", second),
     { x: 4, y: 0 },
     "second spawn uses its own data",
   );
@@ -26,7 +26,7 @@ Deno.test("EcsWorld.spawn reuses scratch without leaking components or data betw
   assertThrows(() => ecs.spawn({ Position: { x: 1 }, Unknown: true } as never), Error, "Unknown component");
   const third = ecs.spawn({ Velocity: { x: 9 } });
   assert(!ecs.world.components.entityHas("Position", third), "no stale Position after a failed spawn");
-  assertEquals(ecs.world.components.getEntityData("Velocity", third), { x: 9 }, "third spawn uses its own data");
+  assertEquals(ecs.world.components.getEntityDataOrThrow("Velocity", third), { x: 9 }, "third spawn uses its own data");
 });
 
 Deno.test("EcsWorld.spawn keeps undefined-skip and tag validation semantics across reuse", async () => {
@@ -46,7 +46,7 @@ Deno.test("EcsWorld.spawn keeps undefined-skip and tag validation semantics acro
   inherited.Position = { x: 2 };
   const own = ecs.spawn(inherited as never);
   assert(!ecs.world.components.entityHas("Player", own), "inherited spec keys are ignored");
-  assertEquals(ecs.world.components.getEntityData("Position", own), { x: 2 }, "own spec keys are used");
+  assertEquals(ecs.world.components.getEntityDataOrThrow("Position", own), { x: 2 }, "own spec keys are used");
 });
 
 Deno.test("EcsWorld.spawn called from a spec getter does not clobber the outer spawn", async () => {
@@ -66,9 +66,9 @@ Deno.test("EcsWorld.spawn called from a spec getter does not clobber the outer s
     },
   });
   const outer = ecs.spawn(spec as never);
-  assertEquals(ecs.world.components.getEntityData("A", outer), { x: 5 }, "outer A keeps its own data");
-  assertEquals(ecs.world.components.getEntityData("B", outer), { x: 7 }, "outer B is applied");
+  assertEquals(ecs.world.components.getEntityDataOrThrow("A", outer), { x: 5 }, "outer A keeps its own data");
+  assertEquals(ecs.world.components.getEntityDataOrThrow("B", outer), { x: 7 }, "outer B is applied");
   assert(inner !== undefined, "inner spawn ran");
-  assertEquals(ecs.world.components.getEntityData("A", inner!), { x: 9 }, "inner A keeps its own data");
+  assertEquals(ecs.world.components.getEntityDataOrThrow("A", inner!), { x: 9 }, "inner A keeps its own data");
   assert(!ecs.world.components.entityHas("B", inner!), "inner entity has no outer components");
 });

@@ -86,11 +86,11 @@ if (positionStorage === null || positionProxy === null) {
   throw new Error("benchmark expected position component storage");
 }
 const healthInstance = mixed.world.components.getInstance(mixed.components.health) as ComponentInstance<Health>;
-const healthPartitions = healthInstance.partitions;
+const healthPartitions = healthInstance.storage.partitions;
 const renderStateInstance = mixed.world.components.getInstance(mixed.components.renderState) as ComponentInstance<
   RenderState
 >;
-const renderStatePartitions = renderStateInstance.partitions;
+const renderStatePartitions = renderStateInstance.storage.partitions;
 const readDataOut = { x: 0, y: 0 };
 
 const mutationEntity = mixed.entities[128]!;
@@ -168,8 +168,8 @@ function destroyPrefabBatch(entities: Entity[]): void {
 function spawnProjectileBatchWithInstantiateMany(): void {
   const world = prefabBulkLifecycle.world;
   const list = world.entities.instantiateManyOrThrow(projectilePrefab, 128);
-  const { x, y } = world.components.require(prefabComponents.position).storage.partitions;
-  const sprite = world.components.require(prefabComponents.renderState).storage.partitions.sprite;
+  const { x, y } = world.components.getInstanceOrThrow(prefabComponents.position).storage.partitions;
+  const sprite = world.components.getInstanceOrThrow(prefabComponents.renderState).storage.partitions.sprite;
   for (let i = 0; i < list.count; i++) {
     const slot = list.slots[i]!;
     x[slot] = i;
@@ -630,7 +630,7 @@ Deno.bench({
   name: "getEntityData object materialization",
   group: "component data hot path",
   fn: () => {
-    objectSink = mixed.world.components.getEntityData(mixed.components.position, mutationEntity);
+    objectSink = mixed.world.components.getEntityDataOrThrow(mixed.components.position, mutationEntity);
   },
 });
 
@@ -1006,7 +1006,7 @@ for (let i = 0; i < 1024; i++) {
 const fieldTarget = fieldEntities[0]!;
 const fieldEntity = fieldEntities[1]!;
 const fieldTransitionEntity = mustCreateEntity(fieldWorld);
-const fieldInstance = fieldWorld.components.require(fieldUnit);
+const fieldInstance = fieldWorld.components.getInstanceOrThrow(fieldUnit);
 const fieldProxy = fieldInstance.proxy;
 const fieldWriteData = {
   hp: 0,
@@ -1108,7 +1108,7 @@ Deno.bench({
   name: "getEntityData all field kinds",
   group: "field types",
   fn: () => {
-    objectSink = fieldWorld.components.getEntityData(fieldUnit, fieldEntity);
+    objectSink = fieldWorld.components.getEntityDataOrThrow(fieldUnit, fieldEntity);
   },
 });
 

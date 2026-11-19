@@ -97,6 +97,44 @@
   `field.entity()` fields.
 - `CommandBuffer` component commands that are given a relation now say to use
   `relate` / `unrelate`.
+- **Breaking:** `world.components` follows the library naming rule: a plain
+  name returns `undefined` (or `false`) when the thing is absent, and the
+  `OrThrow` name throws.
+  - `getEntityData` now returns `undefined` for an inactive entity, a
+    non-owner or a tag component; it is the old `readEntityData`. The old
+    throwing `getEntityData` is now `getEntityDataOrThrow`. Code that relied on
+    `getEntityData` throwing still compiles, so search for it when upgrading.
+  - `readEntityData` is removed; use `getEntityData`.
+  - `require` is renamed `getInstanceOrThrow`.
+- **Breaking:** component values now have three documented access tiers: (a)
+  the hot path `instance.storage.partitions[key][slot]`, (b) the guarded cursor
+  `instance.proxy` (plus `instance.get` / `instance.set`), and (c) the
+  world-level `getEntityData` / `getEntityDataOrThrow`, `readEntityDataInto`
+  and `setEntityData`. Redundant forms are removed:
+  - `ComponentInstance.partitions`; use `instance.storage.partitions`
+    (`instance.storage` is `null` for tag components).
+    `RelationInstance.partitions` is unchanged.
+  - `ComponentInstance.getAt` / `setAt`; use `instance.get` / `instance.set`
+    with the entity handle, or `storage.partitions` for raw slot access.
+  - `ComponentStorage.get` / `set` and the `StorageCell` type; index
+    `storage.partitions` instead.
+- **Breaking:** an invalid numeric value (non-finite, or outside a float
+  column's range) now throws `ComponentDataError` on every write path,
+  including `instance.set`, the proxy, prefab definitions, relation data and
+  `canonicalizeStoredValue`. Before, some paths threw `TypeError`. The
+  messages now say `data field "x"` throughout.
+- `getEntityData` / `readEntityDataInto` no longer fall back to `NaN` for an
+  unmapped cell (which would decode a bool as `true`); they use the field's
+  default.
+- `setEntityData`, `addBundle` / `createWith` and checkpoint apply release
+  staged string / object values right after the write, instead of keeping
+  them alive until the next `refresh()`. `addToEntity`, `addToEntities` and
+  prefab instantiation still release them at `refresh()`.
+- Rollback capture resolves each object field's `clone` hook once per column
+  instead of once per owner.
+- Internal: removed `ComponentManager.copyInstanceEntityData` (test-only) and
+  `getEntityComponents` (bench-only, allocating).
+
 - Fix world-save loads from a Node `Buffer` whose `byteOffset` is not a
   multiple of 8 (common for pooled `fs.readFileSync` Buffers): `loadWorld`,
   `readWorldSaveHeader` and `worldSaveToDocument` threw "Not a Miski world save
@@ -111,7 +149,7 @@
   comparison per `run()`.
 - `World.destroy()` rejects with an `AggregateError` of every failure when more
   than one system destroy hook fails. A single failure is still rethrown as is.
-- Fix: `ComponentInstance.set()` and `setAt()` no longer move the shared
+- Fix: `ComponentInstance.set()` no longer moves the shared
   `instance.proxy` cursor. Before, `inst.set(b, "x", 9)` left a proxy that a
   system had pointed at `a` reading and writing `b`. Single-field writes now go
   through per-column writers that the proxy setters share, so validation,
@@ -176,9 +214,8 @@
   descriptors. `Component.isTag` is `false` for components with only string or
   object fields. Numeric schema hashes are unchanged.
 - `ComponentCheckpoint` payloads and `ComponentData` / `ComponentValue` for
-  field columns are no longer numbers. `ComponentInstance.get` / `getAt` keep a
+  field columns are no longer numbers. `ComponentInstance.get` keeps a
   `string`-key overload typed `number`, so cast results from untyped instances.
-  `instance.storage.get` / `set` are now typed per column (`StorageCell`), and
   `StorageProxySpec<T>` requires `T extends SchemaOrNull`.
 - Add prefabs: immutable entity templates defined with `new Prefab({ name, extends?, components })`.
   `extends` flattens a parent prefab at definition time, and child fields override the parent's field by

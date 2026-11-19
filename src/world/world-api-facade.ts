@@ -149,11 +149,11 @@ function constructComponentAPI(host: WorldApiHost): WorldComponentAPI {
     getEntityData: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
       component: ComponentReference<TValue, TStorage>,
       entity: Entity,
-    ) => host.getComponentEntityData(component, entity),
-    readEntityData: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
+    ) => host.readComponentEntityData(component, entity),
+    getEntityDataOrThrow: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
       component: ComponentReference<TValue, TStorage>,
       entity: Entity,
-    ) => host.readComponentEntityData(component, entity),
+    ) => host.getComponentEntityData(component, entity),
     readEntityDataInto: <
       TValue extends SchemaOrNull,
       TStorage extends SchemaOrNull = TValue,
@@ -165,9 +165,9 @@ function constructComponentAPI(host: WorldApiHost): WorldComponentAPI {
     getInstance: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
       component: ComponentReference<TValue, TStorage>,
     ) => host.componentManager.getInstance(component),
-    require: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
+    getInstanceOrThrow: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
       component: ComponentReference<TValue, TStorage>,
-    ) => host.componentManager.require(component),
+    ) => host.componentManager.getInstanceOrThrow(component),
     getInstances: (array: DynamicComponent[] | Readonly<DynamicComponent[]>) =>
       host.componentManager.getInstances(array),
     getOwners: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(

@@ -12,7 +12,7 @@ const movement = new System({
   name: "movement",
   query: new Query({ all: { position, velocity } }),
   callback: (components) => {
-    components.position.partitions.x;
+    components.position.storage.partitions.x;
     // @ts-expect-error misspelled keys are rejected
     components.postion;
   },

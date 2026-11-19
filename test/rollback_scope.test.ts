@@ -21,7 +21,7 @@ Deno.test("a rollback scope left without commit restores the world, even on thro
     "turn failed",
   );
   assertEquals(ids(world.entities.getActiveSnapshot()), before, "Entities are restored");
-  assertEquals(world.components.getEntityData(position, kept), { x: 1, y: 2 }, "Component values are restored");
+  assertEquals(world.components.getEntityDataOrThrow(position, kept), { x: 1, y: 2 }, "Component values are restored");
   await world.destroy();
 });
 

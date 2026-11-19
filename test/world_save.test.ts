@@ -160,7 +160,7 @@ function observe(world: World): unknown {
     data: Object.keys(dataFields).map((name) => {
       const component = components.find((candidate) => candidate.name === name)!;
       return handles(world.components.getOwners(component)).map((entity) =>
-        world.components.getEntityData(component as typeof position, entity as Entity)
+        world.components.getEntityDataOrThrow(component as typeof position, entity as Entity)
       );
     }),
   };
@@ -505,7 +505,7 @@ Deno.test("migrate hooks run only on a layout mismatch and their result is valid
     },
   });
   assertStrictEquals(calls, 1, "migrate called once");
-  assertEquals(newWorld.components.getEntityData(newPosition, e), { x: 3, y: 4, z: 0 }, "migrated values");
+  assertEquals(newWorld.components.getEntityDataOrThrow(newPosition, e), { x: 3, y: 4, z: 0 }, "migrated values");
   assertStrictEquals(newWorld.entities.isActive(e), true, "handles survive migration");
 
   let same = 0;

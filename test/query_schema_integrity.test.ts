@@ -73,7 +73,11 @@ Deno.test("query aliases use own keys and normalized metadata stays immutable", 
     const query = Query.compose([new Query({ all: { [key]: position } })]);
     const bindings = world.components.query(query);
     assert(Object.hasOwn(bindings, key), `alias ${key} remains an own binding`);
-    assertStrictEquals(bindings[key], world.components.require(position), "alias resolves the intended component");
+    assertStrictEquals(
+      bindings[key],
+      world.components.getInstanceOrThrow(position),
+      "alias resolves the intended component",
+    );
     assertStrictEquals(Object.getPrototypeOf(bindings), null, "bindings have no inherited aliases");
     assert(Object.isFrozen(bindings), "bindings are immutable");
     assertEquals(listIds(world.entities.queryList(query)), [entity], "special aliases preserve matching");

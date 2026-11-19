@@ -145,8 +145,8 @@ const world = new World({
 
 await world.init();
 
-const { partitions: positionStore } = world.components.require(position).storage;
-const { partitions: visualStore } = world.components.require(visual).storage;
+const { partitions: positionStore } = world.components.getInstanceOrThrow(position).storage;
+const { partitions: visualStore } = world.components.getInstanceOrThrow(visual).storage;
 
 const droneQuery = new Query({ all: { position, velocity, visual, brain, drone } });
 const chargedQuery = new Query({ all: { visual, charge, drone } });

@@ -57,14 +57,18 @@ Deno.test("component checkpoints cannot be applied to a different world", async 
   const checkpoint = source.captureCheckpoint([sourceEntity], position);
   assertThrows(() => target.applyCheckpoint(checkpoint), Error, "different world");
   assertEquals(
-    target.components.getEntityData(position, targetEntity),
+    target.components.getEntityDataOrThrow(position, targetEntity),
     { x: 7, y: 8 },
     "A rejected foreign checkpoint must not change the target world",
   );
 
   source.components.setEntityData(position, sourceEntity, { x: 9, y: 9 });
   source.applyCheckpoint(checkpoint);
-  assertEquals(source.components.getEntityData(position, sourceEntity), { x: 1, y: 2 }, "Owner world still applies it");
+  assertEquals(
+    source.components.getEntityDataOrThrow(position, sourceEntity),
+    { x: 1, y: 2 },
+    "Owner world still applies it",
+  );
 });
 
 Deno.test("checkpoint and rollback round-trip worlds with more than 32 data components", async () => {
@@ -82,9 +86,9 @@ Deno.test("checkpoint and rollback round-trip worlds with more than 32 data comp
   world.components.setEntityData(middle, entity, { v: 200 });
   world.components.removeFromEntity(last, entity);
   world.applyCheckpoint(checkpoint);
-  assertEquals(world.components.getEntityData(first, entity), { v: 1 }, "Restore first component");
-  assertEquals(world.components.getEntityData(middle, entity), { v: 34 }, "Restore component past bit 32");
-  assertEquals(world.components.getEntityData(last, entity), { v: 40 }, "Re-attach the removed high component");
+  assertEquals(world.components.getEntityDataOrThrow(first, entity), { v: 1 }, "Restore first component");
+  assertEquals(world.components.getEntityDataOrThrow(middle, entity), { v: 34 }, "Restore component past bit 32");
+  assertEquals(world.components.getEntityDataOrThrow(last, entity), { v: 40 }, "Re-attach the removed high component");
 
   const point = new WorldRollbackScope(world);
   world.components.setEntityData(last, entity, { v: 500 });
@@ -95,7 +99,7 @@ Deno.test("checkpoint and rollback round-trip worlds with more than 32 data comp
 
   for (const [index, component] of components.entries()) {
     assertEquals(
-      world.components.getEntityData(component, entity),
+      world.components.getEntityDataOrThrow(component, entity),
       { v: index + 1 },
       `Rollback restores data component ${index}`,
     );

@@ -68,7 +68,7 @@ const manualTypedSystem = new System({
     entities.each((_slot, _entity, _i) => {});
     expectType<number>(dt);
 
-    components.position.partitions.x;
+    components.position.storage.partitions.x;
     components.velocity.proxy?.x;
 
     // @ts-expect-error none components are query filters, not callback components.
@@ -86,10 +86,10 @@ manualTypedInstance("fast");
 {
   const entity = 0 as Entity;
   const slot = entityIndex(entity);
-  const positionInstance = world.components.require(position);
-  positionInstance.getAt(slot, "x");
-  // @ts-expect-error packed handles are not storage slots.
-  positionInstance.getAt(entity, "x");
+  const positionInstance = world.components.getInstanceOrThrow(position);
+  positionInstance.get(entity, "x");
+  // @ts-expect-error storage slots are not packed entity handles.
+  positionInstance.get(slot, "x");
   // @ts-expect-error slots are not packed entity handles.
   world.entities.destroy(slot);
   world.entities.isActive(entity);
@@ -100,17 +100,17 @@ expectType<DynamicComponentInstance | undefined>(stringPosition);
 // @ts-expect-error string component lookup returns a dynamic component instance, not a concrete schema.
 expectType<ComponentInstance<Vec2> | undefined>(stringPosition);
 
-const requiredStringPosition = world.components.require("position");
+const requiredStringPosition = world.components.getInstanceOrThrow("position");
 expectType<DynamicComponentInstance>(requiredStringPosition);
 // @ts-expect-error required string lookup still cannot recover a concrete schema.
 expectType<ComponentInstance<Vec2>>(requiredStringPosition);
 
-const stringReadPosition = world.components.readEntityData("position", 0 as Entity);
+const stringReadPosition = world.components.getEntityData("position", 0 as Entity);
 expectType<ComponentData<SchemaOrNull> | undefined>(stringReadPosition);
 // @ts-expect-error string component lookup cannot infer a schema for data reads.
-world.components.readEntityData<Vec2>("position", 0 as Entity);
-// @ts-expect-error string component lookup cannot infer a schema for throwing data reads.
 world.components.getEntityData<Vec2>("position", 0 as Entity);
+// @ts-expect-error string component lookup cannot infer a schema for throwing data reads.
+world.components.getEntityDataOrThrow<Vec2>("position", 0 as Entity);
 
 const namedSystem = world.systems.get("manualTypedMovement");
 expectType<SystemInstance<SystemCallback> | undefined>(namedSystem);
@@ -188,10 +188,10 @@ const valueShapedSystem = new System({
   name: "valueShapedMovement",
   query: valueShapedQuery,
   callback: (components, _entities): void => {
-    expectType<Int16Array>(components.gridPos.partitions.x);
-    expectType<Uint8Array>(components.facing.partitions.dir);
+    expectType<Int16Array>(components.gridPos.storage.partitions.x);
+    expectType<Uint8Array>(components.facing.storage.partitions.dir);
     // @ts-expect-error data component partitions are never null.
-    expectType<null>(components.gridPos.partitions);
+    expectType<null>(components.gridPos.storage);
   },
 });
 void valueShapedSystem;
@@ -200,7 +200,7 @@ const ctorShapedSystem = new System({
   name: "ctorShapedMovement",
   query: new Query({ all: { position } }),
   callback: (components, entities): void => {
-    expectType<Float32Array>(components.position.partitions.x);
+    expectType<Float32Array>(components.position.storage.partitions.x);
     // Entity lists are iterable for convenience paths.
     for (const entity of entities) {
       expectType<Entity>(entity);
@@ -233,9 +233,9 @@ brandedWorld.components.setEntityData(gridPos, brandedEntity, { z: 4 });
 brandedWorld.components.setEntityData(position, brandedEntity, { x: 1.5 });
 
 // -- Non-throwing reads preserve the schema keys and add undefined.
-const readResult = brandedWorld.components.readEntityData(gridPos, brandedEntity);
+const readResult = brandedWorld.components.getEntityData(gridPos, brandedEntity);
 expectType<Record<"x" | "y", number> | undefined>(readResult);
-// @ts-expect-error readEntityData results must be narrowed before property access.
+// @ts-expect-error getEntityData results must be narrowed before property access.
 readResult.x;
 
 const readOut = { x: 0, y: 0, label: "kept" };
@@ -284,7 +284,7 @@ const plainAnnotatedSystem = new System({
     if (!dynamicFacing) return;
     expectType<ComponentInstance<SchemaOrNull, SchemaOrNull>>(dynamicFacing);
     // @ts-expect-error plain Query annotations intentionally erase concrete include inference.
-    dynamicFacing.partitions.dir;
+    dynamicFacing.storage.partitions.dir;
   },
 });
 void plainAnnotatedSystem;

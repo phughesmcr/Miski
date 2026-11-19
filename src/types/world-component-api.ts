@@ -6,7 +6,17 @@ import type { ComponentBundle, ComponentBundleEntryInput } from "@/types/compone
 import type { DynamicComponent, DynamicComponentInstance } from "@/types/component.ts";
 import type { ComponentData, SchemaOrNull, SchemaValues } from "@/types/partitions.ts";
 
-/** The public Component management API */
+/**
+ * The public Component management API.
+ *
+ * Component values are read and written at one of three tiers:
+ * - (a) hot path: `instance.storage.partitions[key][slot]` (raw, unguarded, no change tracking);
+ * - (b) guarded cursor: `instance.proxy` (or `instance.get` / `instance.set` for one field);
+ * - (c) world-level guarded calls: {@link getEntityData} / {@link getEntityDataOrThrow},
+ *   {@link readEntityDataInto} and {@link setEntityData}.
+ *
+ * Plain names return `undefined` (or `false`) on an expected failure; `OrThrow` names throw.
+ */
 export type WorldComponentAPI = {
   /** The number of components registered */
   readonly count: number;
@@ -82,30 +92,16 @@ export type WorldComponentAPI = {
     component: Component<TValue, TStorage> | string,
   ): Entity[] | undefined;
   /**
-   * Get the data of a component from an entity
-   * @param component - The component to get the data for
-   * @param entity - The entity to get the data for
-   * @returns The data for the component
-   * @throws {EntityNotFoundError} - If the entity is inactive
+   * Read a copy of an entity's component data (world-level guarded tier). Allocates one object per call; prefer
+   * {@link readEntityDataInto} in loops.
+   * @param component - The component to read
+   * @param entity - The entity to read
+   * @returns The decoded data, or `undefined` if the entity is inactive, does not own the component, or the component
+   * is a tag component with no data storage
    * @throws {NotRegisteredError} - If the component is not registered
-   * @throws {ComponentDataError} - If the component has no data storage
-   * @throws {ComponentOwnershipError} - If the active entity does not own the component
    */
-  getEntityData(component: string, entity: Entity): ComponentData<SchemaOrNull>;
+  getEntityData(component: string, entity: Entity): ComponentData<SchemaOrNull> | undefined;
   getEntityData<
-    TValue extends SchemaOrNull,
-    TStorage extends SchemaOrNull = TValue,
-  >(component: Component<TValue, TStorage>, entity: Entity): ComponentData<TValue>;
-  /**
-   * Read the data of a component from an entity without throwing
-   * @param component - The component to read the data for
-   * @param entity - The entity to read the data for
-   * @returns The data for the component, or `undefined` if the entity is inactive, does not own the component,
-   * or the component is a tag component with no data storage
-   * @throws {NotRegisteredError} - If the component is not registered
-   */
-  readEntityData(component: string, entity: Entity): ComponentData<SchemaOrNull> | undefined;
-  readEntityData<
     TValue extends SchemaOrNull,
     TStorage extends SchemaOrNull = TValue,
   >(
@@ -113,7 +109,22 @@ export type WorldComponentAPI = {
     entity: Entity,
   ): ComponentData<TValue> | undefined;
   /**
-   * Read component data into a caller-owned object without allocating.
+   * Read a copy of an entity's component data, throwing when it is absent (world-level guarded tier).
+   * @param component - The component to read
+   * @param entity - The entity to read
+   * @returns The decoded data
+   * @throws {EntityNotFoundError} - If the entity is inactive
+   * @throws {NotRegisteredError} - If the component is not registered
+   * @throws {ComponentDataError} - If the component has no data storage
+   * @throws {ComponentOwnershipError} - If the active entity does not own the component
+   */
+  getEntityDataOrThrow(component: string, entity: Entity): ComponentData<SchemaOrNull>;
+  getEntityDataOrThrow<
+    TValue extends SchemaOrNull,
+    TStorage extends SchemaOrNull = TValue,
+  >(component: Component<TValue, TStorage>, entity: Entity): ComponentData<TValue>;
+  /**
+   * Read component data into a caller-owned object without allocating (world-level guarded tier).
    * @param component - The component to read
    * @param entity - The entity to read
    * @param out - Object to overwrite with all component keys on success
@@ -152,13 +163,13 @@ export type WorldComponentAPI = {
     TStorage extends SchemaOrNull = TValue,
   >(component: Component<TValue, TStorage>): ComponentInstance<TValue, TStorage> | undefined;
   /**
-   * Get a registered component instance
+   * Get the registered instance of a given component, throwing when it is not registered
    * @param component - The component to get the instance for
    * @returns The registered instance of the component
    * @throws {NotRegisteredError} - If the component is not registered
    */
-  require(component: string): DynamicComponentInstance;
-  require<
+  getInstanceOrThrow(component: string): DynamicComponentInstance;
+  getInstanceOrThrow<
     TValue extends SchemaOrNull,
     TStorage extends SchemaOrNull = TValue,
   >(component: Component<TValue, TStorage>): ComponentInstance<TValue, TStorage>;
@@ -230,7 +241,7 @@ export type WorldComponentAPI = {
     entities: QueryEntityList,
   ): number;
   /**
-   * Set the data of a component for an entity
+   * Set the data of a component for an entity (world-level guarded tier): validates, encodes and marks it changed
    * @param component - The component to set the data for
    * @param entity - The entity to set the data for
    * @param value - The data to set; omitted keys keep their current values (partial update)
