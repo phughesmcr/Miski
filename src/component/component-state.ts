@@ -73,6 +73,8 @@ export type ComponentState = {
   readonly sideInitial: unknown[];
   /** Canonical entity liveness check for entity fields. */
   readonly isEntityActive: (entity: Entity) => boolean;
+  /** `true` when a new owner needs a cap check, side staging or a sparse row before it is claimed. */
+  readonly needsOwnerPreparation: boolean;
   /** `true` when any column is a `field.*` field (reads decode, removal releases side cells). */
   readonly hasFieldColumns: boolean;
   /** Monotonic revision for membership and value changes. */
@@ -275,6 +277,7 @@ export function createComponentState(
     sideScratch: new Array<unknown>(side.keys.length).fill(undefined),
     sideInitial: new Array<unknown>(side.keys.length).fill(undefined),
     isEntityActive,
+    needsOwnerPreparation: maxOwners !== 0 || side.keys.length > 0 || usesSparseStorage,
     hasFieldColumns: hasCodecs || side.keys.length > 0,
     revision: 0,
     lastChangedRevision: 0,

@@ -171,10 +171,6 @@
 - `getEntityData` / `readEntityDataInto` no longer fall back to `NaN` for an
   unmapped cell (which would decode a bool as `true`); they use the field's
   default.
-- `setEntityData`, `addBundle` / `createWith` and checkpoint apply release
-  staged string / object values right after the write, instead of keeping
-  them alive until the next `refresh()`. `addToEntity`, `addToEntities` and
-  prefab instantiation still release them at `refresh()`.
 - Rollback capture resolves each object field's `clone` hook once per column
   instead of once per owner.
 - Internal: removed `ComponentManager.copyInstanceEntityData` (test-only) and

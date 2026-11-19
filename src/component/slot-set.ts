@@ -8,7 +8,8 @@ const INITIAL_LIST_LENGTH = 16;
  *
  * Nothing capacity-sized is allocated until the first {@link reserve} (or {@link add}); the list starts at 16 entries
  * and doubles up to `maxLength`. Entries at or past {@link count} are stale and never read. `add` and `remove` do not
- * check membership; callers check {@link has} (or their own flags) first.
+ * check membership, and `add` does not check `maxLength`; callers check {@link has} (or their own flags) and their
+ * cap first.
  * @internal
  */
 export class SlotSet {

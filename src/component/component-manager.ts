@@ -212,11 +212,28 @@ export class ComponentManager {
   }
 
   /**
-   * Make `slot` a new owner: check the cap, stage absent side fields, map a capped row, then flag, list and bump.
-   * Every step that can throw (cap, `create()` / `clone()` hooks, row mapping) runs before ownership changes.
+   * Make `slot` a new owner: {@link #prepareOwner} when the component needs it, then flag, list and bump.
    * @param template - Side values from a compiled template row, or `undefined` for per-owner defaults
    */
   #claimOwner(
+    state: ComponentState,
+    flags: Uint8Array,
+    slot: number,
+    data: Record<string, unknown> | undefined,
+    template: readonly unknown[] | undefined,
+  ): void {
+    // Uncapped, dense, side-free components (the common case) have nothing to prepare.
+    if (state.needsOwnerPreparation) this.#prepareOwner(state, flags, slot, data, template);
+    flags[slot] = 1;
+    state.owners.add(slot);
+    this.#bumpRevision(state);
+  }
+
+  /**
+   * Every step of a new owner that can throw, run before ownership changes: check the cap, stage absent side
+   * fields (`create()` / `clone()` hooks) and map a capped row.
+   */
+  #prepareOwner(
     state: ComponentState,
     flags: Uint8Array,
     slot: number,
@@ -231,9 +248,6 @@ export class ComponentManager {
     }
     if (state.sideKeys.length > 0) this.#stageSideInitial(state, data, template);
     if (state.usesSparseStorage) this.#reserveSparseSlot(state, flags, slot);
-    flags[slot] = 1;
-    state.owners.add(slot);
-    this.#bumpRevision(state);
   }
 
   /** Mark a data component changed once per entity per refresh window. */
@@ -815,10 +829,7 @@ export class ComponentManager {
     for (let i = 0; i < this.#states.length; i++) this.#states[i]!.changed.clear();
     // Batch writes (one staging, many rows) leave staged side values behind; drop them so they do not keep objects alive.
     const sideStates = this.#sideStates;
-    for (let i = 0; i < sideStates.length; i++) {
-      const scratch = sideStates[i]!.sideScratch;
-      for (let j = 0; j < scratch.length; j++) scratch[j] = undefined;
-    }
+    for (let i = 0; i < sideStates.length; i++) this.#releaseSideScratch(sideStates[i]!);
     return this;
   }
 
@@ -848,8 +859,11 @@ export class ComponentManager {
 
     state.owners.remove(slot);
     flags[slot] = 0;
-    const changed = state.changed;
-    if (changed.has(slot)) changed.remove(slot);
+    // Tag components never enter the changed window.
+    if (instance.storage !== null) {
+      const changed = state.changed;
+      if (changed.has(slot)) changed.remove(slot);
+    }
     this.#bumpRevision(state);
     // Every column of a capped component shares one slot -> row index, so one delete unmaps the whole row.
     if (state.usesSparseStorage) (state.storageColumns[0] as SparseColumn).deleteEntity(slot);
