@@ -142,12 +142,12 @@
  * const world = new World({ capacity: 1024, components: [positionComponent] });
  *
  * // Borrowed dense iterator - valid until next mutation / refresh.
- * // Both calls return undefined when the component is not registered with the world.
- * for (const entity of world.components.getChanged(positionComponent) ?? []) {
+ * // Both calls throw NotRegisteredError when the component is not registered with the world.
+ * for (const entity of world.components.getChanged(positionComponent)) {
  *   console.log(entity);
  * }
  * // Stable array for tools / tests:
- * const changedSnapshot = world.components.getChangedSnapshot(positionComponent) ?? [];
+ * const changedSnapshot = world.components.getChangedSnapshot(positionComponent);
  * console.log(changedSnapshot.length);
  * ```
  *

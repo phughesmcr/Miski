@@ -172,8 +172,7 @@ export class World {
     return result;
   }
 
-  #snapshotIterator(iterator: IterableIterator<Entity> | undefined): Entity[] | undefined {
-    if (iterator === undefined) return undefined;
+  #snapshotIterator(iterator: IterableIterator<Entity>): Entity[] {
     const result: Entity[] = [];
     for (const entity of iterator) {
       result.push(entity);

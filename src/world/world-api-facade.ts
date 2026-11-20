@@ -80,7 +80,7 @@ export type WorldApiHost = {
   ): void;
   destroyEntity(entity: Entity): void;
 
-  snapshotIterator(iterator: IterableIterator<Entity> | undefined): Entity[] | undefined;
+  snapshotIterator(iterator: IterableIterator<Entity>): Entity[];
   copyEntityList(list: QueryEntityList): Entity[];
   queryArchetypeEntered(query: Query): IterableIterator<Entity>;
   queryArchetypeExited(query: Query): IterableIterator<Entity>;
@@ -136,7 +136,7 @@ function constructComponentAPI(host: WorldApiHost): WorldComponentAPI {
     ) => host.componentManager.getChanged(component),
     getChangedSnapshot: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
       component: ComponentReference<TValue, TStorage>,
-    ) => host.snapshotIterator(host.componentManager.getChanged(component)) ?? [],
+    ) => host.snapshotIterator(host.componentManager.getChanged(component)),
     getEntityData: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
       component: ComponentReference<TValue, TStorage>,
       entity: Entity,
@@ -164,7 +164,7 @@ function constructComponentAPI(host: WorldApiHost): WorldComponentAPI {
     ) => host.componentManager.getOwners(component),
     getOwnersSnapshot: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
       component: ComponentReference<TValue, TStorage>,
-    ) => host.snapshotIterator(host.componentManager.getOwners(component)) ?? [],
+    ) => host.snapshotIterator(host.componentManager.getOwners(component)),
     isRegistered: (component: DynamicComponent | string) => host.componentManager.isRegistered(component),
     markChanged: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
       component: ComponentReference<TValue, TStorage>,
@@ -243,7 +243,7 @@ function constructEntityAPI(host: WorldApiHost): WorldEntityAPI {
     },
     getActive: (startSlot?: SlotIndex, endSlot?: SlotIndex) => host.entityManager.getActive(startSlot, endSlot),
     getActiveSnapshot: (startSlot?: SlotIndex, endSlot?: SlotIndex) =>
-      host.snapshotIterator(host.entityManager.getActive(startSlot, endSlot)) ?? [],
+      host.snapshotIterator(host.entityManager.getActive(startSlot, endSlot)),
     getActiveCount: () => host.entityManager.getActiveCount(),
     getAvailableCount: () => host.entityManager.getAvailableCount(),
     isActive: (entity: Entity) => host.entityManager.isActive(entity),
