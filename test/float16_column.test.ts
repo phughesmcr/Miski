@@ -75,6 +75,8 @@ Deno.test("without a Float16Array global, Miski still imports and works, and rej
   assertEquals(report.importError, undefined, "imports without Float16Array");
   assertEquals(report.roundTrip, 1.5, "an f32 world saves and loads");
   assertEquals(report.stillAbsent, true, "Miski does not define Float16Array");
-  assertEquals(report.f16LoadError, "WorldSaveError", "an f16 save is rejected, not misread");
-  assertEquals(report.f16DocumentError, "WorldSaveError", "an f16 save does not convert to a document");
+  // The unsupported-type message, not a layout mismatch with the worker's f32 world.
+  const unsupported = 'WorldSaveError: World save layout field half.v has unsupported type "f16".';
+  assertEquals(report.f16LoadError, unsupported, "an f16 save is rejected, not misread");
+  assertEquals(report.f16DocumentError, unsupported, "an f16 save does not convert to a document");
 });

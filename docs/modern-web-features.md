@@ -136,7 +136,9 @@ not per entity (see row 16).
 
 - **Float16Array:** done in beta.3 (row 5) with partitionedbuffer 0.5.0. `Float16Array` is a supported column type
   with the hashed `"f16"` constructor tag and save field type code 12. Save `FORMAT_VERSION` is 2, so older Miski
-  versions reject these saves cleanly. Tests are in `test/float16_column.test.ts` and
+  versions reject these saves cleanly. Miski imports on runtimes without `Float16Array` (it is referenced through
+  `FLOAT16_ARRAY` in `src/constants.ts`); there, f16 saves are rejected with `WorldSaveError`. Tests are in
+  `test/float16_column.test.ts` (with its worker `test/no_float16_worker.ts`) and
   `test/component_storage_integrity.test.ts`. Still to do: bench on x86 without F16C before recommending it, because
   f16 may be software-emulated there.
 - **AsyncContext:** add `fromAsyncContext() ?? createStorage()` to `hook-scope.ts`. It casts `globalThis` to a local

@@ -13,18 +13,18 @@ export type NoFloat16Report = {
   roundTrip?: number;
   /** Whether `Float16Array` is still absent after the import (Miski must not polyfill it). */
   stillAbsent?: boolean;
-  /** Error name from loading the parent's f16 save. */
+  /** `name: message` of the error from loading the parent's f16 save. */
   f16LoadError?: string;
-  /** Error name from turning the parent's f16 save into a document. */
+  /** `name: message` of the error from turning the parent's f16 save into a document. */
   f16DocumentError?: string;
 };
 
-function errorName(fn: () => unknown): string | undefined {
+function errorText(fn: () => unknown): string | undefined {
   try {
     fn();
     return undefined;
   } catch (error) {
-    return error instanceof Error ? error.name : String(error);
+    return error instanceof Error ? `${error.name}: ${error.message}` : String(error);
   }
 }
 
@@ -46,8 +46,8 @@ self.onmessage = async (event: MessageEvent<{ f16Save: Uint8Array }>) => {
     loadWorld(target, saveWorld(source));
     report.roundTrip = (target.components.getEntityDataOrThrow(full, e) as { v: number }).v;
     report.stillAbsent = typeof (globalThis as { Float16Array?: unknown }).Float16Array === "undefined";
-    report.f16LoadError = errorName(() => loadWorld(target, event.data.f16Save));
-    report.f16DocumentError = errorName(() => worldSaveToDocument(event.data.f16Save));
+    report.f16LoadError = errorText(() => loadWorld(target, event.data.f16Save));
+    report.f16DocumentError = errorText(() => worldSaveToDocument(event.data.f16Save));
   } catch (error) {
     report.importError = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
   }

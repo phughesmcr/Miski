@@ -48,7 +48,7 @@ Runtime tests live in `*.test.ts` files and run via `deno test` (see `deno.json`
 | `world_save.test.ts` | Whole-world saves: twin-world load differential, `saveWorld` into a reused buffer, header/layout, mismatch and migrate, corruption fuzz (random bytes, every header/layout bit, seeded bit flips in a world with every column kind and relations), JSON round-trip, no aliasing |
 | `world_save_fields.test.ts` | World saves of `field.*` columns: string and object round-trips, encode/decode hook rules, null objects, missing hooks, throwing decode leaves the world untouched, unencodable strings, bool/enum/entity round-trips and range checks, field tags in layouts, label-order and kind mismatches, masked next generations, documents, corruption fuzz, continued behavior |
 | `world_save_relations.test.ts` | World saves of relations: twin-world differential (getTargets / getSources / traverse order, rows, changed, continued behavior, byte-identical re-saves), load over a busy world, layout entries and option mismatches, JSON shape and round-trip, document rejections, binary target checks, relation-section corruption fuzz, `saveWorld` into a reused buffer and migrate |
-| `release_integrity.test.ts` | Runtime, `deno.json`, README install snippet, and CHANGELOG version consistency (reads `README.md` and `CHANGELOG.md`; `deno task test` grants `--allow-read` for just those files) |
+| `release_integrity.test.ts` | Runtime, `deno.json`, README install snippet, and CHANGELOG version consistency (reads `README.md` and `CHANGELOG.md`; `deno task test` grants `--allow-read` for those two files, plus `mod.ts`, `src` and `no_float16_worker.ts` for the `float16_column.test.ts` worker) |
 
 ## Shared fixtures
 
