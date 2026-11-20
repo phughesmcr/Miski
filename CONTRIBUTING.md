@@ -51,6 +51,24 @@ Inside `src`, use `@/` imports for cross-folder modules and `./` imports for
 same-folder modules. Keep external package imports first, then a blank line,
 then internal imports.
 
+## Trying a Checkout From Another Project
+
+Source files import each other through the `@/` aliases and the unversioned
+`@phughesmcr/*` entries in this repo's `deno.json`, so importing `mod.ts` by
+path from another project fails. Link the checkout instead. In the other
+project's `deno.json`:
+
+```json
+{
+  "links": ["../Miski"],
+  "imports": { "@phughesmcr/miski": "jsr:@phughesmcr/miski@^1.0.0-beta.3" }
+}
+```
+
+Deno then resolves `@phughesmcr/miski` to the checkout and uses the checkout's
+own import map. The version range must match the `"version"` in this repo's
+`deno.json`.
+
 ## Architecture
 
 Public entry points:
@@ -94,6 +112,13 @@ release validation to match CI.
 ## Releasing
 
 JSR publishing is triggered by version tags (`v*`), not by merging to `master`.
+
+Publish any `@phughesmcr/*` dependency bump at least a day before the
+release. Deno's minimum dependency age (24 hours by default) refuses
+versions newer than that, so a release that needs a same-day dependency
+cannot resolve for new consumers on publish day. If that cannot be avoided,
+say in the release notes that new consumers may need
+`--minimum-dependency-age=0` on the first day.
 
 1. Update `"version"` in `deno.json`, `VERSION` in `src/constants.ts`,
    `CHANGELOG.md` (add a `## <version>` section), and the install snippets in

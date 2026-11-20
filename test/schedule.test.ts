@@ -837,6 +837,11 @@ Deno.test("schedule clock round-trips through getClock and setClock", async () =
   schedule.run(0.375);
   const clock = schedule.getClock();
   assertEquals(clock, { tick: 1, fixedTick: 1, elapsed: 0.375, accumulator: 0.125 }, "clock after one run");
+  assertEquals(
+    [schedule.tick, schedule.fixedTick, schedule.elapsed, schedule.accumulator],
+    [1, 1, 0.375, 0.125],
+    "the getters read the same clock",
+  );
   (clock as { tick: number }).tick = 99;
   assertStrictEquals(schedule.getClock().tick, 1, "getClock returns a copy");
 
@@ -844,6 +849,7 @@ Deno.test("schedule clock round-trips through getClock and setClock", async () =
   schedule.setClock({ tick: 1, fixedTick: 1, elapsed: 0.375, accumulator: 0.125 });
   assertEquals(schedule.getClock(), { tick: 1, fixedTick: 1, elapsed: 0.375, accumulator: 0.125 }, "clock restored");
   assertStrictEquals(schedule.accumulator, 0.125, "accumulator restored");
+  assertEquals([schedule.tick, schedule.fixedTick, schedule.elapsed], [1, 1, 0.375], "getters restored");
   seen.length = 0;
   schedule.run(0.5);
   assertEquals(seen, [[2, 3, 0.875, 0.5]], "the next run continues from the restored clock");

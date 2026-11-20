@@ -94,6 +94,9 @@ export type SystemSpec<
    * A scheduled system receives one argument, the `ScheduleContext`: declare `argCount: 1` (or `0` if the callback
    * ignores it) so scheduled calls do not allocate. `Schedule.add` rejects 2 to 4.
    *
+   * The type requires `argCount` to equal the number of parameters the callback declares after `components` and
+   * `entities`: a callback written as `(components, entities) => ...` takes `argCount: 0`, even when scheduled.
+   *
    * Leave it unset to forward exactly what the caller passes. That form allocates an arguments array on every call
    * (about 32 B plus 8 B per argument in measurements). V8 may optimise it away after tens of thousands of calls,
    * but that is not guaranteed.

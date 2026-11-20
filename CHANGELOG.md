@@ -13,6 +13,16 @@
 - **Breaking (types):** `world.components.getInstances(components)` is no
   longer part of `WorldComponentAPI`. It was query plumbing; map
   `getInstance` over the list instead.
+- `Schedule` gains `tick`, `fixedTick` and `elapsed` getters, beside
+  `accumulator`, so code that reads the clock every frame no longer allocates
+  the object `getClock()` returns. `getClock()` / `setClock()` are unchanged
+  and remain the way to save and restore the clock.
+- Docs: the README and the `SystemSpec.argCount` doc say that `argCount` must
+  equal the parameters the callback declares after `components` and
+  `entities`, so a scheduled callback that leaves out `ctx` takes
+  `argCount: 0`. CONTRIBUTING shows how to use a git checkout from another
+  project with Deno `links`, and asks for dependency bumps to be published a
+  day before a release because of Deno's minimum dependency age.
 - The world-save compatibility promise from 1.0.0 is written down (README,
   "World saves"): every 1.x release reads every save and document written by
   any 1.x release from 1.0.0 on, older releases reject newer saves rather than

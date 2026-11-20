@@ -693,7 +693,10 @@ function loop(dt: number) {
 - **Context.** Every system receives the same reused `ScheduleContext`:
   `dt`, `time`, `tick`, `fixedTick`, `alpha` (leftover fraction of a step, for
   interpolation), `phase`, `fixed`, `world`, and `commands`. Declare
-  `argCount: 1` (or `0` to ignore it) to keep every call allocation-free. A
+  `argCount: 1` (or `0` to ignore it) to keep every call allocation-free.
+  `argCount` must equal the number of parameters the callback declares after
+  `components` and `entities`, so a callback that leaves out `ctx` takes
+  `argCount: 0`. A
   system without `argCount` still gets the context, but its call may allocate;
   `add()` rejects `argCount` 2 to 4.
 - **Run conditions.** `runIf` is checked before each call and the system
@@ -719,7 +722,10 @@ function loop(dt: number) {
 - **Saves and rollback.** Supported between `run()` calls only. The
   schedule's clock is not part of a world save or rollback scope: keep
   `schedule.getClock()` (plain data) alongside it, and after restoring call
-  `schedule.setClock(clock)`. An `accumulator` of a whole `fixedStep` or more
+  `schedule.setClock(clock)`. `getClock()` returns a new object; to read the
+  clock every frame without allocating, use the `schedule.tick`,
+  `schedule.fixedTick`, `schedule.elapsed` and `schedule.accumulator` getters.
+  An `accumulator` of a whole `fixedStep` or more
   is reduced to its remainder (the whole steps are dropped). The schedule flushes its commands every phase,
   so its buffer is empty between runs; call `commands.clear()` on any buffer
   you fill outside a run to drop commands from the abandoned timeline.

@@ -143,7 +143,7 @@ window, which ends at `refresh()`.
 
 | | API |
 | --- | --- |
-| **Miski** | `new System({ name, query, callback, argCount?, init?, destroy? })`. `world.systems.register/get/has/destroy/destroyOrThrow`. `new Schedule(world, { phases, fixedStep, maxFixedSteps })`, then `.add(system, { phase, before, after, runIf })`. Also `setEnabled`, `getOrder`, `run(dt)`, `getClock` / `setClock`, and a shared `ScheduleContext`. |
+| **Miski** | `new System({ name, query, callback, argCount?, init?, destroy? })`. `world.systems.register/get/has/destroy/destroyOrThrow`. `new Schedule(world, { phases, fixedStep, maxFixedSteps })`, then `.add(system, { phase, before, after, runIf })`. Also `setEnabled`, `getOrder`, `run(dt)`, `getClock` / `setClock`, the allocation-free clock getters `tick` / `fixedTick` / `elapsed` / `accumulator`, and a shared `ScheduleContext`. |
 | bitECS, Koota, miniplex | No system concept: systems are plain functions (bitECS `pipe`, Koota `createActions`). |
 | Becsy | `class extends System`, with `this.schedule(s => s.before(X).after(Y))`, groups, entitlement-derived order and coroutines. No fixed step found. |
 | ECSY / ape-ecs | System classes run in registration order; ape-ecs groups them. |
@@ -154,7 +154,9 @@ window, which ends at `refresh()`.
 fixed-step schedule. These are Bevy's and flecs' features, and Miski has each one.
 
 **Recommendation: keep.** `register` (renamed in beta.3) is clear. `argCount` is Miski-specific: it exists to make
-calls allocation-free, it is documented, and it is typed. Keep it.
+calls allocation-free, it is documented, and it is typed. Keep it. The type requires `argCount` to equal the
+callback's declared extra parameters, which a consumer tripped over (`argCount: 1` with a callback that leaves out
+`ctx`); this branch documents the rule, and loosening it is D11.
 
 ### 5. Relations
 
@@ -188,8 +190,8 @@ that role: a plain query on `ChildOf` matches any target. A `(R, specific target
 **Converge on** (Bevy and flecs): a spawn returns a usable id at once, commands flush at sync points, and commands for
 dead targets are dropped rather than fatal. Miski matches all three.
 
-**Recommendation: keep.** Add `CommandBuffer.instantiate(prefab, overrides?)` (A8, still open) after 1.0. It is
-additive.
+**Recommendation: keep.** Add `CommandBuffer.instantiate(prefab, overrides?)` (A8, still open). It is additive, but
+a consumer has asked for it (D10), so it may be worth having in 1.0.
 
 ### 7. Prefabs
 
@@ -337,7 +339,8 @@ The status comes from the beta.3 CHANGELOG section, checked against the code at 
 `ComponentInstance`: keep `id`, `name`, `type`, `storage`, `proxy`, `revision`, `has`, `markChanged`, `get` and
 `set`.
 
-`Schedule`: keep `phases`, `fixedStep`, `maxFixedSteps`, `accumulator`, `context`, `commands`, `add`, `remove`,
+`Schedule`: keep `phases`, `fixedStep`, `maxFixedSteps`, `accumulator`, `tick`, `fixedTick`, `elapsed` (the last
+three added on this branch), `context`, `commands`, `add`, `remove`,
 `has`, `setEnabled`, `isEnabled`, `getOrder`, `run`, `getClock` and `setClock`.
 
 `CommandBuffer`: keep `pendingCount`, `spawn`, `destroy`, `add`, `set`, `remove`, `relate`, `unrelate`, `flush` and
@@ -626,9 +629,26 @@ changes the bytes: generations are saved per slot at their current width, and `f
 as packed handles. Settle D9
 first, then freeze `FORMAT_VERSION` at whatever 1.0.0 writes.
 
+## Consumer feedback: the Hive showcase game
+
+Hive is a game built on beta.3. Its findings, relayed from another session:
+
+| Finding | Status |
+| --- | --- |
+| `Schedule.getClock()` allocates a new object (about 62 B) on every call, and Hive reads the tick every frame | Fixed on this branch: `schedule.tick`, `fixedTick` and `elapsed` getters join `accumulator`. `getClock()` stays for save and restore. |
+| `CommandBuffer.spawn` takes bundles only, so spawning from a prefab inside a system means calling `entities.instantiate` after the borrowed list is done | D10 |
+| `argCount: 1` is a type error for a callback that leaves out `ctx` | Documented on this branch; loosening is D11 |
+| Scheduler, prefab and relation docs exist only in the README; the fixed-phase caveat about entered / exited / changed windows is easy to miss | D12 |
+| A git checkout can't be imported from another project without a hand-written import map | CONTRIBUTING now shows Deno `links`, tested against this branch |
+| Deno's 24-hour minimum dependency age blocked beta.3 and `partitionedbuffer` 0.5.0 for new consumers on publish day | CONTRIBUTING's release steps now say to publish dependency bumps a day early |
+
+Hive also reports that relations round-trip through saves, the same seed gives byte-identical saves, the fixed-phase
+schedule dropped no ticks over 100k ticks, and a 5k-creature tick takes about 1.2 ms.
+
 ## Decisions for the maintainer
 
-None of these is implemented. Each one is either a naming call or the removal of something callers can use. Usage
+None of these is implemented. Each one is a naming call, the removal of something callers can use, or a new
+capability. Usage
 counts are `rg -w` hits in `src` / `test` / `bench`+`example` / README+`mod.ts`.
 
 | # | Decision | Recommendation | Cost |
@@ -642,6 +662,9 @@ counts are `rg -w` hits in `src` / `test` / `bench`+`example` / README+`mod.ts`.
 | D7 | Flip the strict/lenient default (`create` throws, `tryCreate` returns `undefined`), Bevy-style | Don't. The current `x` / `xOrThrow` rule is applied everywhere since beta.3 and matches JS (`Map.get`). | — |
 | D8 | Hide `Query.allEntries` / `anyEntries` / `noneEntries` / `includeEntries` / `dependencyComponents` (and then `NormalizedQueryComponentEntry`) | Hide (`@internal`). They are normalisation internals; `all` / `any` / `none` / `include` remain. | 2 test uses |
 | D9 | Entity-cap work: whether `Entity` packing, `MAX_WORLD_CAPACITY` or `packEntity` change before 1.0 | Decide before the freeze. They are public, and they reach the save format. | Depends on the research session |
+| D10 | Let a `CommandBuffer` spawn from a `Prefab` (Hive asked for `spawn(prefab, overrides?, relationPairs?)`) | Add `commands.instantiate(prefab, overrides?)` returning a `PendingEntity`, mirroring `entities.instantiate`. Don't overload `spawn`, and don't add relation pairs: `commands.relate(pending, R, target)` already accepts pending handles on both ends. | New method on `CommandBuffer`; additive |
+| D11 | Let `argCount` exceed the callback's declared extra parameters (so `argCount: 1` works with `(components, entities) => ...`) | Lean keep strict. The current rule is deliberate and type-tested, and `0` is the right value for a callback that ignores `ctx`; this branch documents it in the README and the `argCount` doc. Loosening is non-breaking if you prefer it. | Type change in `SystemSpec`; flips two `@ts-expect-error` cases in `test/typed_system_inference.ts` |
+| D12 | Per-feature guides (scheduler, prefabs, relations) beyond the README, or README anchors linked from the JSR module docs | Anchors from `mod.ts` first; guides can follow 1.0. | Docs only |
 
 ## Additive work that does not block a freeze
 
@@ -649,7 +672,7 @@ These add API without changing existing calls, so they can ship in 1.x:
 
 - Per-query change filters (`changed: [C]`, `added` / `removed` trackers), the field's common model.
 - Observers (`onAdd` / `onRemove` / `onSet`), offered by bitECS, Koota, flecs and Bevy.
-- `CommandBuffer.instantiate(prefab, overrides?)` (A8).
+- `CommandBuffer.instantiate(prefab, overrides?)` (A8; D10 asks whether to bring it into 1.0).
 - A `(relation, target)` query term.
 
 ## Follow-up bug found while auditing
@@ -657,4 +680,4 @@ These add API without changing existing calls, so they can ship in 1.x:
 `world.components.getOwners(C)` and `getChanged(C)` return one shared iterator per component. Nested loops over the
 same component therefore see too few pairs: 3 owners nested give 3 pairs, not 9. This is the hazard beta.3 fixed for
 `entities.query()` and `getActive()` with pooled iterators. The return type (`BorrowedEntityIterator`) does not need
-to change for the fix. It is not fixed on this branch.
+to change for the fix. It is fixed on `fix/pooled-component-iterators` (`112b36f`), which branches from this one.

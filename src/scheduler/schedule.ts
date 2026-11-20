@@ -213,6 +213,21 @@ export class Schedule {
     return this.#accumulator;
   }
 
+  /** `run()` calls started so far. Reads the clock without allocating, unlike {@link getClock}. */
+  get tick(): number {
+    return this.#context.tick;
+  }
+
+  /** Fixed steps run so far. Reads the clock without allocating, unlike {@link getClock}. */
+  get fixedTick(): number {
+    return this.#context.fixedTick;
+  }
+
+  /** Total `dt` passed to `run()` so far, in seconds. Reads the clock without allocating, unlike {@link getClock}. */
+  get elapsed(): number {
+    return this.#elapsed;
+  }
+
   /**
    * A copy of the schedule's clock, as plain data. Save it with a world save or rollback scope and pass it to
    * {@link setClock} when restoring, so the schedule resumes exactly where it was.
