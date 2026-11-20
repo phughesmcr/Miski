@@ -134,19 +134,11 @@ not per entity (see row 16).
 
 ## Later items: what has to happen first
 
-- **Float16Array:** release partitionedbuffer with `Float16Array` in `TypedArray` / `TypedArrayConstructor`
-  (`utils.ts:13-34`) and a `"Float16Array"` case (max 65504) in `isValidTypedArrayValue` (`utils.ts:144`). Bare
-  `{ v: Float16Array }` already works at runtime (Miski does not accept `[Ctor, initial]` column tuples). Alignment is
-  `max(BYTES_PER_ELEMENT, 8)`, so no layout change is needed. Then in Miski:
-  - add it to `SUPPORTED_COLUMN_CONSTRUCTORS` and the error message (`component.ts:21-35,193`);
-  - append `"f16"` to the hashed, append-only `CONSTRUCTOR_TAGS` (`schema.ts:22`);
-  - in `serialization/format.ts`, add field type code 12 to `NUMERIC_FIELD_TYPES` (which also feeds `Views` and
-    `column()`);
-  - flip the "Float16 rejected" test (`test/component_storage_integrity.test.ts:150-180`).
-
-  `FORMAT_VERSION` is 2 (bumped for beta.3, which added f16 columns and the relation section), so older Miski
-  versions reject these saves cleanly. Bench on x86 without F16C before
-  recommending it, because f16 may be software-emulated there.
+- **Float16Array:** done in beta.3 (row 5) with partitionedbuffer 0.5.0. `Float16Array` is a supported column type
+  with the hashed `"f16"` constructor tag and save field type code 12. Save `FORMAT_VERSION` is 2, so older Miski
+  versions reject these saves cleanly. Tests are in `test/float16_column.test.ts` and
+  `test/component_storage_integrity.test.ts`. Still to do: bench on x86 without F16C before recommending it, because
+  f16 may be software-emulated there.
 - **AsyncContext:** add `fromAsyncContext() ?? createStorage()` to `hook-scope.ts`. It casts `globalThis` to a local
   structural type, so it passes `deno check` without `any` (TS has no lib type yet). It is dead code on every current
   target, so land it only with a stub-backed test (a `createHookScope(backend)` factory). The browser-first hook-scope
