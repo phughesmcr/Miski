@@ -1162,10 +1162,18 @@ const scenarios: Scenario[] = [
     rel.world.relations.add(rel.likes, relLeafA, relHub);
     rel.world.relations.remove(rel.likes, relLeafA, relHub);
   }),
-  budgeted("exclusive relation retarget", 50_000, () => {
-    relToggle = !relToggle;
-    rel.world.relations.add(rel.childOf, relLeafB, relToggle ? relParentA : relParentB);
-  }),
+  {
+    name: "exclusive relation retarget",
+    iterations: 200_000,
+    // Retargeting keeps tiering up past the default warmup; a recompile inside a round adds a fixed ~7-26 KiB
+    // (0.14-0.53 B/iter over 50k iterations), so long rounds keep it below the budget.
+    warmupIterations: 50_000,
+    maxSteadyStateBeforeGcBytesPerIter: ZERO_ALLOC_BUDGET_BYTES_PER_ITER,
+    fn: () => {
+      relToggle = !relToggle;
+      rel.world.relations.add(rel.childOf, relLeafB, relToggle ? relParentA : relParentB);
+    },
+  },
   budgeted("relation lookups: sources, targets, queryList by target", 50_000, () => {
     entitySink ^= rel.world.relations.getSources(rel.childOf, relParentA).count;
     entitySink ^= rel.world.relations.getTargets(rel.likes, relLeafA).count;
