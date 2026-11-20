@@ -46,6 +46,11 @@ type Scenario = {
   fn: () => void;
   rounds?: number;
   warmupIterations?: number;
+  /**
+   * Split the warmup into this many chunks with a forced GC after each (default 1: one collect at the end). Some
+   * functions only reach TurboFan after a few collections; without them that compile lands in a measured round.
+   */
+  warmupCollections?: number;
   maxSteadyStateBeforeGcBytesPerIter?: number;
 };
 
@@ -219,8 +224,12 @@ function warmupScenario(scenario: Scenario): void {
   const iterations = scenario.warmupIterations ?? Math.min(scenario.iterations, DEFAULT_WARMUP_ITERATIONS);
   // One iteration per call: many calls optimize `repeat` as a whole. A few long calls would only optimize its loop
   // on-stack, and its regular compile would then land in a measured round.
-  for (let i = 0; i < iterations; i++) repeat(scenario.fn, 1);
-  collect();
+  const chunk = Math.ceil(iterations / (scenario.warmupCollections ?? 1));
+  for (let done = 0; done < iterations; done += chunk) {
+    const end = Math.min(iterations, done + chunk);
+    for (let i = done; i < end; i++) repeat(scenario.fn, 1);
+    collect();
+  }
 }
 
 function selectLowestAllocRound(rounds: RoundMeasurement[], key: RoundKey): MemorySnapshot {
@@ -1250,6 +1259,9 @@ const scenarios: Scenario[] = [
     // calls (again after the first object-column save deoptimizes them). With less warmup their compiled code lands
     // in rounds 2-3 and counts as tens of KiB.
     warmupIterations: 30_000,
+    // saveWorld itself reaches TurboFan only after a few forced GCs, however long the warmup: with one collect its
+    // compile lands in round 2 (~7.5 KiB; seen as 2.5 B/iter on CI).
+    warmupCollections: 6,
     maxSteadyStateBeforeGcBytesPerIter: OBJECT_SAVE_BUDGET_BYTES_PER_ITER,
     fn: () => {
       numericSink ^= saveWorld(meshed.world, meshedSaveTarget).byteLength;
