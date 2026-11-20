@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.0.0-beta.3 — 2026-11-20
 
 - **Breaking:** the per-world owner cap is named `maxOwners` everywhere, matching
   what it limits (a world's own size stays `capacity`). Rename

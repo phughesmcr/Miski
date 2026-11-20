@@ -103,13 +103,13 @@ JSR publishing is triggered by version tags (`v*`), not by merging to `master`.
    - **Stable releases** (no `-` in the version, e.g. `1.0.0`): merge to
      `master` first. The Publish workflow refuses to run unless the tagged
      commit is an ancestor of `origin/master`.
-   - **Pre-releases** (version contains `-`, e.g. `1.0.0-beta.2`): may be tagged
+   - **Pre-releases** (version contains `-`, e.g. `1.0.0-beta.3`): may be tagged
      from any branch, such as `1.0.0-alpha`; master ancestry is not required.
 3. Create and push a matching tag:
 
    ```sh
-   git tag v1.0.0-beta.2
-   git push origin v1.0.0-beta.2
+   git tag v1.0.0-beta.3
+   git push origin v1.0.0-beta.3
    ```
 
 4. The Publish workflow runs automatically on the tag push. A `verify` job (no
