@@ -1,6 +1,14 @@
 /// <reference lib="deno.ns" />
 
-import { CapacityError, ComponentDataError, NotRegisteredError, Query, System } from "../mod.ts";
+import {
+  CapacityError,
+  ComponentDataError,
+  createEcsWorld,
+  NotRegisteredError,
+  Query,
+  SpecError,
+  System,
+} from "../mod.ts";
 import type { Entity } from "../mod.ts";
 import { assert, assertEquals, assertStrictEquals, assertThrows } from "./helpers.ts";
 import { createEntity, createTestWorld, tagComponent, vec2Component } from "./fixtures.ts";
@@ -207,4 +215,92 @@ Deno.test("system callbacks receive iterable entity lists", async () => {
   const collectInstance = world.systems.register(collect);
 
   assertEquals(collectInstance(), [entity], "Expected system entities to be iterable");
+});
+
+Deno.test("world.frame refreshes after the tick callback", async () => {
+  const position = vec2Component();
+  const world = await createTestWorld([position], 8);
+  const entity = world.entities.createOrThrow();
+  world.components.addToEntity(position, entity, { x: 1, y: 2 });
+
+  let sawChanged = false;
+  world.frame(() => {
+    world.components.setEntityData(position, entity, { x: 3 });
+    sawChanged = [...(world.components.getChanged(position) ?? [])].includes(entity);
+  });
+  assert(sawChanged, "changed set should be visible inside frame");
+  assertEquals(
+    [...(world.components.getChanged(position) ?? [])],
+    [],
+    "changed set clears after frame",
+  );
+});
+
+Deno.test("queryRevision tracks relevant component writes", async () => {
+  const position = vec2Component();
+  const velocity = vec2Component("velocity");
+  const world = await createTestWorld([position, velocity], 8);
+  const entity = world.entities.createOrThrow();
+  world.components.addToEntity(position, entity, { x: 0, y: 0 });
+  world.components.addToEntity(velocity, entity, { x: 0, y: 0 });
+
+  const positionQuery = new Query({ all: [position] });
+  const before = world.queryRevision(positionQuery);
+  world.components.setEntityData(velocity, entity, { x: 1 });
+  assertStrictEquals(
+    world.queryRevision(positionQuery),
+    before,
+    "unrelated write leaves revision unchanged",
+  );
+  world.components.setEntityData(position, entity, { x: 2 });
+  assert(world.queryRevision(positionQuery) > before, "related write bumps revision");
+});
+
+Deno.test("createEcsWorld spawn and storage access", async () => {
+  const ecs = createEcsWorld({
+    capacity: 16,
+    components: {
+      Position: { x: Float32Array, y: Float32Array },
+    },
+  });
+  await ecs.init();
+  const entity = ecs.spawnOrThrow({ Position: { x: 4, y: 5 } });
+  assertEquals(ecs.storage.Position.get(entity, "x"), 4, "spawn writes x");
+  assertEquals(ecs.storage.Position.get(entity, "y"), 5, "spawn writes y");
+});
+
+Deno.test("createEcsWorld tags spawn, ownership, and collisions", async () => {
+  const ecs = createEcsWorld({
+    capacity: 16,
+    components: {
+      Position: { x: Float32Array, y: Float32Array },
+    },
+    tags: {
+      Player: true,
+      Hero: { maxOwners: 1 },
+    },
+  });
+  await ecs.init();
+
+  const player = ecs.spawnOrThrow({ Position: { x: 1, y: 2 }, Player: true, Hero: true });
+  assert(ecs.world.components.entityHas(ecs.components.Player, player), "Player tag attached");
+  assert(ecs.world.components.entityHas(ecs.components.Hero, player), "Hero tag attached");
+  assertStrictEquals(ecs.storage.Player.storage, null, "tag instances have no storage");
+
+  assertThrows(
+    () => ecs.spawn({ Position: { x: 0, y: 0 }, Hero: true }),
+    CapacityError,
+    "can only be added to 1",
+  );
+
+  assertThrows(
+    () =>
+      createEcsWorld({
+        capacity: 8,
+        components: { Player: { x: Float32Array } },
+        tags: { Player: true },
+      }),
+    SpecError,
+    "collides with a component name",
+  );
 });

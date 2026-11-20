@@ -1,5 +1,7 @@
 /// <reference lib="deno.ns" />
 
+// deno-lint-ignore-file no-await-in-loop -- worlds are built and checked one after another on purpose
+
 import {
   asSlotIndex,
   CapacityError,
@@ -13,10 +15,12 @@ import {
   World,
 } from "../mod.ts";
 import { isValidComponentSpec } from "../src/component/component.ts";
-import { createEntity, createTestWorld, vec2Component } from "./fixtures.ts";
+import { createEntity, createTestWorld, tagComponent, vec2Component } from "./fixtures.ts";
 import { assert, assertEquals, assertThrows, ids } from "./helpers.ts";
 
 type RawWrite = "partitions" | "proxy-slot";
+
+type MixedWidth = { flag: number; value: number };
 
 /** Write to a (non-owner) slot through each documented raw/cursor path. */
 function strayWrite(
@@ -214,4 +218,80 @@ Deno.test("EcsWorld.spawn treats undefined tag values as absent", async () => {
   const tagged = ecs.spawnOrThrow({ Position: { x: 1 }, Player: true });
   assert(ecs.world.components.entityHas("Player", tagged), "true still adds the tag");
   assertThrows(() => ecs.spawn({ Player: false as never }), ComponentDataError, "must be spawned with true");
+});
+
+Deno.test("archetype storage scales with population, not world capacity", async () => {
+  const tags = Array.from({ length: 6 }, (_, i) => tagComponent(`tag${i}`));
+  const world = new World({ capacity: 65536, components: tags });
+  await world.init();
+  const entity = world.entities.createOrThrow();
+
+  const before = Deno.memoryUsage().external;
+  // Visit all 64 tag subsets, registering one archetype per subset.
+  for (let mask = 1; mask < 64; mask++) {
+    for (let i = 0; i < tags.length; i++) if (mask & (1 << i)) world.components.addToEntity(tags[i]!, entity);
+    for (let i = 0; i < tags.length; i++) world.components.removeFromEntity(tags[i]!, entity);
+  }
+  const grown = Deno.memoryUsage().external - before;
+
+  // Capacity-sized per-archetype buffers cost ~1 MB each here (~64 MB total); population-sized ones are tiny.
+  assert(grown < 8 * 1024 * 1024, `64 archetypes at capacity 65536 retained ${(grown / 1048576).toFixed(1)} MiB`);
+  await world.destroy();
+});
+
+Deno.test("tag components with maxOwners: 1 can be registered in a world", async () => {
+  const player = tagComponent("player", { maxOwners: 1 });
+  const world = await createTestWorld([player]);
+
+  assert(world.components.isRegistered(player), "Expected tag component to be registered");
+});
+
+Deno.test("component maxOwners limits the number of owners", async () => {
+  const player = tagComponent("player", { maxOwners: 1 });
+  const world = await createTestWorld([player], 8);
+
+  const first = createEntity(world);
+  const second = createEntity(world);
+
+  world.components.addToEntity(player, first);
+
+  assertThrows(
+    () => world.components.addToEntity(player, second),
+    CapacityError,
+    'Component "player" can only be added to 1 entities',
+  );
+  assertEquals(ids(world.components.getOwners(player)), [first], "Expected only the first entity to own player");
+});
+
+Deno.test("component maxOwners slots can be reused after removal", async () => {
+  const position = vec2Component("position", { maxOwners: 1 });
+  const world = await createTestWorld([position], 8);
+
+  const first = createEntity(world);
+  const second = createEntity(world);
+
+  world.components.addToEntity(position, first, { x: 1, y: 2 });
+  world.components.removeFromEntity(position, first);
+  world.components.addToEntity(position, second, { x: 3, y: 4 });
+
+  assertEquals(world.components.getEntityDataOrThrow(position, second), { x: 3, y: 4 }, "Expected sparse slot reuse");
+  assertEquals(ids(world.components.getOwners(position)), [second], "Expected only the second entity to own position");
+});
+
+Deno.test("world storage accounts for aligned mixed-width component schemas", async () => {
+  const mixed = new Component<MixedWidth>({
+    name: "mixed",
+    schema: { flag: Uint8Array, value: Float64Array },
+  });
+  const world = await createTestWorld([mixed], 9);
+
+  const entity = createEntity(world);
+
+  world.components.addToEntity(mixed, entity, { flag: 1, value: 2 });
+
+  assertEquals(
+    world.components.getEntityDataOrThrow(mixed, entity),
+    { flag: 1, value: 2 },
+    "Expected mixed-width data",
+  );
 });

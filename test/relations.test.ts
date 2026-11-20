@@ -2,18 +2,22 @@
 
 import {
   ArgumentError,
+  Component,
   ComponentDataError,
   ComponentOwnershipError,
   createEcsWorld,
+  type DynamicComponent,
   type Entity,
   entityIndex,
   EntityNotFoundError,
+  field,
   NotRegisteredError,
+  Prefab,
   Query,
   Relation,
   RelationCycleError,
   SpecError,
-  World,
+  type World,
   WorldRollbackScope,
 } from "../mod.ts";
 import { createEntity, createTestWorld, tagComponent, vec2Component } from "./fixtures.ts";
@@ -22,6 +26,7 @@ import { assert, assertEquals, assertStrictEquals, assertThrows, ids, listIds } 
 const position = vec2Component("position");
 const hidden = tagComponent("hidden");
 
+// deno-lint-ignore explicit-function-return-type -- the inferred component types are the point of this factory
 function relations() {
   return {
     childOf: new Relation({ name: "childOf", exclusive: true, acyclic: true, onDeleteTarget: "cascade" }),
@@ -498,7 +503,7 @@ Deno.test("rollback restores relation state exactly and order-neutrally", async 
   const before = observe(speculative, defsA, liveS);
   const point = new WorldRollbackScope(speculative);
   // Speculative work: retargets, removals, cascades, new entities and pairs, data writes.
-  world_mutate(speculative, defsA, liveS);
+  worldMutate(speculative, defsA, liveS);
   point.restore();
   assertEquals(observe(speculative, defsA, liveS), before, "observable relation state restored");
   assertEquals(observe(speculative, defsA, liveS), observe(control, defsB, liveC), "matches the control world");
@@ -525,7 +530,7 @@ Deno.test("rollback restores relation state exactly and order-neutrally", async 
   assertStrictEquals(speculative.relations.has(defsA.likes, afterS[0]!, afterS[1]!), true, "committed pair kept");
 });
 
-function world_mutate(world: World, defs: ReturnType<typeof relations>, live: readonly Entity[]): void {
+function worldMutate(world: World, defs: ReturnType<typeof relations>, live: readonly Entity[]): void {
   world.relations.add(defs.childOf, live[3]!, live[1]!);
   world.relations.remove(defs.likes, live[4]!, live[0]!);
   world.relations.add(defs.likes, live[6]!, live[0]!);
@@ -564,4 +569,131 @@ Deno.test("createEcsWorld declares typed relations", async () => {
   );
   game.world.entities.destroy(parent);
   assertStrictEquals(game.world.entities.isActive(child), false, "cascade declared through the config");
+});
+
+Deno.test("applying a checkpoint with unchanged pairs keeps source order and marks nothing changed", async () => {
+  const likes = new Relation({ name: "likes" });
+  const world = await createTestWorld([likes], 16);
+  const target = world.entities.createOrThrow();
+  const a = world.entities.createOrThrow();
+  const b = world.entities.createOrThrow();
+  world.relations.add(likes, a, target);
+  world.relations.add(likes, b, target);
+  const checkpoint = world.captureCheckpoint([b, a], likes);
+  world.refresh();
+  world.applyCheckpoint(checkpoint);
+  assertEquals(listIds(world.relations.getSources(likes, target)), [a, b], "Reverse order kept");
+  assertEquals([...world.relations.getChanged(likes)], [], "No change recorded");
+});
+
+Deno.test("relation pair data treats undefined values as absent", async () => {
+  const weighted = new Relation({ name: "weighted", schema: { weight: Float32Array } });
+  const world = await createTestWorld([weighted], 16);
+  const source = world.entities.createOrThrow();
+  const target = world.entities.createOrThrow();
+  world.relations.add(weighted, source, target, { weight: undefined });
+  assertEquals(world.relations.getData(weighted, source, target), { weight: 0 }, "Absent on add: zero");
+  world.relations.setData(weighted, source, target, { weight: 2 });
+  world.relations.setData(weighted, source, target, { weight: undefined });
+  assertEquals(world.relations.getData(weighted, source, target), { weight: 2 }, "Absent on set: unchanged");
+});
+
+/** Relations next to a unit with field-type columns, for the cross-feature tests. */
+// deno-lint-ignore explicit-function-return-type -- the inferred component types are the point of this factory
+function fieldRelations() {
+  const childOf = new Relation({ name: "childOf", exclusive: true, acyclic: true, onDeleteTarget: "cascade" });
+  const likes = new Relation({ name: "likes" });
+  const unit = new Component({
+    name: "unit",
+    schema: { hp: Uint16Array, label: field.string(), target: field.entity(), alive: field.bool() },
+  });
+  const components: DynamicComponent[] = [childOf, likes, unit];
+  return { childOf, likes, unit, components };
+}
+
+Deno.test("relations x field types: relation pair data rejects field descriptors", () => {
+  assertThrows(() => new Relation({ name: "r", schema: { flag: field.bool() } as never }), SpecError, "numeric");
+  assertThrows(() => new Relation({ name: "r", schema: { label: field.string() } as never }), SpecError, "numeric");
+});
+
+Deno.test("relations x prefabs: a prefab rejects relation components at definition", () => {
+  const { childOf, likes, unit } = fieldRelations();
+  assertThrows(() => new Prefab({ components: [[childOf]] }), SpecError, "relation");
+  const base = new Prefab({ components: [[unit]] });
+  assertThrows(() => new Prefab({ extends: base, components: [[likes]] }), SpecError, "relation");
+});
+
+Deno.test("relations x prefabs: instantiate overrides reject relation components and change nothing", async () => {
+  const { childOf, likes, unit, components } = fieldRelations();
+  const world = await createTestWorld(components);
+  const prefab = new Prefab({ components: [[unit, { hp: 3 }]] });
+  assertThrows(() => world.entities.instantiate(prefab, [[childOf]]), ArgumentError, "relation");
+  assertThrows(() => world.entities.instantiateMany(prefab, 2, [[likes]]), ArgumentError, "relation");
+  assertEquals(world.entities.getActiveCount(), 0, "Rejected overrides allocate nothing");
+  // Relations are attached after instantiation, through world.relations.
+  const parent = world.entities.createOrThrow();
+  const child = world.entities.instantiateOrThrow(prefab);
+  world.relations.add(childOf, child, parent);
+  assertEquals(world.relations.getTarget(childOf, child), parent, "Pairs attach to prefab instances");
+});
+
+Deno.test("relations x field types: one rollback restores side columns and relation pairs together", async () => {
+  const { childOf, likes, unit, components } = fieldRelations();
+  const world = await createTestWorld(components);
+  const parent = world.entities.createOrThrow([[unit, { hp: 1, label: "parent" }]]);
+  const child = world.entities.createOrThrow([[unit, { hp: 2, label: "child", target: parent, alive: true }]]);
+  world.relations.add(childOf, child, parent);
+  world.refresh();
+
+  const point = new WorldRollbackScope(world);
+  world.components.setEntityData(unit, child, { label: "changed", target: null, alive: false });
+  world.relations.remove(childOf, child, parent);
+  world.relations.add(likes, parent, child);
+  world.entities.destroy(parent);
+  point.restore();
+
+  assertEquals(
+    world.components.getEntityDataOrThrow(unit, child),
+    { hp: 2, target: parent, alive: true, label: "child" },
+    "Field values restored, including the entity ref to the revived parent",
+  );
+  assertEquals(world.relations.getTarget(childOf, child), parent, "Relation pair restored");
+  assertEquals(world.relations.getTargets(likes, parent).count, 0, "Speculative pair dropped");
+  assertEquals(
+    world.components.getEntityDataOrThrow(unit, parent).label,
+    "parent",
+    "Destroyed entity's side cells restored",
+  );
+});
+
+Deno.test("relations x field types: an entity field reads null after its target dies in a cascade", async () => {
+  const { childOf, unit, components } = fieldRelations();
+  const world = await createTestWorld(components);
+  const root = world.entities.createOrThrow();
+  const leaf = world.entities.createOrThrow();
+  world.relations.add(childOf, leaf, root);
+  const watcher = world.entities.createOrThrow([[unit, { target: leaf }]]);
+  world.entities.destroy(root);
+  world.refresh();
+  assertEquals(world.entities.isActive(leaf), false, "Cascade destroyed the child");
+  assertEquals(
+    world.components.getEntityDataOrThrow(unit, watcher).target,
+    null,
+    "Ref to the cascaded entity reads null",
+  );
+});
+
+Deno.test("relations x field types: a checkpoint restores field columns and relation pairs together", async () => {
+  const { childOf, unit, components } = fieldRelations();
+  const world = await createTestWorld(components);
+  const parent = world.entities.createOrThrow();
+  const child = world.entities.createOrThrow([[unit, { label: "a", target: parent }]]);
+  world.relations.add(childOf, child, parent);
+  const checkpoint = world.captureCheckpoint([child], unit, childOf);
+  world.components.setEntityData(unit, child, { label: "b", target: null });
+  world.relations.remove(childOf, child, parent);
+  world.applyCheckpoint(checkpoint);
+  assertEquals(world.components.getEntityDataOrThrow(unit, child).label, "a", "String field restored");
+  assertEquals(world.components.getEntityDataOrThrow(unit, child).target, parent, "Entity field restored");
+  assertEquals(world.relations.getTarget(childOf, child), parent, "Relation pair restored");
 });

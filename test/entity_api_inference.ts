@@ -1,5 +1,5 @@
 import { asSlotIndex, type Entity, entityIndex, type World } from "../mod.ts";
-import { EntityManager } from "../src/entity/entity-manager.ts";
+import type { EntityManager } from "../src/entity/entity-manager.ts";
 
 declare const world: World;
 declare const entity: Entity;

@@ -1,8 +1,8 @@
 /// <reference lib="deno.ns" />
 
-import { asSlotIndex, type Entity, Query, type World } from "../mod.ts";
+import { ArgumentError, asSlotIndex, type Entity, entityIndex, Query, type World } from "../mod.ts";
 import { createEntity, createTestWorld, tagComponent, vec2Component } from "./fixtures.ts";
-import { assert, assertEquals, assertStrictEquals } from "./helpers.ts";
+import { assert, assertEquals, assertStrictEquals, assertThrows } from "./helpers.ts";
 
 function sorted(values: Iterable<number>): number[] {
   return [...values].toSorted((a, b) => a - b);
@@ -153,4 +153,16 @@ Deno.test("destroying each entity while iterating getActive() visits every entit
   }
   assertEquals(sorted(visited), sorted(entities), "Every entity visited once");
   await world.destroy();
+});
+
+Deno.test("getActive rejects non-integer bounds with a library error and keeps capacity as an exclusive end", async () => {
+  const world = await createTestWorld([tagComponent("a")], 8);
+  for (let i = 0; i < 4; i++) world.entities.createOrThrow();
+  assertThrows(() => world.entities.getActive(asSlotIndex(Number.NaN)), ArgumentError, "integer slot indices");
+  assertThrows(() => world.entities.getActive(asSlotIndex(0), asSlotIndex(2.5)), ArgumentError, "integer slot indices");
+  assertEquals(
+    world.entities.getActiveSnapshot(asSlotIndex(1), asSlotIndex(world.entities.capacity)).map(entityIndex),
+    [1, 2, 3],
+    "end === capacity stays valid",
+  );
 });

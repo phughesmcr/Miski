@@ -62,7 +62,7 @@ export function assertStrictEquals<T>(actual: T, expected: T, message: string): 
 
 export function assertThrows(
   fn: () => unknown,
-  ErrorClass: new (...args: any[]) => Error,
+  ErrorClass: new (...args: never[]) => Error,
   messageIncludes: string,
 ): void {
   try {
@@ -80,7 +80,7 @@ export function assertThrows(
 
 export async function assertRejects(
   fn: () => Promise<unknown>,
-  ErrorClass: new (...args: any[]) => Error,
+  ErrorClass: new (...args: never[]) => Error,
   messageIncludes: string,
 ): Promise<void> {
   try {

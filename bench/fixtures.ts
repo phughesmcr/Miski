@@ -18,6 +18,7 @@ export const SMALL_CAPACITY = 1_024;
 export const MEDIUM_CAPACITY = 8_192;
 export const LARGE_CAPACITY = 32_768;
 
+// deno-lint-ignore explicit-function-return-type explicit-module-boundary-types -- callers rely on the inferred component types (see BenchmarkComponents)
 export function createBenchmarkComponents() {
   const position = new Component<Vec2>({ name: "position", schema: { x: Float32Array, y: Float32Array } });
   const velocity = new Component<Vec2>({ name: "velocity", schema: { x: Float32Array, y: Float32Array } });
@@ -68,7 +69,7 @@ export function createBenchmarkComponents() {
   };
 }
 
-export function createWideComponents(count: number = 64) {
+export function createWideComponents(count: number = 64): { all: Component<null>[] } {
   const components = new Array<Component<null>>(count);
   for (let i = 0; i < count; i++) {
     components[i] = new Component<null>({ name: `wide_${i}` });
@@ -161,9 +162,10 @@ export async function populateMixedWorld(
 
 export async function populateMovementWorld(
   capacity: number,
-  components: BenchmarkComponents = createBenchmarkComponents(),
+  components?: BenchmarkComponents,
   argCount?: 1,
 ): Promise<{ world: World; components: BenchmarkComponents; entities: Entity[]; movement: MovementSystem }> {
+  components ??= createBenchmarkComponents();
   const world = await createWorld(capacity, components);
   const entities = new Array<Entity>(capacity);
 
@@ -260,6 +262,7 @@ export type Link = { weight: Float32ArrayConstructor };
  * A world with a 4-ary `childOf` hierarchy over `nodes` entities (cascade, acyclic), a multi-target `likes`
  * relation (each node likes the next two nodes) and an exclusive data relation `aims`.
  */
+// deno-lint-ignore explicit-function-return-type explicit-module-boundary-types -- callers rely on the inferred fixture shape
 export async function populateRelationWorld(capacity: number, nodes: number = 1_024) {
   const position = new Component<Vec2>({ name: "position", schema: { x: Float32Array, y: Float32Array } });
   const childOf = new Relation({ name: "childOf", exclusive: true, acyclic: true, onDeleteTarget: "cascade" });
@@ -396,6 +399,7 @@ export class SaveMesh {
  * A world with string fields on half its entities and, with `withObjects`, object fields on an eighth.
  * Without objects every save cost is Miski's own; object encode hooks are user code.
  */
+// deno-lint-ignore explicit-function-return-type explicit-module-boundary-types -- callers rely on the inferred fixture shape
 export async function populateNamedWorld(capacity: number, withObjects: boolean = false) {
   const named = new Component({ name: "named", schema: { hp: Uint16Array, label: field.string() } });
   const titled = new Component({ name: "titled", schema: { title: field.string() } });

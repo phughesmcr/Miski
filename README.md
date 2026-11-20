@@ -1017,8 +1017,8 @@ a local tarball of the current source and the browser bundle without publishing.
 
 House style in brief: prefer `.storage.partitions` for SoA access; `slots` for
 storage, `entities` for identity; index typed arrays by slot
-(`entityIndex` / `queryList` `slots`), not packed handles; keep comments
-ASCII-only in `src/`.
+(`entityIndex` / `queryList` `slots`), not packed handles; keep source
+ASCII-only (`src/`, `test/` and `bench/` are all linted).
 
 ---
 

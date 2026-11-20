@@ -12,7 +12,7 @@ import {
   type PendingEntity,
   Relation,
   RelationCycleError,
-  World,
+  type World,
 } from "../mod.ts";
 import { createTestWorld, tagComponent } from "./fixtures.ts";
 import { assert, assertEquals, assertStrictEquals, assertThrows } from "./helpers.ts";
@@ -208,4 +208,27 @@ Deno.test("command buffer writes null for pending field refs whose spawn died or
     "failed spawn ref is null",
   );
   await world.destroy();
+});
+
+Deno.test("command buffers reject relation components when queuing, not at flush", async () => {
+  const childOf = new Relation({ name: "childOf", exclusive: true });
+  const tag = new Component({ name: "tag" });
+  const components: DynamicComponent[] = [childOf, tag];
+  const world = await createTestWorld(components, 16);
+  const commands = new CommandBuffer(world);
+  const entity = world.entities.createOrThrow();
+  assertThrows(() => commands.add(childOf, entity), ArgumentError, "relation");
+  assertThrows(() => commands.remove(childOf, entity), ArgumentError, "relation");
+  assertThrows(() => commands.spawn([[tag], [childOf]]), ArgumentError, "relation");
+  assertStrictEquals(commands.pendingCount, 0, "Nothing queued");
+});
+
+Deno.test("command buffer x relations: relation presence tags are rejected when queued, like direct calls", async () => {
+  const { world, commands } = await setup();
+  const a = world.entities.createOrThrow();
+  assertThrows(() => commands.add(childOf, a), ArgumentError, "relation");
+  commands.add(node, a, { hp: 9 });
+  commands.flush();
+  assert(!world.components.entityHas(childOf, a), "Relation tag not added without a pair");
+  assertEquals(world.components.getEntityDataOrThrow(node, a).hp, 9, "Later commands still applied");
 });

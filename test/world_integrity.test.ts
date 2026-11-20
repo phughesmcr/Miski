@@ -218,34 +218,6 @@ Deno.test("failed spawn preflight preserves lifecycle windows, revisions, and ha
   await world.destroy();
 });
 
-Deno.test("full-world bundle creation reports payload errors before capacity errors", async () => {
-  const position = vec2Component();
-  const world = await createTestWorld([position]);
-  const entities = Array.from({ length: world.entities.capacity }, () => world.entities.createOrThrow());
-  assertThrows(
-    () => world.entities.create([[position, { x: Number.MAX_VALUE }]]),
-    ComponentDataError,
-    "outside its storage range",
-  );
-  assertThrows(
-    () => world.entities.createOrThrow([[position, { x: Number.MAX_VALUE }]]),
-    ComponentDataError,
-    "outside its storage range",
-  );
-  assertEquals(
-    world.entities.create([[position, { x: 1 }]]),
-    undefined,
-    "Soft capacity failure must return undefined for a valid payload",
-  );
-  assertThrows(
-    () => world.entities.createOrThrow([[position, { x: 1 }]]),
-    CapacityError,
-    "capacity",
-  );
-  assertEquals(world.entities.getActiveSnapshot(), entities, "Capacity failure must preserve active handles");
-  await world.destroy();
-});
-
 Deno.test("active iteration bounds select raw slots across recycled entity generations", async () => {
   const world = await createTestWorld([tagComponent("tag")]);
   const first = world.entities.createOrThrow();

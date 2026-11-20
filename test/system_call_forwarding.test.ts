@@ -2,6 +2,7 @@
 
 import { Query, SpecError, System, type World } from "../mod.ts";
 import { createEntity, createTestWorld, tagComponent } from "./fixtures.ts";
+import { createSystemInstance } from "../src/system/system.ts";
 import { assert, assertEquals, assertStrictEquals, assertThrows, listIds } from "./helpers.ts";
 
 // A registered system instance forwards its call arguments to the callback after the components record and the
@@ -23,7 +24,7 @@ Deno.test("a system callback's arguments.length matches the caller's argument co
     new System<Record<string, never>, unknown[], void>({
       name: "argumentsLength",
       query,
-      callback: function () {
+      callback: function (): void {
         seen = Array.from(arguments);
       },
     }),
@@ -100,6 +101,20 @@ Deno.test("a system callback's default parameters apply only when the caller omi
   assertEquals(seen, [1, 3], "The second default applies with one call arg");
   instance(1, 2);
   assertEquals(seen, [1, 2], "No defaults apply with both call args");
+
+  const withRest = world.systems.register(
+    new System({
+      name: "defaultsAndRest",
+      query,
+      callback: (_components, _entities, first = 7, ...remaining: number[]) => [first, ...remaining],
+    }),
+  );
+  assertEquals(withRest(), [7], "A default before a rest parameter applies with no call args");
+  assertEquals(
+    withRest(undefined, 2, 3, 4, 5),
+    [7, 2, 3, 4, 5],
+    "An explicit undefined takes the default; rest follows",
+  );
   await world.destroy();
 });
 
@@ -136,6 +151,34 @@ Deno.test("a system instance returns the callback's return value", async () => {
   const pending = asyncSystem("done");
   assert(pending instanceof Promise, "An async callback's promise is returned");
   assertStrictEquals(await pending, "DONE", "The promise resolves to the callback's value");
+
+  const six = world.systems.register(
+    new System({
+      name: "sixArguments",
+      query,
+      callback: (_components, _entities, a: number, b: number, c: number, d: number, e: number, f: number) =>
+        a + b + c + d + e + f,
+    }),
+  );
+  assertStrictEquals(six(1, 2, 3, 4, 5, 6), 21, "Six call args reach a typed callback");
+
+  const promise = Promise.resolve(42);
+  const run = createSystemInstance({
+    queryComponents: (definition) => world.components.query(definition),
+    queryEntityList: (definition) => world.entities.queryList(definition),
+  }, new System({ name: "promise", query, callback: () => promise }));
+  assertStrictEquals(run(), promise, "The callback's promise is returned by identity");
+  assertStrictEquals(await run(), 42, "The promise result is preserved");
+  await world.destroy();
+});
+
+Deno.test("system lookups ignore inherited keys and the registry has no prototype", async () => {
+  const { world } = await setup();
+  for (const name of ["constructor", "toString", "__proto__"]) {
+    assertStrictEquals(world.systems.get(name), undefined, `${name} is not a registered system`);
+    assert(!world.systems.has(name), `${name} is not a registered system`);
+  }
+  assertStrictEquals(Object.getPrototypeOf(world.systems.registry), null, "The system registry has no prototype");
   await world.destroy();
 });
 
@@ -146,7 +189,7 @@ Deno.test("a system callback is called without a this value", async () => {
     new System<Record<string, never>, unknown[], void>({
       name: "thisValue",
       query,
-      callback: function (this: unknown) {
+      callback: function (this: unknown): void {
         self = this;
       },
     }),
@@ -168,7 +211,7 @@ Deno.test("a system with argCount forwards exactly that many arguments", async (
         name: `fixed${argCount}`,
         query,
         argCount,
-        callback: function () {
+        callback: function (): void {
           seen = Array.from(arguments).slice(2);
         },
       }),

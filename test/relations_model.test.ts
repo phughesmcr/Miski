@@ -1,5 +1,7 @@
 /// <reference lib="deno.ns" />
 
+// deno-lint-ignore-file no-await-in-loop -- worlds are built and checked one after another on purpose
+
 import { type Entity, Query, Relation, RelationCycleError, type World, WorldRollbackScope } from "../mod.ts";
 import { createTestWorld } from "./fixtures.ts";
 import { assertEquals, listIds } from "./helpers.ts";

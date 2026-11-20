@@ -2,7 +2,7 @@
 
 import { Component, ComponentDataError, type DynamicComponent, type Entity, field, Prefab } from "../mod.ts";
 import { createTestWorld, Mesh } from "./fixtures.ts";
-import { assert, assertEquals, assertStrictEquals, assertThrows } from "./helpers.ts";
+import { assert, assertEquals, assertStrictEquals, assertThrows, listIds } from "./helpers.ts";
 
 let created = 0;
 const createMesh = (): Mesh => {
@@ -167,4 +167,28 @@ Deno.test("Prefab object fields: a throwing create() leaves the world unchanged"
   assertThrows(() => world.entities.instantiateManyOrThrow(prefab, 2), Error, "boom");
   assertEquals(world.entities.getActiveCount(), 1, "No instance survives a failed bulk call");
   assertEquals(world.components.getOwnersSnapshot(fragile)?.length, 1, "No ownership survives a failed bulk call");
+});
+
+Deno.test("a create() hook that breaks its contract by instantiating does not corrupt its caller's borrowed list", async () => {
+  const inner = new Component({ name: "inner", schema: { x: Uint8Array } });
+  const innerPrefab = new Prefab({ components: [[inner]] });
+  const host = new Component({
+    name: "host",
+    schema: {
+      mesh: field.object({
+        create: () => {
+          world.entities.instantiateManyOrThrow(innerPrefab, 2);
+          return {};
+        },
+      }),
+    },
+  });
+  const world = await createTestWorld([inner, host], 16);
+  const outer = new Prefab({ components: [[host]] });
+  const list = world.entities.instantiateManyOrThrow(outer, 3);
+  const entities = listIds(list);
+  assertStrictEquals(entities.length, 3, "Outer list holds only its own entities");
+  for (const entity of entities) {
+    assert(world.components.entityHas(host, entity as Entity), `Outer entity ${entity} has the prefab component`);
+  }
 });

@@ -1,5 +1,5 @@
 /// <reference lib="deno.ns" />
-// deno-lint-ignore-file no-console
+// deno-lint-ignore-file no-console no-top-level-await no-await-in-loop -- bench scripts are entry points that build their worlds at module load and print their reports; worlds are measured one at a time
 
 import { Query, World } from "../mod.ts";
 import {

@@ -1,4 +1,6 @@
 /// <reference lib="deno.ns" />
+
+// deno-lint-ignore-file no-console no-top-level-await -- bench scripts are entry points that build their worlds at module load and print their reports
 /**
  * Probes for the query/archetype performance findings.
  *

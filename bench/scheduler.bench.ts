@@ -1,5 +1,7 @@
 /// <reference lib="deno.ns" />
 
+// deno-lint-ignore-file no-top-level-await -- worlds are built at module load, before Deno.bench registers
+
 // Scheduler and command buffer throughput. Kept in its own file so its worlds do not share an isolate (and heap)
 // with the core benchmarks in miski.bench.ts.
 

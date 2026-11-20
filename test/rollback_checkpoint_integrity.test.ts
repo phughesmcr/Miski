@@ -107,3 +107,44 @@ Deno.test("checkpoint and rollback round-trip worlds with more than 32 data comp
   assert(!world.entities.isActive(speculative), "Rollback discards speculative entities");
   assert(!world.components.entityHas(last, speculative), "Rollback discards speculative ownership");
 });
+
+Deno.test("checkpoint capture and apply round-trip component subsets", async () => {
+  const position = vec2Component();
+  const world = await createTestWorld([position], 8);
+  const entity = world.entities.createOrThrow();
+  world.components.addToEntity(position, entity, { x: 1, y: 2 });
+
+  const checkpoint = world.captureCheckpoint([entity], position);
+  world.components.setEntityData(position, entity, { x: 9, y: 9 });
+  world.applyCheckpoint(checkpoint);
+  assertEquals(
+    world.components.getEntityDataOrThrow(position, entity),
+    { x: 1, y: 2 },
+    "checkpoint restore recovers values",
+  );
+});
+
+Deno.test("rollback restore reverts speculative mutations", async () => {
+  const position = vec2Component();
+  const world = await createTestWorld([position], 8);
+  const entity = world.entities.createOrThrow();
+  world.components.addToEntity(position, entity, { x: 1, y: 2 });
+
+  const point = new WorldRollbackScope(world);
+  world.components.setEntityData(position, entity, { x: 8, y: 8 });
+  point.restore();
+  assertEquals(
+    world.components.getEntityDataOrThrow(position, entity),
+    { x: 1, y: 2 },
+    "rollback restores prior values",
+  );
+
+  const committed = new WorldRollbackScope(world);
+  world.components.setEntityData(position, entity, { x: 3, y: 4 });
+  committed.commit();
+  assertEquals(
+    world.components.getEntityDataOrThrow(position, entity),
+    { x: 3, y: 4 },
+    "commit keeps speculative writes",
+  );
+});

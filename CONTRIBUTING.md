@@ -88,7 +88,8 @@ release validation to match CI.
 - Prefer `entityIndex` / `queryList` `slots` for SoA writes; packed `entities` handles for identity APIs (`isActive`, ownership). Do not index partitions with a packed handle — brands catch swaps at function APIs only; `TypedArray` indexing still accepts either number.
 - Document the layered query pattern (`query` / `queryList` / `querySnapshot`) rather than renaming methods
 - Comment *why* on preflight, atomicity, and borrowed lifetimes; avoid comments that only restate the identifier
-- ASCII-only in `src/` comments (`prefer-ascii` lint)
+- ASCII-only source (`prefer-ascii` lint): write non-ASCII test data as `\u` escapes
+- `deno lint` covers `src/`, `test/` and `bench/`; only `example/` is excluded. Where a rule does not fit test or bench code, relax it in that file with `// deno-lint-ignore-file <rule> -- <reason>` (or a per-line `deno-lint-ignore` with a reason), not in `deno.json`
 
 ## Releasing
 
