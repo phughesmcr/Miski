@@ -202,6 +202,20 @@ Deno.test("component string lookup only resolves registered own names", async ()
   }
 });
 
+Deno.test("owner and changed lists reject an unregistered component like the other component reads", async () => {
+  const position = vec2Component();
+  const stranger = vec2Component("stranger");
+  const world = await createTestWorld([position]);
+  for (const component of [stranger, "stranger"] as const) {
+    assertThrows(() => world.components.getOwners(component), NotRegisteredError, "not registered");
+    assertThrows(() => world.components.getOwnersSnapshot(component), NotRegisteredError, "not registered");
+    assertThrows(() => world.components.getChanged(component), NotRegisteredError, "not registered");
+    assertThrows(() => world.components.getChangedSnapshot(component), NotRegisteredError, "not registered");
+  }
+  assertEquals(world.components.getOwnersSnapshot(position), [], "A registered component with no owners is empty");
+  assertEquals(world.components.getChangedSnapshot(position), [], "A registered component with no changes is empty");
+});
+
 Deno.test("bundle and batch commits keep canonical scratch values isolated by component", async () => {
   const first = vec2Component("first");
   const second = vec2Component("second");

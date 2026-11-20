@@ -369,7 +369,9 @@ world.components.readEntityDataInto(Position, entity, out); // false if absent
 
 Across `world.components`, a plain name returns `undefined` (or `false`) when
 the thing is absent, and the `OrThrow` name throws: `getInstance` /
-`getInstanceOrThrow`, `getEntityData` / `getEntityDataOrThrow`.
+`getInstanceOrThrow`, `getEntityData` / `getEntityDataOrThrow`. Passing a
+component the world has not registered throws `NotRegisteredError` from every
+call except `getInstance`, `isRegistered` and `entityHas`.
 
 `getChanged(...)` resets each `world.refresh()` — a fresh tray every frame.
 Attaching a data component marks it changed, with or without a payload. Tags
@@ -902,8 +904,25 @@ incompatible save leaves the world untouched. Validation is structural: the
 layout table is hashed, but the body is not checksummed, so a corrupted value
 that still fits its field type loads as written. Saves are little-endian. Raw
 writes to slots that do not own a component are not saved; NaN payload bits do
-not survive the document. The save format is versioned but may still change
-before 1.0; a save from an incompatible version is rejected, not misread.
+not survive the document.
+
+**Compatibility.** Two things are versioned separately: the save *format*
+(the library's byte layout and document shape) and your world's *layout*
+(the components and fields above, which `migrate` handles). From 1.0.0:
+
+- Every 1.x release loads every save and document written by any 1.x release
+  from 1.0.0 on. If a later 1.x release needs a new format version, it keeps
+  reading the older ones itself; `migrate` never sees a format difference.
+- A release writes the newest format it knows. An older release rejects a
+  newer save with a `WorldSaveError` naming both versions; it never misreads
+  one. Saves are not forward-compatible.
+- The format version changes only when the bytes or the document shape change,
+  and only in a minor release, noted in the changelog.
+- The same world state saves to the same bytes within one format version, and
+  schema and layout hashes stay the same across 1.x.
+
+Beta saves use format version 2. They load in 1.0.0 only if 1.0.0 still
+writes version 2.
 
 `field.bool()`, `field.enum()` and `field.entity()` columns are saved, and the
 layout records their kind and enum labels, so a bool never loads into a `u8`

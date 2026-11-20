@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+- **Breaking:** `world.components.getOwners`, `getOwnersSnapshot`, `getChanged`
+  and `getChangedSnapshot` throw `NotRegisteredError` for a component the
+  world has not registered, as `getEntityData`, `readEntityDataInto` and every
+  `world.relations` call already did. They returned `undefined`, so their
+  return types lose `| undefined`: drop the `!` or `?? []` at call sites, and
+  use `isRegistered` first if a component may be absent. `getOwners` /
+  `getChanged` are typed `BorrowedEntityIterator` (the same
+  `IterableIterator<Entity>` as before).
+- **Breaking (types):** `world.components.getInstances(components)` is no
+  longer part of `WorldComponentAPI`. It was query plumbing; map
+  `getInstance` over the list instead.
+- The world-save compatibility promise from 1.0.0 is written down (README,
+  "World saves"): every 1.x release reads every save and document written by
+  any 1.x release from 1.0.0 on, older releases reject newer saves rather than
+  misread them, and the format version changes only when the bytes or document
+  shape do, in a minor release. Nothing about the format changed.
+- `docs/api-comparison.md` compares the public API with bitECS, Koota, Becsy,
+  miniplex, ECSY, ape-ecs, flecs and Bevy, and proposes the 1.0 surface.
+
 ## 1.0.0-beta.3 — 2026-11-20
 
 - **Breaking:** the per-world owner cap is named `maxOwners` everywhere, matching

@@ -17,8 +17,13 @@ export class WorldSaveError extends MiskiError {
 /** "MSKI" read as a little-endian u32. */
 export const SAVE_MAGIC = 0x494b534d;
 /**
- * Save format version; a reader accepts only its own. Version 2 marks the f16 column code (12) and the relation
- * section, both added after version 1 saves were first written; version 1 saves are rejected.
+ * Save format version: the byte layout and document shape, not the world's component layout (that is `migrate`'s
+ * job). Version 2 marks the f16 column code (12) and the relation section, both added after version 1 saves were
+ * first written; version 1 saves are rejected. Today a reader accepts only its own version.
+ *
+ * Compatibility promise from 1.0.0 (README "World saves"): every 1.x release reads every format version written by
+ * any 1.x release from 1.0.0 on, converting older versions itself, and rejects newer ones with a `WorldSaveError`.
+ * Bump this only when the bytes or the document shape change, in a minor release, and keep reading the old version.
  */
 export const FORMAT_VERSION = 2;
 

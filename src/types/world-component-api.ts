@@ -1,6 +1,6 @@
 import type { Component } from "@/component/component.ts";
 import type { ComponentInstance } from "@/component/component-instance.ts";
-import type { Entity, QueryEntityList } from "@/entity/entity.ts";
+import type { BorrowedEntityIterator, Entity, QueryEntityList } from "@/entity/entity.ts";
 import type { Query } from "@/query/query.ts";
 import type { ComponentBundle, ComponentBundleEntryInput } from "@/types/component-bundle.ts";
 import type { DynamicComponent, DynamicComponentInstance } from "@/types/component.ts";
@@ -76,21 +76,23 @@ export type WorldComponentAPI = {
     entity: Entity,
   ): boolean;
   /**
-   * Get an iterable of all entities with one or more changed properties for a given component
+   * Iterate the entities with one or more changed properties for a component in this refresh window
    * @param component - The component to get changed entities for
-   * @returns An iterable of entities or `undefined` if the component is not registered
+   * @returns A borrowed iterator of entities, valid until the next mutation or refresh
+   * @throws {NotRegisteredError} - If the component is not registered
    */
   getChanged<TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
     component: Component<TValue, TStorage> | string,
-  ): IterableIterator<Entity> | undefined;
+  ): BorrowedEntityIterator;
   /**
-   * Get a stable snapshot of all entities with one or more changed properties for a component
+   * Copy the entities with one or more changed properties for a component in this refresh window
    * @param component - The component to get changed entities for
-   * @returns An array of entities or `undefined` if the component is not registered
+   * @returns A new array of entities
+   * @throws {NotRegisteredError} - If the component is not registered
    */
   getChangedSnapshot<TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
     component: Component<TValue, TStorage> | string,
-  ): Entity[] | undefined;
+  ): Entity[];
   /**
    * Read a copy of an entity's component data (world-level guarded tier). Allocates one object per call; prefer
    * {@link readEntityDataInto} in loops.
@@ -185,29 +187,23 @@ export type WorldComponentAPI = {
     entity: Entity,
   ): void;
   /**
-   * Get instances for an array of components
-   * @param array - The array of components to get instances for
-   * @returns An array of component instances
-   */
-  getInstances(
-    array: DynamicComponent[] | Readonly<DynamicComponent[]>,
-  ): (DynamicComponentInstance | undefined)[];
-  /**
-   * Get an iterable of all entities with a given component
-   * @param component - The component to get entities for
-   * @returns An iterable of entities or `undefined` if the component is not registered
+   * Iterate the entities that own a component
+   * @param component - The component to get owners for
+   * @returns A borrowed iterator of entities, valid until the next mutation or refresh
+   * @throws {NotRegisteredError} - If the component is not registered
    */
   getOwners<TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
     component: Component<TValue, TStorage> | string,
-  ): IterableIterator<Entity> | undefined;
+  ): BorrowedEntityIterator;
   /**
-   * Get a stable snapshot of all entities with a given component
-   * @param component - The component to get entities for
-   * @returns An array of entities or `undefined` if the component is not registered
+   * Copy the entities that own a component
+   * @param component - The component to get owners for
+   * @returns A new array of entities
+   * @throws {NotRegisteredError} - If the component is not registered
    */
   getOwnersSnapshot<TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
     component: Component<TValue, TStorage> | string,
-  ): Entity[] | undefined;
+  ): Entity[];
   /**
    * Query for components
    * @param query - The query to use
@@ -257,8 +253,10 @@ export type WorldComponentAPI = {
   ): void;
 };
 
-/** A function that gets ComponentInstances from an array of Components */
-export type ComponentInstanceGetter = WorldComponentAPI["getInstances"];
+/** A function that gets the registered instances (or `undefined`) of an array of Components. @internal */
+export type ComponentInstanceGetter = (
+  array: DynamicComponent[] | Readonly<DynamicComponent[]>,
+) => (DynamicComponentInstance | undefined)[];
 
 /** Internal dependencies supplied by a World to its QueryManager. */
 export type QueryManagerDependencies = {

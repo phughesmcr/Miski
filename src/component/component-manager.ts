@@ -597,32 +597,28 @@ export class ComponentManager {
   /**
    * Get an iterable of all entities with one or more changed properties for a given component
    * @param component The component to get changed entities for
-   * @returns An iterable of entities or `undefined` if the component is not registered
+   * @returns An iterable of entities
+   * @throws {NotRegisteredError} If the component is not registered
    */
   getChanged<
     TValue extends SchemaOrNull,
     TStorage extends SchemaOrNull = TValue,
-  >(component: Component<TValue, TStorage> | string): IterableIterator<Entity> | undefined {
-    const instance = this.getInstance(component);
-    if (!instance) return;
-    const state = this.#states[instance.id];
-    if (state === undefined) return;
+  >(component: Component<TValue, TStorage> | string): IterableIterator<Entity> {
+    const state = this.#states[this.getInstanceOrThrow(component).id]!;
     return state.changed.iterator.reset(state.changed.count);
   }
 
   /**
    * Get an iterable of all entities with a given component
    * @param component The component to get entities for
-   * @returns An iterable of entities or `undefined` if the component is not registered
+   * @returns An iterable of entities
+   * @throws {NotRegisteredError} If the component is not registered
    */
   getOwners<
     TValue extends SchemaOrNull,
     TStorage extends SchemaOrNull = TValue,
-  >(component: Component<TValue, TStorage> | string): IterableIterator<Entity> | undefined {
-    const instance = this.getInstance(component);
-    if (!instance) return;
-    const state = this.#states[instance.id];
-    if (state === undefined) return;
+  >(component: Component<TValue, TStorage> | string): IterableIterator<Entity> {
+    const state = this.#states[this.getInstanceOrThrow(component).id]!;
     return state.owners.iterator.reset(state.owners.count);
   }
 
