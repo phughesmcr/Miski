@@ -12,6 +12,7 @@ import {
   worldSaveToDocument,
 } from "../mod.ts";
 import { assert, assertEquals, assertThrows } from "./helpers.ts";
+import type { NoFloat16Report } from "./no_float16_worker.ts";
 
 const half = new Component({ name: "half", schema: { v: Float16Array, w: Float32Array } });
 
@@ -53,4 +54,27 @@ Deno.test("Float16Array column: write, canonicalize, save, JSON, rollback", asyn
   world.components.setEntityData(half, e, { v: 2, w: 2 });
   point.restore();
   assertEquals((world.components.getEntityDataOrThrow(half, e) as { v: number }).v, 65504, "rollback");
+});
+
+Deno.test("without a Float16Array global, Miski still imports and works, and rejects f16 saves", async () => {
+  const world = await make();
+  const e = world.entities.createOrThrow();
+  world.components.addToEntity(half, e, { v: 1, w: 1 });
+  const f16Save = saveWorld(world);
+
+  const worker = new Worker(new URL("./no_float16_worker.ts", import.meta.url), { type: "module" });
+  const report = await new Promise<NoFloat16Report>((resolve, reject) => {
+    worker.onmessage = (event: MessageEvent<NoFloat16Report>) => resolve(event.data);
+    worker.onerror = (event) => {
+      event.preventDefault();
+      reject(new Error(event.message));
+    };
+    worker.postMessage({ f16Save });
+  });
+
+  assertEquals(report.importError, undefined, "imports without Float16Array");
+  assertEquals(report.roundTrip, 1.5, "an f32 world saves and loads");
+  assertEquals(report.stillAbsent, true, "Miski does not define Float16Array");
+  assertEquals(report.f16LoadError, "WorldSaveError", "an f16 save is rejected, not misread");
+  assertEquals(report.f16DocumentError, "WorldSaveError", "an f16 save does not convert to a document");
 });

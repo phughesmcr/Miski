@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Miski imports and runs on runtimes without `Float16Array` (before Chrome 135
+  or Node 24, for example). Beta.3 referenced it when the module loaded, so the
+  import threw a `ReferenceError` there. Only `Float16Array` columns need it
+  now; on such a runtime, loading a save with an `f16` column, or turning it
+  into a document, throws `WorldSaveError`.
+
 ## 1.0.0-beta.3 — 2026-11-20
 
 - **Breaking:** the per-world owner cap is named `maxOwners` everywhere, matching

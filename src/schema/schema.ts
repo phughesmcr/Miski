@@ -1,3 +1,4 @@
+import { FLOAT16_ARRAY } from "@/constants.ts";
 import { SpecError } from "@/errors.ts";
 import { assertNoTupleColumns, Component, isValidComponentSpec } from "@/component/component.ts";
 import type { ComponentSpec, DynamicComponent } from "@/types/component.ts";
@@ -20,7 +21,7 @@ const CONSTRUCTOR_TAGS = new Map<TypedArrayConstructor, string>([
   [Float64Array, "f64"],
   // Append-only: tags are hashed, so never renumber or reorder the entries above.
   [Uint8ClampedArray, "u8c"],
-  [Float16Array, "f16"],
+  ...(FLOAT16_ARRAY ? [[FLOAT16_ARRAY, "f16"] as const] : []),
 ]);
 
 /**

@@ -18,7 +18,7 @@ Runtime tests live in `*.test.ts` files and run via `deno test` (see `deno.json`
 | `world_integrity.test.ts` | Atomic spawn/checkpoints, historical exits, rollback identities, slot bounds |
 | `world_lifecycle_integrity.test.ts` | Async readiness, teardown concurrency, failure cleanup, `await using` disposal during destroy, in-flight init and failed init, a failed refresh blocking lifecycle APIs, `onReady` after destroy |
 | `rollback_scope.test.ts` | `WorldRollbackScope` with `using`: restore when left without `commit()` (also on throw), commit, explicit restore, disposal on destroyed and errored worlds |
-| `float16_column.test.ts` | `Float16Array` columns: writes, canonicalization, saves, documents, rollback |
+| `float16_column.test.ts` | `Float16Array` columns: writes, canonicalization, saves, documents, rollback; in a worker without the `Float16Array` global (`no_float16_worker.ts`), the import, an f32 save round-trip, and f16 saves rejected (`deno task test` grants `--allow-read` for `mod.ts`, `src` and the worker so it can load them) |
 | `rollback_checkpoint_integrity.test.ts` | Checkpoint capture/apply and rollback restore/commit round-trips, one rollback scope, closed and per-world rollback scopes, foreign checkpoints, >32-component round-trips |
 | `component_storage_integrity.test.ts` | Capped (dense-row) storage under stray non-owner writes, ownership acquisition, cap clamping, `maxOwners` limits and slot reuse, mixed-width schemas, column constructors, archetype storage scaling with population rather than capacity |
 | `component_rollback_memory.test.ts` | Capped owners and dense rows through rollback and removal, sparse changed window, `getActive` scratch growth, 16-bit-capacity rollback |

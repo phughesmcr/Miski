@@ -67,3 +67,13 @@ export const INVALID_NAMES: string[] = [
   "$_SYSTEM_INIT_KEY",
   "$_SYSTEM_DESTROY_KEY",
 ];
+
+/**
+ * @internal
+ * The runtime's `Float16Array`, or `undefined` where it has none (older browsers, Electron and Node builds).
+ * Only `f16` columns need it, so reference it through this constant: a bare `Float16Array` at module scope
+ * throws a `ReferenceError` on import there and takes the whole library down with it.
+ */
+export const FLOAT16_ARRAY: Float16ArrayConstructor | undefined = typeof Float16Array === "function" ?
+  Float16Array :
+  undefined;
