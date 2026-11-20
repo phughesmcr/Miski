@@ -654,7 +654,7 @@ These add API without changing existing calls, so they can ship in 1.x:
 
 ## Follow-up bug found while auditing
 
-`world.components.getOwners(C)` and `getChanged(C)` return one shared iterator per component. Nested loops over the
-same component therefore see too few pairs: 3 owners nested give 3 pairs, not 9. This is the hazard beta.3 fixed for
-`entities.query()` and `getActive()` with pooled iterators. The return type (`BorrowedEntityIterator`) does not need
-to change for the fix. It is not fixed on this branch.
+`world.components.getOwners(C)` and `getChanged(C)` returned one shared iterator per component, as did
+`world.relations.getChanged(R)`. Nested loops over the same component therefore saw too few pairs: 3 owners nested
+gave 3 pairs, not 9. They now hand out pooled iterators, as beta.3 did for `entities.query()` and `getActive()`. The
+return type (`BorrowedEntityIterator`) did not change.

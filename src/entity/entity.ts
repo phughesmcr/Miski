@@ -23,7 +23,8 @@ export type EntityArray = Uint8Array | Uint16Array | Uint32Array;
 /**
  * A borrowed, pooled entity iterator.
  *
- * `world.entities.query()` and `getActive()` return a separate iterator per call, so nested loops are independent.
+ * `world.entities.query()`, `getActive()`, `world.components.getOwners()` / `getChanged()` and
+ * `world.relations.getChanged()` return a separate iterator per call, so nested loops are independent.
  * It goes back to its pool when it is exhausted or closed early (`break`); do not call `next()` after it reported
  * `done`, because by then it may be serving another caller. `query()` iterates the query's retained result, which a
  * re-query of the same query after a mutation refills in place.
@@ -184,48 +185,6 @@ export class ReusableEntityIterator implements IterableIterator<Entity> {
   next(): IteratorResult<Entity> {
     if (this.cursor < this.count) {
       this.result.value = this.indices[this.cursor++]! as Entity;
-      this.result.done = false;
-      return this.result;
-    }
-
-    this.result.value = undefined as unknown as Entity;
-    this.result.done = true;
-    return this.result;
-  }
-
-  [Symbol.iterator](): IterableIterator<Entity> {
-    return this;
-  }
-}
-
-/**
- * Iterate packed entity handles from a dense slot list.
- * Packs on {@link ReusableSlotPackIterator.next} so mutation paths stay slot-only.
- */
-export class ReusableSlotPackIterator implements IterableIterator<Entity> {
-  count: number;
-  cursor: number;
-  slots: EntityArray;
-  packSlot: (slot: number) => Entity;
-  result: IteratorResult<Entity>;
-
-  constructor(slots: EntityArray, packSlot: (slot: number) => Entity) {
-    this.slots = slots;
-    this.packSlot = packSlot;
-    this.count = 0;
-    this.cursor = 0;
-    this.result = { value: 0 as Entity, done: false };
-  }
-
-  reset(count: number): this {
-    this.count = count;
-    this.cursor = 0;
-    return this;
-  }
-
-  next(): IteratorResult<Entity> {
-    if (this.cursor < this.count) {
-      this.result.value = this.packSlot(this.slots[this.cursor++]!);
       this.result.done = false;
       return this.result;
     }

@@ -1,4 +1,4 @@
-import type { BorrowedEntityList, Entity } from "@/entity/entity.ts";
+import type { BorrowedEntityIterator, BorrowedEntityList, Entity } from "@/entity/entity.ts";
 import type { Query } from "@/query/query.ts";
 import type { Relation } from "@/relation/relation.ts";
 import type { ComponentData, ComponentPartitions, SchemaOrNull } from "@/types/partitions.ts";
@@ -103,7 +103,7 @@ export type WorldRelationAPI = {
    * Sources whose pairs or pair data changed since the last refresh and that still have a target.
    * Retargeting an exclusive relation is reported here, not as an archetype entry or exit.
    */
-  getChanged(relation: AnyRelation): IterableIterator<Entity>;
+  getChanged(relation: AnyRelation): BorrowedEntityIterator;
   /**
    * Parents-first (breadth-first) traversal. With `root`, walks the sources below `root` (depth 0 is `root`).
    * Without it, walks every tree whose root is a target that has no target itself, in first-targeted order.

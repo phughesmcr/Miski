@@ -39,7 +39,7 @@ is out of the hot path, and column storage changes go through `@phughesmcr/parti
 | 14 | `using` on checkpoints | `checkpoint.ts`, `world.ts` `captureCheckpoint` | A checkpoint is frozen, reusable data that owns nothing | - | **No** |
 | 15 | `using` on CommandBuffer / Schedule / query pools / prefab spawners | `scheduler/**`, `query-pool.ts`, `prefab-spawner.ts` | CommandBuffer dispose must pick flush or discard, both hide bugs; the rest own nothing | - | **No** |
 | 16 | `using` in hot paths | anywhere | Allocates even on pooled objects: 5M iterations 385 ms / 1030 GC events vs try/finally 6 ms / 4 | - | **No** |
-| 17 | Iterator helpers | `query-iterators.ts:87`, `relation-list.ts:107`, `entity.ts:182,224` | Allocate wrappers; Miski's reusable iterators already avoid that | Chrome 122 | **No** in `src/`; fine in examples |
+| 17 | Iterator helpers | `query-iterators.ts:87`, `relation-list.ts:107`, `entity.ts:197` | Allocate wrappers; Miski's reusable iterators already avoid that | Chrome 122 | **No** in `src/`; fine in examples |
 | 18 | `structuredClone` | object fields, prefabs | Miski already has `clone`/`encode`/`decode` hooks; clone drops prototypes | everywhere | **No** |
 | 19 | `Atomics.pause` / `Atomics.waitAsync` | none today | Only relevant inside #8 (Chrome's main thread can't `Atomics.wait`, so joins need `waitAsync`) | Chrome 133 / 87 | **No** (part of #8) |
 | 20 | `Math.sumPrecise`, `RegExp.escape`, import attributes, Web Locks, OffscreenCanvas | none | No call site | - | **No** |

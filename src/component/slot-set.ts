@@ -1,4 +1,4 @@
-import { createSlotArray, type EntityArray, type PackSlot, ReusableSlotPackIterator } from "@/entity/entity.ts";
+import { createSlotArray, type EntityArray } from "@/entity/entity.ts";
 
 /** Initial length of a set's dense list; it doubles on demand up to the set's maximum length. */
 const INITIAL_LIST_LENGTH = 16;
@@ -19,8 +19,6 @@ export class SlotSet {
   positions: EntityArray;
   /** Number of members. */
   count: number;
-  /** Reusable iterator over the members, packing each slot into an entity handle. */
-  readonly iterator: ReusableSlotPackIterator;
   /** World capacity: the slot range and the `positions` length. */
   readonly #capacity: number;
   /** Most members the set can ever hold. */
@@ -29,16 +27,14 @@ export class SlotSet {
   /**
    * @param capacity - World capacity (slots are `0 <= slot < capacity`)
    * @param maxLength - Most members the set can hold (at most `capacity`)
-   * @param packSlot - Packs a live slot into an entity handle for {@link iterator}
    */
-  constructor(capacity: number, maxLength: number, packSlot: PackSlot) {
+  constructor(capacity: number, maxLength: number) {
     this.#capacity = capacity;
     this.#maxLength = maxLength;
     // Zero-length arrays of the world's slot-array type keep `list` / `positions` monomorphic once allocated.
     this.list = createSlotArray(capacity, 0);
     this.positions = this.list;
     this.count = 0;
-    this.iterator = new ReusableSlotPackIterator(this.list, packSlot);
   }
 
   /** Make room for at least `minLength` members: allocate on first use, then double (capped at the maximum). */
@@ -50,7 +46,6 @@ export class SlotSet {
     const list = createSlotArray(this.#capacity, Math.min(Math.max(length, minLength), this.#maxLength));
     list.set(current);
     this.list = list;
-    this.iterator.slots = list;
   }
 
   /** `true` if `slot` is a member. */
