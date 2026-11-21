@@ -22,6 +22,7 @@ import type { ComponentValue, SchemaOrNull } from "@/types/partitions.ts";
 import type { PendingEntity } from "@/types/scheduler.ts";
 import type { AnyRelation, RelationDataInput } from "@/types/world-relation-api.ts";
 import { isRelation, type Relation } from "@/relation/relation.ts";
+import { Prefab } from "@/prefab/prefab.ts";
 import { type EntityField, isEntityField } from "@/schema/field.ts";
 import { growTypedArray, hasOwnProperty } from "@/utils.ts";
 import { World } from "@/world/world.ts";
@@ -39,7 +40,19 @@ const OP_SET = 5;
 const OP_REMOVE = 6;
 const OP_RELATE = 7;
 const OP_UNRELATE = 8;
-const OP_NAMES: readonly string[] = ["", "spawn", "spawn", "destroy", "add", "set", "remove", "relate", "unrelate"];
+const OP_INSTANTIATE = 9;
+const OP_NAMES: readonly string[] = [
+  "",
+  "spawn",
+  "spawn",
+  "destroy",
+  "add",
+  "set",
+  "remove",
+  "relate",
+  "unrelate",
+  "instantiate",
+];
 
 /** Components with more fields than this cannot key their payload shape by a 32-bit field mask. */
 const MAX_MASK_FIELDS = 31;
@@ -121,7 +134,7 @@ type ComponentInfo = {
  * (one whose schema entry is not a typed-array constructor) is held by reference in a side column, validated by the
  * world at flush, and released after the flush. Steady-state queuing and flushing does not allocate.
  *
- * Pending entities from {@link CommandBuffer.spawn} can be used wherever an entity is accepted: as a command target,
+ * Pending entities from {@link CommandBuffer.spawn} and {@link CommandBuffer.instantiate} can be used wherever an entity is accepted: as a command target,
  * as either end of a relation pair, and as a `field.entity()` value (including in a later spawn's bundle, so a parent
  * and a child that points at it can be spawned in one buffer).
  *
@@ -182,6 +195,10 @@ export class CommandBuffer {
   #tagTuples: [DynamicComponent][] = [];
   #dataTuples: [DynamicComponent, Record<string, unknown>][] = [];
 
+  /** Prefabs of queued instantiate commands, by the index stored in their record's component slot. */
+  #prefabs: (Prefab | undefined)[] = [];
+  #prefabCount = 0;
+
   #flushing = false;
 
   /**
@@ -213,53 +230,28 @@ export class CommandBuffer {
   spawn<const TBundle extends readonly ComponentBundleEntryInput[]>(
     bundle?: TBundle & CommandBundle<TBundle>,
   ): PendingEntity {
-    this.#assertNotFlushing();
-    if (this.#spawnCount >= this.#world.entities.capacity) {
-      throw new CapacityError(`World is at capacity (${this.#world.entities.capacity} entities).`);
-    }
-    const entries = bundle as readonly ComponentBundleEntryInput[] | undefined;
-    if (entries !== undefined) assertBundleArray(entries, "Bundle");
-    const entryCount = entries === undefined ? 0 : entries.length;
-    this.#reserveRecords(1 + entryCount);
+    return this.#queueSpawn(undefined, bundle as readonly ComponentBundleEntryInput[] | undefined, "Bundle");
+  }
 
-    // Stage every entry before committing anything, so a rejected bundle queues nothing.
-    const stamp = this.#nextBundleStamp();
-    this.#sideStaged = this.#sideCount;
-    let payload = this.#payloadCount;
-    try {
-      for (let i = 0; i < entryCount; i++) {
-        const entry: unknown = entries![i];
-        assertBundleEntry(entry, "Bundle entries");
-        const index = this.#infoFor(entry[0] as DynamicComponent);
-        if (this.#bundleSeen[index] === stamp) {
-          throw duplicateComponentError(this.#infos[index]!.name, "bundle");
-        }
-        this.#bundleSeen[index] = stamp;
-        const record = this.#recordCount + 1 + i;
-        this.#ops[record] = OP_ENTRY;
-        this.#components[record] = index;
-        this.#targets[record] = 0;
-        payload = this.#stagePayload(record, this.#infos[index]!, entry.length === 2 ? entry[1] : undefined, payload);
-      }
-    } catch (error) {
-      this.#dropStagedSide();
-      throw error;
-    }
-
-    const handle = this.#encodePending(this.#spawnCount);
-    const record = this.#recordCount;
-    this.#ops[record] = OP_SPAWN;
-    this.#components[record] = 0;
-    this.#targets[record] = handle;
-    this.#payloadStarts[record] = 0;
-    this.#payloadCounts[record] = entryCount;
-    this.#masks[record] = 0;
-    this.#recordCount += 1 + entryCount;
-    this.#payloadCount = payload;
-    this.#sideCount = this.#sideStaged;
-    this.#commandCount++;
-    this.#spawnCount++;
-    return handle as PendingEntity;
+  /**
+   * Queue the creation of an entity from a prefab, with optional overrides (as `entities.instantiate`). Override
+   * tuples merge field by field over the prefab's defaults and may add components the prefab lacks; a `field.entity()`
+   * override may hold a pending entity from this buffer. Relations are not part of a prefab: queue them with
+   * {@link relate}, which accepts the returned pending entity.
+   * @param prefab The prefab to instantiate
+   * @param overrides Unique `[component]` or `[component, data]` tuples
+   * @returns A placeholder handle usable as the target of later commands on this buffer until it flushes
+   * @throws {ArgumentError} If `prefab` is not a Prefab, or an override is a relation or appears twice
+   * @throws {CapacityError} If more entities are queued than the world can ever hold
+   * @throws {NotRegisteredError} If a prefab or override component is not registered in the world
+   * @throws {ComponentDataError} If override data names an unknown field or a numeric field value is not a finite number
+   * @throws {ArgumentError} If a `field.entity()` value is a pending entity this buffer did not spawn since its last flush
+   */
+  instantiate<const TBundle extends readonly ComponentBundleEntryInput[] = readonly []>(
+    prefab: Prefab,
+    overrides?: TBundle & CommandBundle<TBundle>,
+  ): PendingEntity {
+    return this.#queueSpawn(prefab, overrides as readonly ComponentBundleEntryInput[] | undefined, "Overrides");
   }
 
   /**
@@ -388,7 +380,8 @@ export class CommandBuffer {
       const count = this.#recordCount;
       let record = 0;
       while (record < count) {
-        const next = this.#ops[record] === OP_SPAWN ? record + 1 + this.#payloadCounts[record]! : record + 1;
+        const op = this.#ops[record];
+        const next = op === OP_SPAWN || op === OP_INSTANTIATE ? record + 1 + this.#payloadCounts[record]! : record + 1;
         try {
           this.#apply(record);
         } catch (error) {
@@ -413,6 +406,73 @@ export class CommandBuffer {
     this.#reset();
   }
 
+  /** Queue a spawn (`prefab` undefined) or an instantiate; `entries` is the bundle or the overrides. */
+  #queueSpawn(
+    prefab: Prefab | undefined,
+    entries: readonly ComponentBundleEntryInput[] | undefined,
+    label: string,
+  ): PendingEntity {
+    this.#assertNotFlushing();
+    if (this.#spawnCount >= this.#world.entities.capacity) {
+      throw new CapacityError(`World is at capacity (${this.#world.entities.capacity} entities).`);
+    }
+    if (prefab !== undefined) {
+      if (!(prefab instanceof Prefab)) throw new ArgumentError("Expected a Prefab.");
+      // Resolve every prefab component now, so an unregistered one throws here rather than at flush.
+      const components = prefab.components;
+      for (let i = 0; i < components.length; i++) this.#infoFor(components[i]!);
+    }
+    if (entries !== undefined) assertBundleArray(entries, label);
+    const entryCount = entries === undefined ? 0 : entries.length;
+    this.#reserveRecords(1 + entryCount);
+
+    // Stage every entry before committing anything, so a rejected bundle queues nothing.
+    const stamp = this.#nextBundleStamp();
+    this.#sideStaged = this.#sideCount;
+    let payload = this.#payloadCount;
+    try {
+      for (let i = 0; i < entryCount; i++) {
+        const entry: unknown = entries![i];
+        assertBundleEntry(entry, `${label} entries`);
+        const index = this.#infoFor(entry[0] as DynamicComponent);
+        if (this.#bundleSeen[index] === stamp) {
+          throw duplicateComponentError(this.#infos[index]!.name, "bundle");
+        }
+        this.#bundleSeen[index] = stamp;
+        const record = this.#recordCount + 1 + i;
+        this.#ops[record] = OP_ENTRY;
+        this.#components[record] = index;
+        this.#targets[record] = 0;
+        payload = this.#stagePayload(record, this.#infos[index]!, entry.length === 2 ? entry[1] : undefined, payload);
+      }
+    } catch (error) {
+      this.#dropStagedSide();
+      throw error;
+    }
+
+    const handle = this.#encodePending(this.#spawnCount);
+    const record = this.#recordCount;
+    if (prefab === undefined) {
+      this.#ops[record] = OP_SPAWN;
+      this.#components[record] = 0;
+    } else {
+      this.#ops[record] = OP_INSTANTIATE;
+      // The spawn count bounds the prefab count, and it stays below the 65,536 world capacity limit.
+      this.#components[record] = this.#prefabCount;
+      this.#prefabs[this.#prefabCount++] = prefab;
+    }
+    this.#targets[record] = handle;
+    this.#payloadStarts[record] = 0;
+    this.#payloadCounts[record] = entryCount;
+    this.#masks[record] = 0;
+    this.#recordCount += 1 + entryCount;
+    this.#payloadCount = payload;
+    this.#sideCount = this.#sideStaged;
+    this.#commandCount++;
+    this.#spawnCount++;
+    return handle as PendingEntity;
+  }
+
   #assertNotFlushing(): void {
     if (this.#flushing) throw new WorldStateError("CommandBuffer is flushing");
   }
@@ -422,6 +482,8 @@ export class CommandBuffer {
     this.#commandCount = 0;
     this.#payloadCount = 0;
     this.#spawnCount = 0;
+    for (let i = 0; i < this.#prefabCount; i++) this.#prefabs[i] = undefined;
+    this.#prefabCount = 0;
     this.#epoch = (this.#epoch + 1) & PENDING_EPOCH_MASK;
     if (this.#sideHigh > 0 || this.#rowsHoldValues) this.#releaseSideValues();
   }
@@ -682,8 +744,8 @@ export class CommandBuffer {
   /** Apply the command at `record`. */
   #apply(record: number): void {
     const op = this.#ops[record]!;
-    if (op === OP_SPAWN) {
-      this.#applySpawn(record);
+    if (op === OP_SPAWN || op === OP_INSTANTIATE) {
+      this.#applySpawn(record, op === OP_INSTANTIATE ? this.#prefabs[this.#components[record]!]! : undefined);
       return;
     }
     const world = this.#world;
@@ -741,7 +803,7 @@ export class CommandBuffer {
     return data;
   }
 
-  #applySpawn(record: number): void {
+  #applySpawn(record: number, prefab: Prefab | undefined): void {
     const entryCount = this.#payloadCounts[record]!;
     // Mark the spawn failed until it succeeds, so later commands on its pending handle are skipped.
     const index = (-this.#targets[record]! - 1) & PENDING_INDEX_MASK;
@@ -763,7 +825,9 @@ export class CommandBuffer {
         bundle[i] = tuple;
       }
     }
-    const entity = this.#world.entities.create(bundle as unknown as readonly []);
+    const entity = prefab === undefined ?
+      this.#world.entities.create(bundle as unknown as readonly []) :
+      this.#world.entities.instantiate(prefab, bundle as unknown as readonly []);
     if (entity === undefined) {
       throw new CapacityError(`World is at capacity (${this.#world.entities.capacity} entities).`);
     }
@@ -834,7 +898,11 @@ export class CommandBuffer {
     if (!isError(error) || record >= this.#recordCount) return;
     const op = this.#ops[record]!;
     const target = this.#targets[record]!;
-    const name = op === OP_SPAWN || op === OP_DESTROY ? "" : ` ${this.#infos[this.#components[record]!]!.name}`;
+    const name = op === OP_SPAWN || op === OP_DESTROY ?
+      "" :
+      op === OP_INSTANTIATE ?
+      ` ${this.#prefabs[this.#components[record]!]!.name}` :
+      ` ${this.#infos[this.#components[record]!]!.name}`;
     let entity = target < 0 ? `pending entity ${target}` : `entity ${target}`;
     if (op === OP_RELATE || op === OP_UNRELATE) {
       const pairTarget = this.#pairTargets[record]!;

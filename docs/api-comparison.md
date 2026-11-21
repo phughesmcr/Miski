@@ -14,24 +14,24 @@ interface/variable pairs.
   command buffer flushed at phase ends, and prefabs.
 - **Miski goes beyond the field in two areas:** saves with an explicit layout check and a `migrate` hook, and an
   error model with one base class.
-- **The main mismatch is naming in `world.components`.** Every other library, and Miski's own `world.relations` and
-  `ComponentInstance`, use short `add` / `remove` / `has` / `get` / `set` verbs. `world.components` uses
-  `addToEntity`, `removeFromEntity`, `entityHas`, `getEntityData` and `setEntityData`. That rename is the biggest open
-  decision (D1).
+- **The main mismatch was naming in `world.components`.** Every other library, and Miski's own `world.relations` and
+  `ComponentInstance`, use short `add` / `remove` / `has` / `get` / `set` verbs. `world.components` used
+  `addToEntity`, `removeFromEntity`, `entityHas`, `getEntityData` and `setEntityData`. This branch renames them (D1).
 - **One real gap: change detection lives on the world, not on the query.** Every other library with change detection
   puts it on the query: Bevy `Added<T>` / `Changed<T>`, Koota `createAdded()` / `createChanged()`, Becsy `q.added` /
   `q.changed`, flecs `detect_changes()`. That can be added after 1.0 without breaking anything, so it does not block a
   freeze.
 - **Changes on this branch** (the "clearly right" set; each is in the CHANGELOG under Unreleased):
   1. `world.components.getChanged` / `getOwners` and their `*Snapshot` forms throw `NotRegisteredError` for an
-     unregistered component instead of returning `undefined`. This matches `getEntityData`, `readEntityDataInto` and
+     unregistered component instead of returning `undefined`. This matches `getData`, `readDataInto` and
      every `world.relations` call. Their return types lose `| undefined`.
   2. `world.components.getInstances` leaves the public type. It was query-manager plumbing, and
      `getInstance` covers it.
   3. The save format's compatibility promise is written down: in this document, in the README and on
      `FORMAT_VERSION`.
-- **Blocked on you:** nine decisions, D1–D9, in [Decisions](#decisions-for-the-maintainer). The freeze also waits on
-  the entity-cap research (D9), because lifting the 65,536 cap may change `Entity` packing and the save format.
+- **Decisions:** D1–D12 are in [Decisions](#decisions-for-the-maintainer). The maintainer accepted every
+  recommendation, and this branch implements them. Only D9 is open: the freeze waits on the entity-cap research,
+  because lifting the 65,536 cap may change `Entity` packing and the save format.
 
 ## Sources and method
 
@@ -80,7 +80,7 @@ note it as the one step of setup most libraries don't need. `EcsWorld` duplicate
 
 | | API |
 | --- | --- |
-| **Miski** | `new Component({ name, schema?, maxOwners? })`, with the schema built from typed-array constructors plus `field.bool/enum/entity/string/object`. Three access tiers: (a) `instance.storage.partitions[key][slot]`; (b) `instance.proxy`, `instance.get/set(entity, key)`; (c) `world.components.getEntityData` / `getEntityDataOrThrow` / `readEntityDataInto` / `setEntityData`. Structural changes: `addToEntity`, `removeFromEntity`, `entityHas`, `addBundle`, `addToEntities`, `removeFromEntities`. |
+| **Miski** | `new Component({ name, schema?, maxOwners? })`, with the schema built from typed-array constructors plus `field.bool/enum/entity/string/object`. Three access tiers: (a) `instance.storage.partitions[key][slot]`; (b) `instance.proxy`, `instance.get/set(entity, key)`; (c) `world.components.getData` / `getDataOrThrow` / `readDataInto` / `setData`. Structural changes: `add`, `remove`, `has`, `addBundle`, `addMany`, `removeMany` (renamed on this branch, D1; were `getEntityData`, `addToEntity` and so on). |
 | bitECS | Any object is a component (SoA `{x: Float32Array}` or AoS). `addComponent(world, eid, C \| set(C, data))`, `removeComponent`, `hasComponent`, `getComponent`, `setComponent`. Components register automatically on first add. Hot path: `Position.x[eid]`. |
 | Koota | `trait({x: 0})` (SoA) or `trait(() => obj)` (AoS). `entity.add/remove/has/get/set`. `getStore(world, T)` returns raw columns. |
 | Becsy | A class with `static schema = { x: Type.float32 }`. `entity.read(C)` / `entity.write(C)` return views; `add/remove/has`. Every access needs a declared entitlement. |
@@ -95,11 +95,11 @@ next to the guarded API for hot loops.
 
 - Keep the three tiers. They match bitECS (raw arrays), Koota (`getStore` vs `entity.get`) and Becsy (`read` vs
   `write`).
-- **Rename the `world.components` verbs (D1).** No surveyed library uses `addToEntity` / `entityHas` /
+- **Rename the `world.components` verbs (D1; done on this branch).** No surveyed library uses `addToEntity` / `entityHas` /
   `getEntityData`, and Miski's own `world.relations` (`add` / `remove` / `has` / `getData` / `setData` /
-  `readDataInto`) and `ComponentInstance` (`has` / `get` / `set`) already use the short forms. Proposed map:
+  `readDataInto`) and `ComponentInstance` (`has` / `get` / `set`) already use the short forms. The map:
 
-  | Now | Proposed |
+  | Before | 1.0 |
   | --- | --- |
   | `addToEntity(C, e, data?)` | `add(C, e, data?)` |
   | `removeFromEntity(C, e)` | `remove(C, e)` |
@@ -117,7 +117,7 @@ next to the guarded API for hot loops.
 
 | | API |
 | --- | --- |
-| **Miski** | `new Query({ all, any, none, include })`, with arrays or keyed maps; `Query.compose(...)`. `world.entities.query(q)` returns a pooled iterator; `queryList(q)` returns a dense borrowed `{ count, entities, slots, each }`; also `querySnapshot(q)` and `toArray(list)`. Change detection is per refresh window: `queryEntered(q)`, `queryExited(q)`, `components.getChanged(C)`, `relations.getChanged(R)` and `world.queryRevision(q)`. |
+| **Miski** | `new Query({ all, any, none, include })`, with arrays or keyed maps; `Query.compose(...)`. `world.entities.query(q)` returns a pooled iterator; `queryList(q)` returns a dense borrowed `{ count, entities, slots, each }`; `toArray(list)` copies it out. Change detection is per refresh window: `queryEntered(q)`, `queryExited(q)`, `components.getChanged(C)`, `relations.getChanged(R)` and `world.queryRevision(q)`. |
 | bitECS | `query(world, [A, Not(B), Or(C, D)])` returns an id array; `registerQuery`. No `Added` / `Changed` filters: observers instead (`observe(world, onAdd(A), cb)`, `onRemove`, `onSet`). |
 | Koota | `world.query(A, Not(B), Or(C))`, `queryFirst`, `createQuery`. Change filters are per-instance trackers (`createAdded()`, `createRemoved()`, `createChanged()`). Observers: `world.onAdd/onRemove/onChange`, `onQueryAdd/onQueryRemove`. |
 | Becsy | `q.current.with(A).and.withAny(B).but.without(C).read`, plus reactive lists `q.added`, `q.removed`, `q.changed` and `q.addedOrChanged`. |
@@ -134,8 +134,8 @@ window, which ends at `refresh()`.
 - Keep the `Query` spec and the `query` / `queryList` pair.
 - Keep `queryEntered` / `queryExited` / `getChanged`. They are well-defined and documented.
 - After 1.0, add per-query change filters (`changed: [C]` in the spec) or per-consumer trackers. Both are additive.
-- `querySnapshot(q)` equals `toArray(queryList(q))`, and `getActiveSnapshot` / `getChangedSnapshot` /
-  `getOwnersSnapshot` equal `Array.from(...)` over the pooled iterators. Folding them away is optional (D2).
+- `querySnapshot(q)` equalled `toArray(queryList(q))`, and `getActiveSnapshot` / `getChangedSnapshot` /
+  `getOwnersSnapshot` equalled `Array.from(...)` over the pooled iterators. This branch removes them (D2).
 - `Query`'s public `allEntries` / `anyEntries` / `noneEntries` / `includeEntries` / `dependencyComponents` are
   normalisation internals, used only by `src` and two tests (D8).
 
@@ -190,8 +190,8 @@ that role: a plain query on `ChildOf` matches any target. A `(R, specific target
 **Converge on** (Bevy and flecs): a spawn returns a usable id at once, commands flush at sync points, and commands for
 dead targets are dropped rather than fatal. Miski matches all three.
 
-**Recommendation: keep.** Add `CommandBuffer.instantiate(prefab, overrides?)` (A8, still open). It is additive, but
-a consumer has asked for it (D10), so it may be worth having in 1.0.
+**Recommendation: keep.** `CommandBuffer.instantiate(prefab, overrides?)` (A8, D10) is now on this branch. It
+returns a `PendingEntity`, and relations are queued with `relate`.
 
 ### 7. Prefabs
 
@@ -252,13 +252,13 @@ The probe before this change found these exceptions to the rule:
 
 | Call | Before | After |
 | --- | --- | --- |
-| `components.getChanged(unregistered)` / `getChangedSnapshot` | `undefined` | throws `NotRegisteredError` (this branch) |
-| `components.getOwners(unregistered)` / `getOwnersSnapshot` | `undefined` | throws `NotRegisteredError` (this branch) |
-| `components.entityHas(unregistered, e)` | `false` | unchanged; D5 |
+| `components.getChanged(unregistered)` | `undefined` | throws `NotRegisteredError` (this branch) |
+| `components.getOwners(unregistered)` | `undefined` | throws `NotRegisteredError` (this branch) |
+| `components.entityHas(unregistered, e)`, now `has` | `false` | throws `NotRegisteredError` (this branch, D5) |
 | `components.getInstance(unregistered)` | `undefined` | unchanged by design: it is the lookup, and `isRegistered` exists |
 
 Already consistent: `relations.has/getChanged/getTarget(unregistered)` throw; `getEntityData(unregistered)` throws;
-`getEntityData(dead)` returns `undefined`; `removeFromEntity(not owned)` is a no-op; `destroy(dead)` throws
+`getEntityData(dead)` returns `undefined`; `removeFromEntity(not owned)` is a no-op (now `getData` and `remove`); `destroy(dead)` throws
 `EntityNotFoundError`.
 
 ### 10. Naming
@@ -266,9 +266,9 @@ Already consistent: `relations.has/getChanged/getTarget(unregistered)` throw; `g
 | Concept | Miski | Field |
 | --- | --- | --- |
 | make / end an entity | `create` / `destroy` | `spawn` / `despawn` (Bevy), `spawn` / `destroy` (Koota), `addEntity` / `removeEntity` (bitECS), `createEntity` / `delete` (Becsy) |
-| component verbs | `addToEntity` / `removeFromEntity` / `entityHas` / `getEntityData` / `setEntityData` | `add` / `remove` / `has` / `get` / `set` everywhere (D1) |
+| component verbs | `add` / `remove` / `has` / `getData` / `setData` (renamed by D1) | `add` / `remove` / `has` / `get` / `set` everywhere |
 | strict vs lenient | `x` / `xOrThrow` | `try_x` / `x` (Bevy), `try_get` / `get` (flecs) |
-| copy-out helpers | `*Snapshot`, `toArray` | Koota `world.entities` is a copy; others return arrays directly |
+| copy-out helpers | `toArray`, `Array.from` (the `*Snapshot` helpers went in D2) | Koota `world.entities` is a copy; others return arrays directly |
 | relation verbs | `add` / `remove` / `has` / `getTarget(s)` / `getSources` | `add(R(t))` / `targetFor` / `targetsFor` (Koota); `getRelationTargets` (bitECS) |
 | definitions | `new Component` / `new Relation` / `new Prefab` / `new Query` / `new System` | factories (`trait()`, `relation()`, `createRelation`) or classes |
 | typed façade | `createEcsWorld` / `EcsWorld` | none of the others has two world types (D4) |
@@ -282,7 +282,7 @@ The status comes from the beta.3 CHANGELOG section, checked against the code at 
 | --- | --- | --- |
 | A1 One way to construct | Done | — |
 | A2 One throw-vs-undefined rule | Done for `world.components`, `world.relations`, `world.systems`, `world.entities` and `EcsWorld` | `entityHas(unregistered)` returns `false` (D5). `getChanged` / `getOwners(unregistered)` returned `undefined`: fixed on this branch. |
-| A3 Collapse the query surface | Done: `queryEntities`, `queryComponents` and the `archetypes` namespace are gone, `queryEntered` / `queryExited` moved to `entities`, `toArray` is typed | `querySnapshot` is still there (the review said optional; D2) |
+| A3 Collapse the query surface | Done: `queryEntities`, `queryComponents` and the `archetypes` namespace are gone, `queryEntered` / `queryExited` moved to `entities`, `toArray` is typed | — (`querySnapshot` removed by D2) |
 | A4 Entity creation | Done: `createWith*` folded into `create(bundle?)`, `isEntity` removed | `instantiateMany` stays separate, by recommendation (see §7) |
 | A5 Component read/write tiers | Done | — |
 | A6 Rollback styles | Done: `WorldRollbackScope` is the one API | — |
@@ -294,8 +294,8 @@ The status comes from the beta.3 CHANGELOG section, checked against the code at 
 
 ## Proposed 1.0 surface
 
-"keep" means frozen at 1.0. "keep\*" means keep, but the value or layout depends on an open decision. "remove?" and
-"rename?" are proposals that wait for a decision. Nothing marked "?" has been changed.
+"keep" means frozen at 1.0. "keep\*" means keep, but the value or layout depends on an open decision (D9).
+"removed", "renamed" and "hidden" record the decisions implemented on this branch.
 
 ### Members
 
@@ -317,17 +317,17 @@ The status comes from the beta.3 CHANGELOG section, checked against the code at 
 | `getActive`, `getActiveCount`, `getAvailableCount` | keep | |
 | `query`, `queryList`, `queryEntered`, `queryExited`, `toArray` | keep | |
 | `instantiate`, `instantiateOrThrow`, `instantiateMany`, `instantiateManyOrThrow` | keep | |
-| `querySnapshot`, `getActiveSnapshot` | remove? | D2: `toArray(queryList(q))` / `Array.from(getActive())` |
+| `querySnapshot`, `getActiveSnapshot` | removed | D2: `toArray(queryList(q))` / `Array.from(getActive())` |
 
 `world.components`:
 
 | Member | 1.0 | Note |
 | --- | --- | --- |
 | `count`, `registry`, `isRegistered`, `getInstance`, `getInstanceOrThrow`, `query`, `markChanged` | keep | |
-| `addToEntity`, `removeFromEntity`, `entityHas`, `getEntityData`, `getEntityDataOrThrow`, `setEntityData`, `readEntityDataInto`, `addToEntities`, `removeFromEntities` | rename? | D1 |
+| `add`, `remove`, `has`, `getData`, `getDataOrThrow`, `setData`, `readDataInto`, `addMany`, `removeMany` | renamed | D1: were `addToEntity`, `removeFromEntity`, `entityHas`, `getEntityData`, `getEntityDataOrThrow`, `setEntityData`, `readEntityDataInto`, `addToEntities`, `removeFromEntities`; `has` throws for an unregistered component (D5) |
 | `addBundle` | keep | |
 | `getChanged`, `getOwners` | keep | throw for an unregistered component (this branch) |
-| `getChangedSnapshot`, `getOwnersSnapshot` | remove? | D2 |
+| `getChangedSnapshot`, `getOwnersSnapshot` | removed | D2: `Array.from(getChanged(C))` / `Array.from(getOwners(C))` |
 | `getInstances` | removed | this branch: internal plumbing |
 
 `world.relations`: keep every member (`add`, `remove`, `removeAll`, `has`, `hasAny`, `getTarget`, `getTargets`,
@@ -344,14 +344,14 @@ three added on this branch), `context`, `commands`, `add`, `remove`,
 `has`, `setEnabled`, `isEnabled`, `getOrder`, `run`, `getClock` and `setClock`.
 
 `CommandBuffer`: keep `pendingCount`, `spawn`, `destroy`, `add`, `set`, `remove`, `relate`, `unrelate`, `flush` and
-`clear`. Add `instantiate` later (additive).
+`clear`, plus `instantiate` (D10, added on this branch).
 
 `EcsWorld`: keep `world`, `components`, `storage`, `relations`, `capacity`, `init`, `query`, `spawn`, `spawnOrThrow`,
 `prefab`, `instantiate`, `instantiateOrThrow`, `instantiateMany`, `instantiateManyOrThrow` and `frame`. See D4 for the
 name.
 
 `Query`: keep `all`, `any`, `none`, `include` and `Query.compose`. `allEntries`, `anyEntries`, `noneEntries`,
-`includeEntries` and `dependencyComponents` are "remove?" (D8).
+`includeEntries` and `dependencyComponents` are hidden (D8): they left the public `Query` type.
 
 ### Every export
 
@@ -437,7 +437,7 @@ name.
 | `ObjectFieldEncoded` | type | keep |  |
 | `isFieldDescriptor` | function | keep |  |
 | `cloneFieldValue` | function | keep |  |
-| `canonicalizeStoredValue` | function | remove? | internal write helper that takes a scratch typed array; no README use (D3) |
+| `canonicalizeStoredValue` | function | removed | internal write helper that takes a scratch typed array; no README use (D3) |
 
 #### Queries
 
@@ -451,7 +451,7 @@ name.
 | `QueryComponents` | type | keep |  |
 | `ComposedQueryComponents` | type | keep |  |
 | `UntypedQueryComponents` | type | keep |  |
-| `NormalizedQueryComponentEntry` | type | keep* | only needed while `Query.*Entries` are public (D8) |
+| `NormalizedQueryComponentEntry` | type | removed | only needed while `Query.*Entries` were public (D8) |
 
 #### Systems and scheduling
 
@@ -647,9 +647,16 @@ schedule dropped no ticks over 100k ticks, and a 5k-creature tick takes about 1.
 
 ## Decisions for the maintainer
 
-None of these is implemented. Each one is a naming call, the removal of something callers can use, or a new
-capability. Usage
-counts are `rg -w` hits in `src` / `test` / `bench`+`example` / README+`mod.ts`.
+Each one is a naming call, the removal of something callers can use, or a new capability. The maintainer accepted
+every recommendation below. On this branch:
+
+- **Implemented:** D1 (rename), D2 (snapshot helpers removed), D3 (`canonicalizeStoredValue` unexported), D5
+  (`entityHas` / `has` throws), D8 (Query internals hidden), D10 (`CommandBuffer.instantiate`) and D12 (guide links
+  in the module docs).
+- **Kept as they are:** D4, D6, D7 and D11.
+- **Still open:** D9, which waits for the entity-cap research.
+
+Usage counts are `rg -w` hits in `src` / `test` / `bench`+`example` / README+`mod.ts`, taken before the changes.
 
 | # | Decision | Recommendation | Cost |
 | --- | --- | --- | --- |
@@ -672,7 +679,6 @@ These add API without changing existing calls, so they can ship in 1.x:
 
 - Per-query change filters (`changed: [C]`, `added` / `removed` trackers), the field's common model.
 - Observers (`onAdd` / `onRemove` / `onSet`), offered by bitECS, Koota, flecs and Bevy.
-- `CommandBuffer.instantiate(prefab, overrides?)` (A8; D10 asks whether to bring it into 1.0).
 - A `(relation, target)` query term.
 
 ## Follow-up bug found while auditing

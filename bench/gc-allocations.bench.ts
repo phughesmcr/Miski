@@ -656,6 +656,28 @@ function commandSpawnDespawnBatch(): void {
   commandSpawnLifecycle.world.refresh();
 }
 
+// Prefab instances queued through a command buffer: the same template and overrides as the direct prefab budget.
+const commandPrefabLifecycle = await populateSparseLifecycleWorld(MEDIUM_CAPACITY, prefabComponents);
+const commandPrefabBuffer = new CommandBuffer(commandPrefabLifecycle.world);
+const commandPrefabQuery = new Query({ all: [prefabComponents.lifetime] });
+
+function commandInstantiateDespawnBatch(): void {
+  for (let i = 0; i < 128; i++) {
+    prefabPositionOverride.x = i;
+    prefabPositionOverride.y = i;
+    prefabRenderOverride.sprite = i & 255;
+    commandPrefabBuffer.instantiate(projectilePrefab, prefabOverrides);
+  }
+  commandPrefabBuffer.flush();
+  const list = commandPrefabLifecycle.world.entities.queryList(commandPrefabQuery);
+  entitySink ^= list.count;
+  for (let i = 0; i < list.count; i++) {
+    commandPrefabBuffer.destroy(list.entities[i]!);
+  }
+  commandPrefabBuffer.flush();
+  commandPrefabLifecycle.world.refresh();
+}
+
 function commandTransitionBatch(round: number): void {
   commandAccelerationData.x = round & 7;
   commandPositionData.x = round & 15;
@@ -1153,6 +1175,9 @@ const scenarios: Scenario[] = [
   }),
   budgeted("command buffer spawn/despawn 128 projectile bundles + flush + refresh", 10_000, () => {
     commandSpawnDespawnBatch();
+  }),
+  budgeted("command buffer instantiate/despawn 128 prefab projectiles + overrides + flush + refresh", 10_000, () => {
+    commandInstantiateDespawnBatch();
   }),
   budgeted("command buffer set side-column + numeric field on 128 entities + flush", 10_000, () => {
     commandSideColumnBatch(commandRound++);

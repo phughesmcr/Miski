@@ -493,3 +493,57 @@ Deno.test("command buffer x prefabs: spawned bundles and prefab instances agree 
     "Same values either way",
   );
 });
+
+Deno.test("command buffer instantiate creates prefab instances at flush, in queue order, like the direct call", async () => {
+  const { world, commands } = await setup();
+  const mover = new Prefab({ name: "mover", components: [[position, { x: 1, y: 2 }], [tag]] });
+  const first = commands.spawn([[velocity, { x: 9 }]]);
+  const instance = commands.instantiate(mover, [[position, { y: 5 }], [velocity, { x: 3 }]]);
+  commands.instantiate(mover);
+  commands.set(position, instance, { x: 4 });
+  assert((instance as number) < 0 && instance !== first, "instantiate returns a fresh pending handle");
+  assertStrictEquals(commands.pendingCount, 4, "three spawns and a set queued");
+  assertStrictEquals(world.entities.getActiveCount(), 0, "nothing created before flush");
+  commands.flush();
+  const created = Array.from(world.entities.getActive());
+  assertStrictEquals(created.length, 3, "every spawn and instance applied");
+  const [, made, bare] = created as [Entity, Entity, Entity];
+  assertEquals(world.components.getEntityDataOrThrow(position, made), { x: 4, y: 5 }, "overrides, then the set");
+  assertEquals(world.components.getEntityDataOrThrow(velocity, made), { x: 3, y: 0 }, "an extra component");
+  assert(world.components.entityHas(tag, made) && world.components.entityHas(tag, bare), "prefab tags applied");
+  assertEquals(world.components.getEntityDataOrThrow(position, bare), { x: 1, y: 2 }, "prefab defaults");
+  const direct = world.entities.instantiateOrThrow(mover, [[position, { y: 5 }], [velocity, { x: 3 }]]);
+  assertEquals(
+    world.components.getEntityDataOrThrow(velocity, direct),
+    world.components.getEntityDataOrThrow(velocity, made),
+    "the buffered and direct instances agree",
+  );
+  await world.destroy();
+});
+
+Deno.test("command buffer instantiate validates the prefab and overrides when queued", async () => {
+  const { world, commands } = await setup();
+  const stray = new Prefab({ name: "stray", components: [[position], [unregistered]] });
+  const mover = new Prefab({ name: "mover", components: [[position]] });
+  assertThrows(() => commands.instantiate({} as Prefab), ArgumentError, "Prefab");
+  assertThrows(() => commands.instantiate(stray), NotRegisteredError, "unregistered");
+  assertThrows(() => commands.instantiate(mover, [[position], [position]] as never), ArgumentError, "position");
+  assertThrows(() => commands.instantiate(mover, [[position, { z: 1 } as never]]), ComponentDataError, "z");
+  assertThrows(() => commands.instantiate(mover, [[unregistered]]), NotRegisteredError, "unregistered");
+  assertStrictEquals(commands.pendingCount, 0, "rejected calls queue nothing");
+  commands.flush();
+  assertStrictEquals(world.entities.getActiveCount(), 0, "nothing created");
+  await world.destroy();
+});
+
+Deno.test("command buffer instantiate reports capacity like spawn", async () => {
+  const { world, commands } = await setup(8);
+  const mover = new Prefab({ name: "mover", components: [[position]] });
+  for (let i = 0; i < 8; i++) commands.instantiate(mover);
+  assertThrows(() => commands.instantiate(mover), CapacityError, "capacity");
+  commands.flush();
+  assertStrictEquals(world.entities.getActiveCount(), 8, "world full");
+  commands.instantiate(mover);
+  assertThrows(() => commands.flush(), CapacityError, "instantiate mover");
+  await world.destroy();
+});

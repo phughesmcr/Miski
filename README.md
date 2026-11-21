@@ -55,7 +55,7 @@ for modern JavaScript — no leftovers.
 - Entity relations and hierarchies: pair data, reverse lookups, cascades, traversal
 - Component-subset checkpoints and speculative world rollback
 - `Schedule`: phases, `before` / `after` ordering, fixed timestep, run conditions
-- `CommandBuffer`: deferred spawn / destroy / add / set / remove / relate / unrelate, applied per phase
+- `CommandBuffer`: deferred spawn / instantiate / destroy / add / set / remove / relate / unrelate, applied per phase
 - Deterministic whole-world saves, binary or lossless JSON
 - Schema compile + stable FNV hash for tooling and saves
 - :page_with_curl: MIT licensed — share freely, keep the wrappers on
@@ -763,6 +763,7 @@ commands.set(Position, entity, { x: 1 }); // omitted fields keep their values
 commands.remove(Velocity, entity);
 commands.destroy(other);
 const turret = commands.spawn([[Aim, { target: bullet }]]); // field.entity() values may be pending
+const orc = commands.instantiate(OrcPrefab, [[Position, { x: 4 }]]); // as entities.instantiate
 commands.relate(ChildOf, turret, ship);  // either end may be pending
 commands.unrelate(Targets, archer, orc);
 commands.flush();                      // applies in queue order
@@ -770,7 +771,7 @@ commands.flush();                      // applies in queue order
 
 Queuing validates components and copies data at once, so data objects can be
 reused straight away and bad data throws at the call site. Flushing applies
-each command as the direct call would (`create(bundle)`, `destroy`,
+each command as the direct call would (`create(bundle)`, `instantiate`, `destroy`,
 `addToEntity`, `setEntityData`, `removeFromEntity`, `relations.add`,
 `relations.remove`), except that commands for entities no longer active are
 skipped (for `relate` / `unrelate`, if either entity is no longer active). A

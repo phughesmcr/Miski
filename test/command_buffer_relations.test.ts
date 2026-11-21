@@ -7,9 +7,11 @@ import {
   Component,
   ComponentDataError,
   type DynamicComponent,
+  type Entity,
   field,
   NotRegisteredError,
   type PendingEntity,
+  Prefab,
   Relation,
   RelationCycleError,
   type World,
@@ -231,4 +233,21 @@ Deno.test("command buffer x relations: relation presence tags are rejected when 
   commands.flush();
   assert(!world.components.entityHas(childOf, a), "Relation tag not added without a pair");
   assertEquals(world.components.getEntityDataOrThrow(node, a).hp, 9, "Later commands still applied");
+});
+
+Deno.test("command buffer instantiate handles work as relation ends and entity-field values", async () => {
+  const { world, commands } = await setup();
+  const child = new Prefab({ name: "child", components: [[node, { hp: 3 }], [marker]] });
+  const parent = commands.spawn([[node, { hp: 10 }]]);
+  const kid = commands.instantiate(child, [[node, { parent }]]);
+  commands.relate(childOf, kid, parent);
+  commands.flush();
+  const [made, instance] = Array.from(world.entities.getActive()) as [Entity, Entity];
+  assertStrictEquals(world.relations.getTarget(childOf, instance), made, "the relation targets the spawned parent");
+  assertEquals(
+    world.components.getEntityDataOrThrow(node, instance),
+    { hp: 3, parent: made },
+    "a pending handle in an override resolves to the new entity",
+  );
+  await world.destroy();
 });

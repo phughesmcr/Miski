@@ -30,6 +30,13 @@
   `Array.from(entities.getActive(...))`, and
   `components.getChangedSnapshot(C)` / `getOwnersSnapshot(C)` with
   `Array.from(components.getChanged(C))` / `Array.from(components.getOwners(C))`.
+- `CommandBuffer.instantiate(prefab, overrides?)` queues a prefab instance and
+  returns a pending entity, as `spawn` does for a bundle. Overrides merge over
+  the prefab's defaults as in `entities.instantiate`, may hold pending
+  entities in `field.entity()` fields, and are validated when queued, as are
+  the prefab's components. Relations are not part of a prefab: queue them with
+  `commands.relate`, which accepts the pending handle. Steady-state queuing and
+  flushing stays allocation-free (new `bench:gc` budget).
 - The JSR module docs link to the README guides for scheduling, prefabs,
   relations, checkpoints and rollback, and world saves.
 - `Schedule` gains `tick`, `fixedTick` and `elapsed` getters, beside
