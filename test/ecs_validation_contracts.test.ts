@@ -145,7 +145,7 @@ Deno.test("component registry exposes a frozen snapshot without backing lookup m
   assert(world.components.getInstance("position") === registered, "Expected string lookup to retain original instance");
 
   const entity = createEntity(world);
-  world.components.addToEntity(position, entity, { x: 1, y: 2 });
+  world.components.add(position, entity, { x: 1, y: 2 });
   assertEquals([...world.entities.query(new Query({ all: [position] }))], [entity], "Expected query to still work");
 });
 

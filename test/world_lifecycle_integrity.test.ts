@@ -830,7 +830,7 @@ Deno.test("failed refresh blocks lifecycle APIs like destroy errors", async () =
     assertEquals(world.state, "error", "Expected failed refresh to move world into error state");
     assertThrows(() => world.entities.create(), WorldStateError, "World has encountered an error");
     assertThrows(
-      () => world.components.addToEntity(position, asEntity(0)),
+      () => world.components.add(position, asEntity(0)),
       WorldStateError,
       "World has encountered an error",
     );

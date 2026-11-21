@@ -50,24 +50,24 @@ for (const how of ["partitions", "proxy-slot"] as const) {
     assertEquals(ids(world.components.getChanged(position)), [], "Non-owner writes must never be tracked as changed");
 
     // Both dense rows were consumed by stray writes; adds must still succeed and fully commit.
-    world.components.addToEntity(position, c, { x: 1, y: 2 });
-    assert(world.components.entityHas(position, c), "Add must grant ownership");
-    assertEquals(world.components.getEntityDataOrThrow(position, c), { x: 1, y: 2 }, "Owner data must be stored");
+    world.components.add(position, c, { x: 1, y: 2 });
+    assert(world.components.has(position, c), "Add must grant ownership");
+    assertEquals(world.components.getDataOrThrow(position, c), { x: 1, y: 2 }, "Owner data must be stored");
     assertEquals(ids(world.entities.queryList(new Query({ all: [position] }))), [c], "Archetype/query must see owner");
     assertEquals(ids(world.components.getChanged(position)), [c], "Only owners appear in getChanged");
 
     // The cap itself still binds.
-    world.components.addToEntity(position, d);
+    world.components.add(position, d);
     assertThrows(
-      () => world.components.addToEntity(position, a),
+      () => world.components.add(position, a),
       CapacityError,
       "can only be added to 2 entities",
     );
-    assert(!world.components.entityHas(position, a), "Rejected add must not grant ownership");
+    assert(!world.components.has(position, a), "Rejected add must not grant ownership");
   });
 }
 
-Deno.test("capped bundle, create(bundle) and addToEntities survive stray non-owner writes", async () => {
+Deno.test("capped bundle, create(bundle) and addMany survive stray non-owner writes", async () => {
   const position = vec2Component("position", { maxOwners: 2 });
   const world = await createTestWorld([position], 8);
   const instance = world.components.getInstanceOrThrow(position);
@@ -77,14 +77,14 @@ Deno.test("capped bundle, create(bundle) and addToEntities survive stray non-own
 
   const created = world.entities.createOrThrow([[position, { x: 3, y: 4 }]]);
   assertEquals(
-    world.components.getEntityDataOrThrow(position, created),
+    world.components.getDataOrThrow(position, created),
     { x: 3, y: 4 },
     "create(bundle) commits fully",
   );
 
   const bundled = createEntity(world);
   world.components.addBundle(bundled, [[position, { x: 9, y: 9 }]]);
-  assertEquals(world.components.getEntityDataOrThrow(position, bundled), { x: 9, y: 9 }, "addBundle commits fully");
+  assertEquals(world.components.getDataOrThrow(position, bundled), { x: 9, y: 9 }, "addBundle commits fully");
   assertEquals(ids(world.components.getOwners(position)).length, 2, "Both owners counted");
 });
 
@@ -95,9 +95,9 @@ Deno.test("stray non-owner writes are discarded when ownership is acquired", asy
     const instance = world.components.getInstanceOrThrow(position);
     const entity = createEntity(world);
     strayWrite("partitions", instance, entityIndex(entity), 42);
-    world.components.addToEntity(position, entity);
+    world.components.add(position, entity);
     assertEquals(
-      world.components.getEntityDataOrThrow(position, entity),
+      world.components.getDataOrThrow(position, entity),
       { x: 0, y: 0 },
       "New ownership starts at zero",
     );
@@ -118,19 +118,19 @@ Deno.test("acquiring ownership with data marks changed identically in dense and 
     // Payload equal to the previous owner's leftover value.
     const instance = world.components.getInstanceOrThrow(position);
     const first = createEntity(world);
-    world.components.addToEntity(position, first, { x: 5 });
-    world.components.removeFromEntity(position, first);
+    world.components.add(position, first, { x: 5 });
+    world.components.remove(position, first);
     world.refresh();
     strayWrite("partitions", instance, entityIndex(first), 5);
-    world.components.addToEntity(position, first, { x: 5 });
+    world.components.add(position, first, { x: 5 });
     assertEquals(ids(world.components.getChanged(position)), [first], `${label}: equal payload marks changed`);
     world.refresh();
 
     // Re-applying an identical payload to an existing owner stays quiet; a no-payload add to a new owner marks.
-    world.components.addToEntity(position, first, { x: 5 });
+    world.components.add(position, first, { x: 5 });
     assertEquals(ids(world.components.getChanged(position)), [], `${label}: idempotent upsert is not a change`);
     const bare = createEntity(world);
-    world.components.addToEntity(position, bare);
+    world.components.add(position, bare);
     assertEquals(ids(world.components.getChanged(position)), [bare], `${label}: payload-less add marks a new owner`);
   }
 });
@@ -143,10 +143,10 @@ Deno.test("owner caps above world capacity are clamped to capacity", async () =>
   assert(performance.now() - before < 5_000, "Capacity-8 world must not allocate cap-sized storage");
 
   const entities = Array.from({ length: 8 }, () => createEntity(world));
-  for (const entity of entities) world.components.addToEntity(huge, entity, { x: 1 });
+  for (const entity of entities) world.components.add(huge, entity, { x: 1 });
   assertEquals(ids(world.components.getOwners(huge)).length, 8, "Cap above capacity never binds before capacity");
   assertEquals(
-    world.components.getEntityDataOrThrow(huge, entities[7]!),
+    world.components.getDataOrThrow(huge, entities[7]!),
     { x: 1, y: 0 },
     "Clamped storage reads and writes normally",
   );
@@ -214,9 +214,9 @@ Deno.test("EcsWorld.spawn treats undefined tag values as absent", async () => {
   });
   await ecs.init();
   const entity = ecs.spawnOrThrow({ Position: undefined, Player: undefined });
-  assert(!ecs.world.components.entityHas("Player", entity), "Undefined tag spawns without the tag");
+  assert(!ecs.world.components.has("Player", entity), "Undefined tag spawns without the tag");
   const tagged = ecs.spawnOrThrow({ Position: { x: 1 }, Player: true });
-  assert(ecs.world.components.entityHas("Player", tagged), "true still adds the tag");
+  assert(ecs.world.components.has("Player", tagged), "true still adds the tag");
   assertThrows(() => ecs.spawn({ Player: false as never }), ComponentDataError, "must be spawned with true");
 });
 
@@ -229,8 +229,8 @@ Deno.test("archetype storage scales with population, not world capacity", async 
   const before = Deno.memoryUsage().external;
   // Visit all 64 tag subsets, registering one archetype per subset.
   for (let mask = 1; mask < 64; mask++) {
-    for (let i = 0; i < tags.length; i++) if (mask & (1 << i)) world.components.addToEntity(tags[i]!, entity);
-    for (let i = 0; i < tags.length; i++) world.components.removeFromEntity(tags[i]!, entity);
+    for (let i = 0; i < tags.length; i++) if (mask & (1 << i)) world.components.add(tags[i]!, entity);
+    for (let i = 0; i < tags.length; i++) world.components.remove(tags[i]!, entity);
   }
   const grown = Deno.memoryUsage().external - before;
 
@@ -253,10 +253,10 @@ Deno.test("component maxOwners limits the number of owners", async () => {
   const first = createEntity(world);
   const second = createEntity(world);
 
-  world.components.addToEntity(player, first);
+  world.components.add(player, first);
 
   assertThrows(
-    () => world.components.addToEntity(player, second),
+    () => world.components.add(player, second),
     CapacityError,
     'Component "player" can only be added to 1 entities',
   );
@@ -270,11 +270,11 @@ Deno.test("component maxOwners slots can be reused after removal", async () => {
   const first = createEntity(world);
   const second = createEntity(world);
 
-  world.components.addToEntity(position, first, { x: 1, y: 2 });
-  world.components.removeFromEntity(position, first);
-  world.components.addToEntity(position, second, { x: 3, y: 4 });
+  world.components.add(position, first, { x: 1, y: 2 });
+  world.components.remove(position, first);
+  world.components.add(position, second, { x: 3, y: 4 });
 
-  assertEquals(world.components.getEntityDataOrThrow(position, second), { x: 3, y: 4 }, "Expected sparse slot reuse");
+  assertEquals(world.components.getDataOrThrow(position, second), { x: 3, y: 4 }, "Expected sparse slot reuse");
   assertEquals(ids(world.components.getOwners(position)), [second], "Expected only the second entity to own position");
 });
 
@@ -287,10 +287,10 @@ Deno.test("world storage accounts for aligned mixed-width component schemas", as
 
   const entity = createEntity(world);
 
-  world.components.addToEntity(mixed, entity, { flag: 1, value: 2 });
+  world.components.add(mixed, entity, { flag: 1, value: 2 });
 
   assertEquals(
-    world.components.getEntityDataOrThrow(mixed, entity),
+    world.components.getDataOrThrow(mixed, entity),
     { flag: 1, value: 2 },
     "Expected mixed-width data",
   );

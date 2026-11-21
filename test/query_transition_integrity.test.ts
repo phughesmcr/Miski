@@ -62,16 +62,16 @@ Deno.test("queryEntered ignores entities that never left the query", async () =>
   const world = await createTestWorld([position, tag]);
   const query = new Query({ all: [position] });
   const entity = createEntity(world);
-  world.components.addToEntity(position, entity);
+  world.components.add(position, entity);
   world.refresh();
 
-  world.components.addToEntity(tag, entity);
+  world.components.add(tag, entity);
   assertEquals(ids(world.entities.queryEntered(query)), [], "Unrelated tag must not re-enter the query");
   assertEquals(ids(world.entities.queryExited(query)), [], "Unrelated tag must not exit the query");
 
   world.refresh();
-  world.components.removeFromEntity(position, entity);
-  world.components.addToEntity(position, entity);
+  world.components.remove(position, entity);
+  world.components.add(position, entity);
   assertEquals(ids(world.entities.queryEntered(query)), [], "Leave and return within a window is not an entry");
   assertEquals(ids(world.entities.queryExited(query)), [], "Leave and return within a window is not an exit");
   await world.destroy();
@@ -86,10 +86,10 @@ Deno.test("query transitions are relative to the start of the refresh window", a
   const anyQuery = new Query({ any: [position, velocity] });
 
   const entity = createEntity(world);
-  world.components.addToEntity(position, entity);
+  world.components.add(position, entity);
   world.refresh();
 
-  world.components.addToEntity(velocity, entity);
+  world.components.add(velocity, entity);
   assertEquals(ids(world.entities.queryEntered(movers)), [entity], "Adding velocity enters movers");
   assertEquals(ids(world.entities.queryExited(missingVelocity)), [entity], "Adding velocity exits no-velocity");
   assertEquals(ids(world.entities.queryEntered(anyQuery)), [], "any query was already matching");
@@ -97,24 +97,24 @@ Deno.test("query transitions are relative to the start of the refresh window", a
 
   // Stay within `any` through several archetypes: still no transition.
   world.refresh();
-  world.components.removeFromEntity(position, entity);
+  world.components.remove(position, entity);
   assertEquals(ids(world.entities.queryEntered(anyQuery)), [], "any entry must not appear on partial change");
   assertEquals(ids(world.entities.queryExited(anyQuery)), [], "any exit must not appear on partial change");
 
   // Spawned and destroyed inside one window: never observed at a window boundary.
   world.refresh();
   const transient = createEntity(world);
-  world.components.addToEntity(position, transient);
+  world.components.add(position, transient);
   world.entities.destroy(transient);
   assertEquals(ids(world.entities.queryEntered(new Query({ all: [position] }))), [], "Transient never entered");
   assertEquals(ids(world.entities.queryExited(new Query({ all: [position] }))), [], "Transient never exited");
 
   // A recycled slot reports the departed handle as exited and the replacement as entered.
-  world.components.addToEntity(position, entity);
+  world.components.add(position, entity);
   world.refresh();
   world.entities.destroy(entity);
   const replacement = createEntity(world);
-  world.components.addToEntity(velocity, replacement);
+  world.components.add(velocity, replacement);
   assert(replacement !== entity, "Recycled slot carries a new generation");
   assertEquals(ids(world.entities.queryExited(movers)), [entity], "Departed handle was a mover at window start");
   assertEquals(ids(world.entities.queryEntered(movers)), [], "Replacement is not a mover");
@@ -129,19 +129,19 @@ Deno.test("rollback restores window origins so later transitions stay window-rel
   const world = await createTestWorld([position, tag]);
   const query = new Query({ all: [position] });
   const member = createEntity(world);
-  world.components.addToEntity(position, member);
+  world.components.add(position, member);
   world.refresh();
-  world.components.addToEntity(tag, member);
+  world.components.add(tag, member);
 
   const point = new WorldRollbackScope(world);
-  world.components.removeFromEntity(position, member);
+  world.components.remove(position, member);
   const speculative = createEntity(world);
-  world.components.addToEntity(position, speculative);
+  world.components.add(position, speculative);
   point.restore();
   assertEquals(ids(world.entities.queryEntered(query)), [], "Speculative entry must be discarded");
   assertEquals(ids(world.entities.queryExited(query)), [], "Speculative exit must be discarded");
 
-  world.components.removeFromEntity(position, member);
+  world.components.remove(position, member);
   assertEquals(ids(world.entities.queryExited(query)), [member], "Window origin survives rollback");
   await world.destroy();
 });
@@ -156,18 +156,18 @@ Deno.test("nested queryExited iteration yields each exited entity once", async (
   const entities: Entity[] = [];
   for (let i = 0; i < 3; i++) {
     const entity = createEntity(world);
-    world.components.addToEntity(position, entity);
-    world.components.addToEntity(velocity, entity);
-    world.components.addToEntity(tag, entity);
+    world.components.add(position, entity);
+    world.components.add(velocity, entity);
+    world.components.add(tag, entity);
     entities.push(entity);
   }
   world.refresh();
 
   // Each entity passes through several archetypes that match both queries before leaving.
   for (const entity of entities) {
-    world.components.removeFromEntity(tag, entity);
-    world.components.removeFromEntity(velocity, entity);
-    world.components.removeFromEntity(position, entity);
+    world.components.remove(tag, entity);
+    world.components.remove(velocity, entity);
+    world.components.remove(position, entity);
   }
 
   const seen: number[] = [];
@@ -189,8 +189,8 @@ Deno.test("nested queryEntered and query iteration stay independent", async () =
   const entities: Entity[] = [];
   for (let i = 0; i < 4; i++) {
     const entity = createEntity(world);
-    world.components.addToEntity(position, entity);
-    if (i % 2 === 0) world.components.addToEntity(tag, entity);
+    world.components.add(position, entity);
+    if (i % 2 === 0) world.components.add(tag, entity);
     entities.push(entity);
   }
   const seenEntered: number[] = [];
@@ -222,15 +222,15 @@ Deno.test("Query.compose preserves AND semantics between input any groups", asyn
   const withAnyAndAll = Query.compose([new Query({ any: [a, b] }), new Query({ all: [c] })]);
 
   const onlyA = createEntity(world);
-  world.components.addToEntity(a, onlyA);
+  world.components.add(a, onlyA);
   const aAndC = createEntity(world);
-  world.components.addToEntity(a, aAndC);
-  world.components.addToEntity(c, aAndC);
+  world.components.add(a, aAndC);
+  world.components.add(c, aAndC);
   const onlyC = createEntity(world);
-  world.components.addToEntity(c, onlyC);
+  world.components.add(c, onlyC);
   const bAndC = createEntity(world);
-  world.components.addToEntity(b, bAndC);
-  world.components.addToEntity(c, bAndC);
+  world.components.add(b, bAndC);
+  world.components.add(c, bAndC);
   assertEquals(
     sorted(world.entities.query(withAnyAndAll)),
     sorted([aAndC, bAndC]),
@@ -314,7 +314,7 @@ Deno.test("incremental query membership matches a brute-force model across rando
   const membership = (world: World, entity: Entity): Set<string> => {
     const result = new Set<string>();
     for (let i = 0; i < components.length; i++) {
-      if (world.components.entityHas(components[i]!, entity)) result.add(names[i]!);
+      if (world.components.has(components[i]!, entity)) result.add(names[i]!);
     }
     return result;
   };
@@ -373,8 +373,8 @@ Deno.test("incremental query membership matches a brute-force model across rando
     } else if (live.size > 0) {
       const entity = [...live][random(live.size)]!;
       const component = components[random(components.length)]!;
-      if (world.components.entityHas(component, entity)) world.components.removeFromEntity(component, entity);
-      else world.components.addToEntity(component, entity);
+      if (world.components.has(component, entity)) world.components.remove(component, entity);
+      else world.components.add(component, entity);
     }
     if (step % 3 === 0) verify(active);
   }
@@ -395,8 +395,8 @@ Deno.test("bundles and spawn APIs preflight before mutation and move once to the
     [Drawable],
   ]);
 
-  assertEquals(world.components.getEntityDataOrThrow(GridPos, entity), { x: 1, y: 2 }, "Expected bundle data");
-  assertEquals(world.components.getEntityDataOrThrow(Facing, entity), { dir: 1 }, "Expected branded bundle data");
+  assertEquals(world.components.getDataOrThrow(GridPos, entity), { x: 1, y: 2 }, "Expected bundle data");
+  assertEquals(world.components.getDataOrThrow(Facing, entity), { dir: 1 }, "Expected branded bundle data");
   assertEquals(ids(world.components.getChanged(GridPos)), [entity], "Expected bundle data to be changed");
   assertEquals(ids(world.components.getChanged(Facing)), [entity], "Expected branded bundle data to be changed");
   assertEquals(
@@ -410,7 +410,7 @@ Deno.test("bundles and spawn APIs preflight before mutation and move once to the
     [GridPos, { x: 5 }],
     [Drawable],
   ]);
-  assertEquals(world.components.getEntityDataOrThrow(GridPos, entity), { x: 5, y: 2 }, "Expected bundle upsert");
+  assertEquals(world.components.getDataOrThrow(GridPos, entity), { x: 5, y: 2 }, "Expected bundle upsert");
   assertEquals(ids(world.components.getChanged(GridPos)), [entity], "Expected upsert data to mark changed");
 
   const spawned = world.entities.create([
@@ -420,7 +420,7 @@ Deno.test("bundles and spawn APIs preflight before mutation and move once to the
   ]);
   assert(spawned !== undefined, "Expected create(bundle) to return an entity");
   assertEquals(
-    world.components.getEntityDataOrThrow(Facing, spawned),
+    world.components.getDataOrThrow(Facing, spawned),
     { dir: 2 },
     "Expected create(bundle) bundle data",
   );
@@ -430,7 +430,7 @@ Deno.test("bundles and spawn APIs preflight before mutation and move once to the
     [Health, { hp: 100 }],
   ]);
   assertEquals(
-    world.components.getEntityDataOrThrow(Health, spawnedOrThrow),
+    world.components.getDataOrThrow(Health, spawnedOrThrow),
     { hp: 100 },
     "Expected create(bundle)OrThrow data",
   );
@@ -458,7 +458,7 @@ Deno.test("bundle validation rejects duplicate, unregistered, inactive, tag-data
     ArgumentError,
     "Duplicate component",
   );
-  assert(!world.components.entityHas(Facing, entity), "Expected duplicate bundle to leave ownership unchanged");
+  assert(!world.components.has(Facing, entity), "Expected duplicate bundle to leave ownership unchanged");
 
   assertThrows(
     () => world.components.addBundle(entity, [[unregistered, { x: 9, y: 9 }]]),
@@ -466,7 +466,7 @@ Deno.test("bundle validation rejects duplicate, unregistered, inactive, tag-data
     "not registered",
   );
   assertEquals(
-    world.components.getEntityDataOrThrow(GridPos, entity),
+    world.components.getDataOrThrow(GridPos, entity),
     { x: 1, y: 2 },
     "Expected unregistered bundle atomicity",
   );
@@ -487,7 +487,7 @@ Deno.test("bundle validation rejects duplicate, unregistered, inactive, tag-data
     ComponentDataError,
     "has no data storage",
   );
-  assert(!world.components.entityHas(Drawable, entity), "Expected tag-data bundle to leave ownership unchanged");
+  assert(!world.components.has(Drawable, entity), "Expected tag-data bundle to leave ownership unchanged");
 
   const limited = new Component<{ value: number }, { value: Uint8ArrayConstructor }>({
     name: "limited",
@@ -529,14 +529,14 @@ Deno.test("query entered and exited entities remain visible until explicit refre
   const entity = createEntity(world);
   const query = new Query({ all: [position] });
 
-  world.components.addToEntity(position, entity);
+  world.components.add(position, entity);
   assertEquals(ids(world.entities.query(query)), [entity], "Expected entity to match position query");
   assertEquals(ids(world.entities.queryEntered(query)), [entity], "Expected entity to appear in entered query");
 
   world.refresh();
   assertEquals(ids(world.entities.queryEntered(query)), [], "Expected entered query to clear after refresh");
 
-  world.components.removeFromEntity(position, entity);
+  world.components.remove(position, entity);
   assertEquals(ids(world.entities.query(query)), [], "Expected entity to stop matching position query");
   assertEquals(ids(world.entities.queryExited(query)), [entity], "Expected entity to appear in exited query");
 
@@ -552,7 +552,7 @@ Deno.test("registering a new query preserves pending entered and exited visibili
   const entity = createEntity(world);
   const positionQuery = new Query({ all: [position] });
 
-  world.components.addToEntity(position, entity, { x: 1, y: 2 });
+  world.components.add(position, entity, { x: 1, y: 2 });
   assertEquals(
     ids(world.entities.query(new Query({ all: [velocity] }))),
     [],
@@ -561,7 +561,7 @@ Deno.test("registering a new query preserves pending entered and exited visibili
   assertEquals(ids(world.entities.queryEntered(positionQuery)), [entity], "Expected entered state to remain visible");
 
   world.refresh();
-  world.components.removeFromEntity(position, entity);
+  world.components.remove(position, entity);
   assertEquals(
     ids(world.entities.query(new Query({ any: [position, velocity] }))),
     [],
@@ -576,7 +576,7 @@ Deno.test("clean refresh preserves query results and clears changed and transiti
 
   const entity = createEntity(world);
   const query = new Query({ all: [position] });
-  world.components.addToEntity(position, entity, { x: 1, y: 2 });
+  world.components.add(position, entity, { x: 1, y: 2 });
 
   assertEquals(ids(world.entities.query(query)), [entity], "Expected query to cache current owner");
   assertEquals(ids(world.components.getChanged(position)), [entity], "Expected ownership add to mark changed");
@@ -595,16 +595,16 @@ Deno.test("component transitions update cached query results immediately", async
   const world = await createTestWorld([position, velocity], 8);
 
   const entity = createEntity(world);
-  world.components.addToEntity(position, entity, { x: 1, y: 2 });
+  world.components.add(position, entity, { x: 1, y: 2 });
   world.refresh();
 
   const moving = new Query({ all: [position, velocity] });
   assertEquals(ids(world.entities.query(moving)), [], "Expected initial cached query to be empty");
 
-  world.components.addToEntity(velocity, entity, { x: 3, y: 4 });
+  world.components.add(velocity, entity, { x: 3, y: 4 });
   assertEquals(ids(world.entities.query(moving)), [entity], "Expected add transition to update cached query");
 
-  world.components.removeFromEntity(velocity, entity);
+  world.components.remove(velocity, entity);
   assertEquals(ids(world.entities.query(moving)), [], "Expected remove transition to update cached query");
 });
 
@@ -617,13 +617,13 @@ Deno.test("queryExited ignores archetype exits while the entity still matches th
   const entity = createEntity(world);
   const query = new Query({ any: [position, velocity] });
 
-  world.components.addToEntity(position, entity);
-  world.components.addToEntity(velocity, entity);
-  world.components.addToEntity(renderable, entity);
+  world.components.add(position, entity);
+  world.components.add(velocity, entity);
+  world.components.add(renderable, entity);
   world.refresh();
 
-  world.components.removeFromEntity(renderable, entity);
-  world.components.removeFromEntity(velocity, entity);
+  world.components.remove(renderable, entity);
+  world.components.remove(velocity, entity);
 
   assertEquals(ids(world.entities.query(query)), [entity], "Expected entity to still match through position");
   assertEquals(ids(world.entities.queryExited(query)), [], "Expected no query exit while still matching");

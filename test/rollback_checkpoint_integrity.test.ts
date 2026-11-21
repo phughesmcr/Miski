@@ -57,15 +57,15 @@ Deno.test("component checkpoints cannot be applied to a different world", async 
   const checkpoint = source.captureCheckpoint([sourceEntity], position);
   assertThrows(() => target.applyCheckpoint(checkpoint), ArgumentError, "different world");
   assertEquals(
-    target.components.getEntityDataOrThrow(position, targetEntity),
+    target.components.getDataOrThrow(position, targetEntity),
     { x: 7, y: 8 },
     "A rejected foreign checkpoint must not change the target world",
   );
 
-  source.components.setEntityData(position, sourceEntity, { x: 9, y: 9 });
+  source.components.setData(position, sourceEntity, { x: 9, y: 9 });
   source.applyCheckpoint(checkpoint);
   assertEquals(
-    source.components.getEntityDataOrThrow(position, sourceEntity),
+    source.components.getDataOrThrow(position, sourceEntity),
     { x: 1, y: 2 },
     "Owner world still applies it",
   );
@@ -77,48 +77,48 @@ Deno.test("checkpoint and rollback round-trip worlds with more than 32 data comp
   const [first, middle, last] = [components[0]!, components[33]!, components[39]!];
   const entity = createEntity(world);
   for (const [index, component] of components.entries()) {
-    world.components.addToEntity(component, entity, { v: index + 1 });
+    world.components.add(component, entity, { v: index + 1 });
   }
   world.refresh();
 
   const checkpoint = world.captureCheckpoint([entity], first, middle, last);
-  world.components.setEntityData(first, entity, { v: 100 });
-  world.components.setEntityData(middle, entity, { v: 200 });
-  world.components.removeFromEntity(last, entity);
+  world.components.setData(first, entity, { v: 100 });
+  world.components.setData(middle, entity, { v: 200 });
+  world.components.remove(last, entity);
   world.applyCheckpoint(checkpoint);
-  assertEquals(world.components.getEntityDataOrThrow(first, entity), { v: 1 }, "Restore first component");
-  assertEquals(world.components.getEntityDataOrThrow(middle, entity), { v: 34 }, "Restore component past bit 32");
-  assertEquals(world.components.getEntityDataOrThrow(last, entity), { v: 40 }, "Re-attach the removed high component");
+  assertEquals(world.components.getDataOrThrow(first, entity), { v: 1 }, "Restore first component");
+  assertEquals(world.components.getDataOrThrow(middle, entity), { v: 34 }, "Restore component past bit 32");
+  assertEquals(world.components.getDataOrThrow(last, entity), { v: 40 }, "Re-attach the removed high component");
 
   const point = new WorldRollbackScope(world);
-  world.components.setEntityData(last, entity, { v: 500 });
-  world.components.removeFromEntity(middle, entity);
+  world.components.setData(last, entity, { v: 500 });
+  world.components.remove(middle, entity);
   const speculative = createEntity(world);
-  world.components.addToEntity(last, speculative, { v: 600 });
+  world.components.add(last, speculative, { v: 600 });
   point.restore();
 
   for (const [index, component] of components.entries()) {
     assertEquals(
-      world.components.getEntityDataOrThrow(component, entity),
+      world.components.getDataOrThrow(component, entity),
       { v: index + 1 },
       `Rollback restores data component ${index}`,
     );
   }
   assert(!world.entities.isActive(speculative), "Rollback discards speculative entities");
-  assert(!world.components.entityHas(last, speculative), "Rollback discards speculative ownership");
+  assert(!world.components.has(last, speculative), "Rollback discards speculative ownership");
 });
 
 Deno.test("checkpoint capture and apply round-trip component subsets", async () => {
   const position = vec2Component();
   const world = await createTestWorld([position], 8);
   const entity = world.entities.createOrThrow();
-  world.components.addToEntity(position, entity, { x: 1, y: 2 });
+  world.components.add(position, entity, { x: 1, y: 2 });
 
   const checkpoint = world.captureCheckpoint([entity], position);
-  world.components.setEntityData(position, entity, { x: 9, y: 9 });
+  world.components.setData(position, entity, { x: 9, y: 9 });
   world.applyCheckpoint(checkpoint);
   assertEquals(
-    world.components.getEntityDataOrThrow(position, entity),
+    world.components.getDataOrThrow(position, entity),
     { x: 1, y: 2 },
     "checkpoint restore recovers values",
   );
@@ -128,22 +128,22 @@ Deno.test("rollback restore reverts speculative mutations", async () => {
   const position = vec2Component();
   const world = await createTestWorld([position], 8);
   const entity = world.entities.createOrThrow();
-  world.components.addToEntity(position, entity, { x: 1, y: 2 });
+  world.components.add(position, entity, { x: 1, y: 2 });
 
   const point = new WorldRollbackScope(world);
-  world.components.setEntityData(position, entity, { x: 8, y: 8 });
+  world.components.setData(position, entity, { x: 8, y: 8 });
   point.restore();
   assertEquals(
-    world.components.getEntityDataOrThrow(position, entity),
+    world.components.getDataOrThrow(position, entity),
     { x: 1, y: 2 },
     "rollback restores prior values",
   );
 
   const committed = new WorldRollbackScope(world);
-  world.components.setEntityData(position, entity, { x: 3, y: 4 });
+  world.components.setData(position, entity, { x: 3, y: 4 });
   committed.commit();
   assertEquals(
-    world.components.getEntityDataOrThrow(position, entity),
+    world.components.getDataOrThrow(position, entity),
     { x: 3, y: 4 },
     "commit keeps speculative writes",
   );

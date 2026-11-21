@@ -195,35 +195,35 @@ const sixComponentBundle = [
   [lifecycle.components.renderable],
   [lifecycle.components.projectile],
 ] as const;
-lifecycle.world.components.addToEntity(lifecycle.components.position, addRemoveEntity, { x: 0, y: 0 });
-lifecycle.world.components.addToEntity(lifecycle.components.position, lifecycleEntity, { x: 0, y: 0 });
-lifecycle.world.components.addToEntity(lifecycle.components.position, destroyOneComponentEntity, { x: 0, y: 0 });
-lifecycle.world.components.addToEntity(lifecycle.components.position, destroyThreeComponentEntity, { x: 0, y: 0 });
-lifecycle.world.components.addToEntity(lifecycle.components.velocity, destroyThreeComponentEntity, { x: 1, y: 1 });
-lifecycle.world.components.addToEntity(lifecycle.components.renderable, destroyThreeComponentEntity);
-lifecycle.world.components.addToEntity(lifecycle.components.position, destroySixComponentEntity, { x: 0, y: 0 });
-lifecycle.world.components.addToEntity(lifecycle.components.velocity, destroySixComponentEntity, { x: 1, y: 1 });
-lifecycle.world.components.addToEntity(lifecycle.components.health, destroySixComponentEntity, {
+lifecycle.world.components.add(lifecycle.components.position, addRemoveEntity, { x: 0, y: 0 });
+lifecycle.world.components.add(lifecycle.components.position, lifecycleEntity, { x: 0, y: 0 });
+lifecycle.world.components.add(lifecycle.components.position, destroyOneComponentEntity, { x: 0, y: 0 });
+lifecycle.world.components.add(lifecycle.components.position, destroyThreeComponentEntity, { x: 0, y: 0 });
+lifecycle.world.components.add(lifecycle.components.velocity, destroyThreeComponentEntity, { x: 1, y: 1 });
+lifecycle.world.components.add(lifecycle.components.renderable, destroyThreeComponentEntity);
+lifecycle.world.components.add(lifecycle.components.position, destroySixComponentEntity, { x: 0, y: 0 });
+lifecycle.world.components.add(lifecycle.components.velocity, destroySixComponentEntity, { x: 1, y: 1 });
+lifecycle.world.components.add(lifecycle.components.health, destroySixComponentEntity, {
   current: 100,
   max: 100,
 });
-lifecycle.world.components.addToEntity(lifecycle.components.renderState, destroySixComponentEntity, {
+lifecycle.world.components.add(lifecycle.components.renderState, destroySixComponentEntity, {
   sprite: 1,
   layer: 1,
 });
-lifecycle.world.components.addToEntity(lifecycle.components.renderable, destroySixComponentEntity);
-lifecycle.world.components.addToEntity(lifecycle.components.projectile, destroySixComponentEntity);
+lifecycle.world.components.add(lifecycle.components.renderable, destroySixComponentEntity);
+lifecycle.world.components.add(lifecycle.components.projectile, destroySixComponentEntity);
 lifecycle.world.components.addBundle(destroySixBundleEntity, sixComponentBundle);
 lifecycle.world.refresh();
-queryInvalidation.world.components.removeFromEntity(queryInvalidation.components.velocity, transitionQueryEntity);
+queryInvalidation.world.components.remove(queryInvalidation.components.velocity, transitionQueryEntity);
 queryInvalidation.world.refresh();
-transitionTracking.world.components.addToEntity(transitionTracking.components.position, enteredExitedEntity, {
+transitionTracking.world.components.add(transitionTracking.components.position, enteredExitedEntity, {
   x: 0,
   y: 0,
 });
 transitionTracking.world.refresh();
-wide.world.components.addToEntity(wide.components.all[0]!, wideTransitionEntity);
-wide.world.components.addToEntity(wide.components.all[31]!, wideTransitionEntity);
+wide.world.components.add(wide.components.all[0]!, wideTransitionEntity);
+wide.world.components.add(wide.components.all[31]!, wideTransitionEntity);
 wide.world.refresh();
 
 const soaX = new Float32Array(MEDIUM_CAPACITY);
@@ -258,28 +258,28 @@ function spawnProjectileBatchRepeated(out: Entity[]): void {
     const entity = mustCreateEntity(repeatedSpawnLifecycle.world);
     out[i] = entity;
     setRepeatedProjectileData(i);
-    repeatedSpawnLifecycle.world.components.addToEntity(
+    repeatedSpawnLifecycle.world.components.add(
       repeatedSpawnLifecycle.components.position,
       entity,
       repeatedProjectilePositionData,
     );
-    repeatedSpawnLifecycle.world.components.addToEntity(
+    repeatedSpawnLifecycle.world.components.add(
       repeatedSpawnLifecycle.components.velocity,
       entity,
       repeatedProjectileVelocityData,
     );
-    repeatedSpawnLifecycle.world.components.addToEntity(
+    repeatedSpawnLifecycle.world.components.add(
       repeatedSpawnLifecycle.components.lifetime,
       entity,
       repeatedProjectileLifetimeData,
     );
-    repeatedSpawnLifecycle.world.components.addToEntity(
+    repeatedSpawnLifecycle.world.components.add(
       repeatedSpawnLifecycle.components.renderState,
       entity,
       repeatedProjectileRenderData,
     );
-    repeatedSpawnLifecycle.world.components.addToEntity(repeatedSpawnLifecycle.components.renderable, entity);
-    repeatedSpawnLifecycle.world.components.addToEntity(repeatedSpawnLifecycle.components.projectile, entity);
+    repeatedSpawnLifecycle.world.components.add(repeatedSpawnLifecycle.components.renderable, entity);
+    repeatedSpawnLifecycle.world.components.add(repeatedSpawnLifecycle.components.projectile, entity);
   }
 }
 
@@ -303,12 +303,12 @@ function destroyBundledBatch(entities: Entity[]): void {
 }
 
 function addSixComponentEntity(entity: Entity): void {
-  lifecycle.world.components.addToEntity(lifecycle.components.position, entity, { x: 0, y: 0 });
-  lifecycle.world.components.addToEntity(lifecycle.components.velocity, entity, { x: 1, y: 1 });
-  lifecycle.world.components.addToEntity(lifecycle.components.health, entity, { current: 100, max: 100 });
-  lifecycle.world.components.addToEntity(lifecycle.components.renderState, entity, { sprite: 1, layer: 1 });
-  lifecycle.world.components.addToEntity(lifecycle.components.renderable, entity);
-  lifecycle.world.components.addToEntity(lifecycle.components.projectile, entity);
+  lifecycle.world.components.add(lifecycle.components.position, entity, { x: 0, y: 0 });
+  lifecycle.world.components.add(lifecycle.components.velocity, entity, { x: 1, y: 1 });
+  lifecycle.world.components.add(lifecycle.components.health, entity, { current: 100, max: 100 });
+  lifecycle.world.components.add(lifecycle.components.renderState, entity, { sprite: 1, layer: 1 });
+  lifecycle.world.components.add(lifecycle.components.renderable, entity);
+  lifecycle.world.components.add(lifecycle.components.projectile, entity);
 }
 
 function addSixComponentBundle(entity: Entity): void {
@@ -418,7 +418,7 @@ Deno.bench({
 });
 
 Deno.bench({
-  name: "spawn/despawn 128 projectiles - repeated addToEntity + refresh",
+  name: "spawn/despawn 128 projectiles - repeated add + refresh",
   group: "entity lifecycle",
   baseline: true,
   fn: () => {
@@ -471,7 +471,7 @@ Deno.bench({
   fn: () => {
     lifecycle.world.entities.destroy(destroyOneComponentEntity);
     destroyOneComponentEntity = mustCreateEntity(lifecycle.world);
-    lifecycle.world.components.addToEntity(lifecycle.components.position, destroyOneComponentEntity, { x: 0, y: 0 });
+    lifecycle.world.components.add(lifecycle.components.position, destroyOneComponentEntity, { x: 0, y: 0 });
     entitySink ^= destroyOneComponentEntity;
     lifecycle.world.refresh();
   },
@@ -483,9 +483,9 @@ Deno.bench({
   fn: () => {
     lifecycle.world.entities.destroy(destroyThreeComponentEntity);
     destroyThreeComponentEntity = mustCreateEntity(lifecycle.world);
-    lifecycle.world.components.addToEntity(lifecycle.components.position, destroyThreeComponentEntity, { x: 0, y: 0 });
-    lifecycle.world.components.addToEntity(lifecycle.components.velocity, destroyThreeComponentEntity, { x: 1, y: 1 });
-    lifecycle.world.components.addToEntity(lifecycle.components.renderable, destroyThreeComponentEntity);
+    lifecycle.world.components.add(lifecycle.components.position, destroyThreeComponentEntity, { x: 0, y: 0 });
+    lifecycle.world.components.add(lifecycle.components.velocity, destroyThreeComponentEntity, { x: 1, y: 1 });
+    lifecycle.world.components.add(lifecycle.components.renderable, destroyThreeComponentEntity);
     entitySink ^= destroyThreeComponentEntity;
     lifecycle.world.refresh();
   },
@@ -529,8 +529,8 @@ Deno.bench({
   group: "archetype transitions",
   baseline: true,
   fn: () => {
-    lifecycle.world.components.addToEntity(lifecycle.components.renderable, addRemoveEntity);
-    lifecycle.world.components.removeFromEntity(lifecycle.components.renderable, addRemoveEntity);
+    lifecycle.world.components.add(lifecycle.components.renderable, addRemoveEntity);
+    lifecycle.world.components.remove(lifecycle.components.renderable, addRemoveEntity);
   },
 });
 
@@ -538,8 +538,8 @@ Deno.bench({
   name: "add/remove data component on recycled entity",
   group: "archetype transitions",
   fn: () => {
-    lifecycle.world.components.addToEntity(lifecycle.components.velocity, addRemoveEntity, { x: 1, y: -1 });
-    lifecycle.world.components.removeFromEntity(lifecycle.components.velocity, addRemoveEntity);
+    lifecycle.world.components.add(lifecycle.components.velocity, addRemoveEntity, { x: 1, y: -1 });
+    lifecycle.world.components.remove(lifecycle.components.velocity, addRemoveEntity);
   },
 });
 
@@ -549,9 +549,9 @@ Deno.bench({
   fn: () => {
     // MEDIUM_CAPACITY sparse lifecycle fixtures leave 7,168 active positioned entities.
     const positioned = batchTransitions.world.entities.queryList(batchPositionQuery);
-    batchTransitions.world.components.addToEntities(batchTransitions.components.renderable, positioned);
+    batchTransitions.world.components.addMany(batchTransitions.components.renderable, positioned);
     const positionedAfterAdd = batchTransitions.world.entities.queryList(batchPositionQuery);
-    batchTransitions.world.components.removeFromEntities(batchTransitions.components.renderable, positionedAfterAdd);
+    batchTransitions.world.components.removeMany(batchTransitions.components.renderable, positionedAfterAdd);
   },
 });
 
@@ -561,13 +561,13 @@ Deno.bench({
   fn: () => {
     // MEDIUM_CAPACITY sparse lifecycle fixtures leave 7,168 active positioned entities.
     const positioned = batchDataTransitions.world.entities.queryList(batchDataPositionQuery);
-    batchDataTransitions.world.components.addToEntities(
+    batchDataTransitions.world.components.addMany(
       batchDataTransitions.components.acceleration,
       positioned,
       batchData,
     );
     const positionedAfterAdd = batchDataTransitions.world.entities.queryList(batchDataPositionQuery);
-    batchDataTransitions.world.components.removeFromEntities(
+    batchDataTransitions.world.components.removeMany(
       batchDataTransitions.components.acceleration,
       positionedAfterAdd,
     );
@@ -578,12 +578,12 @@ Deno.bench({
   name: "move entity across common gameplay archetypes",
   group: "archetype transitions",
   fn: () => {
-    lifecycle.world.components.addToEntity(lifecycle.components.velocity, lifecycleEntity, { x: 1, y: 1 });
-    lifecycle.world.components.addToEntity(lifecycle.components.projectile, lifecycleEntity);
-    lifecycle.world.components.addToEntity(lifecycle.components.lifetime, lifecycleEntity, { ttl: 1.5 });
-    lifecycle.world.components.removeFromEntity(lifecycle.components.lifetime, lifecycleEntity);
-    lifecycle.world.components.removeFromEntity(lifecycle.components.projectile, lifecycleEntity);
-    lifecycle.world.components.removeFromEntity(lifecycle.components.velocity, lifecycleEntity);
+    lifecycle.world.components.add(lifecycle.components.velocity, lifecycleEntity, { x: 1, y: 1 });
+    lifecycle.world.components.add(lifecycle.components.projectile, lifecycleEntity);
+    lifecycle.world.components.add(lifecycle.components.lifetime, lifecycleEntity, { ttl: 1.5 });
+    lifecycle.world.components.remove(lifecycle.components.lifetime, lifecycleEntity);
+    lifecycle.world.components.remove(lifecycle.components.projectile, lifecycleEntity);
+    lifecycle.world.components.remove(lifecycle.components.velocity, lifecycleEntity);
   },
 });
 
@@ -608,10 +608,10 @@ Deno.bench({
 });
 
 Deno.bench({
-  name: "setEntityData component write with changed tracking",
+  name: "setData component write with changed tracking",
   group: "component data hot path",
   fn: () => {
-    mixed.world.components.setEntityData(mixed.components.position, mutationEntity, {
+    mixed.world.components.setData(mixed.components.position, mutationEntity, {
       x: numericSink++,
       y: -numericSink,
     });
@@ -629,28 +629,26 @@ Deno.bench({
 });
 
 Deno.bench({
-  name: "getEntityData object materialization",
+  name: "getData object materialization",
   group: "component data hot path",
   fn: () => {
-    objectSink = mixed.world.components.getEntityDataOrThrow(mixed.components.position, mutationEntity);
+    objectSink = mixed.world.components.getDataOrThrow(mixed.components.position, mutationEntity);
   },
 });
 
 Deno.bench({
-  name: "readEntityDataInto reused object",
+  name: "readDataInto reused object",
   group: "component data hot path",
   fn: () => {
-    numericSink ^= mixed.world.components.readEntityDataInto(mixed.components.position, mutationEntity, readDataOut) ?
-      1 :
-      0;
+    numericSink ^= mixed.world.components.readDataInto(mixed.components.position, mutationEntity, readDataOut) ? 1 : 0;
   },
 });
 
 Deno.bench({
-  name: "entityHas component ownership check",
+  name: "has component ownership check",
   group: "component data hot path",
   fn: () => {
-    numericSink ^= mixed.world.components.entityHas(mixed.components.position, mutationEntity) ? 1 : 0;
+    numericSink ^= mixed.world.components.has(mixed.components.position, mutationEntity) ? 1 : 0;
   },
 });
 
@@ -823,12 +821,12 @@ Deno.bench({
   name: "query after component transition invalidation",
   group: "queries",
   fn: () => {
-    queryInvalidation.world.components.addToEntity(queryInvalidation.components.velocity, transitionQueryEntity, {
+    queryInvalidation.world.components.add(queryInvalidation.components.velocity, transitionQueryEntity, {
       x: 1,
       y: 1,
     });
     entitySink ^= countEntities(queryInvalidation.world.entities.query(invalidationMovementQuery));
-    queryInvalidation.world.components.removeFromEntity(queryInvalidation.components.velocity, transitionQueryEntity);
+    queryInvalidation.world.components.remove(queryInvalidation.components.velocity, transitionQueryEntity);
   },
 });
 
@@ -836,12 +834,12 @@ Deno.bench({
   name: "query entered/exited transition tracking",
   group: "queries",
   fn: () => {
-    transitionTracking.world.components.addToEntity(transitionTracking.components.velocity, enteredExitedEntity, {
+    transitionTracking.world.components.add(transitionTracking.components.velocity, enteredExitedEntity, {
       x: 1,
       y: 1,
     });
     entitySink ^= countEntities(transitionTracking.world.entities.queryEntered(transitionTrackingQuery));
-    transitionTracking.world.components.removeFromEntity(transitionTracking.components.velocity, enteredExitedEntity);
+    transitionTracking.world.components.remove(transitionTracking.components.velocity, enteredExitedEntity);
     entitySink ^= countEntities(transitionTracking.world.entities.queryExited(transitionTrackingQuery));
     transitionTracking.world.refresh();
   },
@@ -868,9 +866,9 @@ Deno.bench({
   name: "64-component world archetype transition",
   group: "queries",
   fn: () => {
-    wide.world.components.addToEntity(wide.components.all[63]!, wideTransitionEntity);
+    wide.world.components.add(wide.components.all[63]!, wideTransitionEntity);
     entitySink ^= countEntities(wide.world.entities.query(wideQuery));
-    wide.world.components.removeFromEntity(wide.components.all[63]!, wideTransitionEntity);
+    wide.world.components.remove(wide.components.all[63]!, wideTransitionEntity);
   },
 });
 
@@ -1085,7 +1083,7 @@ Deno.bench({
 });
 
 Deno.bench({
-  name: "setEntityData all field kinds",
+  name: "setData all field kinds",
   group: "field types",
   fn: () => {
     const i = numericSink++;
@@ -1094,23 +1092,23 @@ Deno.bench({
     fieldWriteData.state = fieldStates[i & 1]!;
     fieldWriteData.label = fieldLabels[i & 1]!;
     fieldWriteData.mesh = fieldMeshes[i & 1]!;
-    fieldWorld.components.setEntityData(fieldUnit, fieldEntity, fieldWriteData);
+    fieldWorld.components.setData(fieldUnit, fieldEntity, fieldWriteData);
   },
 });
 
 Deno.bench({
-  name: "readEntityDataInto all field kinds",
+  name: "readDataInto all field kinds",
   group: "field types",
   fn: () => {
-    numericSink ^= fieldWorld.components.readEntityDataInto(fieldUnit, fieldEntity, fieldReadOut) ? 1 : 0;
+    numericSink ^= fieldWorld.components.readDataInto(fieldUnit, fieldEntity, fieldReadOut) ? 1 : 0;
   },
 });
 
 Deno.bench({
-  name: "getEntityData all field kinds",
+  name: "getData all field kinds",
   group: "field types",
   fn: () => {
-    objectSink = fieldWorld.components.getEntityDataOrThrow(fieldUnit, fieldEntity);
+    objectSink = fieldWorld.components.getDataOrThrow(fieldUnit, fieldEntity);
   },
 });
 
@@ -1118,8 +1116,8 @@ Deno.bench({
   name: "add/remove component with all field kinds",
   group: "field types",
   fn: () => {
-    fieldWorld.components.addToEntity(fieldUnit, fieldTransitionEntity);
-    fieldWorld.components.removeFromEntity(fieldUnit, fieldTransitionEntity);
+    fieldWorld.components.add(fieldUnit, fieldTransitionEntity);
+    fieldWorld.components.remove(fieldUnit, fieldTransitionEntity);
   },
 });
 

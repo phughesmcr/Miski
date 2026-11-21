@@ -132,27 +132,27 @@ export async function populateMixedWorld(
   for (let i = 0; i < capacity; i++) {
     const entity = mustCreateEntity(world);
     entities[i] = entity;
-    world.components.addToEntity(components.position, entity, { x: i, y: i * 0.5 });
+    world.components.add(components.position, entity, { x: i, y: i * 0.5 });
 
     if ((i & 1) === 0) {
-      world.components.addToEntity(components.velocity, entity, { x: 1, y: -1 });
+      world.components.add(components.velocity, entity, { x: 1, y: -1 });
     }
     if (i % 3 === 0) {
-      world.components.addToEntity(components.health, entity, { current: 100, max: 100 });
+      world.components.add(components.health, entity, { current: 100, max: 100 });
     }
     if (i % 4 === 0) {
-      world.components.addToEntity(components.renderState, entity, { sprite: i & 255, layer: i & 7 });
-      world.components.addToEntity(components.renderable, entity);
+      world.components.add(components.renderState, entity, { sprite: i & 255, layer: i & 7 });
+      world.components.add(components.renderable, entity);
     }
     if (i % 8 === 0) {
-      world.components.addToEntity(components.enemy, entity);
+      world.components.add(components.enemy, entity);
     }
     if (i % 16 === 0) {
-      world.components.addToEntity(components.projectile, entity);
-      world.components.addToEntity(components.lifetime, entity, { ttl: 3 });
+      world.components.add(components.projectile, entity);
+      world.components.add(components.lifetime, entity, { ttl: 3 });
     }
     if (i % 64 === 0) {
-      world.components.addToEntity(components.sleeping, entity);
+      world.components.add(components.sleeping, entity);
     }
   }
 
@@ -172,10 +172,10 @@ export async function populateMovementWorld(
   for (let i = 0; i < capacity; i++) {
     const entity = mustCreateEntity(world);
     entities[i] = entity;
-    world.components.addToEntity(components.position, entity, { x: i, y: i });
-    world.components.addToEntity(components.velocity, entity, { x: 1, y: -1 });
+    world.components.add(components.position, entity, { x: i, y: i });
+    world.components.add(components.velocity, entity, { x: 1, y: -1 });
     if (i % 32 === 0) {
-      world.components.addToEntity(components.sleeping, entity);
+      world.components.add(components.sleeping, entity);
     }
   }
 
@@ -217,9 +217,9 @@ export async function populateSparseLifecycleWorld(
 
   for (let i = 0; i < capacity; i++) {
     const entity = mustCreateEntity(world);
-    world.components.addToEntity(components.position, entity, { x: i, y: i });
+    world.components.add(components.position, entity, { x: i, y: i });
     if ((i & 1) === 0) {
-      world.components.addToEntity(components.velocity, entity, { x: 1, y: 1 });
+      world.components.add(components.velocity, entity, { x: 1, y: 1 });
     }
     if (i % 8 === 0) {
       recycled.push(entity);
@@ -246,10 +246,10 @@ export async function populateWideWorld(
   for (let i = 0; i < activeCount; i++) {
     const entity = mustCreateEntity(world);
     entities[i] = entity;
-    world.components.addToEntity(components.all[0]!, entity);
-    if ((i & 1) === 0) world.components.addToEntity(components.all[31]!, entity);
-    if (i % 4 === 0) world.components.addToEntity(components.all[63]!, entity);
-    if (i % 16 === 0) world.components.addToEntity(components.all[47]!, entity);
+    world.components.add(components.all[0]!, entity);
+    if ((i & 1) === 0) world.components.add(components.all[31]!, entity);
+    if (i % 4 === 0) world.components.add(components.all[63]!, entity);
+    if (i % 16 === 0) world.components.add(components.all[47]!, entity);
   }
 
   world.refresh();
@@ -273,7 +273,7 @@ export async function populateRelationWorld(capacity: number, nodes: number = 1_
   const entities: Entity[] = [];
   for (let i = 0; i < nodes; i++) {
     const entity = mustCreateEntity(world);
-    world.components.addToEntity(position, entity, { x: i, y: i });
+    world.components.add(position, entity, { x: i, y: i });
     entities.push(entity);
     if (i > 0) world.relations.add(childOf, entity, entities[(i - 1) >> 2]!);
   }
@@ -299,7 +299,7 @@ export async function populateScheduledMovementWorld(
 ): Promise<{ world: World; components: BenchmarkComponents; schedule: Schedule }> {
   const { world } = await populateMovementWorld(capacity, components, 1);
   for (const entity of Array.from(world.entities.query(createMovementQuery(components)))) {
-    if ((entity & 1) === 0) world.components.addToEntity(components.renderable, entity);
+    if ((entity & 1) === 0) world.components.add(components.renderable, entity);
   }
   world.refresh();
   const schedule = new Schedule(world, { phases: ["update", "render"] });
@@ -346,7 +346,7 @@ export async function createDispatchSchedule(
   const marker = new Component<null>({ name: "marker" });
   const world = new World({ capacity: 64, components: [marker] });
   await world.init();
-  for (let i = 0; i < 32; i++) world.components.addToEntity(marker, mustCreateEntity(world));
+  for (let i = 0; i < 32; i++) world.components.add(marker, mustCreateEntity(world));
   world.refresh();
   const phases = ["input", "physics", "update", "render"] as const;
   const schedule = new Schedule(world, {
@@ -414,9 +414,9 @@ export async function populateNamedWorld(capacity: number, withObjects: boolean 
   const meshes = SAVE_LABELS.map((label, i) => new SaveMesh(`mesh:${i}:${label}`));
   for (let i = 0; i < capacity / 2; i++) {
     const entity = mustCreateEntity(world);
-    world.components.addToEntity(named, entity, { hp: i & 0xffff, label: SAVE_LABELS[i % SAVE_LABELS.length]! });
-    if (i % 4 === 0) world.components.addToEntity(titled, entity, { title: `title ${i}` });
-    if (withObjects && i % 4 === 1) world.components.addToEntity(meshed, entity, { mesh: meshes[i % meshes.length]! });
+    world.components.add(named, entity, { hp: i & 0xffff, label: SAVE_LABELS[i % SAVE_LABELS.length]! });
+    if (i % 4 === 0) world.components.add(titled, entity, { title: `title ${i}` });
+    if (withObjects && i % 4 === 1) world.components.add(meshed, entity, { mesh: meshes[i % meshes.length]! });
   }
   return { world, named, titled, meshed };
 }

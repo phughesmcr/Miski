@@ -256,7 +256,7 @@ const randomVelocity = (): { x: number; y: number } => ({
   y: (Math.random() - 0.5) * VELOCITY_SCALAR * 2,
 });
 
-// Atomic spawn: one archetype move via create(bundle) instead of repeated addToEntity.
+// Atomic spawn: one archetype move via create(bundle) instead of repeated add.
 const predatorSpawner = (x: number, y: number): Entity | undefined => {
   const entity = world.entities.create([
     [position, { x, y }],

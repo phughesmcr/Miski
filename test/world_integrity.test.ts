@@ -22,12 +22,12 @@ Deno.test("rollback restores the stable entity authority without reissuing specu
   const position = vec2Component();
   const world = await createTestWorld([position], 8);
   const original = createEntity(world);
-  world.components.addToEntity(position, original, { x: 1 });
+  world.components.add(position, original, { x: 1 });
   const query = new Query({ all: [position] });
   const point = new WorldRollbackScope(world);
   world.entities.destroy(original);
   const discarded = createEntity(world);
-  world.components.addToEntity(position, discarded, { x: 9 });
+  world.components.add(position, discarded, { x: 9 });
   point.restore();
   assert(world.entities.isActive(original), "Facade must use restored entity authority");
   assert(!world.entities.isActive(discarded), "Speculative handle must be invalidated");
@@ -53,15 +53,15 @@ Deno.test("rollback restores changed and transition windows and advances query r
   const tag = tagComponent("tag");
   const world = await createTestWorld([position, tag]);
   const entity = createEntity(world);
-  world.components.addToEntity(position, entity, { x: 1 });
+  world.components.add(position, entity, { x: 1 });
   world.refresh();
-  world.components.setEntityData(position, entity, { x: 2 });
+  world.components.setData(position, entity, { x: 2 });
   const query = new Query({ all: [position], none: [tag] });
   const entered = ids(world.entities.queryEntered(query));
   const exited = ids(world.entities.queryExited(query));
   const changed = ids(world.components.getChanged(position));
   const point = new WorldRollbackScope(world);
-  world.components.addToEntity(tag, entity);
+  world.components.add(tag, entity);
   world.refresh();
   const beforeRestore = world.queryRevision(query);
   point.restore();
@@ -79,7 +79,7 @@ Deno.test("historical exits retain each departed generation and reject stale arc
   const departed: Entity[] = [];
   for (let index = 0; index < 20; index++) {
     const entity = createEntity(world);
-    world.components.addToEntity(position, entity);
+    world.components.add(position, entity);
     // Exits are relative to the window start, so the entity must be a member before the window opens.
     world.refresh();
     world.entities.destroy(entity);
@@ -98,20 +98,20 @@ Deno.test("batch mutations reject mismatched and malformed slot entries before c
   const world = await createTestWorld([position]);
   const a = createEntity(world);
   const b = createEntity(world);
-  world.components.addToEntity(position, a);
-  world.components.addToEntity(position, b);
+  world.components.add(position, a);
+  world.components.add(position, b);
   const forged = { count: 1, entities: [a], slots: [entityIndex(b)] };
-  assertThrows(() => world.components.removeFromEntities(position, forged), ArgumentError, "invalid storage slot");
-  assertThrows(() => world.components.addToEntities(position, forged), ArgumentError, "invalid storage slot");
+  assertThrows(() => world.components.removeMany(position, forged), ArgumentError, "invalid storage slot");
+  assertThrows(() => world.components.addMany(position, forged), ArgumentError, "invalid storage slot");
   assertThrows(
-    () => world.components.removeFromEntities(position, { count: 2, entities: [a], slots: [entityIndex(a)] }),
+    () => world.components.removeMany(position, { count: 2, entities: [a], slots: [entityIndex(a)] }),
     EntityNotFoundError,
     "not active",
   );
   const query = new Query({ all: [position] });
   assertEquals(Array.from(world.entities.query(query)), [a, b], "Invalid batches must preserve archetype ownership");
   assertEquals(
-    world.components.removeFromEntities(position, world.entities.queryList(query)),
+    world.components.removeMany(position, world.entities.queryList(query)),
     2,
     "Failed preflight clears scratch",
   );
@@ -127,29 +127,29 @@ Deno.test("checkpoint restores tags and capped memberships atomically, including
   const a = createEntity(world);
   const b = createEntity(world);
   const outside = createEntity(world);
-  world.components.addToEntity(position, a, { x: 1 });
-  world.components.addToEntity(capped, a, { x: 3 });
-  world.components.addToEntity(tag, a);
+  world.components.add(position, a, { x: 1 });
+  world.components.add(capped, a, { x: 3 });
+  world.components.add(tag, a);
   const checkpoint = world.captureCheckpoint([a, b], position, capped, tag);
-  world.components.setEntityData(position, a, { x: 9 });
-  world.components.removeFromEntity(capped, a);
-  world.components.addToEntity(capped, b, { x: 8 });
-  world.components.removeFromEntity(tag, a);
+  world.components.setData(position, a, { x: 9 });
+  world.components.remove(capped, a);
+  world.components.add(capped, b, { x: 8 });
+  world.components.remove(tag, a);
   world.applyCheckpoint(checkpoint);
-  assertEquals(world.components.getEntityDataOrThrow(position, a).x, 1, "Value must restore alongside membership");
-  assertEquals(world.components.getEntityDataOrThrow(capped, a).x, 3, "Capped membership can transfer back");
-  assert(world.components.entityHas(tag, a), "Present tag must restore without a data payload");
-  assert(!world.components.entityHas(capped, b), "Speculative captured owner must be removed");
-  world.components.removeFromEntity(capped, a);
-  world.components.addToEntity(capped, outside);
-  world.components.setEntityData(position, a, { x: 9 });
+  assertEquals(world.components.getDataOrThrow(position, a).x, 1, "Value must restore alongside membership");
+  assertEquals(world.components.getDataOrThrow(capped, a).x, 3, "Capped membership can transfer back");
+  assert(world.components.has(tag, a), "Present tag must restore without a data payload");
+  assert(!world.components.has(capped, b), "Speculative captured owner must be removed");
+  world.components.remove(capped, a);
+  world.components.add(capped, outside);
+  world.components.setData(position, a, { x: 9 });
   assertThrows(() => world.applyCheckpoint(checkpoint), CapacityError, "maximum owner count");
   assertEquals(
-    world.components.getEntityDataOrThrow(position, a).x,
+    world.components.getDataOrThrow(position, a).x,
     9,
     "Failed checkpoint must preserve preceding values",
   );
-  assert(world.components.entityHas(capped, outside), "Failed checkpoint must preserve external ownership");
+  assert(world.components.has(capped, outside), "Failed checkpoint must preserve external ownership");
   await world.destroy();
 });
 
@@ -180,11 +180,11 @@ Deno.test("same-handle leave, reenter, and leave records one historical exit", a
   const world = await createTestWorld([position]);
   const entity = createEntity(world);
   const query = new Query({ all: [position] });
-  world.components.addToEntity(position, entity);
+  world.components.add(position, entity);
   world.refresh();
-  world.components.removeFromEntity(position, entity);
-  world.components.addToEntity(position, entity);
-  world.components.removeFromEntity(position, entity);
+  world.components.remove(position, entity);
+  world.components.add(position, entity);
+  world.components.remove(position, entity);
   assertEquals(ids(world.entities.queryExited(query)), [entity], "Repeated exit must deduplicate the same handle");
   await world.destroy();
 });

@@ -481,7 +481,7 @@ export class ComponentManager {
    * @param entity - The entity to check for the component on
    * @returns `true` if the entity has the component, `false` otherwise
    */
-  entityHas<
+  has<
     TValue extends SchemaOrNull,
     TStorage extends SchemaOrNull = TValue,
   >(component: Component<TValue, TStorage> | string, entity: Entity): boolean {

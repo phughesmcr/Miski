@@ -654,7 +654,7 @@ every recommendation below. On this branch:
   (`entityHas` / `has` throws), D8 (Query internals hidden), D10 (`CommandBuffer.instantiate`) and D12 (guide links
   in the module docs).
 - **Kept as they are:** D4, D6, D7 and D11.
-- **Still open:** D9, which waits for the entity-cap research.
+- **Still open:** D9. The entity-cap research recommends keeping the cap for 1.0 but making the handle helpers world-bound or internal first.
 
 Usage counts are `rg -w` hits in `src` / `test` / `bench`+`example` / README+`mod.ts`, taken before the changes.
 
@@ -668,7 +668,7 @@ Usage counts are `rg -w` hits in `src` / `test` / `bench`+`example` / README+`mo
 | D6 | Fold `instantiateMany` into `instantiate(prefab, n?)` (review A4) | Don't. Different return types; Bevy and flecs keep bulk spawn separate. | — |
 | D7 | Flip the strict/lenient default (`create` throws, `tryCreate` returns `undefined`), Bevy-style | Don't. The current `x` / `xOrThrow` rule is applied everywhere since beta.3 and matches JS (`Map.get`). | — |
 | D8 | Hide `Query.allEntries` / `anyEntries` / `noneEntries` / `includeEntries` / `dependencyComponents` (and then `NormalizedQueryComponentEntry`) | Hide (`@internal`). They are normalisation internals; `all` / `any` / `none` / `include` remain. | 2 test uses |
-| D9 | Entity-cap work: whether `Entity` packing, `MAX_WORLD_CAPACITY` or `packEntity` change before 1.0 | Decide before the freeze. They are public, and they reach the save format. | Depends on the research session |
+| D9 | Entity-cap work: whether `Entity` packing, `MAX_WORLD_CAPACITY` or `packEntity` change before 1.0 | The research (`docs/limits-research.md` on `agent/lift-limits-878485`) says keep the 65,536 cap for 1.0 and lift it later behind a per-world option. To keep that later change non-breaking, it asks for one pre-1.0 change: make `entityIndex` / `entityGeneration` / `packEntity` world-bound (for example `world.entities.slotOf(e)`) or internal, and document handles as opaque per-world numbers. Still open: `entityIndex` is the documented hot-path slot lookup (README, `mod.ts` examples), so this changes how callers index storage. A per-world layout with runtime masks cost 7–32% on handle-decoding paths in that research. | 91 src / 109 test / 22 bench+example+docs uses |
 | D10 | Let a `CommandBuffer` spawn from a `Prefab` (Hive asked for `spawn(prefab, overrides?, relationPairs?)`) | Add `commands.instantiate(prefab, overrides?)` returning a `PendingEntity`, mirroring `entities.instantiate`. Don't overload `spawn`, and don't add relation pairs: `commands.relate(pending, R, target)` already accepts pending handles on both ends. | New method on `CommandBuffer`; additive |
 | D11 | Let `argCount` exceed the callback's declared extra parameters (so `argCount: 1` works with `(components, entities) => ...`) | Lean keep strict. The current rule is deliberate and type-tested, and `0` is the right value for a callback that ignores `ctx`; this branch documents it in the README and the `argCount` doc. Loosening is non-breaking if you prefer it. | Type change in `SystemSpec`; flips two `@ts-expect-error` cases in `test/typed_system_inference.ts` |
 | D12 | Per-feature guides (scheduler, prefabs, relations) beyond the README, or README anchors linked from the JSR module docs | Anchors from `mod.ts` first; guides can follow 1.0. | Docs only |

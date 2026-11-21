@@ -2,9 +2,25 @@
 
 ## Unreleased
 
+- **Breaking:** the `world.components` verbs are renamed to match
+  `world.relations`, `ComponentInstance` and every other ECS library. Arguments
+  and behaviour are unchanged:
+
+  | Before | Now |
+  | --- | --- |
+  | `addToEntity` | `add` |
+  | `removeFromEntity` | `remove` |
+  | `entityHas` | `has` |
+  | `getEntityData` / `getEntityDataOrThrow` | `getData` / `getDataOrThrow` |
+  | `setEntityData` | `setData` |
+  | `readEntityDataInto` | `readDataInto` |
+  | `addToEntities` / `removeFromEntities` | `addMany` / `removeMany` |
+
+  A word-boundary find-and-replace in that order (longest names first)
+  migrates a codebase.
 - **Breaking:** `world.components.getOwners`, `getOwnersSnapshot`, `getChanged`
   and `getChangedSnapshot` throw `NotRegisteredError` for a component the
-  world has not registered, as `getEntityData`, `readEntityDataInto` and every
+  world has not registered, as `getData`, `readDataInto` and every
   `world.relations` call already did. They returned `undefined`, so their
   return types lose `| undefined`: drop the `!` or `?? []` at call sites, and
   use `isRegistered` first if a component may be absent. `getOwners` /
@@ -13,7 +29,7 @@
 - **Breaking (types):** `world.components.getInstances(components)` is no
   longer part of `WorldComponentAPI`. It was query plumbing; map
   `getInstance` over the list instead.
-- **Breaking:** `world.components.entityHas` throws `NotRegisteredError` for an
+- **Breaking:** `world.components.has` (formerly `entityHas`) throws `NotRegisteredError` for an
   unregistered component instead of returning `false`, so every
   `world.components` call except `getInstance` and `isRegistered` now follows
   the rule. It still returns `false` for an inactive entity. Check

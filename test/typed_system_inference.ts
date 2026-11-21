@@ -106,24 +106,24 @@ expectType<DynamicComponentInstance>(requiredStringPosition);
 // @ts-expect-error required string lookup still cannot recover a concrete schema.
 expectType<ComponentInstance<Vec2>>(requiredStringPosition);
 
-const stringReadPosition = world.components.getEntityData("position", 0 as Entity);
+const stringReadPosition = world.components.getData("position", 0 as Entity);
 expectType<ComponentData<SchemaOrNull> | undefined>(stringReadPosition);
 // @ts-expect-error string component lookup cannot infer a schema for data reads.
-world.components.getEntityData<Vec2>("position", 0 as Entity);
+world.components.getData<Vec2>("position", 0 as Entity);
 // @ts-expect-error string component lookup cannot infer a schema for throwing data reads.
-world.components.getEntityDataOrThrow<Vec2>("position", 0 as Entity);
+world.components.getDataOrThrow<Vec2>("position", 0 as Entity);
 
 const namedSystem = world.systems.get("manualTypedMovement");
 expectType<SystemInstance<SystemCallback> | undefined>(namedSystem);
 
 // @ts-expect-error string component lookup cannot infer a schema for data writes.
-world.components.addToEntity("position", 0 as Entity, { x: 1, y: 2 });
+world.components.add("position", 0 as Entity, { x: 1, y: 2 });
 // @ts-expect-error string component lookup cannot infer a schema for batch data writes.
-world.components.addToEntities("position", { count: 0, entities: [], slots: [] }, { x: 1, y: 2 });
+world.components.addMany("position", { count: 0, entities: [], slots: [] }, { x: 1, y: 2 });
 // @ts-expect-error tag components do not accept data payloads.
-world.components.addToEntity(renderable, 0 as Entity, {});
+world.components.add(renderable, 0 as Entity, {});
 // @ts-expect-error tag components do not have settable component data.
-world.components.setEntityData(renderable, 0 as Entity, {});
+world.components.setData(renderable, 0 as Entity, {});
 
 const asyncSystem = new System({
   name: "asyncMovement",
@@ -215,9 +215,9 @@ const brandedWorld = new World({ capacity: 8, components: [gridPos, facing] });
 const brandedEntity = brandedWorld.entities.createOrThrow();
 expectType<Entity>(brandedEntity);
 
-brandedWorld.components.addToEntity(facing, brandedEntity, { dir: 2 });
+brandedWorld.components.add(facing, brandedEntity, { dir: 2 });
 // @ts-expect-error 7 is not a valid FacingValues["dir"] literal.
-brandedWorld.components.addToEntity(facing, brandedEntity, { dir: 7 });
+brandedWorld.components.add(facing, brandedEntity, { dir: 7 });
 brandedWorld.components.addBundle(brandedEntity, [[facing, { dir: 1 }]]);
 // @ts-expect-error 7 is not a valid FacingValues["dir"] literal in bundles.
 brandedWorld.components.addBundle(brandedEntity, [[facing, { dir: 7 }]]);
@@ -225,22 +225,22 @@ brandedWorld.components.addBundle(brandedEntity, [[facing, { dir: 7 }]]);
 brandedWorld.components.addBundle(brandedEntity, [[renderable, {}]]);
 
 // Partial writes: omitted keys are allowed.
-brandedWorld.components.setEntityData(gridPos, brandedEntity, { x: 4 });
-brandedWorld.components.addToEntity(gridPos, brandedEntity, { y: 2 });
+brandedWorld.components.setData(gridPos, brandedEntity, { x: 4 });
+brandedWorld.components.add(gridPos, brandedEntity, { y: 2 });
 // @ts-expect-error unknown keys are rejected.
-brandedWorld.components.setEntityData(gridPos, brandedEntity, { z: 4 });
+brandedWorld.components.setData(gridPos, brandedEntity, { z: 4 });
 
 // Constructor-shaped keys accept any number when writing.
-brandedWorld.components.setEntityData(position, brandedEntity, { x: 1.5 });
+brandedWorld.components.setData(position, brandedEntity, { x: 1.5 });
 
 // -- Non-throwing reads preserve the schema keys and add undefined.
-const readResult = brandedWorld.components.getEntityData(gridPos, brandedEntity);
+const readResult = brandedWorld.components.getData(gridPos, brandedEntity);
 expectType<Record<"x" | "y", number> | undefined>(readResult);
-// @ts-expect-error getEntityData results must be narrowed before property access.
+// @ts-expect-error getData results must be narrowed before property access.
 readResult.x;
 
 const readOut = { x: 0, y: 0, label: "kept" };
-expectType<boolean>(brandedWorld.components.readEntityDataInto(gridPos, brandedEntity, readOut));
+expectType<boolean>(brandedWorld.components.readDataInto(gridPos, brandedEntity, readOut));
 
 const includeQuery = new Query({
   all: { gridPos },

@@ -56,7 +56,7 @@ Deno.test("isMiskiError catches failures across the library", async () => {
   const a = createEntity(world);
   const b = createEntity(world);
   assertMiskiThrows(
-    () => world.components.addToEntity(position, a, 5 as never),
+    () => world.components.add(position, a, 5 as never),
     ComponentDataError,
     "component data not an object",
   );
@@ -65,8 +65,8 @@ Deno.test("isMiskiError catches failures across the library", async () => {
     ComponentDataError,
     "tag has no data storage",
   );
-  world.components.addToEntity(hero, a);
-  assertMiskiThrows(() => world.components.addToEntity(hero, b), CapacityError, "owner cap");
+  world.components.add(hero, a);
+  assertMiskiThrows(() => world.components.add(hero, b), CapacityError, "owner cap");
   assertMiskiThrows(() => world.entities.create([[hero]]), CapacityError, "owner cap via plain create");
   assertMiskiThrows(() => world.entities.create([[position], [position]] as never), ArgumentError, "duplicate bundle");
 

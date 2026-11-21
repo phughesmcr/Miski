@@ -74,10 +74,10 @@ Deno.bench({
   fn: () => {
     const tag = directTagWorld.components.enemy;
     for (let i = 0; i < directTagEntities.length; i++) {
-      directTagWorld.world.components.addToEntity(tag, directTagEntities[i]!);
+      directTagWorld.world.components.add(tag, directTagEntities[i]!);
     }
     for (let i = 0; i < directTagEntities.length; i++) {
-      directTagWorld.world.components.removeFromEntity(tag, directTagEntities[i]!);
+      directTagWorld.world.components.remove(tag, directTagEntities[i]!);
     }
   },
 });

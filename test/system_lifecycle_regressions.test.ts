@@ -488,8 +488,8 @@ Deno.test("a system whose query only has none terms gets an empty components rec
   const off = createEntity(world);
   const on = createEntity(world);
   const tagged = createEntity(world);
-  world.components.addToEntity(disabled, off);
-  world.components.addToEntity(other, tagged);
+  world.components.add(disabled, off);
+  world.components.add(other, tagged);
 
   const query = new Query({ none: [disabled] });
   let seenComponents: string[] | undefined;

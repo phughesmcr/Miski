@@ -60,7 +60,7 @@ async function probeInvalidation(): Promise<void> {
   const unrelated = new Component<null>({ name: "unrelated" });
   const world = new World({ capacity: 32_768, components: [...groups, unrelated] });
   await world.init();
-  for (let i = 0; i < 30_000; i++) world.components.addToEntity(groups[i % 8]!, mustCreate(world));
+  for (let i = 0; i < 30_000; i++) world.components.add(groups[i % 8]!, mustCreate(world));
   const queries = groups.map((group) => new Query({ all: [group] }));
   world.refresh();
 
@@ -69,7 +69,7 @@ async function probeInvalidation(): Promise<void> {
   };
   const churn = () => {
     const entity = mustCreate(world);
-    world.components.addToEntity(unrelated, entity);
+    world.components.add(unrelated, entity);
     world.entities.destroy(entity);
   };
   const time = (label: string, frame: () => void): void => {
@@ -97,7 +97,7 @@ async function probeInvalidation(): Promise<void> {
   });
   time("related add/remove on group0 + read 8 queries", () => {
     const entity = mustCreate(world);
-    world.components.addToEntity(groups[0]!, entity);
+    world.components.add(groups[0]!, entity);
     world.entities.destroy(entity);
     read();
     world.refresh();
@@ -111,7 +111,7 @@ async function probeResultBuffers(): Promise<void> {
   const components = tags("single", count);
   const world = new World({ capacity: 65_536, components });
   await world.init();
-  for (let i = 0; i < count; i++) world.components.addToEntity(components[i]!, mustCreate(world));
+  for (let i = 0; i < count; i++) world.components.add(components[i]!, mustCreate(world));
   world.refresh();
   const queries = components.map((component) => new Query({ all: [component] }));
   // Register first so only the result buffers are measured.
@@ -132,9 +132,9 @@ async function probeIterators(): Promise<void> {
   await world.init();
   for (let i = 0; i < 30_000; i++) {
     const entity = mustCreate(world);
-    world.components.addToEntity(groups[0]!, entity);
-    if (i % 2 === 0) world.components.addToEntity(groups[1]!, entity);
-    if (i % 3 === 0) world.components.addToEntity(groups[2]!, entity);
+    world.components.add(groups[0]!, entity);
+    if (i % 2 === 0) world.components.add(groups[1]!, entity);
+    if (i % 3 === 0) world.components.add(groups[2]!, entity);
   }
   const all = new Query({ all: [groups[0]!] });
   const moving = new Query({ all: [mover] });
@@ -149,15 +149,15 @@ async function probeIterators(): Promise<void> {
 
   const calls = 20_000;
   const transition = () => {
-    world.components.addToEntity(mover, moved);
+    world.components.add(mover, moved);
     sink ^= countIterable(world.entities.queryEntered(moving));
-    world.components.removeFromEntity(mover, moved);
+    world.components.remove(mover, moved);
     sink ^= countIterable(world.entities.queryExited(moving));
     world.refresh();
   };
   const transitionOnly = () => {
-    world.components.addToEntity(mover, moved);
-    world.components.removeFromEntity(mover, moved);
+    world.components.add(mover, moved);
+    world.components.remove(mover, moved);
     world.refresh();
   };
   for (let i = 0; i < 2_000; i++) {
@@ -189,9 +189,9 @@ async function probeBatchMove(sourceArchetypes: number): Promise<void> {
   await world.init();
   for (let i = 0; i < 32_000; i++) {
     const entity = mustCreate(world);
-    world.components.addToEntity(base, entity);
+    world.components.add(base, entity);
     const mask = i % sourceArchetypes;
-    for (let b = 0; b < bits; b++) if (mask & (1 << b)) world.components.addToEntity(spread[b]!, entity);
+    for (let b = 0; b < bits; b++) if (mask & (1 << b)) world.components.add(spread[b]!, entity);
   }
   const everyone = new Query({ all: [base] });
   world.refresh();
@@ -200,10 +200,10 @@ async function probeBatchMove(sourceArchetypes: number): Promise<void> {
   const rounds = 40;
   for (let r = 0; r < rounds + 5; r++) {
     const start = performance.now();
-    world.components.addToEntities(target, world.entities.queryList(everyone));
+    world.components.addMany(target, world.entities.queryList(everyone));
     const elapsed = performance.now() - start;
     if (r >= 5) addMs += elapsed;
-    world.components.removeFromEntities(target, world.entities.queryList(everyone));
+    world.components.removeMany(target, world.entities.queryList(everyone));
     world.refresh();
   }
   console.log(
@@ -223,12 +223,12 @@ async function probeRelatedRefill(matched: number, queryCount: number): Promise<
   const nots = tags("not", queryCount);
   const world = new World({ capacity: 65_536, components: [tag, ...nots] });
   await world.init();
-  for (let i = 0; i < matched; i++) world.components.addToEntity(tag, mustCreate(world));
+  for (let i = 0; i < matched; i++) world.components.add(tag, mustCreate(world));
   const queries = nots.map((not) => new Query({ all: [tag], none: [not] }));
   world.refresh();
   const frame = () => {
     const entity = mustCreate(world);
-    world.components.addToEntity(tag, entity);
+    world.components.add(tag, entity);
     world.entities.destroy(entity);
     for (let q = 0; q < queryCount; q++) sink ^= world.entities.queryList(queries[q]!).count;
     world.refresh();

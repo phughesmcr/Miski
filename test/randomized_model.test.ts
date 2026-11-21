@@ -310,7 +310,7 @@ function apply(world: World, op: Op, model: Model | undefined, where: string): v
     }
     case "add": {
       const component = byName[op.name]!;
-      const call = (): void => world.components.addToEntity(component as never, op.entity, op.data as never);
+      const call = (): void => world.components.add(component as never, op.entity, op.data as never);
       if (model && !model.live.get(op.entity)!.has(op.name) && exceedsCap(model, new Map([[op.name, 1]]))) {
         expectThrow(call);
         return;
@@ -320,12 +320,12 @@ function apply(world: World, op: Op, model: Model | undefined, where: string): v
       return;
     }
     case "remove": {
-      world.components.removeFromEntity(byName[op.name]!, op.entity);
+      world.components.remove(byName[op.name]!, op.entity);
       if (model) modelRemove(model, op.entity, op.name);
       return;
     }
     case "set": {
-      world.components.setEntityData(byName[op.name]! as never, op.entity, op.data as never);
+      world.components.setData(byName[op.name]! as never, op.entity, op.data as never);
       if (model) modelAdd(model, op.entity, op.name, op.data);
       return;
     }
@@ -345,22 +345,22 @@ function apply(world: World, op: Op, model: Model | undefined, where: string): v
       const list = world.entities.queryList(queries[op.query]!);
       const component = byName[op.name]!;
       if (!model) {
-        world.components.addToEntities(component as never, list);
+        world.components.addMany(component as never, list);
         return;
       }
       const targets = [...membership(model, op.query)].filter((e) => !model.live.get(e)!.has(op.name));
       if (exceedsCap(model, new Map([[op.name, targets.length]]))) {
-        expectThrow(() => world.components.addToEntities(component as never, list));
+        expectThrow(() => world.components.addMany(component as never, list));
         return;
       }
-      const changed = world.components.addToEntities(component as never, list);
+      const changed = world.components.addMany(component as never, list);
       assertStrictEquals(changed, targets.length, `${where}: bulk add reports new owners`);
       for (const entity of targets) modelAdd(model, entity, op.name, undefined);
       return;
     }
     case "bulkRemove": {
       const list = world.entities.queryList(queries[op.query]!);
-      const changed = world.components.removeFromEntities(byName[op.name]!, list);
+      const changed = world.components.removeMany(byName[op.name]!, list);
       if (!model) return;
       const targets = [...membership(model, op.query)].filter((e) => model.live.get(e)!.has(op.name));
       assertStrictEquals(changed, targets.length, `${where}: bulk remove reports removed owners`);
@@ -388,11 +388,11 @@ function checkAgainstModel(world: World, model: Model, where: string): void {
     for (const component of components) {
       const name = component.name;
       const has = owned.has(name);
-      assertStrictEquals(world.components.entityHas(component, entity), has, `${where}: ${entity} has ${name}`);
+      assertStrictEquals(world.components.has(component, entity), has, `${where}: ${entity} has ${name}`);
       const expected = owned.get(name);
       if (has && expected) {
         assertEquals(
-          world.components.getEntityDataOrThrow(component as never, entity) as unknown,
+          world.components.getDataOrThrow(component as never, entity) as unknown,
           expected,
           `${where}: ${entity} ${name} data`,
         );
@@ -443,7 +443,7 @@ function observe(world: World): string {
       parts.push(`${component.name} changed=${slots(Array.from(world.components.getChanged(component)) ?? [])}`);
       for (const entity of owners) {
         parts.push(
-          `${entityIndex(entity)}:${JSON.stringify(world.components.getEntityDataOrThrow(component as never, entity))}`,
+          `${entityIndex(entity)}:${JSON.stringify(world.components.getDataOrThrow(component as never, entity))}`,
         );
       }
     }

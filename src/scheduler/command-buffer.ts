@@ -267,7 +267,7 @@ export class CommandBuffer {
   }
 
   /**
-   * Queue adding a component to an entity, or updating its data if already owned (upsert, as `addToEntity`).
+   * Queue adding a component to an entity, or updating its data if already owned (upsert, as `world.components.add`).
    * @param component The component to add
    * @param entity The entity, or a pending entity from {@link spawn}
    * @param data Field values; omitted fields keep their values, or start at zero on new ownership
@@ -293,7 +293,7 @@ export class CommandBuffer {
   }
 
   /**
-   * Queue setting component data on an entity that owns the component (as `setEntityData`).
+   * Queue setting component data on an entity that owns the component (as `world.components.setData`).
    * @param component The data component to set
    * @param entity The entity, or a pending entity from {@link spawn}
    * @param data Field values; omitted fields keep their values
@@ -311,7 +311,7 @@ export class CommandBuffer {
   }
 
   /**
-   * Queue removing a component from an entity (as `removeFromEntity`; non-owners are skipped).
+   * Queue removing a component from an entity (as `world.components.remove`; non-owners are skipped).
    * @param component The component to remove
    * @param entity The entity, or a pending entity from {@link spawn}
    * @throws {NotRegisteredError} If the component is not registered in the world
@@ -762,17 +762,17 @@ export class CommandBuffer {
     }
     const component = info.component;
     if (op === OP_REMOVE) {
-      world.components.removeFromEntity(component, entity);
+      world.components.remove(component, entity);
     } else if (op === OP_SET) {
-      world.components.setEntityData(
+      world.components.setData(
         component as Component<Record<string, never>>,
         entity,
         this.#dataFor(record, info, entity, false) as never,
       );
     } else if (this.#payloadCounts[record] === 0) {
-      world.components.addToEntity(component as Component<null, null>, entity);
+      world.components.add(component as Component<null, null>, entity);
     } else {
-      world.components.addToEntity(
+      world.components.add(
         component as Component<Record<string, never>>,
         entity,
         this.#dataFor(record, info, entity, false) as never,
@@ -846,11 +846,11 @@ export class CommandBuffer {
     const end = start + this.#payloadCounts[record]!;
     let data: Record<string, unknown>;
     if (mask === WIDE_MASK) {
-      const owned = !isNew && this.#world.components.entityHas(info.component, entity);
+      const owned = !isNew && this.#world.components.has(info.component, entity);
       if (owned) {
         data = info.row;
         if (info.sideKeys.length > 0) this.#rowsHoldValues = true;
-        this.#world.components.readEntityDataInto(info.component, entity, data as Record<string, number>);
+        this.#world.components.readDataInto(info.component, entity, data as Record<string, number>);
       } else if (info.sideKeys.length === 0) {
         data = info.row;
         for (let i = 0; i < info.keys.length; i++) data[info.keys[i]!] = 0;

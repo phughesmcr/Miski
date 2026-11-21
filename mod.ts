@@ -14,7 +14,7 @@
  * Component values have three access tiers: (a) the hot path
  * `instance.storage.partitions[key][slot]`, (b) the guarded cursor `instance.proxy`
  * (or `instance.get` / `instance.set`), and (c) world-level guarded calls
- * (`components.getEntityData*`, `readEntityDataInto`, `setEntityData`).
+ * (`components.getData*`, `readDataInto`, `setData`).
  * House rule: `slots` for storage / partitions; `entities` for identity
  * (`destroy`, `isActive`, attach). Index typed arrays via `entityIndex(entity)`
  * or `queryList` `slots` - never with a packed handle. Brands catch swaps at
@@ -103,15 +103,15 @@
  * const entity1 = world.entities.createOrThrow();
  * const entity2 = world.entities.createOrThrow();
  *
- * world.components.addToEntity(positionComponent, entity1);
- * world.components.addToEntity(positionComponent, entity2, { x: 10, y: 20 });
+ * world.components.add(positionComponent, entity1);
+ * world.components.add(positionComponent, entity2, { x: 10, y: 20 });
  * // upsert: ownership unchanged; provided fields merge
- * world.components.addToEntity(positionComponent, entity2, { x: 15 }); // y stays 20
+ * world.components.add(positionComponent, entity2, { x: 15 }); // y stays 20
  * world.components.addBundle(entity2, [
  *   [positionComponent, { x: 10, y: 20 }],
  *   [facingComponent, { dir: 0 }],
  * ]);
- * world.components.removeFromEntity(positionComponent, entity2);
+ * world.components.remove(positionComponent, entity2);
  * ```
  *
  * @example Read and write Component data (three access tiers)
@@ -134,12 +134,12 @@
  *
  * // (c) World-level guarded calls. Plain names return undefined / false when absent;
  * // OrThrow names throw on inactive / non-owner / tag. Unregistered components always throw.
- * const soft = world.components.getEntityData(positionComponent, entity1); // { x, y } | undefined
- * const data = world.components.getEntityDataOrThrow(positionComponent, entity1);
+ * const soft = world.components.getData(positionComponent, entity1); // { x, y } | undefined
+ * const data = world.components.getDataOrThrow(positionComponent, entity1);
  * const out = { x: 0, y: 0 };
- * world.components.readEntityDataInto(positionComponent, entity1, out); // zero-alloc; false when absent
- * world.components.setEntityData(positionComponent, entity1, { x: 10, y: 20 });
- * world.components.setEntityData(positionComponent, entity1, { x: 15 }); // partial; y kept
+ * world.components.readDataInto(positionComponent, entity1, out); // zero-alloc; false when absent
+ * world.components.setData(positionComponent, entity1, { x: 10, y: 20 });
+ * world.components.setData(positionComponent, entity1, { x: 15 }); // partial; y kept
  * console.log(x, soft, data, out);
  * ```
  *
@@ -358,11 +358,11 @@
  * const world = new World({ capacity: 256, components: [position] });
  * await world.init();
  * const entity = world.entities.createOrThrow();
- * world.components.addToEntity(position, entity, { x: 1, y: 2 });
+ * world.components.add(position, entity, { x: 1, y: 2 });
  *
  * // A save holds entities, generations, ownership, values, archetype order and the open window.
  * const base = saveWorld(world);
- * world.components.setEntityData(position, entity, { x: 5, y: 6 });
+ * world.components.setData(position, entity, { x: 5, y: 6 });
  * const next = saveWorld(world);
  *
  * // Load replaces the world's state with the save.

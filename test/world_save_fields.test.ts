@@ -134,7 +134,7 @@ function populate(world: World, random: Rng): Entity[] {
     live.push(e);
     const roll = random() % 5;
     if (roll !== 0) {
-      world.components.addToEntity(unit, e, {
+      world.components.add(unit, e, {
         hp: random() % 1000,
         label: TEXTS[random() % TEXTS.length],
         alive: (random() & 1) === 1,
@@ -144,16 +144,16 @@ function populate(world: World, random: Rng): Entity[] {
         target: live.length > 1 ? live[random() % (live.length - 1)] : null,
       } as never);
     }
-    if (roll >= 3) world.components.addToEntity(name, e, { text: TEXTS[random() % TEXTS.length] } as never);
+    if (roll >= 3) world.components.add(name, e, { text: TEXTS[random() % TEXTS.length] } as never);
   }
   const values = [1.5, Number.NaN, -0, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY];
   for (let i = 0; i < 4; i++) {
-    world.components.addToEntity(boss, live[i * 3]!, { title: `boss ${i}`, box: { value: values[i]! } } as never);
+    world.components.add(boss, live[i * 3]!, { title: `boss ${i}`, box: { value: values[i]! } } as never);
   }
   // Free a few slots and move ownership around so owner order differs from slot order.
   for (const e of [live[5]!, live[11]!, live[17]!]) world.entities.destroy(e);
-  world.components.removeFromEntity(boss, live[3]!);
-  world.components.addToEntity(boss, live[20]!, { title: "late", box: { value: values[4]! } } as never);
+  world.components.remove(boss, live[3]!);
+  world.components.add(boss, live[20]!, { title: "late", box: { value: values[4]! } } as never);
   return live.filter((e) => world.entities.isActive(e));
 }
 
@@ -165,7 +165,7 @@ function observe(world: World): unknown {
     const rows: unknown[] = [];
     for (const e of Array.from(world.components.getOwners(type))!) {
       const data = {
-        ...(world.components.getEntityDataOrThrow(type as Component<never>, e as Entity) as unknown as object),
+        ...(world.components.getDataOrThrow(type as Component<never>, e as Entity) as unknown as object),
       } as Record<string, unknown>;
       if (data["mesh"] instanceof Mesh) data["mesh"] = ["mesh", ...(data["mesh"] as Mesh).vertices];
       const box = data["box"] as { value: number } | undefined;
@@ -210,11 +210,11 @@ Deno.test("decoded objects are fresh values, and null objects load as null witho
   loadWorld(loaded, bytes);
   assertStrictEquals(log.decoded, 1, "decode runs once per non-null object per load");
   const loadedUnit = component(loaded, "unit") as Component<never>;
-  const restored = (loaded.components.getEntityDataOrThrow(loadedUnit, a) as { mesh: Mesh }).mesh;
+  const restored = (loaded.components.getDataOrThrow(loadedUnit, a) as { mesh: Mesh }).mesh;
   assert(restored instanceof Mesh && restored !== mesh, "a decoded object is a new instance");
   assertEquals(restored.vertices, [1, 2, 3], "decoded contents");
   assertStrictEquals(
-    (loaded.components.getEntityDataOrThrow(loadedUnit, b) as { mesh: unknown }).mesh,
+    (loaded.components.getDataOrThrow(loadedUnit, b) as { mesh: unknown }).mesh,
     null,
     "null kept",
   );
@@ -234,7 +234,7 @@ Deno.test("an encode result of null loads as null", async () => {
   const loaded = await worldOf(list());
   loadWorld(loaded, saveWorld(source));
   assertStrictEquals(
-    (loaded.components.getEntityDataOrThrow(component(loaded, "maybe") as Component<never>, e) as { value: unknown })
+    (loaded.components.getDataOrThrow(component(loaded, "maybe") as Component<never>, e) as { value: unknown })
       .value,
     null,
     "decode is not called for an encoded null",
@@ -272,10 +272,10 @@ Deno.test("a throwing decode hook leaves the world untouched", async () => {
   const before = saveWorld(target);
   const beforeValues = observe(target);
   targetLog.poison = JSON.stringify(
-    (source.components.getEntityDataOrThrow(
+    (source.components.getDataOrThrow(
       component(source, "unit") as Component<never>,
       Array.from(source.components.getOwners(component(source, "unit")))!.find((e) =>
-        (source.components.getEntityDataOrThrow(component(source, "unit") as Component<never>, e as Entity) as {
+        (source.components.getDataOrThrow(component(source, "unit") as Component<never>, e as Entity) as {
           mesh: unknown;
         }).mesh !== null
       )! as Entity,
@@ -419,10 +419,10 @@ Deno.test("a loaded world keeps behaving like the saved one under the same opera
       const e = live[random() % live.length]!;
       if (!world.entities.isActive(e)) continue;
       if (op === 1) world.entities.destroy(e);
-      else if (op === 2) world.components.addToEntity(name, e, { text: `n${i}` } as never);
-      else if (op === 3) world.components.removeFromEntity(unit, e);
-      else if (world.components.entityHas(unit, e)) {
-        world.components.setEntityData(unit, e, { label: `l${i}`, mesh: new Mesh([i]) } as never);
+      else if (op === 2) world.components.add(name, e, { text: `n${i}` } as never);
+      else if (op === 3) world.components.remove(unit, e);
+      else if (world.components.has(unit, e)) {
+        world.components.setData(unit, e, { label: `l${i}`, mesh: new Mesh([i]) } as never);
       }
     }
   }
@@ -525,16 +525,16 @@ Deno.test("saves x field types: bool, enum and entity fields round-trip into a f
   loadWorld(loaded, bytes);
   const loadedUnit = loaded.components.getInstance("unit")!.type as typeof unit;
   assertEquals(
-    loaded.components.getEntityDataOrThrow(loadedUnit, a),
+    loaded.components.getDataOrThrow(loadedUnit, a),
     { hp: 3, alive: true, state: "run", target },
     "Live values and live ref restored",
   );
   assertEquals(
-    loaded.components.getEntityDataOrThrow(loadedUnit, b).target,
+    loaded.components.getDataOrThrow(loadedUnit, b).target,
     null,
     "A ref to a dead entity still reads null",
   );
-  assertEquals(loaded.components.getEntityDataOrThrow(loadedUnit, b).state, "dead", "Enum label restored");
+  assertEquals(loaded.components.getDataOrThrow(loadedUnit, b).state, "dead", "Enum label restored");
 });
 
 Deno.test("saves x field types: the layout records field tags", async () => {

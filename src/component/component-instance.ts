@@ -18,8 +18,8 @@ import type { Component } from "./component.ts";
  * Values are read and written at one of three tiers:
  * - (a) hot path: `instance.storage.partitions[key][slot]`, raw and unguarded;
  * - (b) guarded cursor: `instance.proxy`, or `instance.get` / `instance.set` for one field by entity handle;
- * - (c) world-level guarded calls: `world.components.getEntityData`, `getEntityDataOrThrow`, `readEntityDataInto` and
- *   `setEntityData`.
+ * - (c) world-level guarded calls: `world.components.getData`, `getDataOrThrow`, `readDataInto` and
+ *   `setData`.
  */
 export class ComponentInstance<
   TValue extends SchemaOrNull,

@@ -44,7 +44,7 @@ Deno.test("Prefab field defaults: unset fields take each field type's default", 
   const world = await createTestWorld(components);
   const entity = world.entities.instantiateOrThrow(prefab);
   assertEquals(
-    world.components.getEntityDataOrThrow(unit, entity),
+    world.components.getDataOrThrow(unit, entity),
     { ...UNIT_DEFAULTS, hp: 3 },
     "Instance takes field defaults",
   );
@@ -58,14 +58,14 @@ Deno.test("Prefab field defaults: bool, enum and string defaults round-trip and 
   const a = world.entities.instantiateOrThrow(prefab);
   const b = world.entities.createOrThrow([[unit, data]]);
   assertEquals(
-    world.components.getEntityDataOrThrow(unit, a),
-    world.components.getEntityDataOrThrow(unit, b),
+    world.components.getDataOrThrow(unit, a),
+    world.components.getDataOrThrow(unit, b),
     "Matches create(bundle)",
   );
   const list = world.entities.instantiateManyOrThrow(prefab, 3);
   for (let i = 0; i < list.count; i++) {
     assertEquals(
-      world.components.getEntityDataOrThrow(unit, list.entities[i]! as Entity),
+      world.components.getDataOrThrow(unit, list.entities[i]! as Entity),
       { ...UNIT_DEFAULTS, ...data },
       "Bulk instance values",
     );
@@ -92,9 +92,9 @@ Deno.test("Prefab entity-ref defaults must be null; live targets are instantiate
   assertThrows(() => new Prefab({ components: [[unit, { target: other }]] }), ComponentDataError, "override");
   const prefab = new Prefab({ components: [[unit, { target: null }]] });
   const entity = world.entities.instantiateOrThrow(prefab, [[unit, { target: other }]]);
-  assertEquals(world.components.getEntityDataOrThrow(unit, entity).target, other, "Override target is stored");
+  assertEquals(world.components.getDataOrThrow(unit, entity).target, other, "Override target is stored");
   const plain = world.entities.instantiateOrThrow(prefab);
-  assertEquals(world.components.getEntityDataOrThrow(unit, plain).target, null, "Default target is null");
+  assertEquals(world.components.getDataOrThrow(unit, plain).target, null, "Default target is null");
 });
 
 Deno.test("Prefab object fields: an absent value calls create() once per instance", async () => {
@@ -105,7 +105,7 @@ Deno.test("Prefab object fields: an absent value calls create() once per instanc
   assertEquals(created - before, 3, "create() runs once per instance");
   const meshes = new Set<unknown>();
   for (let i = 0; i < list.count; i++) {
-    meshes.add(world.components.getEntityDataOrThrow(created_, list.entities[i]! as Entity).mesh);
+    meshes.add(world.components.getDataOrThrow(created_, list.entities[i]! as Entity).mesh);
   }
   assertEquals(meshes.size, 3, "Each instance owns its own created object");
 });
@@ -116,8 +116,8 @@ Deno.test("Prefab object fields: a given value is cloned per instance when clone
   const world = await createTestWorld(components);
   const a = world.entities.instantiateOrThrow(prefab);
   const b = world.entities.instantiateOrThrow(prefab);
-  const meshA = world.components.getEntityDataOrThrow(cloned, a).mesh!;
-  const meshB = world.components.getEntityDataOrThrow(cloned, b).mesh!;
+  const meshA = world.components.getDataOrThrow(cloned, a).mesh!;
+  const meshB = world.components.getDataOrThrow(cloned, b).mesh!;
   assert(meshA !== template && meshB !== template && meshA !== meshB, "Instances never share the template object");
   assertEquals(meshA.vertices, [1, 2, 3], "Clone copies the template");
   meshA.vertices.push(4);
@@ -139,7 +139,7 @@ Deno.test("Prefab object fields: overrides are stored by reference like create(b
   const before = created;
   const entity = world.entities.instantiateOrThrow(prefab, [[created_, { mesh: given }]]);
   assertStrictEquals(
-    world.components.getEntityDataOrThrow(created_, entity).mesh,
+    world.components.getDataOrThrow(created_, entity).mesh,
     given,
     "Override stored by reference",
   );
@@ -189,6 +189,6 @@ Deno.test("a create() hook that breaks its contract by instantiating does not co
   const entities = listIds(list);
   assertStrictEquals(entities.length, 3, "Outer list holds only its own entities");
   for (const entity of entities) {
-    assert(world.components.entityHas(host, entity as Entity), `Outer entity ${entity} has the prefab component`);
+    assert(world.components.has(host, entity as Entity), `Outer entity ${entity} has the prefab component`);
   }
 });

@@ -17,8 +17,8 @@ async function worldWith(count: number): Promise<{ world: World; query: Query; o
   const entities: Entity[] = [];
   for (let i = 0; i < count; i++) {
     const entity = createEntity(world);
-    world.components.addToEntity(position, entity);
-    if (i % 2 === 0) world.components.addToEntity(tag, entity);
+    world.components.add(position, entity);
+    if (i % 2 === 0) world.components.add(tag, entity);
     entities.push(entity);
   }
   world.refresh();
@@ -131,13 +131,13 @@ Deno.test("removing the queried component while iterating query() visits every e
   const entities: Entity[] = [];
   for (let i = 0; i < 4; i++) {
     const entity = createEntity(world);
-    world.components.addToEntity(position, entity);
+    world.components.add(position, entity);
     entities.push(entity);
   }
   const visited: number[] = [];
   for (const entity of world.entities.query(query)) {
     visited.push(entity);
-    world.components.removeFromEntity(position, entity);
+    world.components.remove(position, entity);
   }
   assertEquals(sorted(visited), sorted(entities), "Every entity visited once");
   assertEquals([...world.entities.query(query)], [], "No members remain");

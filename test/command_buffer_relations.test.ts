@@ -71,7 +71,7 @@ Deno.test("command buffer relate and unrelate accept pending entities at either 
   const [, spawnedParent, spawnedChild] = world.entities.toArray(world.relations.traverse(childOf, root));
   assert(spawnedParent !== undefined && spawnedChild !== undefined, "both spawns joined the hierarchy");
   assertStrictEquals(world.relations.getTarget(childOf, spawnedChild), spawnedParent, "pending -> pending pair");
-  assertStrictEquals(world.components.entityHas(marker, spawnedParent), true, "parent spawn bundle applied");
+  assertStrictEquals(world.components.has(marker, spawnedParent), true, "parent spawn bundle applied");
   assertEquals(world.relations.getData(likes, spawnedChild, root), { weight: 2, rank: 0 }, "pending source with data");
 
   const doomed = commands.spawn();
@@ -150,17 +150,17 @@ Deno.test("command buffer resolves pending entities in field.entity() values", a
   commands.add(node, sibling, { parent: child });
   commands.flush();
   const owners = Array.from(world.components.getOwners(node))!;
-  const byHp = new Map(owners.map((entity) => [world.components.getEntityDataOrThrow(node, entity).hp, entity]));
+  const byHp = new Map(owners.map((entity) => [world.components.getDataOrThrow(node, entity).hp, entity]));
   const spawnedParent = byHp.get(1)!;
   const spawnedChild = byHp.get(2)!;
   assertStrictEquals(
-    world.components.getEntityDataOrThrow(node, spawnedChild).parent,
+    world.components.getDataOrThrow(node, spawnedChild).parent,
     spawnedParent,
     "spawn bundle ref",
   );
   const spawnedSibling = owners.find((entity) => entity !== spawnedParent && entity !== spawnedChild)!;
   assertStrictEquals(
-    world.components.getEntityDataOrThrow(node, spawnedSibling).parent,
+    world.components.getDataOrThrow(node, spawnedSibling).parent,
     spawnedChild,
     "add payload ref",
   );
@@ -171,15 +171,15 @@ Deno.test("command buffer resolves pending entities in field.entity() values", a
   commands.add(node, existing, { parent: later });
   commands.flush();
   assertStrictEquals(
-    world.components.getEntityDataOrThrow(node, spawnedChild).parent,
-    world.components.getEntityDataOrThrow(
+    world.components.getDataOrThrow(node, spawnedChild).parent,
+    world.components.getDataOrThrow(
       node,
       existing,
     ).parent,
     "set and add on live entities resolve the same pending ref",
   );
   assert(
-    world.entities.isActive(world.components.getEntityDataOrThrow(node, existing).parent!),
+    world.entities.isActive(world.components.getDataOrThrow(node, existing).parent!),
     "resolved to the spawn",
   );
   await world.destroy();
@@ -193,7 +193,7 @@ Deno.test("command buffer writes null for pending field refs whose spawn died or
   commands.destroy(killed);
   commands.add(node, holder, { hp: 1, parent: killed });
   commands.flush();
-  assertStrictEquals(world.components.getEntityDataOrThrow(node, holder).parent, null, "spawn destroyed before use");
+  assertStrictEquals(world.components.getDataOrThrow(node, holder).parent, null, "spawn destroyed before use");
   assertThrows(() => commands.add(node, holder, { parent: killed }), ArgumentError, "pending");
   assertThrows(() => commands.add(node, holder, { parent: -1 as never }), ArgumentError, "pending");
   commands.spawn(); // the new epoch has a spawn at the stale handle's index; only the epoch check rejects it
@@ -205,7 +205,7 @@ Deno.test("command buffer writes null for pending field refs whose spawn died or
   commands.add(node, holder, { hp: 2, parent: failed });
   assertThrows(() => commands.flush(), CapacityError, "capacity");
   assertEquals(
-    world.components.getEntityDataOrThrow(node, holder),
+    world.components.getDataOrThrow(node, holder),
     { hp: 2, parent: null },
     "failed spawn ref is null",
   );
@@ -231,8 +231,8 @@ Deno.test("command buffer x relations: relation presence tags are rejected when 
   assertThrows(() => commands.add(childOf, a), ArgumentError, "relation");
   commands.add(node, a, { hp: 9 });
   commands.flush();
-  assert(!world.components.entityHas(childOf, a), "Relation tag not added without a pair");
-  assertEquals(world.components.getEntityDataOrThrow(node, a).hp, 9, "Later commands still applied");
+  assert(!world.components.has(childOf, a), "Relation tag not added without a pair");
+  assertEquals(world.components.getDataOrThrow(node, a).hp, 9, "Later commands still applied");
 });
 
 Deno.test("command buffer instantiate handles work as relation ends and entity-field values", async () => {
@@ -245,7 +245,7 @@ Deno.test("command buffer instantiate handles work as relation ends and entity-f
   const [made, instance] = Array.from(world.entities.getActive()) as [Entity, Entity];
   assertStrictEquals(world.relations.getTarget(childOf, instance), made, "the relation targets the spawned parent");
   assertEquals(
-    world.components.getEntityDataOrThrow(node, instance),
+    world.components.getDataOrThrow(node, instance),
     { hp: 3, parent: made },
     "a pending handle in an override resolves to the new entity",
   );

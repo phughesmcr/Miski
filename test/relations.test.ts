@@ -155,7 +155,7 @@ Deno.test("exclusive relations replace their target and report the change", asyn
 Deno.test("relation presence drives wildcard queries and entered/exited windows", async () => {
   const { world, likes } = await relationWorld();
   const [a, b, c] = spawn(world, 3);
-  world.components.addToEntity(position, a!, { x: 0, y: 0 });
+  world.components.add(position, a!, { x: 0, y: 0 });
   world.refresh();
   const liking = new Query({ all: [position, likes] });
   const notLiking = new Query({ all: [position], none: [likes] });
@@ -165,7 +165,7 @@ Deno.test("relation presence drives wildcard queries and entered/exited windows"
   world.relations.add(likes, a!, c!);
   assertEquals(listIds(world.entities.queryList(liking)), [a], "a matches the wildcard");
   assertEquals(ids(world.entities.queryEntered(liking)), [a], "entered once");
-  assertStrictEquals(world.components.entityHas(likes, a!), true, "entityHas reports the presence tag");
+  assertStrictEquals(world.components.has(likes, a!), true, "has reports the presence tag");
   world.refresh();
 
   world.relations.remove(likes, a!, b!);
@@ -326,13 +326,13 @@ Deno.test("generic component APIs refuse relation presence components", async ()
   const { world, likes } = await relationWorld();
   const [a, b] = spawn(world, 2);
   world.relations.add(likes, a!, b!);
-  assertThrows(() => world.components.addToEntity(likes, b!), ArgumentError, "world.relations");
-  assertThrows(() => world.components.removeFromEntity(likes, a!), ArgumentError, "world.relations");
+  assertThrows(() => world.components.add(likes, b!), ArgumentError, "world.relations");
+  assertThrows(() => world.components.remove(likes, a!), ArgumentError, "world.relations");
   assertThrows(() => world.components.addBundle(b!, [[likes]]), ArgumentError, "world.relations");
   assertThrows(() => world.entities.create([[position, { x: 1, y: 1 }], [likes]]), ArgumentError, "world.relations");
   const list = world.entities.queryList(new Query({ all: [likes] }));
-  assertThrows(() => world.components.removeFromEntities(likes, list), ArgumentError, "world.relations");
-  assertThrows(() => world.components.addToEntities(likes, list), ArgumentError, "world.relations");
+  assertThrows(() => world.components.removeMany(likes, list), ArgumentError, "world.relations");
+  assertThrows(() => world.components.addMany(likes, list), ArgumentError, "world.relations");
   assertStrictEquals(world.entities.getActiveCount(), 2, "the rejected create(bundle) allocated nothing");
   assertEquals(listIds(world.relations.getTargets(likes, a!)), [b], "relation state untouched");
 });
@@ -340,9 +340,9 @@ Deno.test("generic component APIs refuse relation presence components", async ()
 Deno.test("queryList filters a target's sources by a query", async () => {
   const { world, likes } = await relationWorld();
   const [target, a, b, c] = spawn(world, 4);
-  world.components.addToEntity(position, a!, { x: 0, y: 0 });
-  world.components.addToEntity(position, c!, { x: 0, y: 0 });
-  world.components.addToEntity(hidden, c!);
+  world.components.add(position, a!, { x: 0, y: 0 });
+  world.components.add(position, c!, { x: 0, y: 0 });
+  world.components.add(hidden, c!);
   for (const source of [c, b, a]) world.relations.add(likes, source!, target!);
   const visible = new Query({ all: [position], none: [hidden] });
   assertEquals(listIds(world.relations.queryList(likes, target!, visible)), [a], "only visible positioned sources");
@@ -646,21 +646,21 @@ Deno.test("relations x field types: one rollback restores side columns and relat
   world.refresh();
 
   const point = new WorldRollbackScope(world);
-  world.components.setEntityData(unit, child, { label: "changed", target: null, alive: false });
+  world.components.setData(unit, child, { label: "changed", target: null, alive: false });
   world.relations.remove(childOf, child, parent);
   world.relations.add(likes, parent, child);
   world.entities.destroy(parent);
   point.restore();
 
   assertEquals(
-    world.components.getEntityDataOrThrow(unit, child),
+    world.components.getDataOrThrow(unit, child),
     { hp: 2, target: parent, alive: true, label: "child" },
     "Field values restored, including the entity ref to the revived parent",
   );
   assertEquals(world.relations.getTarget(childOf, child), parent, "Relation pair restored");
   assertEquals(world.relations.getTargets(likes, parent).count, 0, "Speculative pair dropped");
   assertEquals(
-    world.components.getEntityDataOrThrow(unit, parent).label,
+    world.components.getDataOrThrow(unit, parent).label,
     "parent",
     "Destroyed entity's side cells restored",
   );
@@ -677,7 +677,7 @@ Deno.test("relations x field types: an entity field reads null after its target 
   world.refresh();
   assertEquals(world.entities.isActive(leaf), false, "Cascade destroyed the child");
   assertEquals(
-    world.components.getEntityDataOrThrow(unit, watcher).target,
+    world.components.getDataOrThrow(unit, watcher).target,
     null,
     "Ref to the cascaded entity reads null",
   );
@@ -690,10 +690,10 @@ Deno.test("relations x field types: a checkpoint restores field columns and rela
   const child = world.entities.createOrThrow([[unit, { label: "a", target: parent }]]);
   world.relations.add(childOf, child, parent);
   const checkpoint = world.captureCheckpoint([child], unit, childOf);
-  world.components.setEntityData(unit, child, { label: "b", target: null });
+  world.components.setData(unit, child, { label: "b", target: null });
   world.relations.remove(childOf, child, parent);
   world.applyCheckpoint(checkpoint);
-  assertEquals(world.components.getEntityDataOrThrow(unit, child).label, "a", "String field restored");
-  assertEquals(world.components.getEntityDataOrThrow(unit, child).target, parent, "Entity field restored");
+  assertEquals(world.components.getDataOrThrow(unit, child).label, "a", "String field restored");
+  assertEquals(world.components.getDataOrThrow(unit, child).target, parent, "Entity field restored");
   assertEquals(world.relations.getTarget(childOf, child), parent, "Relation pair restored");
 });

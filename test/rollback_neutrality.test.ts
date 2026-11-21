@@ -51,12 +51,12 @@ function step(h: Harness, random: Rng, componentLimit: number): void {
   const component = components[random() % componentLimit]!;
   if (op === 2 || op === 3) {
     if (component === position) {
-      world.components.addToEntity(position, entity, { x: random() % 100, y: index });
+      world.components.add(position, entity, { x: random() % 100, y: index });
     } else {
-      world.components.addToEntity(component as (typeof tags)[number], entity);
+      world.components.add(component as (typeof tags)[number], entity);
     }
   } else if (op === 4) {
-    world.components.removeFromEntity(component, entity);
+    world.components.remove(component, entity);
   } else {
     world.refresh();
   }
@@ -82,7 +82,7 @@ function observe(world: World): unknown {
     changed: slots(world.components.getChanged(position)),
     data: slots(world.components.getOwners(position)).map((slot) => {
       const entity = Array.from(world.entities.getActive()).find((candidate) => entityIndex(candidate) === slot)!;
-      return world.components.getEntityDataOrThrow(position, entity);
+      return world.components.getDataOrThrow(position, entity);
     }),
   };
 }
@@ -184,8 +184,8 @@ Deno.test("rollback restore keeps query iteration order for reordered archetypes
   const a = tagComponent("a");
   const world = await createTestWorld([a], 16);
   const entities = [0, 1, 2].map(() => world.entities.createOrThrow([[a]]));
-  world.components.removeFromEntity(a, entities[0]!);
-  world.components.addToEntity(a, entities[0]!);
+  world.components.remove(a, entities[0]!);
+  world.components.add(a, entities[0]!);
   world.refresh();
 
   const query = new Query({ all: [a] });

@@ -29,8 +29,8 @@ Deno.test("instance.set writes without moving the shared proxy cursor", async ()
   const instance = world.components.getInstanceOrThrow(mixed);
   const a = createEntity(world);
   const b = createEntity(world);
-  world.components.addToEntity(mixed, a, { x: 1, alive: false, label: "a" });
-  world.components.addToEntity(mixed, b, { x: 2, alive: false, label: "b" });
+  world.components.add(mixed, a, { x: 1, alive: false, label: "a" });
+  world.components.add(mixed, b, { x: 2, alive: false, label: "b" });
   const proxy = instance.proxy!;
   proxy.entity = a;
 
@@ -48,8 +48,8 @@ Deno.test("instance.set writes without moving the shared proxy cursor", async ()
   // The cursor kept entity mode, so its ownership guard still applies.
   assertEquals(proxy.x, 1, "proxy still reads a");
   assertEquals(proxy.label, "a", "proxy still reads a's side column");
-  assertEquals(world.components.getEntityDataOrThrow(mixed, b), { x: 10, alive: false, label: "bea" }, "b was written");
-  world.components.removeFromEntity(mixed, a);
+  assertEquals(world.components.getDataOrThrow(mixed, b), { x: 10, alive: false, label: "bea" }, "b was written");
+  world.components.remove(mixed, a);
   assertThrows(() => proxy.x, ComponentOwnershipError, "does not own");
 
   // Rejected writes leave the cursor alone too.
@@ -70,7 +70,7 @@ Deno.test("instance.set marks owners changed and bump the revision once per real
   const world = await createTestWorld([mixed]);
   const instance = world.components.getInstanceOrThrow(mixed);
   const a = createEntity(world);
-  world.components.addToEntity(mixed, a, { x: 1, alive: false, label: "a" });
+  world.components.add(mixed, a, { x: 1, alive: false, label: "a" });
   const before = instance.revision;
   instance.set(a, "x", 1);
   assertEquals(instance.revision, before, "unchanged value does not bump the revision");
@@ -93,7 +93,7 @@ Deno.test("instance.set covers enum, entity and object columns; non-owner slot w
   const a = createEntity(world);
   const t = createEntity(world);
   const free = createEntity(world);
-  world.components.addToEntity(rich, a, { state: "idle", target: null, mesh: { id: 0 } });
+  world.components.add(rich, a, { state: "idle", target: null, mesh: { id: 0 } });
   instance.proxy!.entity = a;
   const mesh = { id: 1 };
   instance.set(a, "state", "run");

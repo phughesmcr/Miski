@@ -69,27 +69,27 @@ Deno.test("command buffer add, set and remove mirror the direct APIs", async () 
   commands.add(position, entity, { x: 1, y: 2 });
   commands.add(tag, entity);
   commands.flush();
-  assertEquals(world.components.getEntityDataOrThrow(position, entity), { x: 1, y: 2 }, "add with data");
-  assert(world.components.entityHas(tag, entity), "add tag");
+  assertEquals(world.components.getDataOrThrow(position, entity), { x: 1, y: 2 }, "add with data");
+  assert(world.components.has(tag, entity), "add tag");
 
   commands.add(position, entity, { x: 5 });
   commands.flush();
   assertEquals(
-    world.components.getEntityDataOrThrow(position, entity),
+    world.components.getDataOrThrow(position, entity),
     { x: 5, y: 2 },
     "add upserts and keeps omitted",
   );
 
   commands.set(position, entity, { y: 9 });
   commands.flush();
-  assertEquals(world.components.getEntityDataOrThrow(position, entity), { x: 5, y: 9 }, "set keeps omitted fields");
+  assertEquals(world.components.getDataOrThrow(position, entity), { x: 5, y: 9 }, "set keeps omitted fields");
 
   commands.remove(position, entity);
   commands.remove(tag, entity);
   commands.remove(velocity, entity);
   commands.flush();
-  assert(!world.components.entityHas(position, entity), "remove data");
-  assert(!world.components.entityHas(tag, entity), "remove tag");
+  assert(!world.components.has(position, entity), "remove data");
+  assert(!world.components.has(tag, entity), "remove tag");
   await world.destroy();
 });
 
@@ -102,16 +102,16 @@ Deno.test("command buffer new ownership zeroes omitted fields even after other p
   commands.add(position, b, { y: 2 });
   commands.add(position, c);
   commands.flush();
-  assertEquals(world.components.getEntityDataOrThrow(position, a), { x: 1, y: 0 }, "a");
-  assertEquals(world.components.getEntityDataOrThrow(position, b), { x: 0, y: 2 }, "b keeps no stale x");
-  assertEquals(world.components.getEntityDataOrThrow(position, c), { x: 0, y: 0 }, "c");
+  assertEquals(world.components.getDataOrThrow(position, a), { x: 1, y: 0 }, "a");
+  assertEquals(world.components.getDataOrThrow(position, b), { x: 0, y: 2 }, "b keeps no stale x");
+  assertEquals(world.components.getDataOrThrow(position, c), { x: 0, y: 0 }, "c");
   await world.destroy();
 });
 
 Deno.test("command buffer set leaves omitted fields untouched, even values the checked API would reject", async () => {
   const { world, commands } = await setup();
   const entity = createEntity(world);
-  world.components.addToEntity(position, entity, { x: 1, y: 2 });
+  world.components.add(position, entity, { x: 1, y: 2 });
   const storage = world.components.getInstance(position)!.storage!;
   storage.partitions.y[entityIndex(entity)] = Number.POSITIVE_INFINITY;
   commands.set(position, entity, { x: 3 });
@@ -124,7 +124,7 @@ Deno.test("command buffer set leaves omitted fields untouched, even values the c
 Deno.test("command buffer marks changed like the direct APIs", async () => {
   const { world, commands } = await setup();
   const entity = createEntity(world);
-  world.components.addToEntity(position, entity, { x: 1, y: 1 });
+  world.components.add(position, entity, { x: 1, y: 1 });
   world.refresh();
   commands.set(position, entity, { x: 2 });
   commands.flush();
@@ -139,7 +139,7 @@ Deno.test("command buffer copies payloads when queued", async () => {
   commands.add(position, entity, data);
   data.x = 100;
   commands.flush();
-  assertEquals(world.components.getEntityDataOrThrow(position, entity), { x: 1, y: 2 }, "queued values are kept");
+  assertEquals(world.components.getDataOrThrow(position, entity), { x: 1, y: 2 }, "queued values are kept");
   await world.destroy();
 });
 
@@ -157,7 +157,7 @@ Deno.test("command buffer spawn creates entities in order with bundles, and pend
   const [first] = Array.from(world.entities.query(query)) as Entity[];
   assert(first !== undefined, "bundle spawn matches its query");
   assertEquals(
-    world.components.getEntityDataOrThrow(position, first),
+    world.components.getDataOrThrow(position, first),
     { x: 1, y: 7 },
     "later commands apply to the spawn",
   );
@@ -233,7 +233,7 @@ Deno.test("command buffer flush failure applies the remaining commands, then ret
   const nonOwner = createEntity(world);
   const otherNonOwner = createEntity(world);
   const doomed = createEntity(world);
-  world.components.addToEntity(position, owner, { x: 0, y: 0 });
+  world.components.add(position, owner, { x: 0, y: 0 });
   commands.set(position, owner, { x: 1 });
   commands.set(position, nonOwner, { x: 2 });
   commands.set(position, owner, { x: 3 });
@@ -250,13 +250,13 @@ Deno.test("command buffer flush failure applies the remaining commands, then ret
   const message = (caught as Error).message;
   assert(message.includes("set") && message.includes("position"), "message names the command and component");
   assert(message.includes(`entity ${nonOwner}`), "the first failure is the one rethrown");
-  assertStrictEquals(world.components.getEntityDataOrThrow(position, owner).x, 3, "commands after the failure applied");
-  assert(world.components.entityHas(tag, owner), "later add applied");
+  assertStrictEquals(world.components.getDataOrThrow(position, owner).x, 3, "commands after the failure applied");
+  assert(world.components.has(tag, owner), "later add applied");
   assert(!world.entities.isActive(doomed), "later destroy applied");
   assertStrictEquals(commands.pendingCount, 0, "buffer is empty");
   commands.set(position, owner, { x: 5 });
   commands.flush();
-  assertStrictEquals(world.components.getEntityDataOrThrow(position, owner).x, 5, "buffer is reusable");
+  assertStrictEquals(world.components.getDataOrThrow(position, owner).x, 5, "buffer is reusable");
   await world.destroy();
 });
 
@@ -296,7 +296,7 @@ Deno.test("command buffer works with capped sparse components", async () => {
   commands.flush();
   commands.add(capped, entities[2]!, { y: 5 });
   commands.flush();
-  assertEquals(world.components.getEntityDataOrThrow(capped, entities[2]!), { x: 1, y: 5 }, "sparse upsert keeps x");
+  assertEquals(world.components.getDataOrThrow(capped, entities[2]!), { x: 1, y: 5 }, "sparse upsert keeps x");
   await world.destroy();
 });
 
@@ -309,7 +309,7 @@ Deno.test("command buffer grows past its initial capacity", async () => {
   assertStrictEquals(world.entities.getActiveCount(), 3000, "all spawned");
   const owners = Array.from(world.components.getOwners(position))!;
   assertEquals(
-    world.components.getEntityDataOrThrow(position, owners[2999]!),
+    world.components.getDataOrThrow(position, owners[2999]!),
     { x: 2999, y: -2999 },
     "last payload kept",
   );
@@ -344,7 +344,7 @@ Deno.test("command buffer handles partial payloads on the widest masked and on w
     commands.add(wide, entity, { f0: 1, [`f${last}`]: 2 });
     commands.flush();
     assertEquals(
-      world.components.getEntityDataOrThrow(wide, entity),
+      world.components.getDataOrThrow(wide, entity),
       fields(count, { 0: 1, [last]: 2 }),
       `${count}: add`,
     );
@@ -353,7 +353,7 @@ Deno.test("command buffer handles partial payloads on the widest masked and on w
     commands.add(wide, entity, { [`f${last}`]: 4 });
     commands.flush();
     assertEquals(
-      world.components.getEntityDataOrThrow(wide, entity),
+      world.components.getDataOrThrow(wide, entity),
       fields(count, { 0: 1, 1: 3, [last]: 4 }),
       `${count}: set and add keep omitted fields`,
     );
@@ -363,7 +363,7 @@ Deno.test("command buffer handles partial payloads on the widest masked and on w
     commands.flush();
     const spawned = Array.from(world.entities.query(new Query({ all: [wide] }))).find((e) => e !== entity)!;
     assertEquals(
-      world.components.getEntityDataOrThrow(wide, spawned),
+      world.components.getDataOrThrow(wide, spawned),
       fields(count, { 2: 5 }),
       `${count}: spawned add`,
     );
@@ -373,7 +373,7 @@ Deno.test("command buffer handles partial payloads on the widest masked and on w
     commands.add(wide, entity, { f3: 6 });
     commands.flush();
     assertEquals(
-      world.components.getEntityDataOrThrow(wide, entity),
+      world.components.getDataOrThrow(wide, entity),
       fields(count, { 3: 6 }),
       `${count}: re-add zeroes`,
     );
@@ -393,11 +393,11 @@ Deno.test("command buffer passes non-numeric schema fields through a side column
   const commands = new CommandBuffer(world);
   const entity = createEntity(world);
   const passed: Record<string, unknown>[] = [];
-  const addToEntity = world.components.addToEntity;
-  Object.defineProperty(world.components, "addToEntity", {
+  const add = world.components.add;
+  Object.defineProperty(world.components, "add", {
     value: (component: never, target: never, data?: Record<string, unknown>) => {
       if (data !== undefined) passed.push(data);
-      return (addToEntity as (...args: unknown[]) => unknown)(component, target, data);
+      return (add as (...args: unknown[]) => unknown)(component, target, data);
     },
     configurable: true,
   });
@@ -406,7 +406,7 @@ Deno.test("command buffer passes non-numeric schema fields through a side column
   commands.add(point, entity, { x: "eight" } as never);
   assertStrictEquals(commands.pendingCount, 2, "non-numeric values are not validated when queued");
   assertThrows(() => commands.flush(), ComponentDataError, "point");
-  assertEquals(world.components.getEntityDataOrThrow(point, entity), { x: 7, y: 2 }, "side value written by the world");
+  assertEquals(world.components.getDataOrThrow(point, entity), { x: 7, y: 2 }, "side value written by the world");
   assertStrictEquals(passed.length, 2, "both commands reached the world");
   assertStrictEquals(passed[1]!["x"], undefined, "the reused data object releases side values after flush");
 
@@ -414,7 +414,7 @@ Deno.test("command buffer passes non-numeric schema fields through a side column
   commands.add(point, spawned, { x: 4 });
   commands.flush();
   const owners = Array.from(world.components.getOwners(point))!;
-  assertEquals(world.components.getEntityDataOrThrow(point, owners[owners.length - 1]!), { x: 4, y: 0 }, "spawn path");
+  assertEquals(world.components.getDataOrThrow(point, owners[owners.length - 1]!), { x: 4, y: 0 }, "spawn path");
   await world.destroy();
 });
 
@@ -426,7 +426,7 @@ Deno.test("command buffer x field types: every field kind applies at flush", asy
   const mesh = new Mesh([3]);
   commands.add(unit, entity, { hp: 4, alive: true, state: "run", target: other, label: "x", mesh });
   commands.flush();
-  const data = world.components.getEntityDataOrThrow(unit, entity);
+  const data = world.components.getDataOrThrow(unit, entity);
   assertEquals(
     { ...data, mesh: undefined },
     { hp: 4, alive: true, state: "run", target: other, label: "x", mesh: undefined },
@@ -435,8 +435,8 @@ Deno.test("command buffer x field types: every field kind applies at flush", asy
   assertStrictEquals(data.mesh, mesh, "Object fields are passed by reference");
   commands.set(unit, entity, { label: "y", alive: false });
   commands.flush();
-  assertEquals(world.components.getEntityDataOrThrow(unit, entity).label, "y", "set applies side fields");
-  assertEquals(world.components.getEntityDataOrThrow(unit, entity).alive, false, "set applies bool fields");
+  assertEquals(world.components.getDataOrThrow(unit, entity).label, "y", "set applies side fields");
+  assertEquals(world.components.getDataOrThrow(unit, entity).alive, false, "set applies bool fields");
 });
 
 Deno.test("command buffer x field types: an entity ref whose target died before flush is written as null", async () => {
@@ -450,11 +450,11 @@ Deno.test("command buffer x field types: an entity ref whose target died before 
   commands.add(unit, b, { hp: 2, target });
   commands.flush(); // must not throw
   assertEquals(
-    world.components.getEntityDataOrThrow(unit, a).target,
+    world.components.getDataOrThrow(unit, a).target,
     null,
     "Ref killed later in the same flush reads null",
   );
-  assertEquals(world.components.getEntityDataOrThrow(unit, b), {
+  assertEquals(world.components.getDataOrThrow(unit, b), {
     hp: 2,
     alive: false,
     state: "idle",
@@ -463,7 +463,7 @@ Deno.test("command buffer x field types: an entity ref whose target died before 
     mesh: null,
   }, "Dead target written as null; the rest of the payload applies");
   // Direct guarded writes still reject dead handles.
-  assertThrows(() => world.components.setEntityData(unit, a, { target }), EntityNotFoundError, "");
+  assertThrows(() => world.components.setData(unit, a, { target }), EntityNotFoundError, "");
 });
 
 Deno.test("command buffer x field types: a bad field value drains the queue, then rethrows", async () => {
@@ -474,8 +474,8 @@ Deno.test("command buffer x field types: a bad field value drains the queue, the
   commands.add(unit, a, { state: "fly" as "idle" });
   commands.add(unit, b, { label: "ok" });
   assertThrows(() => commands.flush(), ComponentDataError, "unit");
-  assertEquals(world.components.entityHas(unit, a), false, "Failed command left its entity unchanged");
-  assertEquals(world.components.getEntityDataOrThrow(unit, b).label, "ok", "Later commands still applied");
+  assertEquals(world.components.has(unit, a), false, "Failed command left its entity unchanged");
+  assertEquals(world.components.getDataOrThrow(unit, b).label, "ok", "Later commands still applied");
   assertStrictEquals(commands.pendingCount, 0, "Queue drained");
 });
 
@@ -488,8 +488,8 @@ Deno.test("command buffer x prefabs: spawned bundles and prefab instances agree 
   const spawned = Array.from(world.components.getOwners(unit))![0]!;
   const instance = world.entities.instantiateOrThrow(prefab);
   assertEquals(
-    world.components.getEntityDataOrThrow(unit, spawned),
-    world.components.getEntityDataOrThrow(unit, instance),
+    world.components.getDataOrThrow(unit, spawned),
+    world.components.getDataOrThrow(unit, instance),
     "Same values either way",
   );
 });
@@ -508,14 +508,14 @@ Deno.test("command buffer instantiate creates prefab instances at flush, in queu
   const created = Array.from(world.entities.getActive());
   assertStrictEquals(created.length, 3, "every spawn and instance applied");
   const [, made, bare] = created as [Entity, Entity, Entity];
-  assertEquals(world.components.getEntityDataOrThrow(position, made), { x: 4, y: 5 }, "overrides, then the set");
-  assertEquals(world.components.getEntityDataOrThrow(velocity, made), { x: 3, y: 0 }, "an extra component");
-  assert(world.components.entityHas(tag, made) && world.components.entityHas(tag, bare), "prefab tags applied");
-  assertEquals(world.components.getEntityDataOrThrow(position, bare), { x: 1, y: 2 }, "prefab defaults");
+  assertEquals(world.components.getDataOrThrow(position, made), { x: 4, y: 5 }, "overrides, then the set");
+  assertEquals(world.components.getDataOrThrow(velocity, made), { x: 3, y: 0 }, "an extra component");
+  assert(world.components.has(tag, made) && world.components.has(tag, bare), "prefab tags applied");
+  assertEquals(world.components.getDataOrThrow(position, bare), { x: 1, y: 2 }, "prefab defaults");
   const direct = world.entities.instantiateOrThrow(mover, [[position, { y: 5 }], [velocity, { x: 3 }]]);
   assertEquals(
-    world.components.getEntityDataOrThrow(velocity, direct),
-    world.components.getEntityDataOrThrow(velocity, made),
+    world.components.getDataOrThrow(velocity, direct),
+    world.components.getDataOrThrow(velocity, made),
     "the buffered and direct instances agree",
   );
   await world.destroy();

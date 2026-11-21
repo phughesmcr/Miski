@@ -11,7 +11,7 @@ Deno.test("query aliases use own keys and normalized metadata stays immutable", 
   const included = new Component({ name: "included", schema: { x: Float32Array } });
   const world = await createTestWorld([position, velocity, excluded, included], 8);
   const entity = world.entities.createOrThrow();
-  world.components.addToEntity(position, entity, { x: 1, y: 2 });
+  world.components.add(position, entity, { x: 1, y: 2 });
   for (const key of ["constructor", "toString", "__proto__"]) {
     const query = Query.compose([new Query({ all: { [key]: position } })]);
     const bindings = world.components.query(query);
@@ -182,10 +182,10 @@ Deno.test("query any and none clauses match through component bitfields", async 
   const velocityEntity = createEntity(world);
   const disabledEntity = createEntity(world);
 
-  world.components.addToEntity(position, positionEntity);
-  world.components.addToEntity(velocity, velocityEntity);
-  world.components.addToEntity(position, disabledEntity);
-  world.components.addToEntity(disabled, disabledEntity);
+  world.components.add(position, positionEntity);
+  world.components.add(velocity, velocityEntity);
+  world.components.add(position, disabledEntity);
+  world.components.add(disabled, disabledEntity);
 
   const movable = new Query({ any: [position, velocity], none: [disabled] });
 
@@ -203,7 +203,7 @@ Deno.test("none-only queries include active entities in the root archetype", asy
 
   const rootEntity = createEntity(world);
   const disabledEntity = createEntity(world);
-  world.components.addToEntity(disabled, disabledEntity);
+  world.components.add(disabled, disabledEntity);
 
   const active = new Query({ none: [disabled] });
 
@@ -221,9 +221,9 @@ Deno.test("destroyed entities are removed from archetype membership", async () =
 
   const entity = createEntity(world);
   assertEquals(world.entities.isEmpty(entity), true, "Expected a new componentless entity to be empty");
-  world.components.addToEntity(marker, entity);
+  world.components.add(marker, entity);
   assertEquals(world.entities.isEmpty(entity), false, "Expected an entity with a component not to be empty");
-  world.components.removeFromEntity(marker, entity);
+  world.components.remove(marker, entity);
   world.entities.destroy(entity);
 
   assertEquals(world.entities.isEmpty(entity), false, "Expected destroyed entity to leave root membership");
@@ -239,7 +239,7 @@ Deno.test("query registered after init sees existing matching entities", async (
   const world = await createTestWorld([position], 8);
 
   const entity = createEntity(world);
-  world.components.addToEntity(position, entity, { x: 1, y: 2 });
+  world.components.add(position, entity, { x: 1, y: 2 });
   world.refresh();
 
   const lateQuery = new Query({ all: [position] });

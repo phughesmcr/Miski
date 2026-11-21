@@ -12,8 +12,8 @@ import type { ComponentData, ComponentValue, SchemaOrNull } from "@/types/partit
  * Component values are read and written at one of three tiers:
  * - (a) hot path: `instance.storage.partitions[key][slot]` (raw, unguarded, no change tracking);
  * - (b) guarded cursor: `instance.proxy` (or `instance.get` / `instance.set` for one field);
- * - (c) world-level guarded calls: {@link getEntityData} / {@link getEntityDataOrThrow},
- *   {@link readEntityDataInto} and {@link setEntityData}.
+ * - (c) world-level guarded calls: {@link getData} / {@link getDataOrThrow},
+ *   {@link readDataInto} and {@link setData}.
  *
  * Plain names return `undefined` (or `false`) on an expected failure; `OrThrow` names throw.
  */
@@ -31,8 +31,8 @@ export type WorldComponentAPI = {
    * @throws {NotRegisteredError} - If the component is not registered
    * @throws {EntityNotFoundError} - If the entity is inactive
    */
-  addToEntity(component: Component<null, null> | string, entity: Entity): void;
-  addToEntity<TValue extends Exclude<SchemaOrNull, null>, TStorage extends Exclude<SchemaOrNull, null> = TValue>(
+  add(component: Component<null, null> | string, entity: Entity): void;
+  add<TValue extends Exclude<SchemaOrNull, null>, TStorage extends Exclude<SchemaOrNull, null> = TValue>(
     component: Component<TValue, TStorage>,
     entity: Entity,
     data?: Partial<ComponentValue<TValue>>,
@@ -48,8 +48,8 @@ export type WorldComponentAPI = {
    * @throws {NotRegisteredError} - If the component is not registered
    * @throws {EntityNotFoundError} - If any entity is inactive
    */
-  addToEntities(component: Component<null, null> | string, entities: QueryEntityList): number;
-  addToEntities<TValue extends Exclude<SchemaOrNull, null>, TStorage extends Exclude<SchemaOrNull, null> = TValue>(
+  addMany(component: Component<null, null> | string, entities: QueryEntityList): number;
+  addMany<TValue extends Exclude<SchemaOrNull, null>, TStorage extends Exclude<SchemaOrNull, null> = TValue>(
     component: Component<TValue, TStorage>,
     entities: QueryEntityList,
     data?: Partial<ComponentValue<TValue>>,
@@ -72,7 +72,7 @@ export type WorldComponentAPI = {
    * @returns `true` if the entity has the component, `false` otherwise (including for an inactive entity)
    * @throws {NotRegisteredError} If the component is not registered
    */
-  entityHas<TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
+  has<TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
     component: Component<TValue, TStorage> | string,
     entity: Entity,
   ): boolean;
@@ -87,15 +87,15 @@ export type WorldComponentAPI = {
   ): BorrowedEntityIterator;
   /**
    * Read a copy of an entity's component data (world-level guarded tier). Allocates one object per call; prefer
-   * {@link readEntityDataInto} in loops.
+   * {@link readDataInto} in loops.
    * @param component - The component to read
    * @param entity - The entity to read
    * @returns The decoded data, or `undefined` if the entity is inactive, does not own the component, or the component
    * is a tag component with no data storage
    * @throws {NotRegisteredError} - If the component is not registered
    */
-  getEntityData(component: string, entity: Entity): ComponentData<SchemaOrNull> | undefined;
-  getEntityData<
+  getData(component: string, entity: Entity): ComponentData<SchemaOrNull> | undefined;
+  getData<
     TValue extends SchemaOrNull,
     TStorage extends SchemaOrNull = TValue,
   >(
@@ -112,8 +112,8 @@ export type WorldComponentAPI = {
    * @throws {ComponentDataError} - If the component has no data storage
    * @throws {ComponentOwnershipError} - If the active entity does not own the component
    */
-  getEntityDataOrThrow(component: string, entity: Entity): ComponentData<SchemaOrNull>;
-  getEntityDataOrThrow<
+  getDataOrThrow(component: string, entity: Entity): ComponentData<SchemaOrNull>;
+  getDataOrThrow<
     TValue extends SchemaOrNull,
     TStorage extends SchemaOrNull = TValue,
   >(component: Component<TValue, TStorage>, entity: Entity): ComponentData<TValue>;
@@ -125,12 +125,12 @@ export type WorldComponentAPI = {
    * @returns `true` when data was written; `false` for inactive entities, non-owners, and tag components
    * @throws {NotRegisteredError} - If the component is not registered
    */
-  readEntityDataInto(
+  readDataInto(
     component: string,
     entity: Entity,
     out: Partial<ComponentData<SchemaOrNull>>,
   ): boolean;
-  readEntityDataInto<
+  readDataInto<
     TValue extends SchemaOrNull,
     TStorage extends SchemaOrNull = TValue,
   >(
@@ -201,7 +201,7 @@ export type WorldComponentAPI = {
    * @throws {EntityNotFoundError} - If the entity is inactive
    * @throws {NotRegisteredError} - If the component is not registered
    */
-  removeFromEntity<TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
+  remove<TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
     component: Component<TValue, TStorage> | string,
     entity: Entity,
   ): void;
@@ -215,7 +215,7 @@ export type WorldComponentAPI = {
    * @throws {NotRegisteredError} - If the component is not registered
    * @throws {EntityNotFoundError} - If any entity is inactive
    */
-  removeFromEntities<TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
+  removeMany<TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
     component: Component<TValue, TStorage> | string,
     entities: QueryEntityList,
   ): number;
@@ -229,7 +229,7 @@ export type WorldComponentAPI = {
    * @throws {ComponentDataError} - If the component has no data storage
    * @throws {ComponentOwnershipError} - If the active entity does not own the component
    */
-  setEntityData<TValue extends Exclude<SchemaOrNull, null>, TStorage extends Exclude<SchemaOrNull, null> = TValue>(
+  setData<TValue extends Exclude<SchemaOrNull, null>, TStorage extends Exclude<SchemaOrNull, null> = TValue>(
     component: Component<TValue, TStorage>,
     entity: Entity,
     value: Partial<ComponentValue<TValue>>,

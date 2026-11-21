@@ -8,20 +8,20 @@ Deno.test("a rollback scope left without commit restores the world, even on thro
   const position = vec2Component();
   const world = await createTestWorld([position]);
   const kept = createEntity(world);
-  world.components.addToEntity(position, kept, { x: 1, y: 2 });
+  world.components.add(position, kept, { x: 1, y: 2 });
   const before = ids(Array.from(world.entities.getActive()));
   assertThrows(
     () => {
       using _scope = new WorldRollbackScope(world);
       createEntity(world);
-      world.components.setEntityData(position, kept, { x: 9 });
+      world.components.setData(position, kept, { x: 9 });
       throw new Error("turn failed");
     },
     Error,
     "turn failed",
   );
   assertEquals(ids(Array.from(world.entities.getActive())), before, "Entities are restored");
-  assertEquals(world.components.getEntityDataOrThrow(position, kept), { x: 1, y: 2 }, "Component values are restored");
+  assertEquals(world.components.getDataOrThrow(position, kept), { x: 1, y: 2 }, "Component values are restored");
   await world.destroy();
 });
 

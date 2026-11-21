@@ -36,32 +36,32 @@ Deno.test("a newly owned data component is changed whether or not a payload was 
     const world = await createTestWorld([position, marker], 12);
     const { components, entities } = world;
 
-    // addToEntity: no payload, empty payload, zero payload.
+    // add: no payload, empty payload, zero payload.
     const [a, b, c] = [createEntity(world), createEntity(world), createEntity(world)];
     world.refresh();
-    components.addToEntity(position, a);
-    components.addToEntity(position, b, {});
-    components.addToEntity(position, c, { x: 0 });
-    assertEquals(sorted(ids(components.getChanged(position))), sorted([a, b, c]), `${label}: addToEntity`);
+    components.add(position, a);
+    components.add(position, b, {});
+    components.add(position, c, { x: 0 });
+    assertEquals(sorted(ids(components.getChanged(position))), sorted([a, b, c]), `${label}: add`);
     assertEquals(
-      components.getEntityDataOrThrow(position, a),
+      components.getDataOrThrow(position, a),
       { x: 0, y: 0 },
       `${label}: no-payload add zero-initializes`,
     );
 
     // A no-payload re-add on an existing owner is not a change.
     world.refresh();
-    components.addToEntity(position, a);
+    components.add(position, a);
     assertEquals(ids(components.getChanged(position)), [], `${label}: no-payload re-add on an owner stays quiet`);
 
-    // addToEntities without data.
+    // addMany without data.
     const [d, e] = [createEntity(world), createEntity(world)];
-    components.addToEntity(marker, d);
-    components.addToEntity(marker, e);
+    components.add(marker, d);
+    components.add(marker, e);
     world.refresh();
-    const changedCount = components.addToEntities(position, entities.queryList(new Query({ all: [marker] })));
-    assertStrictEquals(changedCount, 2, `${label}: addToEntities acquires two owners`);
-    assertEquals(sorted(ids(components.getChanged(position))), sorted([d, e]), `${label}: addToEntities`);
+    const changedCount = components.addMany(position, entities.queryList(new Query({ all: [marker] })));
+    assertStrictEquals(changedCount, 2, `${label}: addMany acquires two owners`);
+    assertEquals(sorted(ids(components.getChanged(position))), sorted([d, e]), `${label}: addMany`);
 
     // addBundle without data.
     const f = createEntity(world);
@@ -85,7 +85,7 @@ Deno.test("applyCheckpoint does not truncate an in-progress getOwners iteration"
   const owners: Entity[] = [];
   for (let i = 0; i < 4; i++) {
     const entity = createEntity(world);
-    world.components.addToEntity(position, entity, { x: i });
+    world.components.add(position, entity, { x: i });
     owners.push(entity);
   }
   const checkpoint = world.captureCheckpoint([owners[0]!], position);
@@ -138,10 +138,10 @@ Deno.test("a bundle spawn that fails mid-commit strips already-committed compone
   const reused = createEntity(world);
   assertStrictEquals(entityIndex(reused), 0, "The allocator reuses the rolled-back slot");
   for (const filler of fillers) world.entities.destroy(filler);
-  assert(!world.components.entityHas(capped, reused), "The reused slot does not inherit ownership");
-  assert(!world.components.entityHas(position, reused), "The failing entry did not commit");
-  world.components.addToEntity(capped, reused, { x: 3 });
-  world.components.addToEntity(capped, createEntity(world), { x: 4 });
+  assert(!world.components.has(capped, reused), "The reused slot does not inherit ownership");
+  assert(!world.components.has(position, reused), "The failing entry did not commit");
+  world.components.add(capped, reused, { x: 3 });
+  world.components.add(capped, createEntity(world), { x: 4 });
   assertStrictEquals(ids(world.components.getOwners(capped)).length, 2, "The full owner cap is still available");
 });
 
@@ -205,44 +205,44 @@ Deno.test("instance and world changed marking are ownership guarded and allocati
   );
 
   const out = { dir: 99, extra: 7 };
-  assertStrictEquals(world.components.readEntityDataInto(Facing, owner, out), true, "Expected readInto success");
+  assertStrictEquals(world.components.readDataInto(Facing, owner, out), true, "Expected readInto success");
   assertEquals(out, { dir: 3, extra: 7 }, "Expected readInto to overwrite component keys only");
 
   const unchanged = { dir: 11, extra: 5 };
   assertStrictEquals(
-    world.components.readEntityDataInto(Facing, nonOwner, unchanged),
+    world.components.readDataInto(Facing, nonOwner, unchanged),
     false,
     "Expected non-owner readInto to return false",
   );
   assertEquals(unchanged, { dir: 11, extra: 5 }, "Expected non-owner readInto to leave out unchanged");
   assertStrictEquals(
-    world.components.readEntityDataInto(Facing, inactive, unchanged),
+    world.components.readDataInto(Facing, inactive, unchanged),
     false,
     "Expected inactive readInto to return false",
   );
   assertEquals(unchanged, { dir: 11, extra: 5 }, "Expected inactive readInto to leave out unchanged");
   assertStrictEquals(
-    world.components.readEntityDataInto(Drawable, owner, unchanged),
+    world.components.readDataInto(Drawable, owner, unchanged),
     false,
     "Expected tag readInto to return false",
   );
   assertThrows(
-    () => world.components.readEntityDataInto(unregistered, owner, unchanged),
+    () => world.components.readDataInto(unregistered, owner, unchanged),
     NotRegisteredError,
     "not registered",
   );
 });
 
-Deno.test("setEntityData marks the component changed when storage is updated", async () => {
+Deno.test("setData marks the component changed when storage is updated", async () => {
   const position = vec2Component();
   const world = await createTestWorld([position], 8);
 
   const entity = createEntity(world);
-  world.components.addToEntity(position, entity, { x: 1, y: 2 });
+  world.components.add(position, entity, { x: 1, y: 2 });
   world.refresh();
 
-  world.components.setEntityData(position, entity, { x: 3, y: 4 });
+  world.components.setData(position, entity, { x: 3, y: 4 });
 
-  assertEquals(world.components.getEntityDataOrThrow(position, entity), { x: 3, y: 4 }, "Expected storage to update");
-  assertEquals(ids(world.components.getChanged(position)), [entity], "Expected setEntityData to mark changed");
+  assertEquals(world.components.getDataOrThrow(position, entity), { x: 3, y: 4 }, "Expected storage to update");
+  assertEquals(ids(world.components.getChanged(position)), [entity], "Expected setData to mark changed");
 });

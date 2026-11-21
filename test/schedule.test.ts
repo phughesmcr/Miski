@@ -387,7 +387,7 @@ Deno.test("schedule run refreshes once at the end, like world.frame", async () =
       argCount: 1,
       callback: (_c, _e, ctx: ScheduleContext) => {
         const e = createEntity(ctx.world);
-        ctx.world.components.addToEntity(tag, e);
+        ctx.world.components.add(tag, e);
       },
     }),
     { phase: "spawn" },
@@ -406,7 +406,7 @@ Deno.test("schedule refreshes, discards pending commands, and rethrows when a sy
   const world = await setup();
   const query = new Query({ all: [tag] });
   const victim = createEntity(world);
-  world.components.addToEntity(tag, victim);
+  world.components.add(tag, victim);
   world.refresh();
   const boom = new Error("boom");
   let fail = true;
@@ -419,7 +419,7 @@ Deno.test("schedule refreshes, discards pending commands, and rethrows when a sy
       callback: (_c, _e, ctx: ScheduleContext) => {
         ctx.commands.destroy(victim);
         const spawned = createEntity(ctx.world);
-        ctx.world.components.addToEntity(tag, spawned);
+        ctx.world.components.add(tag, spawned);
         if (fail) throw boom;
       },
     }),
@@ -566,7 +566,7 @@ Deno.test("schedule rethrows a command failure at a phase flush after applying t
   const world = await createTestWorld([position, tag], 16);
   const query = new Query({ all: [tag] });
   const anchor = createEntity(world);
-  world.components.addToEntity(tag, anchor);
+  world.components.add(tag, anchor);
   const nonOwner = createEntity(world);
   const later = createEntity(world);
   world.refresh();
@@ -596,7 +596,7 @@ Deno.test("schedule rethrows a command failure at a phase flush after applying t
   assert(caught instanceof Error && caught.message.includes("CommandBuffer set position"), "flush error rethrown");
   assertEquals(log, ["queuer"], "later phases do not run after a failed flush");
   assertStrictEquals(
-    world.components.getEntityDataOrThrow(position, later).x,
+    world.components.getDataOrThrow(position, later).x,
     2,
     "the rest of the phase's commands applied",
   );
@@ -771,7 +771,7 @@ Deno.test("schedule propagates WorldStateError for a system whose init is pendin
 Deno.test("schedule systems see their query entities", async () => {
   const world = await setup();
   const entity = createEntity(world);
-  world.components.addToEntity(tag, entity);
+  world.components.add(tag, entity);
   const seen: number[][] = [];
   const schedule = new Schedule(world);
   schedule.add(
@@ -913,7 +913,7 @@ Deno.test("schedule resumes identically after a rollback restore between runs pl
         const rows: string[] = [];
         for (let i = 0; i < entities.count; i++) {
           const entity = entities.entities[i]!;
-          const data = ctx.world.components.getEntityDataOrThrow(position, entity);
+          const data = ctx.world.components.getDataOrThrow(position, entity);
           // Slots, not handles: generations keep moving forward across a restore.
           rows.push(`${entities.slots[i]}:${data.x}:${data.y}`);
           if (data.x > 3) ctx.commands.destroy(entity);

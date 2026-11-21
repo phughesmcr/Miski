@@ -13,126 +13,126 @@ import type { Entity } from "../mod.ts";
 import { assert, assertEquals, assertStrictEquals, assertThrows } from "./helpers.ts";
 import { createEntity, createTestWorld, tagComponent, vec2Component } from "./fixtures.ts";
 
-Deno.test("getEntityData returns data for an owning entity", async () => {
+Deno.test("getData returns data for an owning entity", async () => {
   const position = vec2Component();
   const world = await createTestWorld([position]);
   const entity = createEntity(world);
 
-  world.components.addToEntity(position, entity, { x: 3, y: 4 });
+  world.components.add(position, entity, { x: 3, y: 4 });
 
-  assertEquals(world.components.getEntityData(position, entity), { x: 3, y: 4 }, "Expected owner data");
+  assertEquals(world.components.getData(position, entity), { x: 3, y: 4 }, "Expected owner data");
 });
 
-Deno.test("getEntityData returns undefined instead of throwing for non-owners", async () => {
+Deno.test("getData returns undefined instead of throwing for non-owners", async () => {
   const position = vec2Component();
   const world = await createTestWorld([position]);
   const entity = createEntity(world);
 
-  assertStrictEquals(world.components.getEntityData(position, entity), undefined, "Expected undefined for non-owner");
+  assertStrictEquals(world.components.getData(position, entity), undefined, "Expected undefined for non-owner");
 });
 
-Deno.test("getEntityData returns undefined for inactive entities", async () => {
+Deno.test("getData returns undefined for inactive entities", async () => {
   const position = vec2Component();
   const world = await createTestWorld([position]);
   const entity = createEntity(world);
 
-  world.components.addToEntity(position, entity, { x: 1, y: 2 });
+  world.components.add(position, entity, { x: 1, y: 2 });
   world.entities.destroy(entity);
 
   assertStrictEquals(
-    world.components.getEntityData(position, entity),
+    world.components.getData(position, entity),
     undefined,
     "Expected undefined for inactive entity",
   );
 });
 
-Deno.test("getEntityData returns undefined for tag components", async () => {
+Deno.test("getData returns undefined for tag components", async () => {
   const renderable = tagComponent("renderable");
   const world = await createTestWorld([renderable]);
   const entity = createEntity(world);
 
-  world.components.addToEntity(renderable, entity);
+  world.components.add(renderable, entity);
 
   assertStrictEquals(
-    world.components.getEntityData(renderable, entity),
+    world.components.getData(renderable, entity),
     undefined,
     "Expected undefined for tag component",
   );
 });
 
-Deno.test("getEntityData still throws for unregistered components", async () => {
+Deno.test("getData still throws for unregistered components", async () => {
   const position = vec2Component();
   const unregistered = vec2Component("unregistered");
   const world = await createTestWorld([position]);
   const entity = createEntity(world);
 
   assertThrows(
-    () => world.components.getEntityData(unregistered, entity),
+    () => world.components.getData(unregistered, entity),
     NotRegisteredError,
     "not registered",
   );
 });
 
-Deno.test("addToEntity upserts data for entities that already own the component", async () => {
+Deno.test("add upserts data for entities that already own the component", async () => {
   const position = vec2Component();
   const world = await createTestWorld([position]);
   const entity = createEntity(world);
 
-  world.components.addToEntity(position, entity, { x: 1, y: 2 });
-  world.components.addToEntity(position, entity, { y: 5 });
+  world.components.add(position, entity, { x: 1, y: 2 });
+  world.components.add(position, entity, { y: 5 });
 
-  assertEquals(world.components.getEntityDataOrThrow(position, entity), { x: 1, y: 5 }, "Expected merged upsert data");
+  assertEquals(world.components.getDataOrThrow(position, entity), { x: 1, y: 5 }, "Expected merged upsert data");
 });
 
-Deno.test("addToEntities reports zero ownership changes for a pure data upsert", async () => {
+Deno.test("addMany reports zero ownership changes for a pure data upsert", async () => {
   const position = vec2Component();
   const world = await createTestWorld([position]);
   const first = createEntity(world);
   const second = createEntity(world);
 
-  world.components.addToEntity(position, first, { x: 1, y: 1 });
-  world.components.addToEntity(position, second, { x: 2, y: 2 });
+  world.components.add(position, first, { x: 1, y: 1 });
+  world.components.add(position, second, { x: 2, y: 2 });
 
-  const changed = world.components.addToEntities(position, {
+  const changed = world.components.addMany(position, {
     count: 2,
     entities: [first, second],
     slots: [first, second],
   }, { x: 9 });
 
   assertStrictEquals(changed, 0, "Expected no ownership changes");
-  assertEquals(world.components.getEntityDataOrThrow(position, first), { x: 9, y: 1 }, "Expected first entity upsert");
+  assertEquals(world.components.getDataOrThrow(position, first), { x: 9, y: 1 }, "Expected first entity upsert");
   assertEquals(
-    world.components.getEntityDataOrThrow(position, second),
+    world.components.getDataOrThrow(position, second),
     { x: 9, y: 2 },
     "Expected second entity upsert",
   );
 });
 
-Deno.test("setEntityData applies partial updates and keeps omitted keys", async () => {
+Deno.test("setData applies partial updates and keeps omitted keys", async () => {
   const position = vec2Component();
   const world = await createTestWorld([position]);
   const entity = createEntity(world);
 
-  world.components.addToEntity(position, entity, { x: 3, y: 4 });
-  world.components.setEntityData(position, entity, { x: 9 });
+  world.components.add(position, entity, { x: 3, y: 4 });
+  world.components.setData(position, entity, { x: 9 });
 
-  assertEquals(world.components.getEntityDataOrThrow(position, entity), { x: 9, y: 4 }, "Expected partial update");
+  assertEquals(world.components.getDataOrThrow(position, entity), { x: 9, y: 4 }, "Expected partial update");
 });
 
-Deno.test("setEntityData rejects keys explicitly set to undefined", async () => {
+Deno.test("setData rejects keys explicitly set to undefined", async () => {
   const position = vec2Component();
   const world = await createTestWorld([position]);
   const entity = createEntity(world);
 
-  world.components.addToEntity(position, entity, { x: 3, y: 4 });
+  world.components.add(position, entity, { x: 3, y: 4 });
   assertThrows(
-    () => world.components.setEntityData(position, entity, { x: undefined, y: 7 }),
+    () => world.components.setData(position, entity, { x: undefined, y: 7 }),
     ComponentDataError,
     'data field "x" cannot be undefined',
   );
 
   assertEquals(
-    world.components.getEntityDataOrThrow(position, entity),
+    world.components.getDataOrThrow(position, entity),
     { x: 3, y: 4 },
     "Expected rejected write to be inert",
   );
@@ -170,8 +170,8 @@ Deno.test("queryList results are iterable with for-of", async () => {
 
   const first = createEntity(world);
   const second = createEntity(world);
-  world.components.addToEntity(position, first, { x: 1, y: 1 });
-  world.components.addToEntity(position, second, { x: 2, y: 2 });
+  world.components.add(position, first, { x: 1, y: 1 });
+  world.components.add(position, second, { x: 2, y: 2 });
 
   const list = world.entities.queryList(query);
   const iterated = [...list].sort((a, b) => a - b);
@@ -186,8 +186,8 @@ Deno.test("queryList iteration supports nesting", async () => {
 
   const first = createEntity(world);
   const second = createEntity(world);
-  world.components.addToEntity(position, first, { x: 1, y: 1 });
-  world.components.addToEntity(position, second, { x: 2, y: 2 });
+  world.components.add(position, first, { x: 1, y: 1 });
+  world.components.add(position, second, { x: 2, y: 2 });
 
   const list = world.entities.queryList(query);
   const pairs: [Entity, Entity][] = [];
@@ -205,7 +205,7 @@ Deno.test("system callbacks receive iterable entity lists", async () => {
   const world = await createTestWorld([position]);
 
   const entity = createEntity(world);
-  world.components.addToEntity(position, entity, { x: 1, y: 1 });
+  world.components.add(position, entity, { x: 1, y: 1 });
 
   const collect = new System({
     name: "collect",
@@ -221,11 +221,11 @@ Deno.test("world.frame refreshes after the tick callback", async () => {
   const position = vec2Component();
   const world = await createTestWorld([position], 8);
   const entity = world.entities.createOrThrow();
-  world.components.addToEntity(position, entity, { x: 1, y: 2 });
+  world.components.add(position, entity, { x: 1, y: 2 });
 
   let sawChanged = false;
   world.frame(() => {
-    world.components.setEntityData(position, entity, { x: 3 });
+    world.components.setData(position, entity, { x: 3 });
     sawChanged = [...(world.components.getChanged(position) ?? [])].includes(entity);
   });
   assert(sawChanged, "changed set should be visible inside frame");
@@ -241,18 +241,18 @@ Deno.test("queryRevision tracks relevant component writes", async () => {
   const velocity = vec2Component("velocity");
   const world = await createTestWorld([position, velocity], 8);
   const entity = world.entities.createOrThrow();
-  world.components.addToEntity(position, entity, { x: 0, y: 0 });
-  world.components.addToEntity(velocity, entity, { x: 0, y: 0 });
+  world.components.add(position, entity, { x: 0, y: 0 });
+  world.components.add(velocity, entity, { x: 0, y: 0 });
 
   const positionQuery = new Query({ all: [position] });
   const before = world.queryRevision(positionQuery);
-  world.components.setEntityData(velocity, entity, { x: 1 });
+  world.components.setData(velocity, entity, { x: 1 });
   assertStrictEquals(
     world.queryRevision(positionQuery),
     before,
     "unrelated write leaves revision unchanged",
   );
-  world.components.setEntityData(position, entity, { x: 2 });
+  world.components.setData(position, entity, { x: 2 });
   assert(world.queryRevision(positionQuery) > before, "related write bumps revision");
 });
 
@@ -283,8 +283,8 @@ Deno.test("createEcsWorld tags spawn, ownership, and collisions", async () => {
   await ecs.init();
 
   const player = ecs.spawnOrThrow({ Position: { x: 1, y: 2 }, Player: true, Hero: true });
-  assert(ecs.world.components.entityHas(ecs.components.Player, player), "Player tag attached");
-  assert(ecs.world.components.entityHas(ecs.components.Hero, player), "Hero tag attached");
+  assert(ecs.world.components.has(ecs.components.Player, player), "Player tag attached");
+  assert(ecs.world.components.has(ecs.components.Hero, player), "Hero tag attached");
   assertStrictEquals(ecs.storage.Player.storage, null, "tag instances have no storage");
 
   assertThrows(

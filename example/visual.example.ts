@@ -595,7 +595,7 @@ const steeringSystem = world.systems.register(
         if (brainRest[slot]! <= 0) ignite(entities[i]!, slot, brainRest, visualGlow);
       }
 
-      if (igniteList.count > 0) world.components.addToEntities(charge, igniteList as QueryEntityList, { level: 1 });
+      if (igniteList.count > 0) world.components.addMany(charge, igniteList as QueryEntityList, { level: 1 });
       sim.pulseAge += dt;
     },
   }),
@@ -625,7 +625,7 @@ const chargeSystem = world.systems.register(
           burnoutList.count++;
         }
       }
-      if (burnoutList.count > 0) world.components.removeFromEntities(charge, burnoutList as QueryEntityList);
+      if (burnoutList.count > 0) world.components.removeMany(charge, burnoutList as QueryEntityList);
     },
   }),
 );

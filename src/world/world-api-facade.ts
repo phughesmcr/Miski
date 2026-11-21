@@ -98,7 +98,7 @@ function constructComponentAPI(host: WorldApiHost): WorldComponentAPI {
   return {
     count: host.componentManager.count,
     registry: host.componentManager.registry,
-    addToEntity: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
+    add: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
       component: ComponentReference<TValue, TStorage>,
       entity: Entity,
       data?: Partial<ComponentValue<TValue>> | undefined,
@@ -107,7 +107,7 @@ function constructComponentAPI(host: WorldApiHost): WorldComponentAPI {
       // ComponentValue<T> values are always numeric; storage internals speak plain numbers.
       host.mutations.addComponentToEntity(component, entity, data as ComponentDataInput<TValue> | undefined);
     },
-    addToEntities: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
+    addMany: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
       component: ComponentReference<TValue, TStorage>,
       entities: QueryEntityList,
       data?: Partial<ComponentValue<TValue>> | undefined,
@@ -126,22 +126,22 @@ function constructComponentAPI(host: WorldApiHost): WorldComponentAPI {
       host.assertInitialized();
       host.mutations.addBundleToEntity(entity, bundle);
     },
-    entityHas: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
+    has: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
       component: ComponentReference<TValue, TStorage>,
       entity: Entity,
     ) => host.componentManager.entityOwnsInstance(host.componentManager.getInstanceOrThrow(component), entity),
     getChanged: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
       component: ComponentReference<TValue, TStorage>,
     ) => host.componentManager.getChanged(component),
-    getEntityData: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
+    getData: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
       component: ComponentReference<TValue, TStorage>,
       entity: Entity,
     ) => host.readComponentEntityData(component, entity),
-    getEntityDataOrThrow: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
+    getDataOrThrow: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
       component: ComponentReference<TValue, TStorage>,
       entity: Entity,
     ) => host.getComponentEntityData(component, entity),
-    readEntityDataInto: <
+    readDataInto: <
       TValue extends SchemaOrNull,
       TStorage extends SchemaOrNull = TValue,
     >(
@@ -170,21 +170,21 @@ function constructComponentAPI(host: WorldApiHost): WorldComponentAPI {
       host.assertInitialized();
       return host.queryManager.components(query);
     },
-    removeFromEntity: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
+    remove: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
       component: ComponentReference<TValue, TStorage>,
       entity: Entity,
     ) => {
       host.assertInitialized();
       host.mutations.removeComponentFromEntity(component, entity);
     },
-    removeFromEntities: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
+    removeMany: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
       component: ComponentReference<TValue, TStorage>,
       entities: QueryEntityList,
     ) => {
       host.assertInitialized();
       return host.mutations.removeComponentFromEntities(component, entities);
     },
-    setEntityData: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
+    setData: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
       component: ComponentReference<TValue, TStorage>,
       entity: Entity,
       value: Partial<ComponentValue<TValue>>,

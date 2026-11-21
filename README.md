@@ -132,7 +132,7 @@ const schedule = new Schedule(world).add(movement);
 
 schedule.run(1 / 60); // runs every system, then refreshes entered / exited / changed
 
-console.log(world.components.getEntityDataOrThrow(Position, entity));
+console.log(world.components.getDataOrThrow(Position, entity));
 // → { x: ~0.0167, y: ~0.0083 }
 ```
 
@@ -279,8 +279,8 @@ const Unit = new Component({
   },
 });
 
-world.components.addToEntity(Unit, entity, { state: "run", target: enemy });
-world.components.getEntityDataOrThrow(Unit, entity);
+world.components.add(Unit, entity, { state: "run", target: enemy });
+world.components.getDataOrThrow(Unit, entity);
 // { hp: 0, alive: false, state: "run", target: enemy, label: "", mesh: Mesh }
 ```
 
@@ -292,10 +292,10 @@ world.components.getEntityDataOrThrow(Unit, entity);
 | `field.string()`  | `string[]`                   | `string`          | `""`                    |
 | `field.object<T>` | `(T \| null)[]`              | `T \| null`       | `create()`, or `null`   |
 
-Guarded writes (`addToEntity`, `setEntityData`, bundles, the proxy,
+Guarded writes (`components.add`, `setData`, bundles, the proxy,
 `instance.set`) check each value's type, and `undefined` is never accepted.
 Entity fields accept a live entity or `null`; a destroyed handle throws
-`EntityNotFoundError`. Reads (`getEntityData*`, `readEntityDataInto`, the
+`EntityNotFoundError`. Reads (`getData*`, `readDataInto`, the
 proxy, `instance.get`) decode raw values; an entity field reads `null` once
 its target is destroyed, even if the slot is reused. Raw partitions hold the
 encoded values, and string / object columns are capacity-length JS arrays
@@ -309,9 +309,9 @@ object field saveable.
 **Ownership & data** — attach, detach, and bundle without crumbs on the floor:
 
 ```ts
-world.components.addToEntity(Position, entity, { x: 10, y: 20 });
-world.components.removeFromEntity(Position, entity);
-world.components.entityHas(Position, entity);
+world.components.add(Position, entity, { x: 10, y: 20 });
+world.components.remove(Position, entity);
+world.components.has(Position, entity);
 
 // Atomic multi-component transition (one archetype move)
 world.components.addBundle(entity, [
@@ -321,7 +321,7 @@ world.components.addBundle(entity, [
 
 // Bulk over a dense query result
 const list = world.entities.queryList(new Query({ all: [Position] }));
-world.components.addToEntities(Active, list);
+world.components.addMany(Active, list);
 ```
 
 **Reading and writing values** — three tiers, fastest first. Pick the
@@ -331,7 +331,7 @@ slowest one your loop can afford.
 | ------------------ | ---------------------------------------------------------------------------------- | --------------------------------------------- |
 | (a) hot path       | `instance.storage.partitions[key][slot]`                                           | none: raw values, no change tracking          |
 | (b) guarded cursor | `instance.proxy` (`proxy.entity = e; proxy.x`), `instance.get` / `instance.set`    | ownership, validation, encoding, changed      |
-| (c) world calls    | `getEntityData` / `getEntityDataOrThrow`, `readEntityDataInto`, `setEntityData`    | (b) plus liveness and registration            |
+| (c) world calls    | `getData` / `getDataOrThrow`, `readDataInto`, `setData`    | (b) plus liveness and registration            |
 
 House rule for tier (a): **`slots` for storage, `entities` for identity.**
 Index partitions by storage slot (`entityIndex(entity)` or `queryList` /
@@ -357,19 +357,19 @@ instance.set(entity, "y", 2); // one field, leaves the proxy where it was
 instance.get(entity, "y"); // 2
 
 // (c) World-level guarded calls: the polite path
-world.components.getEntityData(Position, entity); // { x, y } | undefined
-world.components.getEntityDataOrThrow(Position, entity); // throws if absent
-world.components.setEntityData(Position, entity, { x: 10, y: 20 });
+world.components.getData(Position, entity); // { x, y } | undefined
+world.components.getDataOrThrow(Position, entity); // throws if absent
+world.components.setData(Position, entity, { x: 10, y: 20 });
 world.components.markChanged(Position, entity);
 
 // Zero-alloc read into a reused object — no disposable cups
 const out = { x: 0, y: 0 };
-world.components.readEntityDataInto(Position, entity, out); // false if absent
+world.components.readDataInto(Position, entity, out); // false if absent
 ```
 
 Across `world.components`, a plain name returns `undefined` (or `false`) when
 the thing is absent, and the `OrThrow` name throws: `getInstance` /
-`getInstanceOrThrow`, `getEntityData` / `getEntityDataOrThrow`. Passing a
+`getInstanceOrThrow`, `getData` / `getDataOrThrow`. Passing a
 component the world has not registered throws `NotRegisteredError` from every
 call except `getInstance` and `isRegistered`.
 
@@ -629,7 +629,7 @@ for (let i = 0; i < tree.count; i++) visit(tree.entities[i]!, tree.depths[i]!);
   and a reused slot never inherits pairs.
 - **Rollback and checkpoints** restore pairs, list order and data exactly.
   Checkpoints preflight target liveness and cycles before they mutate anything.
-- The generic component APIs (`addToEntity`, bundles, `create(bundle)`, ...) refuse
+- The generic component APIs (`components.add`, bundles, `create(bundle)`, ...) refuse
   relation tags; use `world.relations`. `createEcsWorld` takes
   `relations: { ChildOf: { exclusive: true }, ... }` and exposes
   `ecs.relations.ChildOf`.
@@ -772,7 +772,7 @@ commands.flush();                      // applies in queue order
 Queuing validates components and copies data at once, so data objects can be
 reused straight away and bad data throws at the call site. Flushing applies
 each command as the direct call would (`create(bundle)`, `instantiate`, `destroy`,
-`addToEntity`, `setEntityData`, `removeFromEntity`, `relations.add`,
+`components.add`, `setData`, `remove`, `relations.add`,
 `relations.remove`), except that commands for entities no longer active are
 skipped (for `relate` / `unrelate`, if either entity is no longer active). A
 pending `field.entity()` value resolves to the spawned entity; like a queued
@@ -988,7 +988,7 @@ agreed within about 3%:
 | Path | Result |
 | --- | ---: |
 | `isActive` | ~5.7 ns |
-| `entityHas` | ~9.1 ns |
+| `components.has` | ~9.1 ns |
 | Direct typed-array write + `markChanged` | ~11.5 ns |
 | Cached dense `queryList` | ~1.0 µs |
 | Add/remove data component | ~167 ns |

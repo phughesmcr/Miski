@@ -88,7 +88,7 @@ const FIXED_ARITY_FRAME_BUDGET_BYTES_PER_ITER = 8;
 const WORLD_CONSTRUCTOR_BUDGET_BYTES_PER_ITER = 120_000;
 const PROJECTILE_SPAWN_DESPAWN_BUDGET_BYTES_PER_ITER = 3_200;
 const GET_ENTITY_DATA_BUDGET_BYTES_PER_ITER = 80;
-// Six-field getEntityData result object (numeric + bool + enum + entity + string + object).
+// Six-field getData result object (numeric + bool + enum + entity + string + object).
 const GET_FIELD_ENTITY_DATA_BUDGET_BYTES_PER_ITER = 160;
 const DATA_COMPONENT_TRANSITION_BUDGET_BYTES_PER_ITER = ZERO_ALLOC_BUDGET_BYTES_PER_ITER;
 const BATCH_COMPONENT_TRANSITION_BUDGET_BYTES_PER_ITER = ZERO_ALLOC_BUDGET_BYTES_PER_ITER;
@@ -368,14 +368,14 @@ const wideQuery = createWideQuery(wide.components);
 const refillTag = new Component<null>({ name: "refillTag" });
 const refillWorld = new World({ capacity: MEDIUM_CAPACITY, components: [refillTag] });
 await refillWorld.init();
-for (let i = 0; i < 4_096; i++) refillWorld.components.addToEntity(refillTag, mustCreateEntity(refillWorld));
+for (let i = 0; i < 4_096; i++) refillWorld.components.add(refillTag, mustCreateEntity(refillWorld));
 const refillQuery = new Query({ all: [refillTag] });
 refillWorld.refresh();
 // Nested loops: every query() / getActive() call gets its own pooled cursor, so depth-2 nesting reuses two.
 const nestedTag = new Component<null>({ name: "nestedTag" });
 const nestedWorld = new World({ capacity: SMALL_CAPACITY, components: [nestedTag] });
 await nestedWorld.init();
-for (let i = 0; i < 32; i++) nestedWorld.components.addToEntity(nestedTag, mustCreateEntity(nestedWorld));
+for (let i = 0; i < 32; i++) nestedWorld.components.add(nestedTag, mustCreateEntity(nestedWorld));
 const nestedQuery = new Query({ all: [nestedTag] });
 nestedWorld.refresh();
 // Relations: a 1,024-node 4-ary hierarchy plus multi-target and exclusive data relations.
@@ -429,15 +429,15 @@ const transitionEntity = mustCreateEntity(lifecycle.world);
 const enteredExitedEntity = mustCreateEntity(transitionTracking.world);
 const wideTransitionEntity = mustCreateEntity(wide.world);
 const batchData = { x: 1, y: -1 };
-lifecycle.world.components.addToEntity(lifecycle.components.position, transitionEntity, { x: 0, y: 0 });
+lifecycle.world.components.add(lifecycle.components.position, transitionEntity, { x: 0, y: 0 });
 lifecycle.world.refresh();
-transitionTracking.world.components.addToEntity(transitionTracking.components.position, enteredExitedEntity, {
+transitionTracking.world.components.add(transitionTracking.components.position, enteredExitedEntity, {
   x: 0,
   y: 0,
 });
 transitionTracking.world.refresh();
-wide.world.components.addToEntity(wide.components.all[0]!, wideTransitionEntity);
-wide.world.components.addToEntity(wide.components.all[31]!, wideTransitionEntity);
+wide.world.components.add(wide.components.all[0]!, wideTransitionEntity);
+wide.world.components.add(wide.components.all[31]!, wideTransitionEntity);
 wide.world.refresh();
 const batchEntities = new Array<Entity>(128);
 const repeatedSpawnEntities = new Array<Entity>(128);
@@ -536,28 +536,28 @@ function spawnProjectileBatchRepeated(out: Entity[]): void {
     const entity = mustCreateEntity(repeatedSpawnLifecycle.world);
     out[i] = entity;
     setRepeatedProjectileData(i);
-    repeatedSpawnLifecycle.world.components.addToEntity(
+    repeatedSpawnLifecycle.world.components.add(
       repeatedSpawnLifecycle.components.position,
       entity,
       repeatedProjectilePositionData,
     );
-    repeatedSpawnLifecycle.world.components.addToEntity(
+    repeatedSpawnLifecycle.world.components.add(
       repeatedSpawnLifecycle.components.velocity,
       entity,
       repeatedProjectileVelocityData,
     );
-    repeatedSpawnLifecycle.world.components.addToEntity(
+    repeatedSpawnLifecycle.world.components.add(
       repeatedSpawnLifecycle.components.lifetime,
       entity,
       repeatedProjectileLifetimeData,
     );
-    repeatedSpawnLifecycle.world.components.addToEntity(
+    repeatedSpawnLifecycle.world.components.add(
       repeatedSpawnLifecycle.components.renderState,
       entity,
       repeatedProjectileRenderData,
     );
-    repeatedSpawnLifecycle.world.components.addToEntity(repeatedSpawnLifecycle.components.renderable, entity);
-    repeatedSpawnLifecycle.world.components.addToEntity(repeatedSpawnLifecycle.components.projectile, entity);
+    repeatedSpawnLifecycle.world.components.add(repeatedSpawnLifecycle.components.renderable, entity);
+    repeatedSpawnLifecycle.world.components.add(repeatedSpawnLifecycle.components.projectile, entity);
   }
 }
 
@@ -703,7 +703,7 @@ await sideWorld.init();
 const sideEntities: Entity[] = [];
 for (let i = 0; i < 128; i++) {
   const entity = mustCreateEntity(sideWorld);
-  sideWorld.components.addToEntity(sidePoint, entity, { x: "a", y: 0 });
+  sideWorld.components.add(sidePoint, entity, { x: "a", y: 0 });
   sideEntities.push(entity);
 }
 sideWorld.refresh();
@@ -772,9 +772,9 @@ const scenarios: Scenario[] = [
     entitySink ^= entity;
     lifecycle.world.refresh();
   }),
-  budgeted("isActive and entityHas hot checks", 250_000, () => {
+  budgeted("isActive and has hot checks", 250_000, () => {
     numericSink ^= mixed.world.entities.isActive(mutationEntity) ? 1 : 0;
-    numericSink ^= mixed.world.components.entityHas(mixed.components.position, mutationEntity) ? 1 : 0;
+    numericSink ^= mixed.world.components.has(mixed.components.position, mutationEntity) ? 1 : 0;
   }),
   budgeted("instance.has hot ownership check", 250_000, () => {
     numericSink ^= healthInstance.has(healthOwnerEntity) ? 1 : 0;
@@ -795,7 +795,7 @@ const scenarios: Scenario[] = [
     },
   },
   {
-    name: "spawn/despawn 128 projectiles - repeated addToEntity + refresh",
+    name: "spawn/despawn 128 projectiles - repeated add + refresh",
     iterations: 10_000,
     maxSteadyStateBeforeGcBytesPerIter: PROJECTILE_SPAWN_DESPAWN_BUDGET_BYTES_PER_ITER,
     fn: () => {
@@ -851,22 +851,23 @@ const scenarios: Scenario[] = [
     positionInstance.set(mutationEntity, "x", numericSink++);
     positionInstance.set(mutationEntity, "y", -numericSink);
   }),
-  budgeted("setEntityData with reused data object", 250_000, () => {
+  budgeted("setData with reused data object", 250_000, () => {
     positionData.x = numericSink++;
     positionData.y = -numericSink;
-    mixed.world.components.setEntityData(mixed.components.position, mutationEntity, positionData);
+    mixed.world.components.setData(mixed.components.position, mutationEntity, positionData);
   }),
   {
-    name: "getEntityDataOrThrow allocating object materialization",
+    name: "getDataOrThrow allocating object materialization",
     iterations: 100_000,
     maxSteadyStateBeforeGcBytesPerIter: GET_ENTITY_DATA_BUDGET_BYTES_PER_ITER,
     fn: () => {
-      objectSink = mixed.world.components.getEntityDataOrThrow(mixed.components.position, mutationEntity);
+      objectSink = mixed.world.components.getDataOrThrow(mixed.components.position, mutationEntity);
     },
   },
-  budgeted("readEntityDataInto reused output object", 250_000, () => {
-    numericSink ^=
-      mixed.world.components.readEntityDataInto(mixed.components.position, mutationEntity, positionReadOut) ? 1 : 0;
+  budgeted("readDataInto reused output object", 250_000, () => {
+    numericSink ^= mixed.world.components.readDataInto(mixed.components.position, mutationEntity, positionReadOut) ?
+      1 :
+      0;
   }),
   {
     name: "cached query entity iteration",
@@ -983,12 +984,12 @@ const scenarios: Scenario[] = [
     iterations: 100_000,
     maxSteadyStateBeforeGcBytesPerIter: DATA_COMPONENT_TRANSITION_BUDGET_BYTES_PER_ITER,
     fn: () => {
-      lifecycle.world.components.addToEntity(
+      lifecycle.world.components.add(
         lifecycle.components.velocity,
         transitionEntity,
         transitionVelocityData,
       );
-      lifecycle.world.components.removeFromEntity(lifecycle.components.velocity, transitionEntity);
+      lifecycle.world.components.remove(lifecycle.components.velocity, transitionEntity);
     },
   },
   {
@@ -1001,9 +1002,9 @@ const scenarios: Scenario[] = [
     fn: () => {
       // SMALL_CAPACITY sparse lifecycle fixtures leave 896 active positioned entities.
       const positioned = batchTagTransitions.world.entities.queryList(batchTagPositionQuery);
-      batchTagTransitions.world.components.addToEntities(batchTagTransitions.components.renderable, positioned);
+      batchTagTransitions.world.components.addMany(batchTagTransitions.components.renderable, positioned);
       const positionedAfterAdd = batchTagTransitions.world.entities.queryList(batchTagPositionQuery);
-      batchTagTransitions.world.components.removeFromEntities(
+      batchTagTransitions.world.components.removeMany(
         batchTagTransitions.components.renderable,
         positionedAfterAdd,
       );
@@ -1017,13 +1018,13 @@ const scenarios: Scenario[] = [
     fn: () => {
       // SMALL_CAPACITY sparse lifecycle fixtures leave 896 active positioned entities.
       const positioned = batchDataTransitions.world.entities.queryList(batchDataPositionQuery);
-      batchDataTransitions.world.components.addToEntities(
+      batchDataTransitions.world.components.addMany(
         batchDataTransitions.components.acceleration,
         positioned,
         batchData,
       );
       const positionedAfterAdd = batchDataTransitions.world.entities.queryList(batchDataPositionQuery);
-      batchDataTransitions.world.components.removeFromEntities(
+      batchDataTransitions.world.components.removeMany(
         batchDataTransitions.components.acceleration,
         positionedAfterAdd,
       );
@@ -1034,12 +1035,12 @@ const scenarios: Scenario[] = [
     iterations: 50_000,
     maxSteadyStateBeforeGcBytesPerIter: QUERY_TRANSITION_TRACKING_BUDGET_BYTES_PER_ITER,
     fn: () => {
-      transitionTracking.world.components.addToEntity(transitionTracking.components.velocity, enteredExitedEntity, {
+      transitionTracking.world.components.add(transitionTracking.components.velocity, enteredExitedEntity, {
         x: 1,
         y: 1,
       });
       entitySink ^= countEntities(transitionTracking.world.entities.queryEntered(transitionTrackingQuery));
-      transitionTracking.world.components.removeFromEntity(transitionTracking.components.velocity, enteredExitedEntity);
+      transitionTracking.world.components.remove(transitionTracking.components.velocity, enteredExitedEntity);
       entitySink ^= countEntities(transitionTracking.world.entities.queryExited(transitionTrackingQuery));
       transitionTracking.world.refresh();
     },
@@ -1057,9 +1058,9 @@ const scenarios: Scenario[] = [
     iterations: 50_000,
     maxSteadyStateBeforeGcBytesPerIter: WIDE_ARCHETYPE_TRANSITION_BUDGET_BYTES_PER_ITER,
     fn: () => {
-      wide.world.components.addToEntity(wide.components.all[63]!, wideTransitionEntity);
+      wide.world.components.add(wide.components.all[63]!, wideTransitionEntity);
       entitySink ^= countEntities(wide.world.entities.query(wideQuery));
-      wide.world.components.removeFromEntity(wide.components.all[63]!, wideTransitionEntity);
+      wide.world.components.remove(wide.components.all[63]!, wideTransitionEntity);
     },
   },
   {
@@ -1133,30 +1134,30 @@ const scenarios: Scenario[] = [
     numericSink ^= fieldProxy.label.length;
     objectSink = fieldProxy.mesh;
   }),
-  budgeted("setEntityData all field kinds with reused data object", 250_000, () => {
+  budgeted("setData all field kinds with reused data object", 250_000, () => {
     const i = numericSink++;
     fieldWriteData.hp = i & 0xff;
     fieldWriteData.alive = (i & 1) === 1;
     fieldWriteData.state = fieldStates[i & 1]!;
     fieldWriteData.label = fieldLabels[i & 1]!;
     fieldWriteData.mesh = fieldMeshes[i & 1]!;
-    fieldWorld.components.setEntityData(fieldUnit, fieldEntity, fieldWriteData);
+    fieldWorld.components.setData(fieldUnit, fieldEntity, fieldWriteData);
     fieldWorld.refresh();
   }),
-  budgeted("readEntityDataInto all field kinds", 250_000, () => {
-    numericSink ^= fieldWorld.components.readEntityDataInto(fieldUnit, fieldEntity, fieldReadOut) ? 1 : 0;
+  budgeted("readDataInto all field kinds", 250_000, () => {
+    numericSink ^= fieldWorld.components.readDataInto(fieldUnit, fieldEntity, fieldReadOut) ? 1 : 0;
   }),
   {
-    name: "getEntityData all field kinds allocating object materialization",
+    name: "getData all field kinds allocating object materialization",
     iterations: 100_000,
     maxSteadyStateBeforeGcBytesPerIter: GET_FIELD_ENTITY_DATA_BUDGET_BYTES_PER_ITER,
     fn: () => {
-      objectSink = fieldWorld.components.getEntityDataOrThrow(fieldUnit, fieldEntity);
+      objectSink = fieldWorld.components.getDataOrThrow(fieldUnit, fieldEntity);
     },
   },
   budgeted("add/remove component with all field kinds + refresh", 100_000, () => {
-    fieldWorld.components.addToEntity(fieldUnit, fieldTransitionEntity);
-    fieldWorld.components.removeFromEntity(fieldUnit, fieldTransitionEntity);
+    fieldWorld.components.add(fieldUnit, fieldTransitionEntity);
+    fieldWorld.components.remove(fieldUnit, fieldTransitionEntity);
     fieldWorld.refresh();
   }),
   budgeted("schedule run dispatch 16 systems (fixed + variable, runIf, disabled) + refresh", 100_000, () => {
@@ -1187,7 +1188,7 @@ const scenarios: Scenario[] = [
   }),
   budgeted("related spawn/tag/destroy + queryList refill of 4096 entities", 20_000, () => {
     const entity = mustCreateEntity(refillWorld);
-    refillWorld.components.addToEntity(refillTag, entity);
+    refillWorld.components.add(refillTag, entity);
     refillWorld.entities.destroy(entity);
     entitySink ^= refillWorld.entities.queryList(refillQuery).count;
     refillWorld.refresh();

@@ -109,17 +109,17 @@ function step(h: Harness, random: Rng): void {
       ) {
         return;
       }
-      world.components.addToEntity(component as typeof position, entity, payload(component, random) as never);
+      world.components.add(component as typeof position, entity, payload(component, random) as never);
       return;
     }
     case 4: {
-      world.components.removeFromEntity(component, entity);
+      world.components.remove(component, entity);
       return;
     }
     case 5: {
       const data = payload(component, random);
-      if (data !== undefined && world.components.entityHas(component, entity)) {
-        world.components.setEntityData(component as typeof position, entity, data as never);
+      if (data !== undefined && world.components.has(component, entity)) {
+        world.components.setData(component as typeof position, entity, data as never);
       }
       return;
     }
@@ -134,7 +134,7 @@ function step(h: Harness, random: Rng): void {
     }
     default: {
       const data = payload(component, random);
-      if (data !== undefined && world.components.entityHas(component, entity)) {
+      if (data !== undefined && world.components.has(component, entity)) {
         world.components.markChanged(component, entity);
       }
     }
@@ -164,7 +164,7 @@ function observe(world: World): unknown {
     data: Object.keys(dataFields).map((name) => {
       const component = components.find((candidate) => candidate.name === name)!;
       return handles(world.components.getOwners(component)).map((entity) =>
-        world.components.getEntityDataOrThrow(component as typeof position, entity as Entity)
+        world.components.getDataOrThrow(component as typeof position, entity as Entity)
       );
     }),
   };
@@ -229,11 +229,11 @@ for (const capacity of CAPACITIES) {
 Deno.test("an archetype empty at save time keeps its registry position after load", async () => {
   const source = await createWorld(16);
   const e = source.entities.createOrThrow();
-  source.components.addToEntity(tagA, e);
-  source.components.addToEntity(tagB, e); // registers {A} then {A,B}
-  source.components.removeFromEntity(tagA, e); // registers {B}; {A} is now empty
+  source.components.add(tagA, e);
+  source.components.add(tagB, e); // registers {A} then {A,B}
+  source.components.remove(tagA, e); // registers {B}; {A} is now empty
   const other = source.entities.createOrThrow();
-  source.components.addToEntity(tagB, other);
+  source.components.add(tagB, other);
   source.refresh();
 
   const target = await createWorld(16);
@@ -241,7 +241,7 @@ Deno.test("an archetype empty at save time keeps its registry position after loa
   const query = new Query({ any: [tagA, tagB] });
   for (const world of [source, target]) {
     const fresh = world.entities.createOrThrow();
-    world.components.addToEntity(tagA, fresh); // reuses the empty {A} archetype
+    world.components.add(tagA, fresh); // reuses the empty {A} archetype
   }
   const order = (world: World): number[] => {
     const list = world.entities.queryList(query);
@@ -487,7 +487,7 @@ async function populatedEveryKindWorld(random: Rng): Promise<World> {
   for (let i = 0; i < 24; i++) {
     const e = world.entities.createOrThrow();
     if (random() % 4 !== 0) {
-      world.components.addToEntity(unit, e, {
+      world.components.add(unit, e, {
         hp: random() % 1000,
         speed: (random() % 64) / 8,
         alive: (random() & 1) === 1,
@@ -497,7 +497,7 @@ async function populatedEveryKindWorld(random: Rng): Promise<World> {
         path: random() % 3 === 0 ? null : [random() % 9, random() % 9],
       } as never);
     }
-    if (random() % 3 === 0) world.components.addToEntity(marker, e);
+    if (random() % 3 === 0) world.components.add(marker, e);
     if (live.length > 0) {
       const other = live[random() % live.length]!;
       if (random() % 2 === 0) world.relations.add(childOf, e, other, { weight: random() % 10 } as never);
@@ -512,7 +512,7 @@ async function populatedEveryKindWorld(random: Rng): Promise<World> {
     if (world.entities.isActive(e)) world.entities.destroy(e);
   }
   world.refresh();
-  for (let i = 0; i < 3; i++) world.components.addToEntity(marker, world.entities.createOrThrow());
+  for (let i = 0; i < 3; i++) world.components.add(marker, world.entities.createOrThrow());
   return world;
 }
 
@@ -574,8 +574,8 @@ Deno.test("the JSON view round-trips losslessly, including non-finite and negati
   const h: Harness = { world: await createWorld(33), live: [] };
   churn(h, rng(21), 250);
   const e = h.world.entities.createOrThrow();
-  h.world.components.addToEntity(position, e, { x: 1, y: 2 });
-  h.world.components.addToEntity(mass, e, { kg: 1, flags: -3 });
+  h.world.components.add(position, e, { x: 1, y: 2 });
+  h.world.components.add(mass, e, { kg: 1, flags: -3 });
   const slot = entityIndex(e);
   const pos = h.world.components.getInstance(position)!.storage.partitions;
   const kg = h.world.components.getInstance(mass)!.storage.partitions;
@@ -599,8 +599,8 @@ Deno.test("migrate hooks run only on a layout mismatch and their result is valid
   const oldWorld = new World({ capacity: 16, components: [oldPosition, health] });
   await oldWorld.init();
   const e = oldWorld.entities.createOrThrow();
-  oldWorld.components.addToEntity(oldPosition, e, { x: 3, y: 4 });
-  oldWorld.components.addToEntity(health, e, { hp: 9 });
+  oldWorld.components.add(oldPosition, e, { x: 3, y: 4 });
+  oldWorld.components.add(health, e, { hp: 9 });
   oldWorld.refresh();
   const bytes = saveWorld(oldWorld);
 
@@ -635,7 +635,7 @@ Deno.test("migrate hooks run only on a layout mismatch and their result is valid
     },
   });
   assertStrictEquals(calls, 1, "migrate called once");
-  assertEquals(newWorld.components.getEntityDataOrThrow(newPosition, e), { x: 3, y: 4, z: 0 }, "migrated values");
+  assertEquals(newWorld.components.getDataOrThrow(newPosition, e), { x: 3, y: 4, z: 0 }, "migrated values");
   assertStrictEquals(newWorld.entities.isActive(e), true, "handles survive migration");
 
   let same = 0;
@@ -671,7 +671,7 @@ Deno.test("documents keep a field named __proto__ as an own key", async () => {
   const unit = new Component({ name: "unit", schema: { v: Float32Array } });
   const world = new World({ capacity: 8, components: [unit] });
   await world.init();
-  world.components.addToEntity(unit, world.entities.createOrThrow(), { v: 3 });
+  world.components.add(unit, world.entities.createOrThrow(), { v: 3 });
   // World names cannot be `__proto__`, but documents and save bytes are untrusted input.
   const text = JSON.stringify(worldSaveToDocument(saveWorld(world))).replaceAll('"v"', '"__proto__"');
   const bytes = worldSaveFromDocument(JSON.parse(text));

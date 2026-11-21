@@ -13,7 +13,7 @@ async function setup(): Promise<{ world: World; query: Query; entity: number }> 
   const tag = tagComponent("tag");
   const world = await createTestWorld([tag]);
   const entity = createEntity(world);
-  world.components.addToEntity(tag, entity);
+  world.components.add(tag, entity);
   return { world, query: new Query({ all: [tag] }), entity };
 }
 

@@ -27,8 +27,8 @@ Deno.test("world enforces entity capacity and reuses destroyed entity slots with
   const third = entities[2]!;
   assertStrictEquals(world.entities.create(), undefined, "Expected create() to return undefined when capacity is full");
 
-  world.components.addToEntity(position, second, { x: 10, y: 20 });
-  world.components.addToEntity(renderable, second);
+  world.components.add(position, second, { x: 10, y: 20 });
+  world.components.add(renderable, second);
   assertEquals(ids(world.entities.query(new Query({ all: [position, renderable] }))), [second], "Expected setup match");
 
   world.entities.destroy(second);
@@ -53,13 +53,13 @@ Deno.test("world enforces entity capacity and reuses destroyed entity slots with
     "Expected the destroyed packed handle to become stale after slot reuse",
   );
   assert(
-    !world.components.entityHas(position, replacement),
+    !world.components.has(position, replacement),
     "Expected recycled entity to start without stale components",
   );
 
-  world.components.addToEntity(position, replacement);
+  world.components.add(position, replacement);
   assertEquals(
-    world.components.getEntityDataOrThrow(position, replacement),
+    world.components.getDataOrThrow(position, replacement),
     { x: 0, y: 0 },
     "Expected recycled component storage to be reinitialized when ownership is reacquired",
   );
@@ -71,15 +71,15 @@ Deno.test("component data APIs expose initial data, mutation, and per-frame dens
   const world = await createTestWorld([position, renderable]);
 
   const entity = createEntity(world);
-  world.components.addToEntity(position, entity, { x: 1.5, y: -2 });
-  world.components.addToEntity(renderable, entity);
+  world.components.add(position, entity, { x: 1.5, y: -2 });
+  world.components.add(renderable, entity);
 
   assertEquals(
-    world.components.getEntityDataOrThrow(position, entity),
+    world.components.getDataOrThrow(position, entity),
     { x: 1.5, y: -2 },
     "Expected initial data to be stored",
   );
-  assertEquals(ids(world.components.getChanged(position)), [entity], "Expected addToEntity to mark component changed");
+  assertEquals(ids(world.components.getChanged(position)), [entity], "Expected add to mark component changed");
   assertEquals(
     ids(world.components.getChanged(renderable)),
     [],
@@ -89,14 +89,14 @@ Deno.test("component data APIs expose initial data, mutation, and per-frame dens
   world.refresh();
   assertEquals(ids(world.components.getChanged(position)), [], "Expected refresh to clear changed tracking");
 
-  world.components.setEntityData(position, entity, { x: 4, y: 9 });
+  world.components.setData(position, entity, { x: 4, y: 9 });
 
   assertEquals(
-    world.components.getEntityDataOrThrow(position, entity),
+    world.components.getDataOrThrow(position, entity),
     { x: 4, y: 9 },
-    "Expected setEntityData to update storage",
+    "Expected setData to update storage",
   );
-  assertEquals(ids(world.components.getChanged(position)), [entity], "Expected setEntityData to mark changed entities");
+  assertEquals(ids(world.components.getChanged(position)), [entity], "Expected setData to mark changed entities");
 });
 
 Deno.test("component proxy tracks only real writes and direct storage access remains an opt-out fast path", async () => {
@@ -104,7 +104,7 @@ Deno.test("component proxy tracks only real writes and direct storage access rem
   const world = await createTestWorld([position]);
 
   const entity = createEntity(world);
-  world.components.addToEntity(position, entity, { x: 0, y: 0 });
+  world.components.add(position, entity, { x: 0, y: 0 });
   const instance = world.components.getInstance(position);
   assert(instance !== undefined, "Expected component instance to exist");
   const storage = instance.storage;
@@ -125,7 +125,7 @@ Deno.test("component proxy tracks only real writes and direct storage access rem
 
   proxy.y = 100;
   assertEquals(
-    world.components.getEntityDataOrThrow(position, entity),
+    world.components.getDataOrThrow(position, entity),
     { x: 99, y: 100 },
     "Expected proxy write to update data",
   );
@@ -138,19 +138,19 @@ Deno.test("changed iteration reuses dense storage and tracks each entity once pe
 
   const first = createEntity(world);
   const second = createEntity(world);
-  world.components.addToEntity(position, first, { x: 0, y: 0 });
-  world.components.addToEntity(position, second, { x: 1, y: 1 });
+  world.components.add(position, first, { x: 0, y: 0 });
+  world.components.add(position, second, { x: 1, y: 1 });
   world.refresh();
 
   const instance = world.components.getInstance(position);
   assert(instance !== undefined && instance.proxy !== null, "Expected data component instance");
 
-  world.components.setEntityData(position, first, { x: 2, y: 2 });
-  world.components.setEntityData(position, first, { x: 3, y: 3 });
+  world.components.setData(position, first, { x: 2, y: 2 });
+  world.components.setData(position, first, { x: 3, y: 3 });
   instance.proxy.entity = first;
   instance.proxy.x = 4;
   instance.proxy.y = 5;
-  world.components.setEntityData(position, second, { x: 6, y: 6 });
+  world.components.setData(position, second, { x: 6, y: 6 });
 
   const firstRead = world.components.getChanged(position);
   const secondRead = world.components.getChanged(position);
@@ -159,7 +159,7 @@ Deno.test("changed iteration reuses dense storage and tracks each entity once pe
   assertStrictEquals(secondRead, firstRead, "Expected getChanged to reuse the component's borrowed iterator");
   assertEquals(ids(firstRead), [first, second], "Expected one dense changed entry per entity");
 
-  world.components.removeFromEntity(position, first);
+  world.components.remove(position, first);
   assertEquals(ids(world.components.getChanged(position)), [second], "Expected removal to erase changed membership");
 
   world.refresh();
@@ -190,8 +190,8 @@ Deno.test("manual typed query and system expose keyed component instances in cal
   const world = await createTestWorld([position, velocity]);
 
   const first = createEntity(world);
-  world.components.addToEntity(position, first, { x: 1, y: 2 });
-  world.components.addToEntity(velocity, first, { x: 3, y: 4 });
+  world.components.add(position, first, { x: 1, y: 2 });
+  world.components.add(velocity, first, { x: 3, y: 4 });
 
   const movement = new System({
     name: "movement",
@@ -210,7 +210,7 @@ Deno.test("manual typed query and system expose keyed component instances in cal
   const updateMovement = world.systems.register(movement);
   updateMovement(2);
   assertEquals(
-    world.components.getEntityDataOrThrow(position, first),
+    world.components.getDataOrThrow(position, first),
     { x: 7, y: 10 },
     "Expected typed manual system update",
   );
@@ -243,8 +243,8 @@ Deno.test("systems receive matching component instances, borrowed entity lists, 
   const world = await createTestWorld([position, velocity]);
 
   const first = createEntity(world);
-  world.components.addToEntity(position, first, { x: 10, y: 20 });
-  world.components.addToEntity(velocity, first, { x: 1, y: -2 });
+  world.components.add(position, first, { x: 10, y: 20 });
+  world.components.add(velocity, first, { x: 1, y: -2 });
 
   const movement = new System({
     name: "movement",
@@ -272,14 +272,14 @@ Deno.test("systems receive matching component instances, borrowed entity lists, 
   const updateMovement = world.systems.register(movement);
   updateMovement(2);
   assertEquals(
-    world.components.getEntityDataOrThrow(position, first),
+    world.components.getDataOrThrow(position, first),
     { x: 12, y: 16 },
     "Expected first movement update",
   );
 
   const second = createEntity(world);
-  world.components.addToEntity(position, second, { x: 0, y: 0 });
-  world.components.addToEntity(velocity, second, { x: 3, y: 4 });
+  world.components.add(position, second, { x: 0, y: 0 });
+  world.components.add(velocity, second, { x: 3, y: 4 });
 
   updateMovement(1);
 
@@ -289,12 +289,12 @@ Deno.test("systems receive matching component instances, borrowed entity lists, 
     "Expected system query to see entities added after system creation",
   );
   assertEquals(
-    world.components.getEntityDataOrThrow(position, first),
+    world.components.getDataOrThrow(position, first),
     { x: 13, y: 14 },
     "Expected first entity to update again",
   );
   assertEquals(
-    world.components.getEntityDataOrThrow(position, second),
+    world.components.getDataOrThrow(position, second),
     { x: 3, y: 4 },
     "Expected second entity to update",
   );
@@ -308,8 +308,8 @@ Deno.test("typed systems receive keyed component records and borrowed entity lis
   const world = await createTestWorld([position, velocity]);
 
   const first = createEntity(world);
-  world.components.addToEntity(position, first, { x: 1, y: 2 });
-  world.components.addToEntity(velocity, first, { x: 3, y: 4 });
+  world.components.add(position, first, { x: 1, y: 2 });
+  world.components.add(velocity, first, { x: 3, y: 4 });
 
   const seen: number[][] = [];
   const movement = new System({
@@ -333,18 +333,18 @@ Deno.test("typed systems receive keyed component records and borrowed entity lis
   updateMovement(2);
 
   const second = createEntity(world);
-  world.components.addToEntity(position, second, { x: 10, y: 0 });
-  world.components.addToEntity(velocity, second, { x: 1, y: 0 });
+  world.components.add(position, second, { x: 10, y: 0 });
+  world.components.add(velocity, second, { x: 1, y: 0 });
   updateMovement(1);
 
   assertEquals(seen, [[first], [first, second]], "Expected each invocation to receive a fresh entity iterator");
   assertEquals(
-    world.components.getEntityDataOrThrow(position, first),
+    world.components.getDataOrThrow(position, first),
     { x: 10, y: 2 },
     "Expected first entity updates",
   );
   assertEquals(
-    world.components.getEntityDataOrThrow(position, second),
+    world.components.getDataOrThrow(position, second),
     { x: 11, y: 0 },
     "Expected second entity updates",
   );
@@ -474,15 +474,15 @@ Deno.test("query compose supports reusable filters for renderable active movers"
   const movingSprite = createEntity(world);
   const sleepingSprite = createEntity(world);
   const invisibleMover = createEntity(world);
-  world.components.addToEntity(position, movingSprite);
-  world.components.addToEntity(velocity, movingSprite);
-  world.components.addToEntity(renderable, movingSprite);
-  world.components.addToEntity(position, sleepingSprite);
-  world.components.addToEntity(velocity, sleepingSprite);
-  world.components.addToEntity(renderable, sleepingSprite);
-  world.components.addToEntity(sleeping, sleepingSprite);
-  world.components.addToEntity(position, invisibleMover);
-  world.components.addToEntity(velocity, invisibleMover);
+  world.components.add(position, movingSprite);
+  world.components.add(velocity, movingSprite);
+  world.components.add(renderable, movingSprite);
+  world.components.add(position, sleepingSprite);
+  world.components.add(velocity, sleepingSprite);
+  world.components.add(renderable, sleepingSprite);
+  world.components.add(sleeping, sleepingSprite);
+  world.components.add(position, invisibleMover);
+  world.components.add(velocity, invisibleMover);
 
   const active = new Query({ none: [sleeping] });
   const movers = new Query({ all: [position, velocity] });
@@ -505,17 +505,17 @@ Deno.test("queryList exposes dense live entity IDs for index-based hot loops", a
   const first = createEntity(world);
   const second = createEntity(world);
   const third = createEntity(world);
-  world.components.addToEntity(position, first);
-  world.components.addToEntity(velocity, first);
-  world.components.addToEntity(position, second);
-  world.components.addToEntity(velocity, second);
-  world.components.addToEntity(sleeping, second);
-  world.components.addToEntity(position, third);
+  world.components.add(position, first);
+  world.components.add(velocity, first);
+  world.components.add(position, second);
+  world.components.add(velocity, second);
+  world.components.add(sleeping, second);
+  world.components.add(position, third);
 
   const activeMovers = new Query({ all: [position, velocity], none: [sleeping] });
   assertEquals(listIds(world.entities.queryList(activeMovers)), [first], "Expected dense query list to match query");
 
-  world.components.addToEntity(velocity, third);
+  world.components.add(velocity, third);
   assertEquals(
     listIds(world.entities.queryList(activeMovers)),
     [first, third],
@@ -533,16 +533,16 @@ Deno.test("queryList returns a borrowed pooled view, not a stable snapshot", asy
 
   const first = createEntity(world);
   const second = createEntity(world);
-  world.components.addToEntity(position, first);
-  world.components.addToEntity(velocity, first);
-  world.components.addToEntity(position, second);
-  world.components.addToEntity(velocity, second);
+  world.components.add(position, first);
+  world.components.add(velocity, first);
+  world.components.add(position, second);
+  world.components.add(velocity, second);
 
   const moving = new Query({ all: [position, velocity] });
   const stale = world.entities.queryList(moving);
   assertEquals(listIds(stale), [first, second], "Expected initial query list to contain both moving entities");
 
-  world.components.removeFromEntity(velocity, second);
+  world.components.remove(velocity, second);
   const current = world.entities.queryList(moving);
 
   assertStrictEquals(stale, current, "Expected invalidated queryList storage to be recycled for the same query");
@@ -556,19 +556,19 @@ Deno.test("snapshot helpers return stable arrays across retained and nested use"
 
   const first = createEntity(world);
   const second = createEntity(world);
-  world.components.addToEntity(position, first);
-  world.components.addToEntity(velocity, first);
-  world.components.addToEntity(position, second);
-  world.components.addToEntity(velocity, second);
+  world.components.add(position, first);
+  world.components.add(velocity, first);
+  world.components.add(position, second);
+  world.components.add(velocity, second);
 
   const moving = new Query({ all: [position, velocity] });
   const retainedQuerySnapshot = Array.from(world.entities.query(moving));
   const retainedOwnersSnapshot = Array.from(world.components.getOwners(velocity));
   const retainedActiveSnapshot = Array.from(world.entities.getActive());
 
-  world.components.removeFromEntity(velocity, second);
+  world.components.remove(velocity, second);
   const nestedSnapshot = Array.from(world.entities.query(moving));
-  world.components.addToEntity(velocity, second);
+  world.components.add(velocity, second);
 
   assertEquals(retainedQuerySnapshot, [first, second], "Expected retained query snapshot to stay stable");
   assertEquals(retainedOwnersSnapshot, [first, second], "Expected retained owner snapshot to stay stable");
@@ -604,14 +604,14 @@ Deno.test("batch component transitions mutate dense query lists", async () => {
   const first = createEntity(world);
   const second = createEntity(world);
   const third = createEntity(world);
-  world.components.addToEntity(position, first);
-  world.components.addToEntity(position, second);
-  world.components.addToEntity(position, third);
-  world.components.addToEntity(velocity, second);
+  world.components.add(position, first);
+  world.components.add(position, second);
+  world.components.add(position, third);
+  world.components.add(velocity, second);
 
   const positioned = new Query({ all: [position] });
   const moving = new Query({ all: [position, velocity] });
-  const changed = world.components.addToEntities(velocity, world.entities.queryList(positioned));
+  const changed = world.components.addMany(velocity, world.entities.queryList(positioned));
 
   assertEquals(changed, 2, "Expected only entities missing velocity to change ownership");
   assertEquals(
@@ -620,7 +620,7 @@ Deno.test("batch component transitions mutate dense query lists", async () => {
     "Expected all positioned entities to move",
   );
 
-  const removed = world.components.removeFromEntities(velocity, world.entities.queryList(moving));
+  const removed = world.components.removeMany(velocity, world.entities.queryList(moving));
   assertEquals(removed, 3, "Expected every moving entity to lose velocity");
   assertEquals(listIds(world.entities.queryList(moving)), [], "Expected batch removal to invalidate cached queries");
 });
@@ -632,14 +632,14 @@ Deno.test("batch component transitions preserve entered and exited visibility un
 
   const first = createEntity(world);
   const second = createEntity(world);
-  world.components.addToEntity(position, first);
-  world.components.addToEntity(position, second);
+  world.components.add(position, first);
+  world.components.add(position, second);
   world.refresh();
 
   const positioned = new Query({ all: [position] });
   const moving = new Query({ all: [position, velocity] });
 
-  world.components.addToEntities(velocity, world.entities.queryList(positioned), { x: 1, y: 1 });
+  world.components.addMany(velocity, world.entities.queryList(positioned), { x: 1, y: 1 });
   assertEquals(
     ids(world.entities.queryEntered(moving)).toSorted((a, b) => a - b),
     [first, second],
@@ -649,7 +649,7 @@ Deno.test("batch component transitions preserve entered and exited visibility un
   world.refresh();
   assertEquals(ids(world.entities.queryEntered(moving)), [], "Expected refresh to clear batch entered state");
 
-  world.components.removeFromEntities(velocity, world.entities.queryList(moving));
+  world.components.removeMany(velocity, world.entities.queryList(moving));
   assertEquals(
     ids(world.entities.queryExited(moving)).toSorted((a, b) => a - b),
     [first, second],
@@ -667,22 +667,22 @@ Deno.test("queries remain live across add, remove, destroy, and recreate operati
 
   const query = new Query({ all: [position], any: [velocity] });
   const first = createEntity(world);
-  world.components.addToEntity(position, first);
+  world.components.add(position, first);
   assertEquals(ids(world.entities.query(query)), [], "Expected any clause to require at least one optional component");
 
-  world.components.addToEntity(velocity, first);
+  world.components.add(velocity, first);
   assertEquals(ids(world.entities.query(query)), [first], "Expected entity to enter query after velocity is added");
 
-  world.components.removeFromEntity(velocity, first);
+  world.components.remove(velocity, first);
   assertEquals(ids(world.entities.query(query)), [], "Expected entity to leave query after velocity is removed");
 
-  world.components.addToEntity(velocity, first);
+  world.components.add(velocity, first);
   world.entities.destroy(first);
   assertEquals(ids(world.entities.query(query)), [], "Expected destroyed entities to leave cached query results");
 
   const replacement = createEntity(world);
-  world.components.addToEntity(position, replacement);
-  world.components.addToEntity(velocity, replacement);
+  world.components.add(position, replacement);
+  world.components.add(velocity, replacement);
   assertEquals(
     ids(world.entities.query(query)),
     [replacement],
@@ -699,16 +699,16 @@ Deno.test("entered and exited query views deduplicate entities that match throug
   const entity = createEntity(world);
   const query = new Query({ any: [position, velocity] });
 
-  world.components.addToEntity(position, entity);
-  world.components.addToEntity(velocity, entity);
-  world.components.addToEntity(renderable, entity);
+  world.components.add(position, entity);
+  world.components.add(velocity, entity);
+  world.components.add(renderable, entity);
 
   assertEquals(ids(world.entities.query(query)), [entity], "Expected live query to deduplicate entity");
   assertEquals(ids(world.entities.queryEntered(query)), [entity], "Expected entered query to deduplicate entity");
 
   world.refresh();
-  world.components.removeFromEntity(renderable, entity);
-  world.components.removeFromEntity(velocity, entity);
+  world.components.remove(renderable, entity);
+  world.components.remove(velocity, entity);
 
   assertEquals(ids(world.entities.query(query)), [entity], "Expected entity to still match through position");
   assertEquals(
@@ -730,27 +730,27 @@ Deno.test("world state guards make lifecycle misuse explicit", async () => {
   assertThrows(() => ids(world.entities.query(query)), WorldStateError, "World has not been initialized");
   assertThrows(() => world.entities.queryList(query), WorldStateError, "World has not been initialized");
   assertThrows(
-    () => world.components.addToEntity(position, asEntity(0)),
+    () => world.components.add(position, asEntity(0)),
     WorldStateError,
     "World has not been initialized",
   );
   assertThrows(
-    () => world.components.addToEntities(position, emptyList),
+    () => world.components.addMany(position, emptyList),
     WorldStateError,
     "World has not been initialized",
   );
   assertThrows(
-    () => world.components.removeFromEntity(position, asEntity(0)),
+    () => world.components.remove(position, asEntity(0)),
     WorldStateError,
     "World has not been initialized",
   );
   assertThrows(
-    () => world.components.removeFromEntities(position, emptyList),
+    () => world.components.removeMany(position, emptyList),
     WorldStateError,
     "World has not been initialized",
   );
   assertThrows(
-    () => world.components.setEntityData(position, asEntity(0), { x: 1, y: 2 }),
+    () => world.components.setData(position, asEntity(0), { x: 1, y: 2 }),
     WorldStateError,
     "World has not been initialized",
   );
@@ -768,27 +768,27 @@ Deno.test("world state guards make lifecycle misuse explicit", async () => {
   assertThrows(() => ids(world.entities.query(query)), WorldStateError, "World has already been destroyed");
   assertThrows(() => world.entities.queryList(query), WorldStateError, "World has already been destroyed");
   assertThrows(
-    () => world.components.addToEntity(position, asEntity(0)),
+    () => world.components.add(position, asEntity(0)),
     WorldStateError,
     "World has already been destroyed",
   );
   assertThrows(
-    () => world.components.addToEntities(position, emptyList),
+    () => world.components.addMany(position, emptyList),
     WorldStateError,
     "World has already been destroyed",
   );
   assertThrows(
-    () => world.components.removeFromEntity(position, asEntity(0)),
+    () => world.components.remove(position, asEntity(0)),
     WorldStateError,
     "World has already been destroyed",
   );
   assertThrows(
-    () => world.components.removeFromEntities(position, emptyList),
+    () => world.components.removeMany(position, emptyList),
     WorldStateError,
     "World has already been destroyed",
   );
   assertThrows(
-    () => world.components.setEntityData(position, asEntity(0), { x: 1, y: 2 }),
+    () => world.components.setData(position, asEntity(0), { x: 1, y: 2 }),
     WorldStateError,
     "World has already been destroyed",
   );
@@ -843,7 +843,7 @@ Deno.test("captured lifecycle API methods observe the current world state", asyn
 
   const createEntity = world.entities.create;
   const queryList = world.entities.queryList;
-  const addToEntity = world.components.addToEntity;
+  const add = world.components.add;
   const queryComponents = world.components.query;
   const queryEntered = world.entities.queryEntered;
   const registerSystem = world.systems.register;
@@ -853,7 +853,7 @@ Deno.test("captured lifecycle API methods observe the current world state", asyn
 
   assertThrows(() => createEntity(), WorldStateError, "World has already been destroyed");
   assertThrows(() => queryList(query), WorldStateError, "World has already been destroyed");
-  assertThrows(() => addToEntity(position, asEntity(0)), WorldStateError, "World has already been destroyed");
+  assertThrows(() => add(position, asEntity(0)), WorldStateError, "World has already been destroyed");
   assertThrows(() => queryComponents(query), WorldStateError, "World has already been destroyed");
   assertThrows(() => queryEntered(query), WorldStateError, "World has already been destroyed");
   assertThrows(() => registerSystem(system), WorldStateError, "World has already been destroyed");
@@ -870,10 +870,10 @@ Deno.test("a component definition can back independent worlds without shared own
 
   const firstPlayer = createEntity(firstWorld);
   const secondPlayer = createEntity(secondWorld);
-  firstWorld.components.addToEntity(player, firstPlayer);
-  firstWorld.components.addToEntity(health, firstPlayer, { current: 75, max: 100 });
-  secondWorld.components.addToEntity(player, secondPlayer);
-  secondWorld.components.addToEntity(health, secondPlayer, { current: 20, max: 25 });
+  firstWorld.components.add(player, firstPlayer);
+  firstWorld.components.add(health, firstPlayer, { current: 75, max: 100 });
+  secondWorld.components.add(player, secondPlayer);
+  secondWorld.components.add(health, secondPlayer, { current: 20, max: 25 });
 
   assertEquals(ids(firstWorld.components.getOwners(player)), [firstPlayer], "Expected first world singleton ownership");
   assertEquals(
@@ -882,12 +882,12 @@ Deno.test("a component definition can back independent worlds without shared own
     "Expected second world singleton ownership",
   );
   assertEquals(
-    firstWorld.components.getEntityDataOrThrow(health, firstPlayer),
+    firstWorld.components.getDataOrThrow(health, firstPlayer),
     { current: 75, max: 100 },
     "Expected first data",
   );
   assertEquals(
-    secondWorld.components.getEntityDataOrThrow(health, secondPlayer),
+    secondWorld.components.getDataOrThrow(health, secondPlayer),
     { current: 20, max: 25 },
     "Expected second data",
   );
@@ -907,9 +907,9 @@ Deno.test("queries support worlds with more than 32 component types", async () =
   await world.init();
 
   const entity = createEntity(world);
-  world.components.addToEntity(components[0]!, entity);
-  world.components.addToEntity(components[33]!, entity);
-  world.components.addToEntity(components[39]!, entity);
+  world.components.add(components[0]!, entity);
+  world.components.add(components[33]!, entity);
+  world.components.add(components[39]!, entity);
 
   assertEquals(
     ids(world.entities.query(new Query({ all: [components[0]!, components[39]!], none: [components[1]!] }))),
@@ -927,11 +927,11 @@ Deno.test("high-volume game-loop smoke test keeps query results deterministic un
   const expectedMovers: ReturnType<typeof createEntity>[] = [];
   for (let i = 0; i < 1024; i++) {
     const entity = createEntity(world);
-    world.components.addToEntity(position, entity, { x: i, y: -i });
+    world.components.add(position, entity, { x: i, y: -i });
     if (i % 2 === 0) {
-      world.components.addToEntity(velocity, entity, { x: 1, y: 1 });
+      world.components.add(velocity, entity, { x: 1, y: 1 });
       if (i % 5 === 0) {
-        world.components.addToEntity(sleeping, entity);
+        world.components.add(sleeping, entity);
       } else {
         expectedMovers.push(entity);
       }
@@ -942,7 +942,7 @@ Deno.test("high-volume game-loop smoke test keeps query results deterministic un
   assertEquals(ids(world.entities.query(activeMovers)), expectedMovers, "Expected deterministic active mover query");
 
   for (const entity of expectedMovers.slice(0, 64)) {
-    world.components.removeFromEntity(velocity, entity);
+    world.components.remove(velocity, entity);
   }
 
   assertEquals(

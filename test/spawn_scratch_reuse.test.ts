@@ -13,11 +13,11 @@ Deno.test("EcsWorld.spawn reuses scratch without leaking components or data betw
 
   const first = ecs.spawnOrThrow({ Position: { x: 1, y: 2 }, Velocity: { x: 3 }, Player: true });
   const second = ecs.spawnOrThrow({ Position: { x: 4 } });
-  assert(ecs.world.components.entityHas("Velocity", first), "first entity keeps Velocity");
-  assert(!ecs.world.components.entityHas("Velocity", second), "second entity gets no stale Velocity");
-  assert(!ecs.world.components.entityHas("Player", second), "second entity gets no stale tag");
+  assert(ecs.world.components.has("Velocity", first), "first entity keeps Velocity");
+  assert(!ecs.world.components.has("Velocity", second), "second entity gets no stale Velocity");
+  assert(!ecs.world.components.has("Player", second), "second entity gets no stale tag");
   assertEquals(
-    ecs.world.components.getEntityDataOrThrow("Position", second),
+    ecs.world.components.getDataOrThrow("Position", second),
     { x: 4, y: 0 },
     "second spawn uses its own data",
   );
@@ -25,8 +25,8 @@ Deno.test("EcsWorld.spawn reuses scratch without leaking components or data betw
   // A failed spawn must not poison the next one.
   assertThrows(() => ecs.spawn({ Position: { x: 1 }, Unknown: true } as never), Error, "Unknown component");
   const third = ecs.spawnOrThrow({ Velocity: { x: 9 } });
-  assert(!ecs.world.components.entityHas("Position", third), "no stale Position after a failed spawn");
-  assertEquals(ecs.world.components.getEntityDataOrThrow("Velocity", third), { x: 9 }, "third spawn uses its own data");
+  assert(!ecs.world.components.has("Position", third), "no stale Position after a failed spawn");
+  assertEquals(ecs.world.components.getDataOrThrow("Velocity", third), { x: 9 }, "third spawn uses its own data");
 });
 
 Deno.test("EcsWorld.spawn keeps undefined-skip and tag validation semantics across reuse", async () => {
@@ -43,14 +43,14 @@ Deno.test("EcsWorld.spawn keeps undefined-skip and tag validation semantics acro
     "must be spawned with true",
   );
   const clean = ecs.spawnOrThrow({ Position: undefined, Player: undefined });
-  assert(!ecs.world.components.entityHas("Position", clean), "undefined data skips the component after a throw");
-  assert(!ecs.world.components.entityHas("Player", clean), "undefined tag skips the tag after a throw");
+  assert(!ecs.world.components.has("Position", clean), "undefined data skips the component after a throw");
+  assert(!ecs.world.components.has("Player", clean), "undefined tag skips the tag after a throw");
 
   const inherited = Object.create({ Player: true }) as { Position?: { x: number } };
   inherited.Position = { x: 2 };
   const own = ecs.spawnOrThrow(inherited as never);
-  assert(!ecs.world.components.entityHas("Player", own), "inherited spec keys are ignored");
-  assertEquals(ecs.world.components.getEntityDataOrThrow("Position", own), { x: 2 }, "own spec keys are used");
+  assert(!ecs.world.components.has("Player", own), "inherited spec keys are ignored");
+  assertEquals(ecs.world.components.getDataOrThrow("Position", own), { x: 2 }, "own spec keys are used");
 });
 
 Deno.test("EcsWorld.spawn called from a spec getter does not clobber the outer spawn", async () => {
@@ -70,11 +70,11 @@ Deno.test("EcsWorld.spawn called from a spec getter does not clobber the outer s
     },
   });
   const outer = ecs.spawnOrThrow(spec as never);
-  assertEquals(ecs.world.components.getEntityDataOrThrow("A", outer), { x: 5 }, "outer A keeps its own data");
-  assertEquals(ecs.world.components.getEntityDataOrThrow("B", outer), { x: 7 }, "outer B is applied");
+  assertEquals(ecs.world.components.getDataOrThrow("A", outer), { x: 5 }, "outer A keeps its own data");
+  assertEquals(ecs.world.components.getDataOrThrow("B", outer), { x: 7 }, "outer B is applied");
   assert(inner !== undefined, "inner spawn ran");
-  assertEquals(ecs.world.components.getEntityDataOrThrow("A", inner!), { x: 9 }, "inner A keeps its own data");
-  assert(!ecs.world.components.entityHas("B", inner!), "inner entity has no outer components");
+  assertEquals(ecs.world.components.getDataOrThrow("A", inner!), { x: 9 }, "inner A keeps its own data");
+  assert(!ecs.world.components.has("B", inner!), "inner entity has no outer components");
 });
 
 Deno.test("EcsWorld plain spawn/instantiate return undefined at capacity; OrThrow variants throw", async () => {
@@ -100,6 +100,6 @@ Deno.test("EcsWorld plain spawn/instantiate return undefined at capacity; OrThro
 
   ecs.world.entities.destroy(first!);
   const next = ecs.spawnOrThrow({ Position: { x: 5 } });
-  assertEquals(ecs.world.components.getEntityData("Position", next), { x: 5 }, "scratch is clean after failures");
-  assert(!ecs.world.components.entityHas("Player", next), "no stale tag from a rejected spawn");
+  assertEquals(ecs.world.components.getData("Position", next), { x: 5 }, "scratch is clean after failures");
+  assert(!ecs.world.components.has("Player", next), "no stale tag from a rejected spawn");
 });

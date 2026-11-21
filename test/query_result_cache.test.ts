@@ -25,7 +25,7 @@ function sorted(iterable: Iterable<number>): number[] {
 
 /** Model oracle: active entities whose components satisfy the query's all / any / none terms, sorted. */
 function expectedMembers(world: World, query: Query): number[] {
-  const has = (component: DynamicComponent, entity: Entity) => world.components.entityHas(component, entity);
+  const has = (component: DynamicComponent, entity: Entity) => world.components.has(component, entity);
   const members: number[] = [];
   for (const entity of Array.from(world.entities.getActive())) {
     if (!query.all.every((component) => has(component, entity))) continue;
@@ -97,22 +97,22 @@ function step(world: World, live: Entity[], random: Rng): void {
   }
   const component = components[random() % components.length]!;
   if (op === 3) {
-    world.components.removeFromEntity(component, entity);
+    world.components.remove(component, entity);
     return;
   }
   if (op === 4) {
     // Batch move over every source archetype the query spans.
     const list = world.entities.queryList(queries[random() % queries.length]!);
-    if (component === position) world.components.addToEntities(position, list, { x: 1, y: 2 });
-    else world.components.addToEntities(component as (typeof tags)[number], list);
+    if (component === position) world.components.addMany(position, list, { x: 1, y: 2 });
+    else world.components.addMany(component as (typeof tags)[number], list);
     return;
   }
   if (op === 5) {
-    world.components.removeFromEntities(component, world.entities.queryList(queries[random() % queries.length]!));
+    world.components.removeMany(component, world.entities.queryList(queries[random() % queries.length]!));
     return;
   }
-  if (component === position) world.components.addToEntity(position, entity, { x: index, y: 1 });
-  else world.components.addToEntity(component as (typeof tags)[number], entity);
+  if (component === position) world.components.add(position, entity, { x: index, y: 1 });
+  else world.components.add(component as (typeof tags)[number], entity);
 }
 
 async function orderTrace(): Promise<string[]> {
@@ -124,8 +124,8 @@ async function orderTrace(): Promise<string[]> {
     const entity = world.entities.create()!;
     live.push(entity);
     const mask = random();
-    if (mask & 1) world.components.addToEntity(position, entity, { x: i, y: 0 });
-    for (let t = 0; t < tags.length; t++) if (mask & (2 << t)) world.components.addToEntity(tags[t]!, entity);
+    if (mask & 1) world.components.add(position, entity, { x: i, y: 0 });
+    for (let t = 0; t < tags.length; t++) if (mask & (2 << t)) world.components.add(tags[t]!, entity);
   }
   for (let round = 0; round < 24; round++) {
     for (let i = 0; i < 20; i++) step(world, live, random);
@@ -200,8 +200,8 @@ Deno.test("an unrelated structural change keeps other query results without refi
   const withA = new Query({ all: [a] });
   const withB = new Query({ all: [b] });
   for (let i = 0; i < 4; i++) {
-    world.components.addToEntity(a, createEntity(world));
-    world.components.addToEntity(b, createEntity(world));
+    world.components.add(a, createEntity(world));
+    world.components.add(b, createEntity(world));
   }
   const listA = world.entities.queryList(withA);
   const listB = world.entities.queryList(withB);
@@ -211,20 +211,20 @@ Deno.test("an unrelated structural change keeps other query results without refi
   entitiesA[0] = 0xffff_ffff;
 
   const churn = createEntity(world);
-  world.components.addToEntity(unrelated, churn);
+  world.components.add(unrelated, churn);
   world.entities.destroy(churn);
   assertStrictEquals(world.entities.queryList(withA).entities[0], 0xffff_ffff as Entity, "Unrelated churn refilled A");
 
   // A change to a listed archetype refills only that query.
-  world.components.addToEntity(b, createEntity(world));
+  world.components.add(b, createEntity(world));
   assertStrictEquals(world.entities.queryList(withA).entities[0], 0xffff_ffff as Entity, "B churn refilled A");
   assertStrictEquals(world.entities.queryList(withB).count, 5, "B sees the new member");
   assertStrictEquals(world.entities.queryList(withB), listB, "B keeps its retained result object");
 
   // A new archetype joining the query's list refills it.
   const both = createEntity(world);
-  world.components.addToEntity(a, both);
-  world.components.addToEntity(unrelated, both);
+  world.components.add(a, both);
+  world.components.add(unrelated, both);
   const refilled = world.entities.queryList(withA);
   assertStrictEquals(refilled.count, 5, "A sees the entity in the new archetype");
   assertStrictEquals(refilled.entities[0], realA as Entity, "A was refilled from its archetypes");
@@ -235,12 +235,12 @@ Deno.test("a related change refills a query result by copying stored handles, no
   const a = tagComponent("a");
   const world = await createTestWorld([a], 4096);
   const withA = new Query({ all: [a] });
-  for (let i = 0; i < 2000; i++) world.components.addToEntity(a, createEntity(world));
+  for (let i = 0; i < 2000; i++) world.components.add(a, createEntity(world));
   world.refresh();
   assertStrictEquals(world.entities.queryList(withA).count, 2000, "Initial fill");
 
   const spawned = createEntity(world);
-  world.components.addToEntity(a, spawned);
+  world.components.add(a, spawned);
   world.entities.destroy(spawned);
   const pack = EntityManager.prototype.packSlot;
   let packed = 0;
@@ -266,7 +266,7 @@ Deno.test("refills stay exact when archetype lists are much larger than their po
   const entities: Entity[] = [];
   for (let i = 0; i < 1000; i++) {
     const entity = createEntity(world);
-    world.components.addToEntity(a, entity);
+    world.components.add(a, entity);
     entities.push(entity);
   }
   const check = (label: string) => {
@@ -276,11 +276,11 @@ Deno.test("refills stay exact when archetype lists are much larger than their po
   };
   check("full");
   // Shrink {a} far below its list length (copy loop path) while {a, b} fills (bulk copy path).
-  for (let i = 0; i < 990; i++) world.components.addToEntity(b, entities[i]!);
+  for (let i = 0; i < 990; i++) world.components.add(b, entities[i]!);
   check("mostly moved");
   for (let i = 0; i < 990; i += 3) world.entities.destroy(entities[i]!);
   check("after destroys");
-  for (let i = 1; i < 990; i += 3) world.components.removeFromEntity(b, entities[i]!);
+  for (let i = 1; i < 990; i += 3) world.components.remove(b, entities[i]!);
   check("partly moved back");
   await world.destroy();
 });
@@ -290,13 +290,13 @@ Deno.test("rollback restore refills every query result", async () => {
   const world = await createTestWorld([a], 32);
   const withA = new Query({ all: [a] });
   const kept = createEntity(world);
-  world.components.addToEntity(a, kept);
+  world.components.add(a, kept);
   world.refresh();
   assertEquals(listIds(world.entities.queryList(withA)), [kept], "Before speculation");
 
   const point = new WorldRollbackScope(world);
-  world.components.addToEntity(a, createEntity(world));
-  world.components.removeFromEntity(a, kept);
+  world.components.add(a, createEntity(world));
+  world.components.remove(a, kept);
   assertStrictEquals(world.entities.queryList(withA).count, 1, "Speculative membership");
   point.restore();
   assertEquals(listIds(world.entities.queryList(withA)), [kept], "Restored membership");
@@ -308,14 +308,14 @@ Deno.test("query result buffers grow from a small start and stay coherent", asyn
   const world = await createTestWorld([a], 4096);
   const withA = new Query({ all: [a] });
   const first = createEntity(world);
-  world.components.addToEntity(a, first);
+  world.components.add(a, first);
   const small = world.entities.queryList(withA);
   assert((small.entities as unknown as Uint32Array).length < 4096, "Result is not sized by world capacity");
 
   const expected: Entity[] = [first];
   for (let i = 0; i < 1000; i++) {
     const entity = createEntity(world);
-    world.components.addToEntity(a, entity);
+    world.components.add(a, entity);
     expected.push(entity);
   }
   const grown = world.entities.queryList(withA);
@@ -345,8 +345,8 @@ Deno.test("archetype query iterators are reused without sharing state", async ()
   const entities: Entity[] = [];
   for (let i = 0; i < 4; i++) {
     const entity = createEntity(world);
-    world.components.addToEntity(a, entity);
-    if (i % 2 === 0) world.components.addToEntity(b, entity);
+    world.components.add(a, entity);
+    if (i % 2 === 0) world.components.add(b, entity);
     entities.push(entity);
   }
 
@@ -378,7 +378,7 @@ Deno.test("archetype query iterators are reused without sharing state", async ()
   // Like the generators, the query resolves lazily and sees state at first next().
   const lazy = world.entities.queryExited(withA);
   world.refresh();
-  world.components.removeFromEntity(a, entities[0]!);
+  world.components.remove(a, entities[0]!);
   assertEquals([...lazy], [entities[0]], "Exited reads the window when iteration starts");
   await world.destroy();
 });
@@ -452,11 +452,11 @@ Deno.test("systems see every match after their query result grows", async () => 
   const world = await createTestWorld([a], 1024);
   const update = world.systems.register(system);
   const expected: Entity[] = [createEntity(world)];
-  world.components.addToEntity(a, expected[0]!);
+  world.components.add(a, expected[0]!);
   update();
   for (let i = 0; i < 100; i++) {
     const entity = createEntity(world);
-    world.components.addToEntity(a, entity);
+    world.components.add(a, entity);
     expected.push(entity);
   }
   update();
@@ -472,7 +472,7 @@ Deno.test("query entity results retain their buffer across invalidation", async 
   const first = world.entities.queryList(query);
   assertStrictEquals(world.entities.queryList(query), first, "unchanged queries reuse the result");
   const entity = world.entities.createOrThrow();
-  world.components.addToEntity(position, entity, { x: 1, y: 2 });
+  world.components.add(position, entity, { x: 1, y: 2 });
   const filled = world.entities.queryList(query);
   assertStrictEquals(filled, first, "invalidated queries refill the retained result");
   assertEquals(listIds(filled), [entity], "refill reflects membership");
@@ -493,10 +493,10 @@ Deno.test("component query cache access does not freshen stale entity query resu
   const entity = createEntity(world);
   const moving = new Query({ all: [position, velocity] });
 
-  world.components.addToEntity(position, entity, { x: 1, y: 2 });
+  world.components.add(position, entity, { x: 1, y: 2 });
   assertEquals(ids(world.entities.query(moving)), [], "Expected moving query to cache an empty result");
 
-  world.components.addToEntity(velocity, entity, { x: 3, y: 4 });
+  world.components.add(velocity, entity, { x: 3, y: 4 });
   world.components.query(moving);
 
   assertEquals(

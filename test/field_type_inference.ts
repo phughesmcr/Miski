@@ -54,23 +54,23 @@ const targetColumn: Int32Array = instance.storage.partitions.target;
 const labelColumn: string[] = instance.storage.partitions.label;
 const meshColumn: (Mesh | null)[] = instance.storage.partitions.mesh;
 
-const data = world.components.getEntityDataOrThrow(Unit, entity);
+const data = world.components.getDataOrThrow(Unit, entity);
 const alive: boolean = data.alive;
 const state: "idle" | "run" | "dead" = data.state;
 const target: Entity | null = data.target;
 const mesh: Mesh | null = data.mesh;
 
-world.components.setEntityData(Unit, entity, { alive: true, state: "run", target: entity, label: "a", mesh: null });
-world.components.addToEntity(Unit, entity, { mesh: new Mesh() });
+world.components.setData(Unit, entity, { alive: true, state: "run", target: entity, label: "a", mesh: null });
+world.components.add(Unit, entity, { mesh: new Mesh() });
 
 // @ts-expect-error bool fields take booleans.
-world.components.setEntityData(Unit, entity, { alive: 1 });
+world.components.setData(Unit, entity, { alive: 1 });
 // @ts-expect-error enum fields take their labels.
-world.components.setEntityData(Unit, entity, { state: "fly" });
+world.components.setData(Unit, entity, { state: "fly" });
 // @ts-expect-error string fields take strings.
-world.components.setEntityData(Unit, entity, { label: 1 });
+world.components.setData(Unit, entity, { label: 1 });
 // @ts-expect-error object fields take their declared type.
-world.components.setEntityData(Unit, entity, { mesh: { kind: "other" } });
+world.components.setData(Unit, entity, { mesh: { kind: "other" } });
 
 instance.proxy.entity = entity;
 const proxyState: "idle" | "run" | "dead" = instance.proxy.state;
