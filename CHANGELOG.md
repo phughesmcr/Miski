@@ -51,7 +51,9 @@
   entities in `field.entity()` fields, and are validated when queued, as are
   the prefab's components. Relations are not part of a prefab: queue them with
   `commands.relate`, which accepts the pending handle. Steady-state queuing and
-  flushing stays allocation-free (new `bench:gc` budget).
+  flushing stays allocation-free (new `bench:gc` budget), except that an
+  override on a component with more than 31 fields builds a fresh object at
+  flush.
 - The JSR module docs link to the README guides for scheduling, prefabs,
   relations, checkpoints and rollback, and world saves.
 - `Schedule` gains `tick`, `fixedTick` and `elapsed` getters, beside

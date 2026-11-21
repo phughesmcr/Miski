@@ -6,7 +6,7 @@ interface/variable pairs.
 
 ## Summary
 
-- **Most of the beta.3 review backlog has landed.** A1, A5, A6, A7 and A9 are done. Most of A2, A3, A4, A8, A10 and A11
+- **Most of the beta.3 review backlog has landed.** A1, A5, A6, A7, A8 and A9 are done. Most of A2, A3, A4, A10 and A11
   is done. What remains is small (see [Backlog](#backlog-a1a11-from-the-beta3-review)).
 - **Miski's shape matches the reference designs on the parts that are hard to change later.** It has generational
   packed handles, SoA typed-array storage with a raw hot path, `all` / `any` / `none` queries, relations with
@@ -181,7 +181,7 @@ that role: a plain query on `ChildOf` matches any target. A `(R, specific target
 
 | | API |
 | --- | --- |
-| **Miski** | `new CommandBuffer(world)`: `spawn(bundle)` returns a `PendingEntity`; also `destroy`, `add`, `set`, `remove`, `relate`, `unrelate`, `flush()`, `clear()`, `pendingCount`. A `Schedule` flushes at each phase end. Commands for dead entities are skipped. A failing command does not stop the flush. |
+| **Miski** | `new CommandBuffer(world)`: `spawn(bundle)` returns a `PendingEntity`; also `instantiate`, `destroy`, `add`, `set`, `remove`, `relate`, `unrelate`, `flush()`, `clear()`, `pendingCount`. A `Schedule` flushes at each phase end. Commands for dead entities are skipped. A failing command does not stop the flush. |
 | bitECS | No buffer; only deferred removals (`commitRemovals`). |
 | Koota, miniplex, ECSY | None. |
 | flecs | Stages and deferred mode; commands for deleted entities are discarded. |
@@ -287,7 +287,7 @@ The status comes from the beta.3 CHANGELOG section, checked against the code at 
 | A5 Component read/write tiers | Done | — |
 | A6 Rollback styles | Done: `WorldRollbackScope` is the one API | — |
 | A7 Save API | Done | — |
-| A8 Relations, commands, scheduling | Done: `remove` needs a target, `queryList` takes the relation first, `CommandBuffer.relate` / `unrelate` exist, `Schedule.add`'s `argCount` is typed, `systems.register` is documented | `CommandBuffer.instantiate(prefab)` is not implemented. It is additive, so it can come after 1.0. |
+| A8 Relations, commands, scheduling | Done: `remove` needs a target, `queryList` takes the relation first, `CommandBuffer.relate` / `unrelate` exist, `Schedule.add`'s `argCount` is typed, `systems.register` is documented, and `CommandBuffer.instantiate(prefab, overrides?)` exists (D10) | — |
 | A9 Errors | Done: everything is a `MiskiError`, `NoComponentsFoundError` is gone, the `maxOwnersError` helper exists | — |
 | A10 Trim exports | Done for `isValid*`, `mergeComponentSchemas`, `ParametersExceptFirstTwo`, `StorageCell`, `PartitionStorage`, `SchemaValues` and `WorldContext` | `StorageProxyWithProperties`, `CompiledComponentEntry` and `CompiledComponentProperty` stay: public signatures use them, and `deno doc --lint` requires them. Optional tidy: `createComponentRegistry` is still `export`ed inside `src` for one caller. |
 | A11 Naming | Done: `maxOwners`, the internal slot/entity names and the query-pool file | — |
@@ -636,7 +636,7 @@ Hive is a game built on beta.3. Its findings, relayed from another session:
 | Finding | Status |
 | --- | --- |
 | `Schedule.getClock()` allocates a new object (about 62 B) on every call, and Hive reads the tick every frame | Fixed on this branch: `schedule.tick`, `fixedTick` and `elapsed` getters join `accumulator`. `getClock()` stays for save and restore. |
-| `CommandBuffer.spawn` takes bundles only, so spawning from a prefab inside a system means calling `entities.instantiate` after the borrowed list is done | D10 |
+| `CommandBuffer.spawn` takes bundles only, so spawning from a prefab inside a system means calling `entities.instantiate` after the borrowed list is done | Added on this branch: `commands.instantiate(prefab, overrides?)` (D10) |
 | `argCount: 1` is a type error for a callback that leaves out `ctx` | Documented on this branch; loosening is D11 |
 | Scheduler, prefab and relation docs exist only in the README; the fixed-phase caveat about entered / exited / changed windows is easy to miss | D12 |
 | A git checkout can't be imported from another project without a hand-written import map | CONTRIBUTING now shows Deno `links`, tested against this branch |
