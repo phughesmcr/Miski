@@ -1,10 +1,4 @@
-import {
-  createSlotArray,
-  type Entity,
-  type EntityArray,
-  entityIndex,
-  ReusableSlotPackIterator,
-} from "@/entity/entity.ts";
+import { createSlotArray, type Entity, type EntityArray, entityIndex } from "@/entity/entity.ts";
 import {
   ComponentDataError,
   ComponentOwnershipError,
@@ -21,6 +15,7 @@ import type { Relation } from "./relation.ts";
 import { growTypedArray, hasOwnProperty, isObject } from "@/utils.ts";
 import { canonicalizeStoredValue } from "@/value/canonicalize.ts";
 import { RelationList } from "./relation-list.ts";
+import { type SlotListSource, SlotPackIteratorPool } from "@/entity/pooled-entity-iterator.ts";
 
 /** Sentinel for "no row" / "no slot" in the linked lists. */
 export const NONE = -1;
@@ -144,7 +139,10 @@ export class RelationStore {
   readonly #changedSlots: EntityArray;
   readonly #changedIndex: Int32Array;
   #changedCount: number = 0;
-  readonly #changedIterator: ReusableSlotPackIterator;
+  /** {@link #changedSlots} as a slot-list source for {@link #changedIterators}. */
+  readonly #changedSource: SlotListSource;
+  /** Per-call changed iterators, so nested loops over this relation stay independent. */
+  readonly #changedIterators: SlotPackIteratorPool;
 
   /** Structure revision; bumps on every pair change and never repeats, so caches keyed by it stay sound. */
   revision: number = 0;
@@ -207,7 +205,8 @@ export class RelationStore {
 
     this.#changedSlots = createSlotArray(capacity);
     this.#changedIndex = new Int32Array(capacity).fill(NONE);
-    this.#changedIterator = new ReusableSlotPackIterator(this.#changedSlots, host.packSlot);
+    this.#changedSource = { list: this.#changedSlots };
+    this.#changedIterators = new SlotPackIteratorPool(host.packSlot);
 
     this.targetsList = new RelationList(capacity, false);
     this.sourcesList = new RelationList(capacity, false);
@@ -379,7 +378,7 @@ export class RelationStore {
   }
 
   changed(): IterableIterator<Entity> {
-    return this.#changedIterator.reset(this.#changedCount);
+    return this.#changedIterators.open(this.#changedSource, this.#changedCount);
   }
 
   clearChanged(): void {

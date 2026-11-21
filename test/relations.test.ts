@@ -132,6 +132,32 @@ Deno.test("borrowed relation lists expose storage slots and data rows", async ()
   assertThrows(() => world.relations.getInstanceOrThrow(stranger), NotRegisteredError, "stranger");
 });
 
+Deno.test("nested relations.getChanged() loops over one relation each get their own cursor", async () => {
+  const { world, likes } = await relationWorld();
+  const [a, b, c, target] = spawn(world, 4);
+  for (const source of [a!, b!, c!]) world.relations.add(likes, source, target!);
+  const sorted = (values: Iterable<number>) => [...values].toSorted((x, y) => x - y);
+
+  const pairs = new Set<string>();
+  for (const x of world.relations.getChanged(likes)) {
+    for (const y of world.relations.getChanged(likes)) pairs.add(`${x}:${y}`);
+  }
+  assertStrictEquals(pairs.size, 9, "3 x 3 nested loop yields every pair");
+
+  const outer: number[] = [];
+  for (const x of world.relations.getChanged(likes)) {
+    outer.push(x);
+    for (const _y of world.relations.getChanged(likes)) break;
+  }
+  assertEquals(sorted(outer), sorted([a!, b!, c!]), "An inner break leaves the outer loop intact");
+
+  const first = world.relations.getChanged(likes);
+  assertEquals(sorted(first), sorted([a!, b!, c!]), "Full pass");
+  assert(first.next().done === true, "An exhausted iterator reports done");
+  assertStrictEquals(world.relations.getChanged(likes), first, "A finished iterator returns to the pool");
+  await world.destroy();
+});
+
 Deno.test("exclusive relations replace their target and report the change", async () => {
   const { world, childOf } = await relationWorld();
   const [parentA, parentB, child] = spawn(world, 3);

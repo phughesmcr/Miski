@@ -2,6 +2,7 @@ import { PartitionedBuffer } from "@phughesmcr/partitionedbuffer";
 
 import { $_COMPONENT_ID_KEY } from "@/constants.ts";
 import { type EntityArray, packEntity, type PackSlot } from "@/entity/entity.ts";
+import { SlotPackIteratorPool } from "@/entity/pooled-entity-iterator.ts";
 import {
   ComponentDataError,
   componentDisplayName,
@@ -79,6 +80,9 @@ export class ComponentManager {
   #idBase: number;
   /** Component instances by definition, used when {@link #registryByIdOffset} is `null`. */
   #registryByComponent: Map<DynamicComponent, DynamicComponentInstance> | null;
+  /** Per-call owner and changed iterators, so nested loops over one component stay independent */
+  readonly #iterators: SlotPackIteratorPool;
+
   /** Component ownership and changed state indexed by component instance id */
   #states: ComponentState[];
   /** States with string / object fields, whose staged side values refresh releases */
@@ -115,6 +119,7 @@ export class ComponentManager {
     this.#buffer = new PartitionedBuffer(size, capacity);
     this.#capacity = capacity;
     this.#nextWorldRevision = nextWorldRevision;
+    this.#iterators = new SlotPackIteratorPool(packSlot);
     this.#isActive = isActive;
     this.#registryByName = Object.create(null);
     this.#publicRegistry = {};
@@ -605,7 +610,7 @@ export class ComponentManager {
     TStorage extends SchemaOrNull = TValue,
   >(component: Component<TValue, TStorage> | string): IterableIterator<Entity> {
     const state = this.#states[this.getInstanceOrThrow(component).id]!;
-    return state.changed.iterator.reset(state.changed.count);
+    return this.#iterators.open(state.changed, state.changed.count);
   }
 
   /**
@@ -619,12 +624,11 @@ export class ComponentManager {
     TStorage extends SchemaOrNull = TValue,
   >(component: Component<TValue, TStorage> | string): IterableIterator<Entity> {
     const state = this.#states[this.getInstanceOrThrow(component).id]!;
-    return state.owners.iterator.reset(state.owners.count);
+    return this.#iterators.open(state.owners, state.owners.count);
   }
 
   /**
-   * Count the owners of a registered component without touching its shared owner iterator,
-   * so callers may count during an in-progress {@link getOwners} iteration.
+   * Count the owners of a component without opening an owner iterator.
    * @param component The component to count owners for
    * @returns The owner count, or `0` if the component is not registered
    * @internal

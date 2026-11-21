@@ -25,6 +25,14 @@
   use `isRegistered` first if a component may be absent. `getOwners` /
   `getChanged` are typed `BorrowedEntityIterator` (the same
   `IterableIterator<Entity>` as before).
+- `world.components.getOwners(C)`, `world.components.getChanged(C)` and
+  `world.relations.getChanged(R)` return a separate pooled iterator per call
+  instead of one shared cursor per component or relation, so nested loops over
+  the same component or relation see every pair. A 3×3 nested loop over 3
+  owners used to yield 3 pairs. As with `query()`, an iterator returns to its
+  pool when the loop finishes or breaks, so warm loops still allocate nothing;
+  don't call `next()` on one after it reports `done`. `relations.getChanged`
+  is typed `BorrowedEntityIterator` (the same `IterableIterator<Entity>`).
 - **Breaking (types):** `world.components.getInstances(components)` is no
   longer part of `WorldComponentAPI`. It was query plumbing; map
   `getInstance` over the list instead.

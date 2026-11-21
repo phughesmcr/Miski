@@ -223,6 +223,76 @@ Deno.test("owner, changed and has calls reject an unregistered component like th
   );
 });
 
+Deno.test("nested getOwners() and getChanged() loops over one component each get their own cursor", async () => {
+  const position = vec2Component();
+  const world = await createTestWorld([position], 64);
+  const entities = [createEntity(world), createEntity(world), createEntity(world)];
+  for (const entity of entities) world.components.add(position, entity, { x: 1, y: 2 });
+  const sorted = (values: Iterable<number>) => [...values].toSorted((a, b) => a - b);
+
+  for (
+    const [label, list] of [["getOwners", world.components.getOwners], [
+      "getChanged",
+      world.components.getChanged,
+    ]] as const
+  ) {
+    const pairs = new Set<string>();
+    for (const a of list(position)) {
+      for (const b of list(position)) pairs.add(`${a}:${b}`);
+    }
+    assertStrictEquals(pairs.size, 9, `${label}: 3 x 3 nested loop yields every pair`);
+
+    let triples = 0;
+    for (const _a of list(position)) {
+      for (const _b of list(position)) {
+        for (const _c of list(position)) triples++;
+      }
+    }
+    assertStrictEquals(triples, 27, `${label}: depth-3 nesting is complete`);
+
+    const outer: number[] = [];
+    for (const a of list(position)) {
+      outer.push(a);
+      for (const _b of list(position)) break;
+    }
+    assertEquals(sorted(outer), sorted(entities), `${label}: an inner break leaves the outer loop intact`);
+
+    const first = list(position);
+    assertEquals(sorted(first), sorted(entities), `${label}: full pass`);
+    assert(first.next().done === true, `${label}: an exhausted iterator reports done`);
+    const second = list(position);
+    assertStrictEquals(second, first, `${label}: a finished iterator returns to the pool`);
+    assert(list(position) !== second, `${label}: an iterator in use is not handed out again`);
+    assertEquals(sorted(second), sorted(entities), `${label}: a reused iterator restarts`);
+  }
+  await world.destroy();
+});
+
+Deno.test("getOwners() keeps reading the live owner list when it grows during the loop", async () => {
+  const position = vec2Component();
+  const world = await createTestWorld([position], 64);
+  const first = createEntity(world);
+  const second = createEntity(world);
+  world.components.add(position, first);
+  world.components.add(position, second);
+  let visits = 0;
+  for (const entity of world.components.getOwners(position)) {
+    visits++;
+    assert(world.components.has(position, entity), "Every visited entity still owns the component");
+    if (entity !== first) continue;
+    // Grow past the owner list's initial 16 entries so it is reallocated, then swap-remove the next member.
+    for (let i = 0; i < 20; i++) world.components.add(position, createEntity(world));
+    world.components.remove(position, second);
+  }
+  assertStrictEquals(visits, 2, "The pass covers the owner count taken when it began");
+  assertStrictEquals(
+    Array.from(world.components.getOwners(position)).length,
+    21,
+    "Every new owner is listed afterwards",
+  );
+  await world.destroy();
+});
+
 Deno.test("bundle and batch commits keep canonical scratch values isolated by component", async () => {
   const first = vec2Component("first");
   const second = vec2Component("second");

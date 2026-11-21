@@ -153,11 +153,10 @@ Deno.test("changed iteration reuses dense storage and tracks each entity once pe
   world.components.setData(position, second, { x: 6, y: 6 });
 
   const firstRead = world.components.getChanged(position);
-  const secondRead = world.components.getChanged(position);
-
-  assert(firstRead !== undefined && secondRead !== undefined, "Expected changed iterator for registered component");
-  assertStrictEquals(secondRead, firstRead, "Expected getChanged to reuse the component's borrowed iterator");
   assertEquals(ids(firstRead), [first, second], "Expected one dense changed entry per entity");
+  const secondRead = world.components.getChanged(position);
+  assertStrictEquals(secondRead, firstRead, "Expected getChanged to reuse a finished pooled iterator");
+  assertEquals(ids(secondRead), [first, second], "Expected the reused iterator to restart");
 
   world.components.remove(position, first);
   assertEquals(ids(world.components.getChanged(position)), [second], "Expected removal to erase changed membership");

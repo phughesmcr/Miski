@@ -902,6 +902,13 @@ const scenarios: Scenario[] = [
     }
     entitySink ^= pairs;
   }),
+  budgeted("nested component owners iteration (depth 2)", 10_000, () => {
+    let pairs = 0;
+    for (const _outer of nestedWorld.components.getOwners(nestedTag)) {
+      for (const _inner of nestedWorld.components.getOwners(nestedTag)) pairs++;
+    }
+    entitySink ^= pairs;
+  }),
   {
     name: "queryList cached entity iteration",
     iterations: 100_000,

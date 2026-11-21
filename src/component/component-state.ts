@@ -260,9 +260,9 @@ export function createComponentState(
   return {
     instance,
     maxOwners,
-    owners: new SlotSet(capacity, listCapacity, packSlot),
+    owners: new SlotSet(capacity, listCapacity),
     ownerFlags: null,
-    changed: new SlotSet(capacity, listCapacity, packSlot),
+    changed: new SlotSet(capacity, listCapacity),
     usesSparseStorage,
     storageKeys,
     storageColumns,

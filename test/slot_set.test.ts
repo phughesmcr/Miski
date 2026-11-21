@@ -2,12 +2,13 @@
 
 import { packEntity } from "../src/entity/entity.ts";
 import { SlotSet } from "../src/component/slot-set.ts";
+import { SlotPackIteratorPool } from "../src/entity/pooled-entity-iterator.ts";
 import { assert, assertEquals } from "./helpers.ts";
 
 const members = (set: SlotSet): number[] => Array.from(set.list.subarray(0, set.count));
 
 Deno.test("SlotSet allocates lazily, grows by doubling and stops at its maximum length", () => {
-  const set = new SlotSet(1000, 40, (slot) => packEntity(slot, 0));
+  const set = new SlotSet(1000, 40);
   assertEquals(set.list.length, 0, "Nothing is allocated before the first add");
   assertEquals(set.positions.length, 0, "Positions are allocated with the first reservation");
   assert(!set.has(3), "An empty set has no members");
@@ -20,7 +21,7 @@ Deno.test("SlotSet allocates lazily, grows by doubling and stops at its maximum 
 });
 
 Deno.test("SlotSet swap-removes, clears and assigns without stale members", () => {
-  const set = new SlotSet(64, 64, (slot) => packEntity(slot, 0));
+  const set = new SlotSet(64, 64);
   for (const slot of [5, 9, 2, 40]) set.add(slot);
   set.remove(9);
   assertEquals(members(set), [5, 40, 2], "The last member moves into the removed one's place");
@@ -35,9 +36,9 @@ Deno.test("SlotSet swap-removes, clears and assigns without stale members", () =
   assertEquals(members(set), [7, 3, 11], "Assign replaces the members in order");
   assert(set.has(3) && !set.has(40), "Assign rebuilds the positions");
   assertEquals(
-    Array.from(set.iterator.reset(set.count)),
+    Array.from(new SlotPackIteratorPool((slot) => packEntity(slot, 0)).open(set, set.count)),
     [7, 3, 11].map((slot) => packEntity(slot, 0)),
-    "The iterator packs the members",
+    "A pooled iterator packs the members",
   );
   set.assign([]);
   assertEquals(set.count, 0, "Assigning nothing empties the set");
