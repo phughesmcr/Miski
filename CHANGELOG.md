@@ -81,6 +81,11 @@
   shape do, in a minor release. Nothing about the format changed.
 - `docs/api-comparison.md` compares the public API with bitECS, Koota, Becsy,
   miniplex, ECSY, ape-ecs, flecs and Bevy, and proposes the 1.0 surface.
+- Miski imports and runs on runtimes without `Float16Array` (before Chrome 135
+  or Node 24, for example). Beta.3 referenced it when the module loaded, so the
+  import threw a `ReferenceError` there. Only `Float16Array` columns need it
+  now; on such a runtime, loading a save with an `f16` column, or turning it
+  into a document, throws `WorldSaveError`.
 
 ## 1.0.0-beta.3 — 2026-11-20
 

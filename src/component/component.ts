@@ -1,5 +1,5 @@
 import { isValidName as isValidPartitionName, Partition, type PartitionSpec } from "@phughesmcr/partitionedbuffer";
-import { $_COMPONENT_ID_KEY, $_PARTITION_KEY } from "@/constants.ts";
+import { $_COMPONENT_ID_KEY, $_PARTITION_KEY, FLOAT16_ARRAY } from "@/constants.ts";
 import type {
   ComponentConstructor,
   ComponentPrivateMethods,
@@ -31,7 +31,7 @@ const SUPPORTED_COLUMN_CONSTRUCTORS: ReadonlySet<unknown> = new Set<unknown>([
   Uint32Array,
   Float32Array,
   Float64Array,
-  Float16Array,
+  ...(FLOAT16_ARRAY ? [FLOAT16_ARRAY] : []),
 ]);
 
 /**

@@ -260,7 +260,9 @@ numbers; direct partition access remains an unchecked escape hatch.
 Numeric fields may use any number-valued typed array, including
 `Float16Array`: half the memory of `Float32Array` for values that tolerate
 about 3 significant digits (range ±65504; guarded writes outside it throw).
-`BigInt64Array` and `BigUint64Array` are not supported.
+Miski itself runs where `Float16Array` doesn't exist (older browsers, Electron
+and Node builds); only `Float16Array` columns, and saves that contain them, need
+it. `BigInt64Array` and `BigUint64Array` are not supported.
 
 **Non-numeric fields** — mix `field.*` descriptors with typed arrays:
 

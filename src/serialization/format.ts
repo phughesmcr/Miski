@@ -1,3 +1,4 @@
+import { FLOAT16_ARRAY } from "@/constants.ts";
 import { MiskiError } from "@/errors.ts";
 import type { TypedArray, TypedArrayConstructor } from "@/types/partitions.ts";
 
@@ -117,7 +118,8 @@ export const NUMERIC_FIELD_TYPES: readonly (NumericFieldType | undefined)[] = Ob
   numericType(9, "u8c", Uint8ClampedArray, [0, 0xff]),
   undefined, // CODE_STRING
   undefined, // CODE_OBJECT
-  numericType(12, "f16", Float16Array),
+  // Unknown where the runtime has no Float16Array: such a world has no f16 columns, so an f16 save is rejected.
+  FLOAT16_ARRAY ? numericType(12, "f16", FLOAT16_ARRAY) : undefined,
 ]);
 
 /** Element byte size by type code (0 for variable-length codes): {@link NUMERIC_FIELD_TYPES} flattened for hot loops. */
