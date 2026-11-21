@@ -165,17 +165,17 @@ const scenarios: MemoryScenario[] = [
     },
   },
   {
-    name: "Snapshot convenience arrays - 8K mixed world",
+    name: "Allocated entity arrays - 8K mixed world",
     maxRetainedBytes: 8 * 1024 * 1024,
     create: async () => {
       const fixture = await populateMixedWorld(MEDIUM_CAPACITY);
       const movementQuery = createMovementQuery(fixture.components);
       return {
         fixture,
-        active: fixture.world.entities.getActiveSnapshot(),
-        changed: fixture.world.components.getChangedSnapshot(fixture.components.position),
-        owners: fixture.world.components.getOwnersSnapshot(fixture.components.position),
-        query: fixture.world.entities.querySnapshot(movementQuery),
+        active: Array.from(fixture.world.entities.getActive()),
+        changed: Array.from(fixture.world.components.getChanged(fixture.components.position)),
+        owners: Array.from(fixture.world.components.getOwners(fixture.components.position)),
+        query: Array.from(fixture.world.entities.query(movementQuery)),
       };
     },
   },

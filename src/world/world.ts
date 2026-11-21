@@ -172,14 +172,6 @@ export class World {
     return result;
   }
 
-  #snapshotIterator(iterator: IterableIterator<Entity>): Entity[] {
-    const result: Entity[] = [];
-    for (const entity of iterator) {
-      result.push(entity);
-    }
-    return result;
-  }
-
   /**
    * Entities that match the query now but did not match it when the refresh window began.
    * Only slots that moved this window can qualify, so this walks the window's touched slots in first-touch order.
@@ -449,7 +441,6 @@ export class World {
       markComponentChanged: (component, entity) => this.#markComponentChanged(component, entity),
       setComponentEntityData: (component, entity, value) => this.#setComponentEntityData(component, entity, value),
       destroyEntity: (entity) => this.#destroyEntity(entity),
-      snapshotIterator: (iterator) => this.#snapshotIterator(iterator),
       copyEntityList: (list) => this.#copyEntityList(list),
       queryArchetypeEntered: (query) => this.#queryArchetypeEntered(query),
       queryArchetypeExited: (query) => this.#queryArchetypeExited(query),

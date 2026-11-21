@@ -70,8 +70,8 @@ function observe(world: World, revisions = true): unknown {
   const changed: Record<string, number[]> = {};
   const data: Record<string, Record<string, unknown>> = {};
   for (const component of allComponents) {
-    owners[component.name] = world.components.getOwnersSnapshot(component) ?? [];
-    changed[component.name] = world.components.getChangedSnapshot(component) ?? [];
+    owners[component.name] = Array.from(world.components.getOwners(component)) ?? [];
+    changed[component.name] = Array.from(world.components.getChanged(component)) ?? [];
     if (component.schema === null) continue;
     const rows: Record<string, unknown> = {};
     for (const entity of owners[component.name]!) {
@@ -80,12 +80,12 @@ function observe(world: World, revisions = true): unknown {
     data[component.name] = rows;
   }
   return {
-    active: world.entities.getActiveSnapshot(),
+    active: Array.from(world.entities.getActive()),
     owners,
     changed,
     data,
     queries: queries.map((query) => ({
-      list: world.entities.querySnapshot(query),
+      list: Array.from(world.entities.query(query)),
       entered: [...world.entities.queryEntered(query)],
       exited: [...world.entities.queryExited(query)],
       revision: revisions ? world.queryRevision(query) : 0,
@@ -295,7 +295,11 @@ Deno.test("prefabs are world-independent and never occupy slots", async () => {
   assertEquals(reordered.components.getEntityDataOrThrow(stats, e1), { level: 3, speed: 0 }, "reordered registration");
   assertEquals(original.components.getEntityDataOrThrow(stats, e2), { level: 3, speed: 0 }, "original registration");
   assertStrictEquals(reordered.entities.getActiveCount(), 1, "only the instance is active");
-  assertEquals(reordered.entities.querySnapshot(new Query({ none: [flying] })), [e1], "none-only query sees instance");
+  assertEquals(
+    Array.from(reordered.entities.query(new Query({ none: [flying] }))),
+    [e1],
+    "none-only query sees instance",
+  );
 });
 
 // --- Bulk instantiate ---

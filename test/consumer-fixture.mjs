@@ -19,11 +19,11 @@ export async function runConsumerSmoke({ createEcsWorld, World }, expectedVersio
     position.set(entity, "x", 2);
     assert(position.get(entity, "x") === 2, "Guarded writes must reach the owner");
     const query = game.query(game.components.Position, game.components.Player);
-    const snapshot = game.world.entities.querySnapshot(query);
+    const snapshot = Array.from(game.world.entities.query(query));
     assert(snapshot.length === 1 && snapshot[0] === entity, "Queries must return the spawned handle");
     game.world.entities.destroy(entity);
     assert(!game.world.entities.isActive(entity), "Destroyed handles must be inactive");
-    assert(game.world.entities.querySnapshot(query).length === 0, "Destroyed entities must leave queries");
+    assert(Array.from(game.world.entities.query(query)).length === 0, "Destroyed entities must leave queries");
     assert(snapshot[0] === entity, "Snapshots must survive later mutations");
     const replacement = game.spawnOrThrow({ Position: { x: 3 } });
     assert(replacement !== entity && position.get(replacement, "x") === 3, "Recycled slots must get new handles");

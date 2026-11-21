@@ -90,7 +90,7 @@ function rowsOf(l: { count: number; rows: { readonly [i: number]: number } }): n
 
 /** Everything a program can read about the world's relations, as plain data. */
 function observe(world: World, defs: Defs): unknown {
-  const live = world.entities.getActiveSnapshot();
+  const live = Array.from(world.entities.getActive());
   const out: Record<string, unknown> = { live, pos: live.map((e) => world.components.getEntityData(defs.pos, e)) };
   for (const def of relationsOf(defs)) {
     const r = world.relations;
@@ -125,7 +125,7 @@ function observe(world: World, defs: Defs): unknown {
       forest: list(forest),
       forestDepths: Array.from({ length: forest.count }, (_, i) => forest.depths[i]),
       changed: [...r.getChanged(def)],
-      members: world.entities.querySnapshot(new Query({ all: [def] })),
+      members: Array.from(world.entities.query(new Query({ all: [def] }))),
     };
   }
   return out;
@@ -208,7 +208,7 @@ function drawOp(random: Rng, live: readonly Entity[], defs: Defs): (world: World
 /** Run `steps` random operations on every world in `worlds`, checking that they agree. */
 function runOps(random: Rng, worlds: readonly World[], defs: Defs, steps: number, label: string): void {
   for (let step = 0; step < steps; step++) {
-    const live = worlds[0]!.entities.getActiveSnapshot();
+    const live = Array.from(worlds[0]!.entities.getActive());
     const op = drawOp(random, live, defs);
     const outcomes = worlds.map((world) => op(world));
     for (let i = 1; i < worlds.length; i++) assertEquals(outcomes[i], outcomes[0], `${label} step ${step}: outcome`);

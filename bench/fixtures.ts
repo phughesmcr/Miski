@@ -298,7 +298,7 @@ export async function populateScheduledMovementWorld(
   components: BenchmarkComponents = createBenchmarkComponents(),
 ): Promise<{ world: World; components: BenchmarkComponents; schedule: Schedule }> {
   const { world } = await populateMovementWorld(capacity, components, 1);
-  for (const entity of world.entities.querySnapshot(createMovementQuery(components))) {
+  for (const entity of Array.from(world.entities.query(createMovementQuery(components)))) {
     if ((entity & 1) === 0) world.components.addToEntity(components.renderable, entity);
   }
   world.refresh();

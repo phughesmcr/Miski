@@ -9,7 +9,7 @@ Deno.test("a rollback scope left without commit restores the world, even on thro
   const world = await createTestWorld([position]);
   const kept = createEntity(world);
   world.components.addToEntity(position, kept, { x: 1, y: 2 });
-  const before = ids(world.entities.getActiveSnapshot());
+  const before = ids(Array.from(world.entities.getActive()));
   assertThrows(
     () => {
       using _scope = new WorldRollbackScope(world);
@@ -20,7 +20,7 @@ Deno.test("a rollback scope left without commit restores the world, even on thro
     Error,
     "turn failed",
   );
-  assertEquals(ids(world.entities.getActiveSnapshot()), before, "Entities are restored");
+  assertEquals(ids(Array.from(world.entities.getActive())), before, "Entities are restored");
   assertEquals(world.components.getEntityDataOrThrow(position, kept), { x: 1, y: 2 }, "Component values are restored");
   await world.destroy();
 });
@@ -52,7 +52,7 @@ Deno.test("an explicit restore closes the scope so disposal does nothing more", 
     assert(!scope.isOpen, "Restore closes the scope");
     createEntity(world);
   }
-  assertEquals(world.entities.getActiveSnapshot().length, 1, "Writes after restore are kept by disposal");
+  assertEquals(Array.from(world.entities.getActive()).length, 1, "Writes after restore are kept by disposal");
   await world.destroy();
 });
 

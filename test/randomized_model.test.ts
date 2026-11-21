@@ -381,7 +381,7 @@ const sorted = (values: Iterable<number>): number[] => [...values].sort((a, b) =
 
 function checkAgainstModel(world: World, model: Model, where: string): void {
   assertStrictEquals(world.entities.getActiveCount(), model.live.size, `${where}: active count`);
-  assertEquals(sorted(world.entities.getActiveSnapshot()), sorted(model.live.keys()), `${where}: active set`);
+  assertEquals(sorted(Array.from(world.entities.getActive())), sorted(model.live.keys()), `${where}: active set`);
   for (const entity of model.dead) assert(!world.entities.isActive(entity), `${where}: dead ${entity} is inactive`);
 
   for (const [entity, owned] of model.live) {
@@ -401,11 +401,11 @@ function checkAgainstModel(world: World, model: Model, where: string): void {
   }
 
   for (const component of components) {
-    const owners = world.components.getOwnersSnapshot(component) ?? [];
+    const owners = Array.from(world.components.getOwners(component)) ?? [];
     const expectedOwners = [...model.live].filter(([, owned]) => owned.has(component.name)).map(([e]) => e);
     assertEquals(sorted(owners), sorted(expectedOwners), `${where}: ${component.name} owners`);
     if (!isTag(component.name)) {
-      const changed = world.components.getChangedSnapshot(component) ?? [];
+      const changed = Array.from(world.components.getChanged(component)) ?? [];
       assertEquals(sorted(changed), sorted(model.changed.get(component.name)!), `${where}: ${component.name} changed`);
     }
   }
@@ -435,12 +435,12 @@ function checkAgainstModel(world: World, model: Model, where: string): void {
  */
 function observe(world: World): string {
   const slots = (entities: Iterable<Entity>): string => [...entities].map(entityIndex).join(",");
-  const parts: string[] = [`active=${slots(world.entities.getActiveSnapshot())}`];
+  const parts: string[] = [`active=${slots(Array.from(world.entities.getActive()))}`];
   for (const component of components) {
-    const owners = world.components.getOwnersSnapshot(component) ?? [];
+    const owners = Array.from(world.components.getOwners(component)) ?? [];
     parts.push(`${component.name} owners=${slots(owners)}`);
     if (!isTag(component.name)) {
-      parts.push(`${component.name} changed=${slots(world.components.getChangedSnapshot(component) ?? [])}`);
+      parts.push(`${component.name} changed=${slots(Array.from(world.components.getChanged(component)) ?? [])}`);
       for (const entity of owners) {
         parts.push(
           `${entityIndex(entity)}:${JSON.stringify(world.components.getEntityDataOrThrow(component as never, entity))}`,
@@ -450,7 +450,7 @@ function observe(world: World): string {
   }
   for (const query of queries) {
     parts.push(
-      `list=${slots(world.entities.querySnapshot(query))}` +
+      `list=${slots(Array.from(world.entities.query(query)))}` +
         ` entered=${slots(world.entities.queryEntered(query))}` +
         ` exited=${slots(world.entities.queryExited(query))}`,
     );
@@ -461,7 +461,7 @@ function observe(world: World): string {
 /** The control world's live handle in the same slot as a subject handle. */
 function controlHandle(world: World, entity: Entity): Entity {
   const slot = entityIndex(entity);
-  const [handle] = world.entities.getActiveSnapshot(asSlotIndex(slot), asSlotIndex(slot + 1));
+  const [handle] = Array.from(world.entities.getActive(asSlotIndex(slot), asSlotIndex(slot + 1)));
   assert(handle !== undefined, `control has no live entity in slot ${slot}`);
   return handle;
 }

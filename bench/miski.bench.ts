@@ -742,10 +742,10 @@ Deno.bench({
 });
 
 Deno.bench({
-  name: "querySnapshot allocating - movement all + none",
+  name: "Array.from(query) allocating - movement all + none",
   group: "queries",
   fn: () => {
-    objectSink = mixed.world.entities.querySnapshot(movementQuery);
+    objectSink = Array.from(mixed.world.entities.query(movementQuery));
   },
 });
 
@@ -913,27 +913,27 @@ Deno.bench({
 });
 
 Deno.bench({
-  name: "getActiveSnapshot allocating - 8K world",
-  group: "snapshots",
+  name: "Array.from(getActive) allocating - 8K world",
+  group: "array copies",
   baseline: true,
   fn: () => {
-    objectSink = mixed.world.entities.getActiveSnapshot();
+    objectSink = Array.from(mixed.world.entities.getActive());
   },
 });
 
 Deno.bench({
-  name: "getOwnersSnapshot allocating - position",
-  group: "snapshots",
+  name: "Array.from(getOwners) allocating - position",
+  group: "array copies",
   fn: () => {
-    objectSink = mixed.world.components.getOwnersSnapshot(mixed.components.position);
+    objectSink = Array.from(mixed.world.components.getOwners(mixed.components.position));
   },
 });
 
 Deno.bench({
-  name: "getChangedSnapshot allocating - position",
-  group: "snapshots",
+  name: "Array.from(getChanged) allocating - position",
+  group: "array copies",
   fn: () => {
-    objectSink = mixed.world.components.getChangedSnapshot(mixed.components.position);
+    objectSink = Array.from(mixed.world.components.getChanged(mixed.components.position));
   },
 });
 

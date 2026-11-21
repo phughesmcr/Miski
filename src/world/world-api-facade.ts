@@ -80,7 +80,6 @@ export type WorldApiHost = {
   ): void;
   destroyEntity(entity: Entity): void;
 
-  snapshotIterator(iterator: IterableIterator<Entity>): Entity[];
   copyEntityList(list: QueryEntityList): Entity[];
   queryArchetypeEntered(query: Query): IterableIterator<Entity>;
   queryArchetypeExited(query: Query): IterableIterator<Entity>;
@@ -134,9 +133,6 @@ function constructComponentAPI(host: WorldApiHost): WorldComponentAPI {
     getChanged: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
       component: ComponentReference<TValue, TStorage>,
     ) => host.componentManager.getChanged(component),
-    getChangedSnapshot: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
-      component: ComponentReference<TValue, TStorage>,
-    ) => host.snapshotIterator(host.componentManager.getChanged(component)),
     getEntityData: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
       component: ComponentReference<TValue, TStorage>,
       entity: Entity,
@@ -162,9 +158,6 @@ function constructComponentAPI(host: WorldApiHost): WorldComponentAPI {
     getOwners: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
       component: ComponentReference<TValue, TStorage>,
     ) => host.componentManager.getOwners(component),
-    getOwnersSnapshot: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
-      component: ComponentReference<TValue, TStorage>,
-    ) => host.snapshotIterator(host.componentManager.getOwners(component)),
     isRegistered: (component: DynamicComponent | string) => host.componentManager.isRegistered(component),
     markChanged: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
       component: ComponentReference<TValue, TStorage>,
@@ -242,8 +235,6 @@ function constructEntityAPI(host: WorldApiHost): WorldEntityAPI {
       host.destroyEntity(entity);
     },
     getActive: (startSlot?: SlotIndex, endSlot?: SlotIndex) => host.entityManager.getActive(startSlot, endSlot),
-    getActiveSnapshot: (startSlot?: SlotIndex, endSlot?: SlotIndex) =>
-      host.snapshotIterator(host.entityManager.getActive(startSlot, endSlot)),
     getActiveCount: () => host.entityManager.getActiveCount(),
     getAvailableCount: () => host.entityManager.getAvailableCount(),
     isActive: (entity: Entity) => host.entityManager.isActive(entity),
@@ -263,10 +254,6 @@ function constructEntityAPI(host: WorldApiHost): WorldEntityAPI {
     queryExited: (query: Query) => {
       host.assertInitialized();
       return host.queryArchetypeExited(query);
-    },
-    querySnapshot: (query: Query) => {
-      host.assertInitialized();
-      return host.copyEntityList(host.queryManager.entityList(query));
     },
     toArray: (list: QueryEntityList) => host.copyEntityList(list),
   };

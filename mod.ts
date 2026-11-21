@@ -8,7 +8,7 @@
  * - **Core** - World, Component, Query, System, entity handles, errors (every library failure is a `MiskiError`;
  *   test with `isMiskiError`)
  * - **Hot-path** - dense `queryList`, direct `instance.storage.partitions` writes, `frame`
- * - **Tooling** - `createEcsWorld`, schema hash, checkpoints, rollback, world saves, canonicalize
+ * - **Tooling** - `createEcsWorld`, schema hash, checkpoints, rollback, world saves
  * - **Scheduling** - `Schedule` (phases, ordering, fixed timestep), `CommandBuffer`
  *
  * Component values have three access tiers: (a) the hot path
@@ -22,6 +22,13 @@
  *
  * Every example below is self-contained and type-checked in CI
  * (`deno check --doc mod.ts`).
+ *
+ * The README has a guide to each larger feature:
+ * [scheduling](https://github.com/phughesmcr/Miski#calendar-scheduling) (phases, fixed steps, run conditions, and why
+ * fixed-phase logic must not rely on entered / exited / changed windows),
+ * [prefabs](https://github.com/phughesmcr/Miski#cookie-prefabs), [relations](https://github.com/phughesmcr/Miski#link-relations),
+ * [checkpoints and rollback](https://github.com/phughesmcr/Miski#rewind-checkpoints-rollback-schema) and
+ * [world saves](https://github.com/phughesmcr/Miski#floppy_disk-world-saves).
  *
  * ## Core
  *
@@ -136,7 +143,7 @@
  * console.log(x, soft, data, out);
  * ```
  *
- * @example Changed tracking and snapshots
+ * @example Changed tracking and copies
  * ```ts
  * const positionComponent = new Component({ name: "position", schema: { x: Float32Array, y: Float32Array } });
  * const world = new World({ capacity: 1024, components: [positionComponent] });
@@ -147,8 +154,8 @@
  *   console.log(entity);
  * }
  * // Stable array for tools / tests:
- * const changedSnapshot = world.components.getChangedSnapshot(positionComponent);
- * console.log(changedSnapshot.length);
+ * const changedCopy = Array.from(world.components.getChanged(positionComponent));
+ * console.log(changedCopy.length);
  * ```
  *
  * ## Hot-path
@@ -459,12 +466,7 @@ export type {
 } from "@/serialization/layout.ts";
 export type { WorldSaveFieldType, WorldSaveNumericFieldType } from "@/serialization/format.ts";
 
-export type {
-  ComposedQueryComponents,
-  QueryComponents,
-  QueryConstructor,
-  QueryInputSpec,
-} from "@/query/query.ts";
+export type { ComposedQueryComponents, QueryComponents, QueryConstructor, QueryInputSpec } from "@/query/query.ts";
 export type { PrefabDefaults, PrefabSpec } from "@/prefab/prefab.ts";
 export type { SchemaPropertyArray } from "@/types.ts";
 export type { ComponentInstance } from "@/component/component-instance.ts";

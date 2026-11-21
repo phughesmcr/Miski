@@ -620,9 +620,9 @@ const dispatch = await createDispatchSchedule(16);
 const scheduledMovement = await populateScheduledMovementWorld(MEDIUM_CAPACITY);
 const commandTransitions = await populateSparseLifecycleWorld(SMALL_CAPACITY);
 const commandTransitionBuffer = new CommandBuffer(commandTransitions.world);
-const commandTransitionEntities = commandTransitions.world.entities
-  .querySnapshot(new Query({ all: [commandTransitions.components.position] }))
-  .slice(0, 128);
+const commandTransitionEntities = Array.from(
+  commandTransitions.world.entities.query(new Query({ all: [commandTransitions.components.position] })),
+).slice(0, 128);
 const commandAccelerationData = { x: 0, y: 1 };
 const commandPositionData = { x: 0 };
 const commandSpawnLifecycle = await populateSparseLifecycleWorld(MEDIUM_CAPACITY);
@@ -922,21 +922,21 @@ const scenarios: Scenario[] = [
     },
   },
   {
-    name: "querySnapshot allocating convenience helper",
+    name: "Array.from(query) allocating copy",
     // About 32 KiB per snapshot: keep a round inside the young generation.
     iterations: 1_000,
     fn: () => {
-      objectSink = mixed.world.entities.querySnapshot(movementQuery);
+      objectSink = Array.from(mixed.world.entities.query(movementQuery));
     },
   },
   {
-    name: "snapshot helpers allocating convenience baseline",
+    name: "Array.from and toArray allocating copies baseline",
     // About 500 KiB per iteration: keep a round inside the young generation.
     iterations: 50,
     fn: () => {
-      objectSink = mixed.world.entities.getActiveSnapshot();
-      objectSink = mixed.world.components.getOwnersSnapshot(mixed.components.position);
-      objectSink = mixed.world.components.getChangedSnapshot(mixed.components.position);
+      objectSink = Array.from(mixed.world.entities.getActive());
+      objectSink = Array.from(mixed.world.components.getOwners(mixed.components.position));
+      objectSink = Array.from(mixed.world.components.getChanged(mixed.components.position));
       objectSink = mixed.world.entities.toArray(mixed.world.entities.queryList(movementQuery));
     },
   },

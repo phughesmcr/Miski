@@ -375,8 +375,8 @@ call except `getInstance` and `isRegistered`.
 
 `getChanged(...)` resets each `world.refresh()` — a fresh tray every frame.
 Attaching a data component marks it changed, with or without a payload. Tags
-skip changed tracking. Need retained IDs outside the hot path? Reach for
-the `*Snapshot` helpers.
+skip changed tracking. Need retained IDs outside the hot path? Copy them
+with `Array.from(world.components.getChanged(C))`.
 
 ### :ghost: Entities
 
@@ -402,7 +402,7 @@ world.entities.getActiveCount();
 world.entities.getAvailableCount();
 
 // Optional active-iteration bounds are raw slots: inclusive start, exclusive end.
-world.entities.getActiveSnapshot(entityIndex(e3));
+world.entities.getActive(entityIndex(e3));
 ```
 
 Handle `0` is a valid entity (slot 0, generation 0), so test an optional
@@ -493,8 +493,8 @@ list.each((slot, entity) => {
 
 // Borrowed views are valid until the next mutation / refresh.
 // Need a take-home box? Opt into allocation:
-world.entities.querySnapshot(q);
 world.entities.toArray(list);
+Array.from(world.entities.query(q));
 
 world.entities.queryEntered(q);
 world.entities.queryExited(q);

@@ -166,7 +166,7 @@ Deno.test("Prefab object fields: a throwing create() leaves the world unchanged"
   fail = true;
   assertThrows(() => world.entities.instantiateManyOrThrow(prefab, 2), Error, "boom");
   assertEquals(world.entities.getActiveCount(), 1, "No instance survives a failed bulk call");
-  assertEquals(world.components.getOwnersSnapshot(fragile)?.length, 1, "No ownership survives a failed bulk call");
+  assertEquals(Array.from(world.components.getOwners(fragile))?.length, 1, "No ownership survives a failed bulk call");
 });
 
 Deno.test("a create() hook that breaks its contract by instantiating does not corrupt its caller's borrowed list", async () => {

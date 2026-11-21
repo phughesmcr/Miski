@@ -71,7 +71,7 @@ function slots(iterable: Iterable<Entity> | undefined): number[] {
 }
 
 function observe(world: World): unknown {
-  const live = world.entities.getActiveSnapshot();
+  const live = Array.from(world.entities.getActive());
   const bySlot = new Map<number, Entity>(live.map((entity) => [entityIndex(entity), entity]));
   return {
     active: live.map((entity) => entityIndex(entity)),
@@ -192,12 +192,12 @@ Deno.test("rollback keeps allocation order and retires speculative handles at 16
   for (let i = 0; i < kept.length; i += 3) world.entities.destroy(kept[i]!);
 
   const point = new WorldRollbackScope(world);
-  const before = world.entities.getActiveSnapshot();
+  const before = Array.from(world.entities.getActive());
   const speculative = Array.from({ length: 30 }, () => createEntity(world));
   for (const entity of before.slice(0, 5)) world.entities.destroy(entity);
   point.restore();
 
-  assertEquals(world.entities.getActiveSnapshot(), before, "Live handles restored exactly");
+  assertEquals(Array.from(world.entities.getActive()), before, "Live handles restored exactly");
   for (const entity of speculative) {
     assert(!world.entities.isActive(entity), "Speculative handles stay retired");
   }

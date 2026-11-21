@@ -104,7 +104,7 @@ console.log(${JSON.stringify(successMarker)});
 const game = createEcsWorld({ capacity: 8, components: { Position: { x: Float32Array } } });
 const entity: Entity = game.spawnOrThrow({ Position: { x: 1 } });
 const column: Float32Array = game.storage.Position.storage.partitions.x;
-game.world.entities.getActiveSnapshot(entityIndex(entity));
+Array.from(game.world.entities.getActive(entityIndex(entity)));
 // @ts-expect-error Unknown component fields must remain rejected by the packed declarations.
 game.spawn({ Position: { missing: 1 } });
 // @ts-expect-error Packed handles must not be accepted as raw slot bounds.

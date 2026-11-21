@@ -81,7 +81,7 @@ function observe(world: World): unknown {
     owners: components.map((component) => slots(world.components.getOwners(component))),
     changed: slots(world.components.getChanged(position)),
     data: slots(world.components.getOwners(position)).map((slot) => {
-      const entity = world.entities.getActiveSnapshot().find((candidate) => entityIndex(candidate) === slot)!;
+      const entity = Array.from(world.entities.getActive()).find((candidate) => entityIndex(candidate) === slot)!;
       return world.components.getEntityDataOrThrow(position, entity);
     }),
   };

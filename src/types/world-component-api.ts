@@ -86,15 +86,6 @@ export type WorldComponentAPI = {
     component: Component<TValue, TStorage> | string,
   ): BorrowedEntityIterator;
   /**
-   * Copy the entities with one or more changed properties for a component in this refresh window
-   * @param component - The component to get changed entities for
-   * @returns A new array of entities
-   * @throws {NotRegisteredError} - If the component is not registered
-   */
-  getChangedSnapshot<TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
-    component: Component<TValue, TStorage> | string,
-  ): Entity[];
-  /**
    * Read a copy of an entity's component data (world-level guarded tier). Allocates one object per call; prefer
    * {@link readEntityDataInto} in loops.
    * @param component - The component to read
@@ -196,15 +187,6 @@ export type WorldComponentAPI = {
   getOwners<TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
     component: Component<TValue, TStorage> | string,
   ): BorrowedEntityIterator;
-  /**
-   * Copy the entities that own a component
-   * @param component - The component to get owners for
-   * @returns A new array of entities
-   * @throws {NotRegisteredError} - If the component is not registered
-   */
-  getOwnersSnapshot<TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
-    component: Component<TValue, TStorage> | string,
-  ): Entity[];
   /**
    * Query for components
    * @param query - The query to use

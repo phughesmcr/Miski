@@ -161,7 +161,7 @@ Deno.test("getActive rejects non-integer bounds with a library error and keeps c
   assertThrows(() => world.entities.getActive(asSlotIndex(Number.NaN)), ArgumentError, "integer slot indices");
   assertThrows(() => world.entities.getActive(asSlotIndex(0), asSlotIndex(2.5)), ArgumentError, "integer slot indices");
   assertEquals(
-    world.entities.getActiveSnapshot(asSlotIndex(1), asSlotIndex(world.entities.capacity)).map(entityIndex),
+    Array.from(world.entities.getActive(asSlotIndex(1), asSlotIndex(world.entities.capacity))).map(entityIndex),
     [1, 2, 3],
     "end === capacity stays valid",
   );

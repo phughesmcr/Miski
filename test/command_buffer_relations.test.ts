@@ -147,7 +147,7 @@ Deno.test("command buffer resolves pending entities in field.entity() values", a
   const sibling = commands.spawn();
   commands.add(node, sibling, { parent: child });
   commands.flush();
-  const owners = world.components.getOwnersSnapshot(node)!;
+  const owners = Array.from(world.components.getOwners(node))!;
   const byHp = new Map(owners.map((entity) => [world.components.getEntityDataOrThrow(node, entity).hp, entity]));
   const spawnedParent = byHp.get(1)!;
   const spawnedChild = byHp.get(2)!;

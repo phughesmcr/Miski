@@ -105,7 +105,7 @@ function step(h: Harness, random: Rng): void {
     case 2:
     case 3: {
       if (
-        component.maxOwners !== null && world.components.getOwnersSnapshot(component)!.length >= component.maxOwners
+        component.maxOwners !== null && Array.from(world.components.getOwners(component))!.length >= component.maxOwners
       ) {
         return;
       }

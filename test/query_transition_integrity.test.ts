@@ -272,7 +272,7 @@ Deno.test("full-world bundle creation reports payload errors before capacity err
   );
   assertEquals(world.entities.create([[position, { x: 1 }]]), undefined, "Valid bundle on full world is undefined");
   assertThrows(() => world.entities.createOrThrow([[position, { x: 1 }]]), CapacityError, "capacity");
-  assertEquals(world.entities.getActiveSnapshot(), created, "Failures preserve active handles");
+  assertEquals(Array.from(world.entities.getActive()), created, "Failures preserve active handles");
 
   // Scratch state must stay clean after a capacity failure.
   world.entities.destroy(created[0]!);

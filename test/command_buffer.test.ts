@@ -154,14 +154,14 @@ Deno.test("command buffer spawn creates entities in order with bundles, and pend
   assertStrictEquals(world.entities.getActiveCount(), 0, "nothing created before flush");
   commands.flush();
   assertStrictEquals(world.entities.getActiveCount(), 2, "both spawned");
-  const [first] = world.entities.querySnapshot(query) as Entity[];
+  const [first] = Array.from(world.entities.query(query)) as Entity[];
   assert(first !== undefined, "bundle spawn matches its query");
   assertEquals(
     world.components.getEntityDataOrThrow(position, first),
     { x: 1, y: 7 },
     "later commands apply to the spawn",
   );
-  const velocityOwners = world.components.getOwnersSnapshot(velocity)!;
+  const velocityOwners = Array.from(world.components.getOwners(velocity))!;
   assertStrictEquals(velocityOwners.length, 1, "the second spawn received velocity");
   assert(first < velocityOwners[0]!, "spawn order follows queue order");
   await world.destroy();
@@ -282,8 +282,8 @@ Deno.test("command buffer spawn respects component owner caps atomically", async
   commands.spawn([[tag]]);
   assertThrows(() => commands.flush(), CapacityError, "hero");
   assertStrictEquals(world.entities.getActiveCount(), 2, "failed spawns leave no half-built entity; later ones run");
-  assertStrictEquals(world.components.getOwnersSnapshot(hero)!.length, 1, "one hero");
-  assertStrictEquals(world.components.getOwnersSnapshot(tag)!.length, 1, "commands on a failed spawn are skipped");
+  assertStrictEquals(Array.from(world.components.getOwners(hero))!.length, 1, "one hero");
+  assertStrictEquals(Array.from(world.components.getOwners(tag))!.length, 1, "commands on a failed spawn are skipped");
   await world.destroy();
 });
 
@@ -307,7 +307,7 @@ Deno.test("command buffer grows past its initial capacity", async () => {
   assertStrictEquals(commands.pendingCount, 3000, "pendingCount counts commands, not bundle entries");
   commands.flush();
   assertStrictEquals(world.entities.getActiveCount(), 3000, "all spawned");
-  const owners = world.components.getOwnersSnapshot(position)!;
+  const owners = Array.from(world.components.getOwners(position))!;
   assertEquals(
     world.components.getEntityDataOrThrow(position, owners[2999]!),
     { x: 2999, y: -2999 },
@@ -361,7 +361,7 @@ Deno.test("command buffer handles partial payloads on the widest masked and on w
     const pending = commands.spawn();
     commands.add(wide, pending, { f2: 5 });
     commands.flush();
-    const spawned = world.entities.querySnapshot(new Query({ all: [wide] })).find((e) => e !== entity)!;
+    const spawned = Array.from(world.entities.query(new Query({ all: [wide] }))).find((e) => e !== entity)!;
     assertEquals(
       world.components.getEntityDataOrThrow(wide, spawned),
       fields(count, { 2: 5 }),
@@ -413,7 +413,7 @@ Deno.test("command buffer passes non-numeric schema fields through a side column
   const spawned = commands.spawn([[point, { x: 3 }]]);
   commands.add(point, spawned, { x: 4 });
   commands.flush();
-  const owners = world.components.getOwnersSnapshot(point)!;
+  const owners = Array.from(world.components.getOwners(point))!;
   assertEquals(world.components.getEntityDataOrThrow(point, owners[owners.length - 1]!), { x: 4, y: 0 }, "spawn path");
   await world.destroy();
 });
@@ -485,7 +485,7 @@ Deno.test("command buffer x prefabs: spawned bundles and prefab instances agree 
   const prefab = new Prefab({ components: [[unit, { hp: 5, label: "p" }]] });
   commands.spawn([[unit, { hp: 5, label: "p" }]]);
   commands.flush();
-  const spawned = world.components.getOwnersSnapshot(unit)![0]!;
+  const spawned = Array.from(world.components.getOwners(unit))![0]!;
   const instance = world.entities.instantiateOrThrow(prefab);
   assertEquals(
     world.components.getEntityDataOrThrow(unit, spawned),

@@ -31,8 +31,8 @@ Deno.test("rollback restores the stable entity authority without reissuing specu
   point.restore();
   assert(world.entities.isActive(original), "Facade must use restored entity authority");
   assert(!world.entities.isActive(discarded), "Speculative handle must be invalidated");
-  assertEquals(world.entities.getActiveSnapshot(), [original], "Active snapshot must restore");
-  assertEquals(world.entities.querySnapshot(query), [original], "Query must agree with active facade");
+  assertEquals(Array.from(world.entities.getActive()), [original], "Active snapshot must restore");
+  assertEquals(Array.from(world.entities.query(query)), [original], "Query must agree with active facade");
   world.entities.destroy(original);
   const replacement = createEntity(world);
   assert(replacement !== discarded, "Restoring a live generation must retain issuance history");
@@ -109,7 +109,7 @@ Deno.test("batch mutations reject mismatched and malformed slot entries before c
     "not active",
   );
   const query = new Query({ all: [position] });
-  assertEquals(world.entities.querySnapshot(query), [a, b], "Invalid batches must preserve archetype ownership");
+  assertEquals(Array.from(world.entities.query(query)), [a, b], "Invalid batches must preserve archetype ownership");
   assertEquals(
     world.components.removeFromEntities(position, world.entities.queryList(query)),
     2,
@@ -206,7 +206,7 @@ Deno.test("failed spawn preflight preserves lifecycle windows, revisions, and ha
   );
   assertThrows(() => world.entities.create([[capped]]), CapacityError, "can only be added");
   assertThrows(() => world.entities.create([[position], [position]]), ArgumentError, "Duplicate component");
-  assertEquals(world.entities.getActiveSnapshot(), [owner], "Failed spawn must preserve active handles");
+  assertEquals(Array.from(world.entities.getActive()), [owner], "Failed spawn must preserve active handles");
   assertEquals(ids(world.entities.queryEntered(query)), [], "Failed spawn must not publish entries");
   assertEquals(ids(world.entities.queryExited(query)), [], "Failed spawn must not publish phantom exits");
   assertEquals(world.queryRevision(query), revision, "Failed spawn must not advance query revisions");
@@ -235,12 +235,12 @@ Deno.test("active iteration bounds select raw slots across recycled entity gener
     "Raw bounds must include the recycled handle and exclude the upper slot",
   );
   assertEquals(
-    world.entities.getActiveSnapshot(entityIndex(second), asSlotIndex(2)),
+    Array.from(world.entities.getActive(entityIndex(second), asSlotIndex(2))),
     [second],
     "Raw bounds select only the requested slot range",
   );
   assertStrictEquals(
-    world.entities.getActiveSnapshot(entityIndex(second), asSlotIndex(capacity)).length,
+    Array.from(world.entities.getActive(entityIndex(second), asSlotIndex(capacity))).length,
     capacity - 1,
     "Capacity is a valid exclusive upper bound",
   );

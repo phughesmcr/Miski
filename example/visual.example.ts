@@ -742,7 +742,7 @@ const advance = (): void => {
 
 const seedWorld = (droneCount = desiredDroneCount): void => {
   // Stable array: the list is walked while its entities are destroyed.
-  const active = world.entities.getActiveSnapshot();
+  const active = Array.from(world.entities.getActive());
   for (let i = 0; i < active.length; i++) world.entities.destroy(active[i]!);
   desiredDroneCount = snapDrones(droneCount);
   sim.frame = 0;

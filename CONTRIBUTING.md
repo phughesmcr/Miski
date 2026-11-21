@@ -82,11 +82,11 @@ Mutation pipeline (keep these boundaries when changing code):
 2. **ComponentManager** owns storage, ownership flags, and changed tracking
 3. **ArchetypeManager** owns archetype membership and transitions
 
-Borrowed vs snapshot iterators:
+Borrowed iterators vs copies:
 
 - Hot paths return **borrowed** dense views (`queryList`, `getChanged`, `getOwners`) that are valid only until the next world mutation or `refresh`
 - `query` and `getActive` return a pooled iterator per call, so nested loops are independent; it returns to its pool when the loop ends or breaks. `getActive` copies its handles; `query` reads the query's retained result, which re-querying after a mutation refills
-- `*Snapshot` / `querySnapshot` / `toArray` helpers allocate stable copies for tools, tests, and non-frame-critical code
+- `toArray(list)` and `Array.from(iterator)` allocate stable copies for tools, tests, and non-frame-critical code; there are no separate snapshot methods
 
 Layout sketch: `src/{archetype,checkpoint,component,entity,prefab,query,relation,rollback,scheduler,schema,serialization,system,types,value,world}/`. Demos live in `example/`; throughput and GC budgets in `bench/`. See [`test/README.md`](test/README.md) for how tests map to API domains.
 
@@ -104,7 +104,7 @@ release validation to match CI.
 
 - Use `instance.storage.partitions` for raw SoA access in docs and examples (there is no `.partitions` alias)
 - Prefer `entityIndex` / `queryList` `slots` for SoA writes; packed `entities` handles for identity APIs (`isActive`, ownership). Do not index partitions with a packed handle — brands catch swaps at function APIs only; `TypedArray` indexing still accepts either number.
-- Document the layered query pattern (`query` / `queryList` / `querySnapshot`) rather than renaming methods
+- Document the layered query pattern (`query` / `queryList` / `toArray`) rather than renaming methods
 - Comment *why* on preflight, atomicity, and borrowed lifetimes; avoid comments that only restate the identifier
 - ASCII-only source (`prefer-ascii` lint): write non-ASCII test data as `\u` escapes
 - `deno lint` covers `src/`, `test/` and `bench/`; only `example/` is excluded. Where a rule does not fit test or bench code, relax it in that file with `// deno-lint-ignore-file <rule> -- <reason>` (or a per-line `deno-lint-ignore` with a reason), not in `deno.json`

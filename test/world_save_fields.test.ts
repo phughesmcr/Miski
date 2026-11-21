@@ -163,7 +163,7 @@ function observe(world: World): unknown {
   for (const name of ["unit", "named", "boss"]) {
     const type = component(world, name);
     const rows: unknown[] = [];
-    for (const e of world.components.getOwnersSnapshot(type)!) {
+    for (const e of Array.from(world.components.getOwners(type))!) {
       const data = {
         ...(world.components.getEntityDataOrThrow(type as Component<never>, e as Entity) as unknown as object),
       } as Record<string, unknown>;
@@ -274,7 +274,7 @@ Deno.test("a throwing decode hook leaves the world untouched", async () => {
   targetLog.poison = JSON.stringify(
     (source.components.getEntityDataOrThrow(
       component(source, "unit") as Component<never>,
-      source.components.getOwnersSnapshot(component(source, "unit"))!.find((e) =>
+      Array.from(source.components.getOwners(component(source, "unit")))!.find((e) =>
         (source.components.getEntityDataOrThrow(component(source, "unit") as Component<never>, e as Entity) as {
           mesh: unknown;
         }).mesh !== null

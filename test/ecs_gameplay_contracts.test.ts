@@ -562,19 +562,23 @@ Deno.test("snapshot helpers return stable arrays across retained and nested use"
   world.components.addToEntity(velocity, second);
 
   const moving = new Query({ all: [position, velocity] });
-  const retainedQuerySnapshot = world.entities.querySnapshot(moving);
-  const retainedOwnersSnapshot = world.components.getOwnersSnapshot(velocity);
-  const retainedActiveSnapshot = world.entities.getActiveSnapshot();
+  const retainedQuerySnapshot = Array.from(world.entities.query(moving));
+  const retainedOwnersSnapshot = Array.from(world.components.getOwners(velocity));
+  const retainedActiveSnapshot = Array.from(world.entities.getActive());
 
   world.components.removeFromEntity(velocity, second);
-  const nestedSnapshot = world.entities.querySnapshot(moving);
+  const nestedSnapshot = Array.from(world.entities.query(moving));
   world.components.addToEntity(velocity, second);
 
   assertEquals(retainedQuerySnapshot, [first, second], "Expected retained query snapshot to stay stable");
   assertEquals(retainedOwnersSnapshot, [first, second], "Expected retained owner snapshot to stay stable");
   assertEquals(retainedActiveSnapshot, [first, second], "Expected retained active snapshot to stay stable");
   assertEquals(nestedSnapshot, [first], "Expected nested snapshot to capture its own point in time");
-  assertEquals(world.entities.querySnapshot(moving), [first, second], "Expected fresh snapshot to see current state");
+  assertEquals(
+    Array.from(world.entities.query(moving)),
+    [first, second],
+    "Expected fresh snapshot to see current state",
+  );
 });
 
 Deno.test("queryList slots are readonly at the public type boundary", () => {

@@ -59,12 +59,12 @@ Deno.bench({
 
 const directTagWorld = await populateSparseLifecycleWorld(SMALL_CAPACITY);
 const commandTagWorld = await populateSparseLifecycleWorld(SMALL_CAPACITY);
-const directTagEntities = directTagWorld.world.entities
-  .querySnapshot(new Query({ all: [directTagWorld.components.position] }))
-  .slice(0, 128);
-const commandTagEntities = commandTagWorld.world.entities
-  .querySnapshot(new Query({ all: [commandTagWorld.components.position] }))
-  .slice(0, 128);
+const directTagEntities = Array.from(
+  directTagWorld.world.entities.query(new Query({ all: [directTagWorld.components.position] })),
+).slice(0, 128);
+const commandTagEntities = Array.from(
+  commandTagWorld.world.entities.query(new Query({ all: [commandTagWorld.components.position] })),
+).slice(0, 128);
 const commandTagBuffer = new CommandBuffer(commandTagWorld.world);
 
 Deno.bench({

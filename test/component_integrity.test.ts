@@ -209,16 +209,18 @@ Deno.test("owner, changed and has calls reject an unregistered component like th
   const entity = world.entities.createOrThrow();
   for (const component of [stranger, "stranger"] as const) {
     assertThrows(() => world.components.getOwners(component), NotRegisteredError, "not registered");
-    assertThrows(() => world.components.getOwnersSnapshot(component), NotRegisteredError, "not registered");
     assertThrows(() => world.components.getChanged(component), NotRegisteredError, "not registered");
-    assertThrows(() => world.components.getChangedSnapshot(component), NotRegisteredError, "not registered");
     assertThrows(() => world.components.entityHas(component, entity), NotRegisteredError, "not registered");
   }
   assertStrictEquals(world.components.entityHas(position, entity), false, "A registered, unowned component is false");
   world.entities.destroy(entity);
   assertStrictEquals(world.components.entityHas(position, entity), false, "An inactive entity is false");
-  assertEquals(world.components.getOwnersSnapshot(position), [], "A registered component with no owners is empty");
-  assertEquals(world.components.getChangedSnapshot(position), [], "A registered component with no changes is empty");
+  assertEquals(Array.from(world.components.getOwners(position)), [], "A registered component with no owners is empty");
+  assertEquals(
+    Array.from(world.components.getChanged(position)),
+    [],
+    "A registered component with no changes is empty",
+  );
 });
 
 Deno.test("bundle and batch commits keep canonical scratch values isolated by component", async () => {

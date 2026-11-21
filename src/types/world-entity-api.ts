@@ -38,8 +38,6 @@ export type WorldEntityAPI = {
    * Returns a pooled per-call iterator over a snapshot taken now, so nested loops are independent.
    */
   getActive(startSlot?: SlotIndex, endSlot?: SlotIndex): BorrowedEntityIterator;
-  /** Get a stable snapshot within the same raw slot bounds as {@link getActive}. */
-  getActiveSnapshot(startSlot?: SlotIndex, endSlot?: SlotIndex): Entity[];
   /** Get the number of active entities */
   getActiveCount(): number;
   /** Get the number of available entities */
@@ -65,8 +63,6 @@ export type WorldEntityAPI = {
    * Reports the window-start handle, which may since have been destroyed. Returns a pooled live iterator.
    */
   queryExited(query: Query): IterableIterator<Entity>;
-  /** Query for entities as a stable allocating array snapshot (`toArray(queryList(query))`) */
-  querySnapshot(query: Query): Entity[];
   /** Copy a borrowed entity list (such as a {@link queryList} or `instantiateMany` result) into a stable array */
   toArray(list: QueryEntityList): Entity[];
   /**

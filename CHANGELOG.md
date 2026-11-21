@@ -24,6 +24,14 @@
   `noneEntries`, `includeEntries` or `dependencyComponents`, and
   `NormalizedQueryComponentEntry` is no longer exported. They were
   normalisation internals; `all`, `any`, `none` and `include` remain.
+- **Breaking:** the allocating `*Snapshot` helpers are gone. Replace
+  `entities.querySnapshot(q)` with `entities.toArray(entities.queryList(q))`
+  or `Array.from(entities.query(q))`, `entities.getActiveSnapshot(...)` with
+  `Array.from(entities.getActive(...))`, and
+  `components.getChangedSnapshot(C)` / `getOwnersSnapshot(C)` with
+  `Array.from(components.getChanged(C))` / `Array.from(components.getOwners(C))`.
+- The JSR module docs link to the README guides for scheduling, prefabs,
+  relations, checkpoints and rollback, and world saves.
 - `Schedule` gains `tick`, `fixedTick` and `elapsed` getters, beside
   `accumulator`, so code that reads the clock every frame no longer allocates
   the object `getClock()` returns. `getClock()` / `setClock()` are unchanged

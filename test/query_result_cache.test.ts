@@ -27,7 +27,7 @@ function sorted(iterable: Iterable<number>): number[] {
 function expectedMembers(world: World, query: Query): number[] {
   const has = (component: DynamicComponent, entity: Entity) => world.components.entityHas(component, entity);
   const members: number[] = [];
-  for (const entity of world.entities.getActiveSnapshot()) {
+  for (const entity of Array.from(world.entities.getActive())) {
     if (!query.all.every((component) => has(component, entity))) continue;
     if (query.none.some((component) => has(component, entity))) continue;
     if (query.any.length > 0 && !query.any.some((component) => has(component, entity))) continue;
@@ -477,7 +477,7 @@ Deno.test("query entity results retain their buffer across invalidation", async 
   assertStrictEquals(filled, first, "invalidated queries refill the retained result");
   assertEquals(listIds(filled), [entity], "refill reflects membership");
   assertStrictEquals(world.components.query(query), bindings, "immutable bindings are retained independently");
-  const snapshot = world.entities.querySnapshot(query);
+  const snapshot = Array.from(world.entities.query(query));
   world.entities.destroy(entity);
   assertStrictEquals(world.entities.queryList(query), first, "removal also retains the result");
   assertEquals(listIds(first), [], "removal clears the valid prefix");
