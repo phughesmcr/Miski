@@ -22,7 +22,7 @@ interface/variable pairs.
   `q.changed`, flecs `detect_changes()`. That can be added after 1.0 without breaking anything, so it does not block a
   freeze.
 - **Changes on this branch** (the "clearly right" set; each is in the CHANGELOG under Unreleased):
-  1. `world.components.getChanged` / `getOwners` and their `*Snapshot` forms throw `NotRegisteredError` for an
+  1. `world.components.getChanged` / `getOwners` throw `NotRegisteredError` for an
      unregistered component instead of returning `undefined`. This matches `getData`, `readDataInto` and
      every `world.relations` call. Their return types lose `| undefined`.
   2. `world.components.getInstances` leaves the public type. It was query-manager plumbing, and

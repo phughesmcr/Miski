@@ -818,7 +818,8 @@ export class CommandBuffer {
         tuple[0] = info.component;
         bundle[i] = tuple;
       } else {
-        const data = this.#dataFor(entry, info, -1 as Entity, true);
+        // An instance's overrides merge over the prefab's defaults, so omitted fields must stay omitted.
+        const data = this.#dataFor(entry, info, -1 as Entity, true, prefab !== undefined);
         const tuple = this.#dataTuples[i] ?? (this.#dataTuples[i] = [info.component, data]);
         tuple[0] = info.component;
         tuple[1] = data;
@@ -838,16 +839,25 @@ export class CommandBuffer {
    * Build the data object for a payload record. Narrow components reuse an object holding exactly the provided
    * fields, so omitted fields stay omitted. Wide components fill omitted fields from the entity's current values;
    * when it is new or not an owner, omitted numeric fields are zero and omitted side fields are left out (a fresh
-   * object, so that cold case allocates).
+   * object, so that cold case allocates). With `onlyProvided`, a wide component gets a fresh object holding only the
+   * provided fields, as prefab overrides need (also a cold, allocating case).
    */
-  #dataFor(record: number, info: ComponentInfo, entity: Entity, isNew: boolean): Record<string, unknown> {
+  #dataFor(
+    record: number,
+    info: ComponentInfo,
+    entity: Entity,
+    isNew: boolean,
+    onlyProvided = false,
+  ): Record<string, unknown> {
     const mask = this.#masks[record]!;
     const start = this.#payloadStarts[record]!;
     const end = start + this.#payloadCounts[record]!;
     let data: Record<string, unknown>;
     if (mask === WIDE_MASK) {
       const owned = !isNew && this.#world.components.has(info.component, entity);
-      if (owned) {
+      if (onlyProvided) {
+        data = {};
+      } else if (owned) {
         data = info.row;
         if (info.sideKeys.length > 0) this.#rowsHoldValues = true;
         this.#world.components.readDataInto(info.component, entity, data as Record<string, number>);

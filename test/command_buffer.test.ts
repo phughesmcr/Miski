@@ -521,6 +521,26 @@ Deno.test("command buffer instantiate creates prefab instances at flush, in queu
   await world.destroy();
 });
 
+Deno.test("command buffer instantiate merges partial overrides of wide components over prefab defaults", async () => {
+  for (const count of [31, 32, 40]) {
+    const wide = wideComponent(`wide${count}`, count);
+    const world = await createTestWorld([wide], 8);
+    const commands = new CommandBuffer(world);
+    const prefab = new Prefab({ name: `wide${count}`, components: [[wide, { f0: 7, f1: 8 }]] });
+    commands.instantiate(prefab, [[wide, { f2: 1 }]]);
+    commands.flush();
+    const [buffered] = Array.from(world.entities.getActive()) as [Entity];
+    const direct = world.entities.instantiateOrThrow(prefab, [[wide, { f2: 1 }]]);
+    assertEquals(world.components.getDataOrThrow(wide, buffered), fields(count, { 0: 7, 1: 8, 2: 1 }), "defaults kept");
+    assertEquals(
+      world.components.getDataOrThrow(wide, buffered),
+      world.components.getDataOrThrow(wide, direct),
+      `buffered and direct agree for ${count} fields`,
+    );
+    await world.destroy();
+  }
+});
+
 Deno.test("command buffer instantiate validates the prefab and overrides when queued", async () => {
   const { world, commands } = await setup();
   const stray = new Prefab({ name: "stray", components: [[position], [unregistered]] });

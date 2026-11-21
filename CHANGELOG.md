@@ -18,9 +18,8 @@
 
   A word-boundary find-and-replace in that order (longest names first)
   migrates a codebase.
-- **Breaking:** `world.components.getOwners`, `getOwnersSnapshot`, `getChanged`
-  and `getChangedSnapshot` throw `NotRegisteredError` for a component the
-  world has not registered, as `getData`, `readDataInto` and every
+- **Breaking:** `world.components.getOwners` and `getChanged` throw
+  `NotRegisteredError` for a component the world has not registered, as `getData`, `readDataInto` and every
   `world.relations` call already did. They returned `undefined`, so their
   return types lose `| undefined`: drop the `!` or `?? []` at call sites, and
   use `isRegistered` first if a component may be absent. `getOwners` /
