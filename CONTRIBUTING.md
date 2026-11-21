@@ -61,7 +61,7 @@ project's `deno.json`:
 ```json
 {
   "links": ["../Miski"],
-  "imports": { "@phughesmcr/miski": "jsr:@phughesmcr/miski@^1.0.0-beta.3" }
+  "imports": { "@phughesmcr/miski": "jsr:@phughesmcr/miski@^1.0.0-beta.4" }
 }
 ```
 

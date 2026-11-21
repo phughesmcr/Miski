@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.0.0-beta.4 — 2026-11-21
 
 - **Breaking:** the `world.components` verbs are renamed to match
   `world.relations`, `ComponentInstance` and every other ECS library. Arguments
