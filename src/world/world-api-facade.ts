@@ -130,7 +130,7 @@ function constructComponentAPI(host: WorldApiHost): WorldComponentAPI {
     entityHas: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
       component: ComponentReference<TValue, TStorage>,
       entity: Entity,
-    ) => host.componentManager.entityHas(component, entity),
+    ) => host.componentManager.entityOwnsInstance(host.componentManager.getInstanceOrThrow(component), entity),
     getChanged: <TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
       component: ComponentReference<TValue, TStorage>,
     ) => host.componentManager.getChanged(component),

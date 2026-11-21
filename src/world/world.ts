@@ -17,7 +17,7 @@ import { RelationManager, type RelationManagerSnapshot } from "@/relation/relati
 import { SystemManager } from "@/system/system-manager.ts";
 import type { Component } from "@/component/component.ts";
 import type { ComponentInstance } from "@/component/component-instance.ts";
-import type { Query } from "@/query/query.ts";
+import { type Query, queryInternals } from "@/query/query.ts";
 import type { DynamicComponent } from "@/types/component.ts";
 import type { ComponentData, SchemaOrNull } from "@/types/partitions.ts";
 import type {
@@ -650,7 +650,10 @@ export class World {
   queryRevision(query: Query): number {
     this.#assertInitialized();
     const lifecycleRevision = query.all.length === 0 && query.any.length === 0 ? this.#entityRevision : 0;
-    return Math.max(lifecycleRevision, this.#componentManager.latestChangedRevision(query.dependencyComponents));
+    return Math.max(
+      lifecycleRevision,
+      this.#componentManager.latestChangedRevision(queryInternals(query).dependencyComponents),
+    );
   }
 
   /** Capture membership and values for selected components across an entity set. */

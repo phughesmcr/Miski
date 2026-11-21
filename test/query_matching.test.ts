@@ -1,5 +1,6 @@
 /// <reference lib="deno.ns" />
 import { Component, NotRegisteredError, Query, SpecError, System } from "../mod.ts";
+import { queryInternals } from "../src/query/query.ts";
 import { createEntity, createTestWorld, gameComponents, tagComponent, vec2Component } from "./fixtures.ts";
 import { assert, assertEquals, assertStrictEquals, assertThrows, ids, listIds } from "./helpers.ts";
 
@@ -23,23 +24,23 @@ Deno.test("query aliases use own keys and normalized metadata stays immutable", 
     assertStrictEquals(Object.getPrototypeOf(bindings), null, "bindings have no inherited aliases");
     assert(Object.isFrozen(bindings), "bindings are immutable");
     assertEquals(listIds(world.entities.queryList(query)), [entity], "special aliases preserve matching");
-    assert(Object.isFrozen(query.allEntries[0]!), "normalized entries are immutable");
+    assert(Object.isFrozen(queryInternals(query).allEntries[0]!), "normalized entries are immutable");
     assertThrows(
       () => {
-        (query.allEntries[0]! as { key: string }).key = "changed";
+        (queryInternals(query).allEntries[0]! as { key: string }).key = "changed";
       },
       TypeError,
       "read only",
     );
   }
   const query = new Query({ all: [position], any: [velocity], none: [excluded], include: [included] });
-  assertEquals(query.dependencyComponents.map((component) => component.name), [
+  assertEquals(queryInternals(query).dependencyComponents.map((component) => component.name), [
     position.name,
     velocity.name,
     excluded.name,
     included.name,
   ], "revision dependencies include every clause");
-  assert(Object.isFrozen(query.dependencyComponents), "revision dependencies are immutable");
+  assert(Object.isFrozen(queryInternals(query).dependencyComponents), "revision dependencies are immutable");
   await world.destroy();
 });
 

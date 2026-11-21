@@ -174,7 +174,13 @@ export interface Query<TComponents extends ComponentMap = UntypedQueryComponents
 
   /** Non-filtering component instances exposed to callbacks */
   readonly include: Readonly<DynamicComponent[]>;
+}
 
+/**
+ * The normalised parts of a {@link Query} that the world reads to bind and track it. Not part of the public API.
+ * @internal
+ */
+export interface QueryInternals {
   /** Components whose membership or data changes affect the query revision. */
   readonly dependencyComponents: readonly DynamicComponent[];
 
@@ -191,8 +197,17 @@ export interface Query<TComponents extends ComponentMap = UntypedQueryComponents
   readonly includeEntries: Readonly<NormalizedQueryComponentEntry[]>;
 }
 
+/**
+ * Read a query's normalised internals.
+ * @internal
+ */
+export function queryInternals(query: Query<ComponentMap>): QueryInternals {
+  return query as unknown as QueryInternals;
+}
+
 /** Query implementation used by the {@link Query} constructor. */
-class QueryRuntime<TComponents extends ComponentMap = UntypedQueryComponents> implements Query<TComponents> {
+class QueryRuntime<TComponents extends ComponentMap = UntypedQueryComponents>
+  implements Query<TComponents>, QueryInternals {
   /** Carries the typed component map through to {@link System} inference. */
   declare readonly $inferComponents: ComponentInstances<TComponents>;
 
@@ -214,7 +229,7 @@ class QueryRuntime<TComponents extends ComponentMap = UntypedQueryComponents> im
   ): Query<ComposedQueryComponents<TQueries>> {
     let anyGroups = 0;
     for (let i = 0; i < queries.length; i++) {
-      if (queries[i]!.anyEntries.length > 0) anyGroups++;
+      if (queryInternals(queries[i]!).anyEntries.length > 0) anyGroups++;
     }
     if (anyGroups > 1) {
       throw new SpecError(
@@ -222,12 +237,12 @@ class QueryRuntime<TComponents extends ComponentMap = UntypedQueryComponents> im
           "merging several would change (A | B) AND (C | D) into A | B | C | D.",
       );
     }
-    const allEntries = queries.flatMap((query) => query.allEntries);
-    const anyEntries = queries.flatMap((query) => query.anyEntries);
-    const noneEntries = queries.flatMap((query) => query.noneEntries);
+    const allEntries = queries.flatMap((query) => queryInternals(query).allEntries);
+    const anyEntries = queries.flatMap((query) => queryInternals(query).anyEntries);
+    const noneEntries = queries.flatMap((query) => queryInternals(query).noneEntries);
     // `include` is non-filtering, so an input's include entry adds nothing when another input already
     // requires or offers the same component under the same key; keep the filtering role instead of rejecting.
-    const includeEntries = queries.flatMap((query) => query.includeEntries).filter((entry) =>
+    const includeEntries = queries.flatMap((query) => queryInternals(query).includeEntries).filter((entry) =>
       !allEntries.some((other) => other.component === entry.component && other.key === entry.key) &&
       !anyEntries.some((other) => other.component === entry.component && other.key === entry.key)
     );

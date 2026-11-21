@@ -13,6 +13,17 @@
 - **Breaking (types):** `world.components.getInstances(components)` is no
   longer part of `WorldComponentAPI`. It was query plumbing; map
   `getInstance` over the list instead.
+- **Breaking:** `world.components.entityHas` throws `NotRegisteredError` for an
+  unregistered component instead of returning `false`, so every
+  `world.components` call except `getInstance` and `isRegistered` now follows
+  the rule. It still returns `false` for an inactive entity. Check
+  `isRegistered` first where a component may be absent.
+- **Breaking:** `canonicalizeStoredValue` is no longer exported. Every guarded
+  write path already applies it.
+- **Breaking (types):** `Query` no longer exposes `allEntries`, `anyEntries`,
+  `noneEntries`, `includeEntries` or `dependencyComponents`, and
+  `NormalizedQueryComponentEntry` is no longer exported. They were
+  normalisation internals; `all`, `any`, `none` and `include` remain.
 - `Schedule` gains `tick`, `fixedTick` and `elapsed` getters, beside
   `accumulator`, so code that reads the clock every frame no longer allocates
   the object `getClock()` returns. `getClock()` / `setClock()` are unchanged

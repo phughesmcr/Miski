@@ -9,7 +9,7 @@ import type { QueryInstance } from "@/types/query.ts";
 import type { ComponentInstanceGetter, QueryManagerDependencies } from "@/types/world-api.ts";
 import { EntityIteratorPool } from "@/entity/pooled-entity-iterator.ts";
 import { QueryEntityResult } from "./query-result.ts";
-import type { NormalizedQueryComponentEntry, Query } from "./query.ts";
+import { type NormalizedQueryComponentEntry, type Query, queryInternals } from "./query.ts";
 import { type MembershipSource, QueryMembership } from "./query-membership.ts";
 
 type QueryComponent = Parameters<ComponentInstanceGetter>[0][number];
@@ -62,32 +62,36 @@ function createBindingID(
  * @returns A QueryInstance.
  */
 function createQueryInstance(getInstances: ComponentInstanceGetter, size: number, query: Query): QueryInstance {
+  const internals = queryInternals(query);
   // Create AND bit array - marks required components
-  const andInstances = getRegisteredInstances(getInstances, query.allEntries.map((entry) => entry.component));
+  const andInstances = getRegisteredInstances(getInstances, internals.allEntries.map((entry) => entry.component));
   const and = new BooleanArray(size).setFromObjects(ID_KEY, andInstances, true);
 
   // Create OR bit array - when present, at least one component must match
-  const orInstances = getRegisteredInstances(getInstances, query.anyEntries.map((entry) => entry.component));
+  const orInstances = getRegisteredInstances(getInstances, internals.anyEntries.map((entry) => entry.component));
   const or = new BooleanArray(size).setFromObjects(ID_KEY, orInstances, true);
 
   // Create NOT bit array - marks forbidden components
-  const notInstances = getRegisteredInstances(getInstances, query.noneEntries.map((entry) => entry.component));
+  const notInstances = getRegisteredInstances(getInstances, internals.noneEntries.map((entry) => entry.component));
   const not = new BooleanArray(size).setFromObjects(ID_KEY, notInstances, true);
 
   // Create include bit array - marks non-filtering components exposed to callbacks
-  const includeInstances = getRegisteredInstances(getInstances, query.includeEntries.map((entry) => entry.component));
+  const includeInstances = getRegisteredInstances(
+    getInstances,
+    internals.includeEntries.map((entry) => entry.component),
+  );
   const include = new BooleanArray(size).setFromObjects(ID_KEY, includeInstances, true);
 
   // Build lookup table for quick component access
   const components: Record<string, RegisteredComponentInstance> = Object.create(null);
-  addComponentsToLookup(components, query.allEntries, andInstances);
-  addComponentsToLookup(components, query.anyEntries, orInstances);
-  addComponentsToLookup(components, query.includeEntries, includeInstances);
+  addComponentsToLookup(components, internals.allEntries, andInstances);
+  addComponentsToLookup(components, internals.anyEntries, orInstances);
+  addComponentsToLookup(components, internals.includeEntries, includeInstances);
   Object.freeze(components);
 
-  const bindings = `${createBindingID(query.allEntries, andInstances)}|${
-    createBindingID(query.anyEntries, orInstances)
-  }|${createBindingID(query.includeEntries, includeInstances)}`;
+  const bindings = `${createBindingID(internals.allEntries, andInstances)}|${
+    createBindingID(internals.anyEntries, orInstances)
+  }|${createBindingID(internals.includeEntries, includeInstances)}`;
   const id = `${and.toString()}:${or.toString()}:${not.toString()}:${include.toString()}:${bindings}`;
 
   return {

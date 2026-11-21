@@ -5,7 +5,6 @@
 import {
   ArgumentError,
   asEntity,
-  canonicalizeStoredValue,
   CapacityError,
   compileComponentSchema,
   Component,
@@ -20,6 +19,7 @@ import {
   SpecError,
   WorldRollbackScope,
 } from "../mod.ts";
+import { canonicalizeStoredValue } from "../src/value/canonicalize.ts";
 import { createEntity, createTestWorld, tagComponent, vec2Component } from "./fixtures.ts";
 import { assert, assertEquals, assertStrictEquals, assertThrows, ids } from "./helpers.ts";
 
@@ -202,16 +202,21 @@ Deno.test("component string lookup only resolves registered own names", async ()
   }
 });
 
-Deno.test("owner and changed lists reject an unregistered component like the other component reads", async () => {
+Deno.test("owner, changed and has calls reject an unregistered component like the other component reads", async () => {
   const position = vec2Component();
   const stranger = vec2Component("stranger");
   const world = await createTestWorld([position]);
+  const entity = world.entities.createOrThrow();
   for (const component of [stranger, "stranger"] as const) {
     assertThrows(() => world.components.getOwners(component), NotRegisteredError, "not registered");
     assertThrows(() => world.components.getOwnersSnapshot(component), NotRegisteredError, "not registered");
     assertThrows(() => world.components.getChanged(component), NotRegisteredError, "not registered");
     assertThrows(() => world.components.getChangedSnapshot(component), NotRegisteredError, "not registered");
+    assertThrows(() => world.components.entityHas(component, entity), NotRegisteredError, "not registered");
   }
+  assertStrictEquals(world.components.entityHas(position, entity), false, "A registered, unowned component is false");
+  world.entities.destroy(entity);
+  assertStrictEquals(world.components.entityHas(position, entity), false, "An inactive entity is false");
   assertEquals(world.components.getOwnersSnapshot(position), [], "A registered component with no owners is empty");
   assertEquals(world.components.getChangedSnapshot(position), [], "A registered component with no changes is empty");
 });

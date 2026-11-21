@@ -420,7 +420,6 @@ export {
 } from "@/entity/entity.ts";
 
 // --- Tooling ---
-export { canonicalizeStoredValue } from "@/value/canonicalize.ts";
 export { compileComponentSchema, componentSchemaHash, defineComponentSchema } from "@/schema/schema.ts";
 export { createEcsWorld, EcsWorld } from "@/world/ecs-world.ts";
 export { cloneFieldValue, field, isFieldDescriptor } from "@/schema/field.ts";
@@ -462,7 +461,6 @@ export type { WorldSaveFieldType, WorldSaveNumericFieldType } from "@/serializat
 
 export type {
   ComposedQueryComponents,
-  NormalizedQueryComponentEntry,
   QueryComponents,
   QueryConstructor,
   QueryInputSpec,

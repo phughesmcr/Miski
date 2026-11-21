@@ -371,7 +371,7 @@ Across `world.components`, a plain name returns `undefined` (or `false`) when
 the thing is absent, and the `OrThrow` name throws: `getInstance` /
 `getInstanceOrThrow`, `getEntityData` / `getEntityDataOrThrow`. Passing a
 component the world has not registered throws `NotRegisteredError` from every
-call except `getInstance`, `isRegistered` and `entityHas`.
+call except `getInstance` and `isRegistered`.
 
 `getChanged(...)` resets each `world.refresh()` — a fresh tray every frame.
 Attaching a data component marks it changed, with or without a payload. Tags

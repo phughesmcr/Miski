@@ -69,7 +69,8 @@ export type WorldComponentAPI = {
    * Check if an entity has a component
    * @param component - The component to check for
    * @param entity - The entity to check
-   * @returns `true` if the entity has the component, `false` otherwise
+   * @returns `true` if the entity has the component, `false` otherwise (including for an inactive entity)
+   * @throws {NotRegisteredError} If the component is not registered
    */
   entityHas<TValue extends SchemaOrNull, TStorage extends SchemaOrNull = TValue>(
     component: Component<TValue, TStorage> | string,
